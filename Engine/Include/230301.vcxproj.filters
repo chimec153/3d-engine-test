@@ -1,0 +1,661 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="01. Core">
+      <UniqueIdentifier>{324a2d67-4eee-4ccd-a015-c47bb7290e1b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="02. Input">
+      <UniqueIdentifier>{1eab03a0-e32e-430b-a73c-50cff5789efe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="03. Shader">
+      <UniqueIdentifier>{a50ebb09-efc3-4b66-927f-4b0feec366bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable">
+      <UniqueIdentifier>{eb1e2215-e682-44c3-af45-d065aa66641f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Drawable">
+      <UniqueIdentifier>{a44cb6b0-485a-4be8-9bd6-a5e7999731d3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\03. Texture">
+      <UniqueIdentifier>{7c8f1e72-c22c-414d-8234-feb2af336e93}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\01. ConstantBuffer">
+      <UniqueIdentifier>{a95a5ce2-1b9e-4e40-9350-c8035a2f625f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\02. Shader">
+      <UniqueIdentifier>{8565268b-d432-4f14-95f9-e69c2ac5ba68}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\04. Sampler">
+      <UniqueIdentifier>{6bdd0c9c-02e8-4a74-ac5f-6349af134cde}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Drawable\01. Camera">
+      <UniqueIdentifier>{46ddc2cc-3770-4bb0-890a-7a33fcdad5fd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Drawable\02. Light">
+      <UniqueIdentifier>{eacc89f7-fc74-4ebe-bac3-e11ea759e04a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\05. Transform">
+      <UniqueIdentifier>{0043c0d5-e26c-4d5d-85bf-ae89983f5a81}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\06. Material">
+      <UniqueIdentifier>{8fc19696-43aa-484a-9f01-25464268a110}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Drawable\03. Fbx">
+      <UniqueIdentifier>{2ee8164f-02af-4e21-a6d1-e4b71a1edb1a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="07. Math">
+      <UniqueIdentifier>{3b9dd608-5e6c-4d44-a5a2-657ce4d6e9a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\07. RenderState">
+      <UniqueIdentifier>{3b27b734-2b5d-42cc-aa4d-5ee13f5acaab}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="08. Scene">
+      <UniqueIdentifier>{7976c5b4-2f09-4e86-9b0c-cf2683f5d321}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="01. Core\01. Layer">
+      <UniqueIdentifier>{f419788e-2bf5-444e-a1bf-99c1197a5ad3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="09. Render">
+      <UniqueIdentifier>{de081ee7-1088-45a0-8763-4777d0832336}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Drawable\04. Primitive">
+      <UniqueIdentifier>{831666fb-16de-4d54-814c-3f224c6a8a92}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="10. Collision">
+      <UniqueIdentifier>{5b11b5cf-9d0c-4b6d-bc4d-86d52a168bb5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\08. Collider">
+      <UniqueIdentifier>{a993c57b-c768-4156-9abd-abb244997be4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\09. Animation">
+      <UniqueIdentifier>{e14f3fcf-ef54-4edb-8c23-9fc17dfc45c6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="09. Render\01. MRT">
+      <UniqueIdentifier>{9e99b80c-026c-4211-9672-ecb8a9fc56c0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="11. Resource">
+      <UniqueIdentifier>{61de2fe8-16e7-48a9-8763-d3dd24b0c3c4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Drawable\05. Mesh">
+      <UniqueIdentifier>{bf16a9d0-a5c1-4489-9454-0335f2c355a4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="12. Thread">
+      <UniqueIdentifier>{a46dfe20-7e7f-47a2-a5c2-d20dc8c019e8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Drawable\06. Terrain">
+      <UniqueIdentifier>{e4772c40-d1e9-40d9-a9ee-dec0d38eaf6d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="13. Navigation">
+      <UniqueIdentifier>{5e1f6059-57bd-4aa8-b89d-5e64b58c6ae8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="13. Navigation\01. Detour">
+      <UniqueIdentifier>{d54cac39-a9d2-402f-8286-cbeff7d9a54b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\10. Navigation">
+      <UniqueIdentifier>{9c456a1e-bab5-4600-bd39-1c2e4953d7bb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="03. Shader\01. Shader">
+      <UniqueIdentifier>{28a6cce7-ce0f-4925-b197-56a997de9a59}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Core\Window.cpp">
+      <Filter>01. Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Graphics.cpp">
+      <Filter>01. Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Timer.cpp">
+      <Filter>01. Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\TimerManager.cpp">
+      <Filter>01. Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\PathManager.cpp">
+      <Filter>01. Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Input\Input.cpp">
+      <Filter>02. Input</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Bindable.cpp">
+      <Filter>04. Bindable</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\VertexBuffer.cpp">
+      <Filter>04. Bindable</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\IndexBuffer.cpp">
+      <Filter>04. Bindable</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Topology.cpp">
+      <Filter>04. Bindable</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\InputLayout.cpp">
+      <Filter>04. Bindable</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\VertexCBuffer.cpp">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\PixelCBuffer.cpp">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\ConstantBuffer.cpp">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\VertexShader.cpp">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\PixelShader.cpp">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Drawable.cpp">
+      <Filter>05. Drawable</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Sampler.cpp">
+      <Filter>04. Bindable\04. Sampler</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Texture.cpp">
+      <Filter>04. Bindable\03. Texture</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Camera.cpp">
+      <Filter>05. Drawable\01. Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\PointLight.cpp">
+      <Filter>05. Drawable\02. Light</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\TransformBuffer.cpp">
+      <Filter>04. Bindable\05. Transform</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Material.cpp">
+      <Filter>04. Bindable\06. Material</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\FbxLoader.cpp">
+      <Filter>05. Drawable\03. Fbx</Filter>
+    </ClCompile>
+    <ClCompile Include="Vector3.cpp">
+      <Filter>07. Math</Filter>
+    </ClCompile>
+    <ClCompile Include="Matrix.cpp">
+      <Filter>07. Math</Filter>
+    </ClCompile>
+    <ClCompile Include="Shader\ShaderManager.cpp">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\BindableManager.cpp">
+      <Filter>04. Bindable</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\BlendState.cpp">
+      <Filter>04. Bindable\07. RenderState</Filter>
+    </ClCompile>
+    <ClCompile Include="Scene\Scene.cpp">
+      <Filter>08. Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Scene\Layer.cpp">
+      <Filter>01. Core\01. Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Ref.cpp">
+      <Filter>01. Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Scene\SceneManager.cpp">
+      <Filter>08. Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\RasterizerState.cpp">
+      <Filter>04. Bindable\07. RenderState</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\DepthStencilState.cpp">
+      <Filter>04. Bindable\07. RenderState</Filter>
+    </ClCompile>
+    <ClCompile Include="Render\RenderManager.cpp">
+      <Filter>09. Render</Filter>
+    </ClCompile>
+    <ClCompile Include="Render\MRT.cpp">
+      <Filter>09. Render\01. MRT</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Box.cpp">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Cone.cpp">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Cylinder.cpp">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Quad.cpp">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Sphere.cpp">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Shader.cpp">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\HullShader.cpp">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\DomainShader.cpp">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\DomainCBuffer.cpp">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClCompile>
+    <ClCompile Include="Render\RenderInstancing.cpp">
+      <Filter>09. Render</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Collider.cpp">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClCompile>
+    <ClCompile Include="Collision\Collision.cpp">
+      <Filter>10. Collision</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\ColliderLine.cpp">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\ColliderSphere.cpp">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClCompile>
+    <ClCompile Include="Collision\CollisionManager.cpp">
+      <Filter>10. Collision</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Mouse.cpp">
+      <Filter>02. Input</Filter>
+    </ClCompile>
+    <ClCompile Include="Math.cpp">
+      <Filter>01. Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Animation.cpp">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClCompile>
+    <ClCompile Include="Animation\Sequence.cpp">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClCompile>
+    <ClCompile Include="Animation\Skeleton.cpp">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClCompile>
+    <ClCompile Include="Resource\ResourceManager.cpp">
+      <Filter>11. Resource</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Mesh.cpp">
+      <Filter>05. Drawable\05. Mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="Thread\ThreadManager.cpp">
+      <Filter>12. Thread</Filter>
+    </ClCompile>
+    <ClCompile Include="Thread\Thread.cpp">
+      <Filter>12. Thread</Filter>
+    </ClCompile>
+    <ClCompile Include="Thread\LoadingThread.cpp">
+      <Filter>12. Thread</Filter>
+    </ClCompile>
+    <ClCompile Include="Animation\JointSocket.cpp">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Terrain.cpp">
+      <Filter>05. Drawable\06. Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\ColliderMesh.cpp">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\NavMesh.cpp">
+      <Filter>04. Bindable\10. Navigation</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Agent.cpp">
+      <Filter>04. Bindable\10. Navigation</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\ComputeCBuffer.cpp">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\ComputeShader.cpp">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Shader\StructuredBuffer.cpp">
+      <Filter>03. Shader</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Core\Window.h">
+      <Filter>01. Core</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Graphics.h">
+      <Filter>01. Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Timer.h">
+      <Filter>01. Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\TimerManager.h">
+      <Filter>01. Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Ref.h">
+      <Filter>01. Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Ptr.h">
+      <Filter>01. Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\PathManager.h">
+      <Filter>01. Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Input\Input.h">
+      <Filter>02. Input</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Bindable.h">
+      <Filter>04. Bindable</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\VertexBuffer.h">
+      <Filter>04. Bindable</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\IndexBuffer.h">
+      <Filter>04. Bindable</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Topology.h">
+      <Filter>04. Bindable</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\InputLayout.h">
+      <Filter>04. Bindable</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\VertexCBuffer.h">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\PixelCBuffer.h">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\ConstantBuffer.h">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\VertexShader.h">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\PixelShader.h">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Drawable.h">
+      <Filter>05. Drawable</Filter>
+    </ClInclude>
+    <ClInclude Include="Types.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\DirectXTex.h">
+      <Filter>04. Bindable\03. Texture</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Sampler.h">
+      <Filter>04. Bindable\04. Sampler</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Texture.h">
+      <Filter>04. Bindable\03. Texture</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Camera.h">
+      <Filter>05. Drawable\01. Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\PointLight.h">
+      <Filter>05. Drawable\02. Light</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\TransformBuffer.h">
+      <Filter>04. Bindable\05. Transform</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Material.h">
+      <Filter>04. Bindable\06. Material</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\FbxLoader.h">
+      <Filter>05. Drawable\03. Fbx</Filter>
+    </ClInclude>
+    <ClInclude Include="Vector3.h">
+      <Filter>07. Math</Filter>
+    </ClInclude>
+    <ClInclude Include="Matrix.h">
+      <Filter>07. Math</Filter>
+    </ClInclude>
+    <ClInclude Include="Vector4.h">
+      <Filter>07. Math</Filter>
+    </ClInclude>
+    <ClInclude Include="Flag.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Shader\ShaderManager.h">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\BindableManager.h">
+      <Filter>04. Bindable</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\BlendState.h">
+      <Filter>04. Bindable\07. RenderState</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene\Scene.h">
+      <Filter>08. Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene\Layer.h">
+      <Filter>01. Core\01. Layer</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene\SceneManager.h">
+      <Filter>08. Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\RasterizerState.h">
+      <Filter>04. Bindable\07. RenderState</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\DepthStencilState.h">
+      <Filter>04. Bindable\07. RenderState</Filter>
+    </ClInclude>
+    <ClInclude Include="Render\RenderManager.h">
+      <Filter>09. Render</Filter>
+    </ClInclude>
+    <ClInclude Include="Render\MRT.h">
+      <Filter>09. Render\01. MRT</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Box.h">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Cone.h">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Cylinder.h">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Quad.h">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Sphere.h">
+      <Filter>05. Drawable\04. Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Shader.h">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\HullShader.h">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\DomainShader.h">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\DomainCBuffer.h">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClInclude>
+    <ClInclude Include="Render\RenderInstancing.h">
+      <Filter>09. Render</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Collider.h">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClInclude>
+    <ClInclude Include="Collision\Collision.h">
+      <Filter>10. Collision</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\ColliderLine.h">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\ColliderSphere.h">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClInclude>
+    <ClInclude Include="Collision\CollisionManager.h">
+      <Filter>10. Collision</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Macro.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Mouse.h">
+      <Filter>02. Input</Filter>
+    </ClInclude>
+    <ClInclude Include="Math.h">
+      <Filter>01. Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Animation.h">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClInclude>
+    <ClInclude Include="Animation\Sequence.h">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClInclude>
+    <ClInclude Include="Animation\Skeleton.h">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource\ResourceManager.h">
+      <Filter>11. Resource</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Mesh.h">
+      <Filter>05. Drawable\05. Mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="Thread\ThreadManager.h">
+      <Filter>12. Thread</Filter>
+    </ClInclude>
+    <ClInclude Include="Thread\Thread.h">
+      <Filter>12. Thread</Filter>
+    </ClInclude>
+    <ClInclude Include="Thread\LoadingThread.h">
+      <Filter>12. Thread</Filter>
+    </ClInclude>
+    <ClInclude Include="Animation\JointSocket.h">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Terrain.h">
+      <Filter>05. Drawable\06. Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourAlloc.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourAssert.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourCommon.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourMath.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourNavMesh.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourNavMeshBuilder.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourNavMeshQuery.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourNode.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourStatus.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\ColliderMesh.h">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\NavMesh.h">
+      <Filter>04. Bindable\10. Navigation</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Agent.h">
+      <Filter>04. Bindable\10. Navigation</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourCrowd.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourLocalBoundary.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourObstacleAvoidance.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourPathCorridor.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourPathQueue.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourProximityGrid.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourTileCache.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Detour\DetourTileCacheBuilder.h">
+      <Filter>13. Navigation\01. Detour</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\ComputeCBuffer.h">
+      <Filter>04. Bindable\01. ConstantBuffer</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\ComputeShader.h">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="Shader\StructuredBuffer.h">
+      <Filter>03. Shader</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="230301.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="icon1.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="..\Bin\Resource\Shader\anisotropic_microfacet.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\Debug.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\NormalShader.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\PixelShader.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\Shadow.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\shared.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\TextureShader.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\VertexShader.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\ComputeShader.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Bindable\DirectXTex.inl">
+      <Filter>04. Bindable\03. Texture</Filter>
+    </None>
+    <None Include="Copy.bat">
+      <Filter>Source Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="NatvisFile.natvis">
+      <Filter>Source Files</Filter>
+    </Natvis>
+  </ItemGroup>
+</Project>

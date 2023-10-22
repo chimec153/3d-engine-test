@@ -1,0 +1,141 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="01. Navigation">
+      <UniqueIdentifier>{dd46ba89-651a-4b13-9d2e-20c9c593cf78}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="01. Navigation\01. Recast">
+      <UniqueIdentifier>{86054147-d3c4-4757-847f-4388e275e92c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="01. Navigation\02. DebugUtils">
+      <UniqueIdentifier>{971538a1-287f-4e9b-85d2-48cde077557f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="02. Window">
+      <UniqueIdentifier>{f7c3a9e1-67b6-4d06-94f7-04af4560d2f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="03. Imgui">
+      <UniqueIdentifier>{11f199dc-db93-40ba-b8a2-e97326bf9afb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="03. Imgui\Include">
+      <UniqueIdentifier>{7668295e-341d-4623-bd0e-092332b7dc36}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Object">
+      <UniqueIdentifier>{dddb3da9-43ef-4b89-817c-dbbead8de5bb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Scene">
+      <UniqueIdentifier>{665eaa82-7237-4543-9680-e447c3bc19f9}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Window.cpp">
+      <Filter>02. Window</Filter>
+    </ClCompile>
+    <ClCompile Include="Imgui\imgui.cpp">
+      <Filter>03. Imgui\Include</Filter>
+    </ClCompile>
+    <ClCompile Include="Imgui\imgui_demo.cpp">
+      <Filter>03. Imgui\Include</Filter>
+    </ClCompile>
+    <ClCompile Include="Imgui\imgui_draw.cpp">
+      <Filter>03. Imgui\Include</Filter>
+    </ClCompile>
+    <ClCompile Include="Imgui\imgui_impl_dx11.cpp">
+      <Filter>03. Imgui\Include</Filter>
+    </ClCompile>
+    <ClCompile Include="Imgui\imgui_impl_win32.cpp">
+      <Filter>03. Imgui\Include</Filter>
+    </ClCompile>
+    <ClCompile Include="Imgui\imgui_tables.cpp">
+      <Filter>03. Imgui\Include</Filter>
+    </ClCompile>
+    <ClCompile Include="Imgui\imgui_widgets.cpp">
+      <Filter>03. Imgui\Include</Filter>
+    </ClCompile>
+    <ClCompile Include="Imgui\ImguiManager.cpp">
+      <Filter>03. Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Player.cpp">
+      <Filter>04. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Scene\InGameScene.cpp">
+      <Filter>05. Scene</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Editor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Recast\Recast.h">
+      <Filter>01. Navigation\01. Recast</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Recast\RecastAlloc.h">
+      <Filter>01. Navigation\01. Recast</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Recast\RecastAssert.h">
+      <Filter>01. Navigation\01. Recast</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\DebugUtils\DebugDraw.h">
+      <Filter>01. Navigation\02. DebugUtils</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\DebugUtils\DetourDebugDraw.h">
+      <Filter>01. Navigation\02. DebugUtils</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\DebugUtils\RecastDebugDraw.h">
+      <Filter>01. Navigation\02. DebugUtils</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\DebugUtils\RecastDump.h">
+      <Filter>01. Navigation\02. DebugUtils</Filter>
+    </ClInclude>
+    <ClInclude Include="Window.h">
+      <Filter>02. Window</Filter>
+    </ClInclude>
+    <ClInclude Include="Imgui\imconfig.h">
+      <Filter>03. Imgui\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Imgui\imgui.h">
+      <Filter>03. Imgui\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Imgui\imgui_impl_dx11.h">
+      <Filter>03. Imgui\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Imgui\imgui_impl_win32.h">
+      <Filter>03. Imgui\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Imgui\imgui_internal.h">
+      <Filter>03. Imgui\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Imgui\imstb_rectpack.h">
+      <Filter>03. Imgui\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Imgui\imstb_textedit.h">
+      <Filter>03. Imgui\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Imgui\imstb_truetype.h">
+      <Filter>03. Imgui\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Imgui\ImguiManager.h">
+      <Filter>03. Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Player.h">
+      <Filter>04. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene\InGameScene.h">
+      <Filter>05. Scene</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,98 @@
+#pragma once
+
+namespace Engine
+{
+	enum class LIGHT_TYPE
+	{
+		POINT,
+		SPOT,
+		DIRECTIONAL,
+		END
+	};
+
+	enum class AXIS_TYPE
+	{
+		X,
+		Y,
+		Z,
+		END
+	};
+
+	enum class TEXTURE_MAP_TYPE
+	{
+		NONE,
+		DIFFUSE,
+		NORMAL,
+		SPECULAR = 0b100,
+		EMISSIVE = 0b1000,
+		END
+	};
+
+	enum class SCENE_TYPE
+	{
+		CURRENT,
+		NEXT,
+		END
+	};
+
+	enum class BINDABLE_TYPE
+	{
+		NONE,
+		VERTEX_BUFFER,
+		INDEX_BUFFER,
+		VERTEX_SHADER,
+		HULL_SHADER,
+		DOMAIN_SHADER,
+		GEOMETRY_SHADER,
+		PIXEL_SHADER,
+		TEXTURE,
+		MATERIAL,
+		TRANSFORM,
+		INPUTLAYOUT,
+		TOPOLOGY,
+		MESH,
+		COLLIDER_LINE,
+		COLLIDER_SPHERE,
+		ANIMATION,
+		AGENT,
+		NAV_MESH,
+		LIGHT,
+		END
+	};
+
+	enum class COLLIDER_TYPE
+	{
+		NONE,
+		LINE,
+		SPHERE,
+		MESH,
+		END
+	};
+
+	enum class COLLISION_TYPE
+	{
+		BEGIN,
+		STAY,
+		LAST,
+		END
+	};
+
+	enum class BOUNDING_VOLUME_TYPE
+	{
+		NONE,
+		SPHERE,
+		BOX,
+		ELIPSOID,
+		CYLINDER,
+		END
+	};
+
+	enum class OBJECT_TYPE
+	{
+		NONE,
+		BIND,
+		DRAW,
+		COLLIDER,
+		END
+	};
+}

@@ -1,0 +1,242 @@
+#include "Mesh.h"
+#include "Drawable.h"
+#include "Animation.h"
+
+namespace Engine
+{
+	const Vector4& Mesh::GetBoundingSphereInfo() const
+	{
+		return m_vBoundingSphereInfo;
+	}
+	int Mesh::GetMeshCount() const
+	{
+		return static_cast<int>(m_vecMeshContainer.size());
+	}
+#ifdef _DEBUG
+	bool Mesh::IsMeshEnabled(int iIndex) const
+	{
+		return m_vecMeshContainer[iIndex].bEnable;
+	}
+	void Mesh::ToggleMesh(int iIndex)
+	{
+		m_vecMeshContainer[iIndex].bEnable ^= true;
+	}
+#endif
+
+	void Mesh::SetTextures(const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture)
+	{
+		assert(m_vecMeshContainer.size() <= vecTexture.size());
+
+		for (int i = 0; i < m_vecMeshContainer.size(); ++i)
+		{
+			m_vecMeshContainer[i].vecTexture = vecTexture[i];
+		}
+	}
+
+	void Mesh::SetTextures(int iIndex, const std::vector<std::shared_ptr<Texture>>& vecTexture)
+	{
+		if (m_vecMeshContainer.size() <= iIndex || iIndex < 0)
+		{
+			assert(false);
+			return;
+		}
+
+		m_vecMeshContainer[iIndex].vecTexture = vecTexture;
+	}
+
+	void Mesh::SetMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial)
+	{
+		if (m_vecMeshContainer.size() <= iIndex || iIndex < 0)
+		{
+			assert(false);
+			return;
+		}
+
+		m_vecMeshContainer[iIndex].pMaterial = pMaterial;
+
+		if (m_vecMeshContainer[iIndex].pMaterial)
+		{
+			m_vecMeshContainer[iIndex].pMaterial->SetContainerIndex(iIndex);
+		}
+	}
+
+	std::shared_ptr<Material> Mesh::GetMaterial(int iIndex) const
+	{
+		if (m_vecMeshContainer.size() <= iIndex ||
+			iIndex < 0)
+		{
+			return nullptr;
+		}
+
+		return m_vecMeshContainer[iIndex].pMaterial;
+	}
+
+	void Mesh::Bind()
+	{
+	}
+
+	void Mesh::Draw()
+	{
+		for (int i = 0; i < static_cast<int>(m_vecMeshContainer.size()); ++i)
+		{
+#ifdef _DEBUG
+			if (!m_vecMeshContainer[i].bEnable)
+			{
+				continue;
+			}
+#endif
+
+			for (size_t j = 0; j < m_vecMeshContainer[i].vecTexture.size(); ++j)
+			{
+				m_vecMeshContainer[i].vecTexture[j]->Bind();
+			}
+
+			if (m_vecMeshContainer[i].pMaterial)
+			{
+				m_vecMeshContainer[i].pMaterial->Bind();
+			}
+
+			UINT iStride = m_vecMeshContainer[i].m_iSize;
+			UINT iOffset = 0;
+
+			Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 1, m_vecMeshContainer[i].m_pVertexBuffer.GetAdressof(), &iStride, &iOffset);
+
+			for (int j = 0; j < m_vecMeshContainer[i].m_vecIndexBuffer.size(); ++j)
+			{
+				Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(*m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer, m_vecMeshContainer[i].m_vecIndexBuffer[j].eFormat, 0);
+
+				if (m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer)
+				{
+					Graphics::GetInst()->GetDeviceContext()->DrawIndexed(m_vecMeshContainer[i].m_vecIndexBuffer[j].iCount, 0, 0);
+				}
+				else
+				{
+					Graphics::GetInst()->GetDeviceContext()->Draw(m_vecMeshContainer[i].m_iCount, 0);
+				}
+			}
+		}
+	}
+
+	void Mesh::DrawInst(int iCount, int iSize, const CPtr<ID3D11Buffer>& pInstBuffer)
+	{
+		for (int i = 0; i < static_cast<int>(m_vecMeshContainer.size()); ++i)
+		{
+#ifdef _DEBUG
+			if (!m_vecMeshContainer[i].bEnable)
+			{
+				continue;
+			}
+#endif
+			for (size_t j = 0; j < m_vecMeshContainer[i].vecTexture.size(); ++j)
+			{
+				m_vecMeshContainer[i].vecTexture[j]->Bind();
+			}
+
+			if (m_vecMeshContainer[i].pMaterial)
+			{
+				m_vecMeshContainer[i].pMaterial->Bind();
+			}
+
+			UINT iStrides[] = { static_cast<unsigned int>(m_vecMeshContainer[i].m_iSize), static_cast<unsigned int>(iSize) };
+			UINT iOffsets[2] = {};
+
+			ID3D11Buffer* pBuffers[] = { m_vecMeshContainer[i].m_pVertexBuffer.Get(), pInstBuffer.Get() };
+
+			Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 2, pBuffers, iStrides, iOffsets);
+
+			for (size_t j = 0; j < m_vecMeshContainer[i].m_vecIndexBuffer.size(); ++j)
+			{
+				Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer.Get(), m_vecMeshContainer[i].m_vecIndexBuffer[j].eFormat, 0);
+
+				if (m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer)
+				{
+					Graphics::GetInst()->GetDeviceContext()->DrawIndexedInstanced(m_vecMeshContainer[i].m_vecIndexBuffer[j].iCount, static_cast<UINT>(iCount), 0, 0, 0);
+				}
+				else
+				{
+					Graphics::GetInst()->GetDeviceContext()->DrawInstanced(m_vecMeshContainer[i].m_iCount, static_cast<UINT>(iCount), 0, 0);
+				}
+			}
+		}
+	}
+
+	std::shared_ptr<Bindable> Mesh::Clone()
+	{
+		return std::shared_ptr<Bindable>();
+	}
+
+	void Mesh::Load(FILE* pFile)
+	{
+		int iContainerCount = 0;
+
+		fread(&iContainerCount, 4, 1, pFile);
+
+		std::vector<std::vector<VertexStandard>> _vecVertex;
+
+		for (int i = 0; i < iContainerCount; ++i)
+		{
+			std::vector<VertexStandard> vecVertex;
+			std::vector<std::vector<unsigned int>> vecIndex;
+
+			int iVertexCount = 0;
+
+			fread(&iVertexCount, 4, 1, pFile);
+
+			vecVertex.resize(iVertexCount);
+
+			fread(&vecVertex[0], sizeof(VertexStandard), iVertexCount, pFile);
+
+			_vecVertex.push_back(vecVertex);
+
+			short iIndexCount = 0;
+
+			fread(&iIndexCount, 2, 1, pFile);
+
+			vecIndex.resize(iIndexCount);
+
+			for (short j = 0; j < iIndexCount; ++j)
+			{
+				int _iIndexCount = 0;
+				fread(&_iIndexCount, 4, 1, pFile);
+
+				vecIndex[j].resize(_iIndexCount);
+
+				fread(&vecIndex[j][0], 4, _iIndexCount, pFile);
+			}
+
+			CreateMesh(vecVertex, vecIndex);
+
+			std::vector<std::shared_ptr<Texture>> vecTexture;
+
+			int iTextureCount = 0;
+
+			fread(&iTextureCount, 4, 1, pFile);
+
+			for (int j = 0; j < iTextureCount; ++j)
+			{
+				std::shared_ptr<Texture> pTexture = std::make_shared<Texture>();
+
+				pTexture->Load(pFile);
+
+				vecTexture.push_back(pTexture);
+			}
+
+			SetTextures(i, vecTexture);
+
+			bool bMaterial = false;
+
+			fread(&bMaterial, 1, 1, pFile);
+
+			if (bMaterial)
+			{
+				std::shared_ptr<Material> pMaterial = std::make_shared<Material>();
+
+				pMaterial->Load(pFile);
+
+				SetMaterial(i, pMaterial);
+			}
+		}
+
+		m_vBoundingSphereInfo = Drawable::StaticGetBoundingSphere(_vecVertex);
+	}
+}

@@ -1,0 +1,112 @@
+#pragma once
+
+#include "../Editor.h"
+#include "Animation/JointSocket.h"
+#include "Core/Graphics.h"
+#include "../Navigation/Recast/Recast.h"
+
+namespace Engine
+{
+	class Layer;
+	class Drawable;
+	class Mesh;
+	class Collider;
+	class NavMesh;
+	class TransformBuffer;
+	class PointLight;
+	class Sphere;
+	class MRT;
+	class Material;
+	class Shader;
+	class Scene;
+}
+
+class ImguiManager
+{
+private:
+	ImguiManager();
+	~ImguiManager();
+
+private:
+	static ImguiManager* m_pInst;
+
+public:
+	static ImguiManager* GetInst()
+	{
+		if (!m_pInst)
+		{
+			m_pInst = dbg_new ImguiManager;
+		}
+
+		return m_pInst;
+	}
+	static void DestroyInst()
+	{
+		if (m_pInst)
+		{
+			delete m_pInst;
+			m_pInst = nullptr;
+		}
+	}
+
+private:
+	bool m_bDemoWindow;
+
+public:
+	bool Init(HWND hWnd);
+	void Update(float fDeltaTime);
+	void Render(float fDeltaTime);
+
+public:
+	void DisableMouse();
+	void EnableMouse();
+
+public:
+	void CRef_ImGuiWindow(std::shared_ptr<Engine::CRef> pRef);
+	void JointSocket_ImGuiWindow(std::shared_ptr<class Engine::JointSocket> pRef, int iIndex);
+	void SceneWindow(class Engine::Scene* pScene);
+	void Layer_DrawListImgui(std::shared_ptr<Engine::Layer> pLayer);
+	void Drawable_ShowImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawable);
+	void Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawable);
+	void Mesh_ImGuiWindow(std::shared_ptr<Engine::Mesh> pMesh);
+	void Material_ImGuiWindow(std::shared_ptr<Engine::Material> pMaterial);
+	std::shared_ptr<Engine::Bindable> Drawable_ShowImGuiTree(std::shared_ptr<Engine::Bindable>, bool& bSelect);
+	void TransformBuffer_ImGuiWindow(std::shared_ptr<Engine::TransformBuffer> pTransform);
+	void PointLight_ImGuiWindow(std::shared_ptr<Engine::PointLight> pLight);
+	void Shader_ImGuiWindow(std::shared_ptr<Engine::Shader> pShader);
+	void Sphere_ImGuiWindow(std::shared_ptr<Engine::Sphere> pSphere);
+	void MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT);
+	void RenderManager_ShowImGuiWindow();
+
+private:
+	float m_fCellSize;
+	float m_fCellHeight;
+	float m_fAgentSlopeAngle;
+	float m_fAgentHeight;
+	float m_fAgentRadius;
+	float m_fAgentClimb;
+	float m_fMaxEdgeLen;
+	float m_fMaxEdgeError;
+	float m_fRegionMinSize;
+	float m_fRegionMergeSize;
+	float m_fVertsPerPoly;
+	float m_fDetailSampleDist;
+	float m_fDetailSampleMaxError;
+
+	rcHeightfield* m_pHeightField;
+	rcContext m_tContext;
+
+	std::unique_ptr<unsigned char[]> m_pTriAreas;
+	rcCompactHeightfield* m_pCompactHeightField;
+	rcContourSet* m_pContourSet;
+	rcPolyMesh* m_pPolyMesh;
+	rcPolyMeshDetail* m_pPolyMeshDetail;
+	std::shared_ptr<Engine::NavMesh> m_pNavMesh;
+	bool m_bMode;
+	std::list<std::shared_ptr<class Player>> m_PlayerList;
+
+public:
+	void CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);
+	void LoadNavMesh(const TCHAR* pFullPath, class Engine::Scene* pScene);
+	void LoadNavMesh(class Engine::Scene* pScene, const TCHAR* pFilePath, const std::string& strPathKey);
+};
