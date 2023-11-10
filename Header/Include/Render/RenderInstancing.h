@@ -36,8 +36,8 @@ namespace Engine
         std::shared_ptr<class StructuredBuffer> m_pBoneDataBuffer;
         std::shared_ptr<class StructuredBuffer> m_pFinalBuffer;
         BONECBUFFER m_tBoneCBuffer;
-        std::shared_ptr<class ComputeCBuffer<BONECBUFFER>> m_pBoneConstBuffer;
-        std::shared_ptr<class VertexCBuffer<BONECBUFFER>> m_pBoneVertexBuffer;
+        std::shared_ptr<class ConstantBuffer<BONECBUFFER>> m_pBoneConstBuffer;
+        std::shared_ptr<class ConstantBuffer<BONECBUFFER>> m_pBoneVertexBuffer;
         std::shared_ptr<class Skeleton> m_pSkeleton;
         std::shared_ptr<class StructuredBuffer> m_pSkeletonBuffer;
         std::shared_ptr<class StructuredBuffer> m_pJointSocketBuffer;

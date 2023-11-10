@@ -42,7 +42,7 @@ namespace Engine
 		m_pDebugDrawable->FindAndAddBind<class RasterizerState>("WireFrame");*/
 #endif
 
-		const std::shared_ptr<TransformBuffer>& pTransform = GetTransform();
+		const std::shared_ptr<Transform>& pTransform = GetTransform();
 
 		if (pTransform == nullptr)
 		{
@@ -57,7 +57,7 @@ namespace Engine
 
 	void Camera::UpdateView()
 	{
-		const std::shared_ptr<TransformBuffer>& pTransform = GetTransform();
+		const std::shared_ptr<Transform>& pTransform = GetTransform();
 
 		Matrix mat = Matrix::matIdentity;
 
@@ -72,6 +72,17 @@ namespace Engine
 		mat.v[2].w = -static_cast<Vector3>(mat.v[2]).Dot(vPosition);
 
 		matView = mat.Transpose();
+
+		//T^-1 * R'
+		//	1	0	0	0		Xx	Yx	Zx	0		Xx	Yx	Zx	0
+		//	0	1	0	0	*	Xy	Yy	Zy	0	=	Xy	Yy	Zy	0	
+		//	0	0	1	0		Xz	Yz	Zz	0		Xz	Yz	Zz	0
+		//	-x	-y	-z	1		0	0	0	1		-X.P -Y.P -Z.P	1
+	}
+
+	const Matrix& Camera::GetInvView() const
+	{
+		return GetTransform()->GetTransformMatrix();
 	}
 
 	bool Camera::Init()
@@ -117,7 +128,7 @@ namespace Engine
 		{
 			if (!Window::GetInst()->IsLockRotation())
 			{
-				const std::shared_ptr<TransformBuffer>& pTransform = GetTransform();
+				const std::shared_ptr<Transform>& pTransform = GetTransform();
 
 				int iDeltaX = CInput::GetInst()->GetMouseDeltaX();
 				int iDeltaY = CInput::GetInst()->GetMouseDeltaY();

@@ -30,11 +30,14 @@ namespace Engine
 		void SetBuffer(const CPtr<ID3D11Buffer>& pBuffer);
 
 	public:
-		virtual void Bind() override = 0;
+		virtual void Bind() override;
+		virtual std::shared_ptr<Bindable> Clone() override;
 
 	public:
 		void UpdateBuffer(const T& pData);
 		void CreateBuffer(const T* pData = nullptr);
+		void GetAndBind();
+		void BindEnd();
 	};
 
 }

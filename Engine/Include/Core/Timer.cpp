@@ -1,4 +1,5 @@
 #include "Timer.h"
+#include "Graphics.h"
 
 namespace Engine
 {
@@ -7,10 +8,10 @@ namespace Engine
 		, m_tFreq()
 		, m_fElapsedTime(0.f)
 		, m_fFPS(0.f)
-		, fDeltaTime(0.f)
 		, iFrame(0)
 		, fFrameTime(0.f)
 		, m_fScale(1.f)
+		, m_fDeltaTime(0.f)
 	{
 	}
 
@@ -18,17 +19,17 @@ namespace Engine
 	{
 	}
 
-	float Timer::GetElapsedTime() const noexcept
+	constexpr float Timer::GetElapsedTime() const noexcept
 	{
 		return m_fElapsedTime;
 	}
 
-	const float Timer::GetDeltTime() const noexcept
+	constexpr float Timer::GetDeltTime() const noexcept
 	{
-		return fDeltaTime * m_fScale;
+		return m_fDeltaTime * m_fScale;
 	}
 
-	float Timer::GetFPS() const
+	constexpr float Timer::GetFPS() const noexcept
 	{
 		return m_fFPS;
 	}
@@ -38,7 +39,7 @@ namespace Engine
 		m_fScale = fScale;
 	}
 
-	const float Timer::GetScale() const noexcept
+	constexpr float Timer::GetScale() const noexcept
 	{
 		return m_fScale;
 	}
@@ -57,13 +58,13 @@ namespace Engine
 
 		QueryPerformanceCounter(&tTime);
 
-		fDeltaTime = (tTime.QuadPart - m_tSecond.QuadPart) / static_cast<float>(m_tFreq.QuadPart);
+		m_fDeltaTime = (tTime.QuadPart - m_tSecond.QuadPart) / static_cast<float>(m_tFreq.QuadPart);
 
 		m_tSecond = tTime;
 
-		m_fElapsedTime += fDeltaTime * m_fScale;
+		m_fElapsedTime += m_fDeltaTime * m_fScale;
 
-		fFrameTime += fDeltaTime;
+		fFrameTime += m_fDeltaTime;
 
 		++iFrame;
 

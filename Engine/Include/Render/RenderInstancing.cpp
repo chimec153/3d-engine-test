@@ -12,7 +12,7 @@
 #include "../Animation/Sequence.h"
 #include "../Bindable/Animation.h"
 #include "../Bindable/ComputeShader.h"
-#include "../Bindable/ComputeCBuffer.h"
+#include "../Bindable/ConstantBuffer.h"
 #include "../Animation/Skeleton.h"
 #include "../Animation/JointSocket.h"
 
@@ -33,8 +33,8 @@ namespace Engine
 		, m_pVertexShadowShader(pVertexShadowShader)
 		, m_pAnimationComputeShader(StaticFindBindable<ComputeShader>("SequenceInst"))
 		, m_pAnimPaletteBuffer(nullptr)
-		, m_pBoneConstBuffer(StaticFindBindable<ComputeCBuffer<BONECBUFFER>>("Bone"))
-		, m_pBoneVertexBuffer(StaticFindBindable<VertexCBuffer<BONECBUFFER>>("Bone"))
+		, m_pBoneConstBuffer(StaticFindBindable<ConstantBuffer<BONECBUFFER>>("Bone"))
+		, m_pBoneVertexBuffer(StaticFindBindable<ConstantBuffer<BONECBUFFER>>("Bone"))
 		, m_pSkeleton(nullptr)
 		, m_pSkeletonBuffer(nullptr)
 		, m_pJointSocketBuffer(nullptr)

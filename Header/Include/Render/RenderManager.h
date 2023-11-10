@@ -4,6 +4,9 @@
 
 namespace Engine
 {
+	template <typename T>
+	class ConstantBuffer;
+
 	class ENGINE_DLL RenderManager
 	{
 	private:
@@ -35,13 +38,14 @@ namespace Engine
 
 	private:
 		std::list<class std::shared_ptr<class PointLight>>	m_LightList[static_cast<int>(LIGHT_TYPE::END)];
-		std::list<class std::shared_ptr<class Drawable>>	m_RenderList[2];
+		std::list<class std::shared_ptr<class Drawable>>	m_RenderList[static_cast<int>(RENDER_LAYER::END)];
 		std::list<class std::shared_ptr<class Drawable>>	m_ShadowList;
-		std::unordered_map<size_t, class std::shared_ptr<class RenderInstancing>>	m_mapInstance[2];
+		std::unordered_map<size_t, class std::shared_ptr<class RenderInstancing>>	m_mapInstance[static_cast<int>(RENDER_LAYER::END)];
 		std::unordered_map<size_t, class std::shared_ptr<class RenderInstancing>>	m_mapShadowInstance;
 
 	private:
 		std::shared_ptr<class MRT> pMRT;
+		std::shared_ptr<class MRT> m_pDecalMRT;
 #ifdef _DEBUG
 		std::shared_ptr<VertexShader> pVertexShader;
 		std::shared_ptr<PixelShader> pPixelShader;
@@ -51,7 +55,7 @@ namespace Engine
 		std::shared_ptr<class DepthStencilState> m_pNoDepthWrite;
 		std::shared_ptr<class RasterizerState> m_pCullFront;
 		std::shared_ptr<class DepthStencilState> m_pGreaterOrEqual;
-		std::shared_ptr<class PixelCBuffer<PERSPECTIVEBUFFER>>	m_pPerspecCBuffer;
+		std::shared_ptr<class ConstantBuffer<PERSPECTIVEBUFFER>>	m_pPerspecCBuffer;
 		std::shared_ptr<class BlendState>	m_pAccBlend;
 		std::shared_ptr<class VertexShader> pPointVertexShader;
 		std::shared_ptr<class HullShader> pPointHullShader;
@@ -60,13 +64,17 @@ namespace Engine
 		std::shared_ptr<class VertexShader>	pAnimShadowVertexShader;
 		std::shared_ptr<class PixelShader>	pShadowPixelShader;
 		std::shared_ptr<class MRT> pDepthBuffer[static_cast<int>(LIGHT_TYPE::END)];
-		std::shared_ptr<class VertexCBuffer<TRANSFORMBUFFER>>	m_pTransformBuffer;
+		std::shared_ptr<class ConstantBuffer<TRANSFORMBUFFER>>	m_pTransformBuffer;
+		std::shared_ptr<class BlendState>	m_pDecalBlend;
+		std::shared_ptr<class DepthStencilState> m_pNoDepthRead;
+		std::shared_ptr<class ConstantBuffer<DECALCBUFFER>>	m_pDecalCBuffer;
 
 	public:
 		void AddLight(const std::shared_ptr<PointLight>& pLight);
-		void AddDrawable(const std::shared_ptr<Drawable>& pDrawable, int iLayer = 0);
+		void AddDrawable(const std::shared_ptr<Drawable>& pDrawable);
 		std::shared_ptr<class MRT> GetMRT()	const;
 		std::shared_ptr<MRT> GetDepthBuffer(LIGHT_TYPE eType)	const;
+		std::shared_ptr<MRT> GetDecalMRT()	const;
 
 	public:
 		bool Init();
@@ -78,6 +86,7 @@ namespace Engine
 		void RenderAlpha();
 		void RenderLight();
 		void RenderShadow();
+		void RenderDecal();
 		void Clear();
 	};
 

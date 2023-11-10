@@ -61,7 +61,7 @@ namespace Engine
 	Quad::Quad(const Quad& quad) :
 		Drawable(quad)
 	{
-		const std::shared_ptr<TransformBuffer>& pTransform = GetTransform();
+		const std::shared_ptr<Transform>& pTransform = GetTransform();
 
 		if (pTransform != nullptr)
 		{

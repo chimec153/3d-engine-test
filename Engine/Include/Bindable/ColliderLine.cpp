@@ -82,7 +82,7 @@ namespace Engine
 
 		if (pParent)
 		{
-			std::shared_ptr<TransformBuffer> pTransform = std::static_pointer_cast<TransformBuffer>(pParent->FindChild(BINDABLE_TYPE::TRANSFORM));
+			std::shared_ptr<Transform> pTransform = std::static_pointer_cast<Transform>(pParent->FindChild(BINDABLE_TYPE::TRANSFORM));
 
 			if (pTransform)
 			{

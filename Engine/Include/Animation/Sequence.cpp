@@ -3,13 +3,12 @@
 #include "Skeleton.h"
 #include "../Resource/ResourceManager.h"
 #include "../Shader/StructuredBuffer.h"
-#include "../Bindable/ComputeCBuffer.h"
+#include "../Bindable/ConstantBuffer.h"
 
 namespace Engine
 {
 	Sequence::Sequence() :
-		m_pBoneVertexCBuffer(StaticFindBindable<VertexCBuffer<BONECBUFFER>>("Bone"))
-		, m_pBoneComputeCBuffer(StaticFindBindable<ComputeCBuffer<BONECBUFFER>>("Bone"))
+		m_pBoneConstantBuffer(StaticFindBindable<ConstantBuffer<BONECBUFFER>>("Bone"))
 		, m_vecInfo()
 		, m_bRootMotion(false)
 		, m_pBuffer()
@@ -21,8 +20,7 @@ namespace Engine
 	}
 
 	Sequence::Sequence(const Sequence& seq)	:
-		m_pBoneVertexCBuffer(seq.m_pBoneVertexCBuffer)
-		, m_pBoneComputeCBuffer(seq.m_pBoneComputeCBuffer)
+		m_pBoneConstantBuffer(seq.m_pBoneConstantBuffer)
 		, m_vecInfo(seq.m_vecInfo)
 		, m_bRootMotion(seq.m_bRootMotion)
 		, m_pBuffer(seq.m_pBuffer)
@@ -174,9 +172,9 @@ namespace Engine
 
 		m_tCBuffer.vRootPos = vRootPos;
 
-		m_pBoneComputeCBuffer->UpdateBuffer(m_tCBuffer);
+		m_pBoneConstantBuffer->UpdateBuffer(m_tCBuffer);
 
-		m_pBoneComputeCBuffer->Bind();
+		m_pBoneConstantBuffer->Bind();
 
 #ifdef _DEBUG
 		/*std::vector<TRANSFORM> vecSrc(m_pBuffer->GetCount());

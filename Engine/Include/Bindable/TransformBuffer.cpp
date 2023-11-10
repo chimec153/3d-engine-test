@@ -2,16 +2,15 @@
 #include "Drawable.h"
 #include "../Core/Graphics.h"
 #include "BindableManager.h"
-#include "DomainCBuffer.h"
+#include "ConstantBuffer.h"
 #include "PointLight.h"
 #include "../Shader/StructuredBuffer.h"
 
 namespace Engine
 {
-	TransformBuffer::TransformBuffer() :
+	Transform::Transform() :
 		Bindable()
-		, m_pVertexCBuffer(StaticFindBindable<VertexCBuffer<_tagTransformBuffer>>("Transform"))
-		, m_pDomainCBuffer(StaticFindBindable<DomainCBuffer<_tagTransformBuffer>>("Transform"))
+		, m_pConstantBuffer(StaticFindBindable<ConstantBuffer<_tagTransformBuffer>>("Transform"))
 		, m_pParentTrasnform(nullptr)
 		, m_vPosition(0.f, 0.f, 0.f)
 		, m_vVelocity(0.f, 0.f, 0.f)
@@ -33,10 +32,9 @@ namespace Engine
 		SetBindableType(BINDABLE_TYPE::TRANSFORM);
 	}
 
-	TransformBuffer::TransformBuffer(const TransformBuffer& buffer) :
+	Transform::Transform(const Transform& buffer) :
 		Bindable(buffer)
-		, m_pVertexCBuffer(buffer.m_pVertexCBuffer)
-		, m_pDomainCBuffer(buffer.m_pDomainCBuffer)
+		, m_pConstantBuffer(buffer.m_pConstantBuffer)
 		, m_pParentTrasnform(nullptr)
 		, m_vPosition(buffer.m_vPosition)
 		, m_vVelocity(buffer.m_vVelocity)
@@ -57,27 +55,27 @@ namespace Engine
 		m_tBuffer.matJoint = Matrix::matIdentity;
 	}
 
-	void TransformBuffer::SetParentTransform(TransformBuffer* pParent)
+	void Transform::SetParentTransform(Transform* pParent)
 	{
 		m_pParentTrasnform = pParent;
 	}
 
-	void TransformBuffer::AddChildTransform(TransformBuffer* pChild)
+	void Transform::AddChildTransform(Transform* pChild)
 	{
 		m_ChildTransformList.push_back(pChild);
 	}
 
-	const std::shared_ptr<class DomainCBuffer<_tagTransformBuffer>>& TransformBuffer::GetDomainCBuffer() const
+	const std::shared_ptr<class ConstantBuffer<_tagTransformBuffer>>& Transform::GetConstantBuffer() const
 	{
-		return m_pDomainCBuffer;
+		return m_pConstantBuffer;
 	}
 
-	const _tagTransformBuffer& TransformBuffer::GetBuffer() const
+	const _tagTransformBuffer& Transform::GetBuffer() const
 	{
 		return m_tBuffer;
 	}
 
-	void TransformBuffer::Update(float fDeltaTime)
+	void Transform::Update(float fDeltaTime)
 	{
 		if (m_bUpdateRotation)
 		{
@@ -109,6 +107,24 @@ namespace Engine
 
 		m_tBuffer.matWorldView = m_matWV;
 
+		m_tBuffer.matWorld = m_matTransform;
+
+		Matrix matInvRot = m_matRotation;
+
+		matInvRot.Transpose();
+
+		m_tBuffer.matInvWorldView = Graphics::GetInst()->GetCamera()->GetInvView() * Matrix::TranslateFromVector(-m_vPosition) * matInvRot * Matrix::Scaling(1.f / m_vScale);
+
+#ifdef _DEBUG
+		Matrix matDebug = m_tBuffer.matWorldView * m_tBuffer.matInvWorldView;
+#endif
+
+		m_tBuffer.matInvWorldView.Transpose();
+
+		m_tBuffer.matView = Graphics::GetInst()->GetView();
+
+		m_tBuffer.matProj = Graphics::GetInst()->GetProjectMatrix();
+
 		const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();
 
 		if (pLight)
@@ -121,27 +137,32 @@ namespace Engine
 		m_tBuffer.matWorldViewProject.Transpose();
 
 		m_tBuffer.matWorldView.Transpose();
+
+		m_tBuffer.matWorld.Transpose();
+
+		m_tBuffer.matView.Transpose();
+
+		m_tBuffer.matProj.Transpose();
 	}
 
-	void TransformBuffer::Bind()
+	void Transform::Bind()
 	{
 		if (m_pJointSequenceBuffer)
 		{
 			m_pJointSequenceBuffer->SetSRV(32);
 		}
 
-		m_pVertexCBuffer->UpdateBuffer(m_tBuffer);
+		m_pConstantBuffer->UpdateBuffer(m_tBuffer);
 
-		m_pVertexCBuffer->Bind();
-		m_pDomainCBuffer->Bind();
+		m_pConstantBuffer->Bind();
 	}
 
-	std::shared_ptr<Bindable> TransformBuffer::Clone()
+	std::shared_ptr<Bindable> Transform::Clone()
 	{
-		return std::make_shared<TransformBuffer>(*this);
+		return std::make_shared<Transform>(*this);
 	}
 
-	void TransformBuffer::PostBind()
+	void Transform::PostBind()
 	{
 		__super::PostBind();
 
@@ -151,7 +172,7 @@ namespace Engine
 		}
 	}
 
-	void TransformBuffer::UpdatePosition()
+	void Transform::UpdatePosition()
 	{
 		m_bUpdatePosition = true;
 
@@ -168,8 +189,8 @@ namespace Engine
 
 		m_vVelocity += m_vPosition - vPrevPos;
 
-		std::list<TransformBuffer*>::iterator iter = m_ChildTransformList.begin();
-		std::list<TransformBuffer*>::iterator iterEnd = m_ChildTransformList.end();
+		std::list<Transform*>::iterator iter = m_ChildTransformList.begin();
+		std::list<Transform*>::iterator iterEnd = m_ChildTransformList.end();
 
 		for (; iter != iterEnd; ++iter)
 		{
@@ -177,7 +198,7 @@ namespace Engine
 		}
 	}
 
-	void TransformBuffer::UpdateRelativeRotation()
+	void Transform::UpdateRelativeRotation()
 	{
 		m_vRelativeRotation = m_vRotation;
 
@@ -186,8 +207,8 @@ namespace Engine
 			m_vRelativeRotation -= m_pParentTrasnform->GetRotation();
 		}
 
-		std::list<TransformBuffer*>::iterator iter = m_ChildTransformList.begin();
-		std::list<TransformBuffer*>::iterator iterEnd = m_ChildTransformList.end();
+		std::list<Transform*>::iterator iter = m_ChildTransformList.begin();
+		std::list<Transform*>::iterator iterEnd = m_ChildTransformList.end();
 
 		for (; iter != iterEnd; ++iter)
 		{
@@ -195,7 +216,7 @@ namespace Engine
 		}
 	}
 
-	void TransformBuffer::UpdateRotation()
+	void Transform::UpdateRotation()
 	{
 		m_bUpdateRotation = true;
 
@@ -210,8 +231,8 @@ namespace Engine
 			m_bUpdatePosition = true;
 		}
 
-		std::list<TransformBuffer*>::iterator iter = m_ChildTransformList.begin();
-		std::list<TransformBuffer*>::iterator iterEnd = m_ChildTransformList.end();
+		std::list<Transform*>::iterator iter = m_ChildTransformList.begin();
+		std::list<Transform*>::iterator iterEnd = m_ChildTransformList.end();
 
 		for (; iter != iterEnd; ++iter)
 		{
@@ -219,7 +240,7 @@ namespace Engine
 		}
 	}
 
-	void TransformBuffer::UpdateRelativeScale()
+	void Transform::UpdateRelativeScale()
 	{
 		m_vRelativeScale = m_vScale;
 
@@ -228,8 +249,8 @@ namespace Engine
 			m_vRelativeScale /= m_pParentTrasnform->GetScale();
 		}
 
-		std::list<TransformBuffer*>::iterator iter = m_ChildTransformList.begin();
-		std::list<TransformBuffer*>::iterator iterEnd = m_ChildTransformList.end();
+		std::list<Transform*>::iterator iter = m_ChildTransformList.begin();
+		std::list<Transform*>::iterator iterEnd = m_ChildTransformList.end();
 
 		for (; iter != iterEnd; ++iter)
 		{
@@ -237,7 +258,7 @@ namespace Engine
 		}
 	}
 
-	void TransformBuffer::UpdateScale()
+	void Transform::UpdateScale()
 	{
 		m_bUpdateScale = true;
 
@@ -248,8 +269,8 @@ namespace Engine
 			m_vScale *= m_pParentTrasnform->GetScale();
 		}
 
-		std::list<TransformBuffer*>::iterator iter = m_ChildTransformList.begin();
-		std::list<TransformBuffer*>::iterator iterEnd = m_ChildTransformList.end();
+		std::list<Transform*>::iterator iter = m_ChildTransformList.begin();
+		std::list<Transform*>::iterator iterEnd = m_ChildTransformList.end();
 
 		for (; iter != iterEnd; ++iter)
 		{
@@ -257,14 +278,14 @@ namespace Engine
 		}
 	}
 
-	void TransformBuffer::Reset()
+	void Transform::Reset()
 	{
 		SetPosition({ 0.f, 0.f, 0.f });
 		SetRotation({ 0.f, 0.f, 0.f });
 		SetScale({ 1.f, 1.f, 1.f });
 	}
 
-	void TransformBuffer::UpdateRelativePosition()
+	void Transform::UpdateRelativePosition()
 	{
 		m_vRelativePosition = m_vPosition;
 
@@ -273,8 +294,8 @@ namespace Engine
 			m_vRelativePosition = Matrix::RotationXYZ(m_pParentTrasnform->GetRotation()).Transpose().TransformNormal(m_vPosition - m_pParentTrasnform->GetPosition());
 		}
 
-		std::list<TransformBuffer*>::iterator iter = m_ChildTransformList.begin();
-		std::list<TransformBuffer*>::iterator iterEnd = m_ChildTransformList.end();
+		std::list<Transform*>::iterator iter = m_ChildTransformList.begin();
+		std::list<Transform*>::iterator iterEnd = m_ChildTransformList.end();
 
 		for (; iter != iterEnd; ++iter)
 		{
@@ -282,7 +303,7 @@ namespace Engine
 		}
 	}
 
-	void TransformBuffer::SetX(float _x)
+	void Transform::SetX(float _x)
 	{
 		m_vVelocity.x += _x - m_vPosition.x;
 
@@ -293,7 +314,7 @@ namespace Engine
 		UpdateRelativePosition();
 	}
 
-	void TransformBuffer::SetY(float _y)
+	void Transform::SetY(float _y)
 	{
 		m_vVelocity.y += _y - m_vPosition.y;
 
@@ -304,7 +325,7 @@ namespace Engine
 		UpdateRelativePosition();
 	}
 
-	void TransformBuffer::SetZ(float _z)
+	void Transform::SetZ(float _z)
 	{
 		m_vVelocity.z += _z - m_vPosition.z;
 
@@ -315,7 +336,7 @@ namespace Engine
 		UpdateRelativePosition();
 	}
 
-	void TransformBuffer::AddX(float _x)
+	void Transform::AddX(float _x)
 	{
 		m_vVelocity.x += _x;
 
@@ -326,7 +347,7 @@ namespace Engine
 		UpdateRelativePosition();
 	}
 
-	void TransformBuffer::AddY(float _y)
+	void Transform::AddY(float _y)
 	{
 		m_vVelocity.y += _y;
 
@@ -337,7 +358,7 @@ namespace Engine
 		UpdateRelativePosition();
 	}
 
-	void TransformBuffer::AddZ(float _z)
+	void Transform::AddZ(float _z)
 	{
 		m_vVelocity.z += _z;
 
@@ -348,67 +369,67 @@ namespace Engine
 		UpdateRelativePosition();
 	}
 
-	float TransformBuffer::GetX() const
+	float Transform::GetX() const
 	{
 		return m_vPosition.x;
 	}
 
-	float TransformBuffer::GetY() const
+	float Transform::GetY() const
 	{
 		return m_vPosition.y;
 	}
 
-	float TransformBuffer::GetZ() const
+	float Transform::GetZ() const
 	{
 		return m_vPosition.z;
 	}
 
-	void TransformBuffer::SetDX(float x)
+	void Transform::SetDX(float x)
 	{
 		m_vVelocity.x = x;
 	}
 
-	void TransformBuffer::SetDY(float y)
+	void Transform::SetDY(float y)
 	{
 		m_vVelocity.y = y;
 	}
 
-	void TransformBuffer::SetDZ(float z)
+	void Transform::SetDZ(float z)
 	{
 		m_vVelocity.z = z;
 	}
 
-	void TransformBuffer::AddDX(float x)
+	void Transform::AddDX(float x)
 	{
 		m_vVelocity.x += x;
 	}
 
-	void TransformBuffer::AddDY(float y)
+	void Transform::AddDY(float y)
 	{
 		m_vVelocity.y += y;
 	}
 
-	void TransformBuffer::AddDZ(float z)
+	void Transform::AddDZ(float z)
 	{
 		m_vVelocity.z += z;
 	}
 
-	float TransformBuffer::GetDX() const
+	float Transform::GetDX() const
 	{
 		return m_vVelocity.x;
 	}
 
-	float TransformBuffer::GetDY() const
+	float Transform::GetDY() const
 	{
 		return m_vVelocity.y;
 	}
 
-	float TransformBuffer::GetDZ() const
+	float Transform::GetDZ() const
 	{
 		return m_vVelocity.z;
 	}
 
-	void TransformBuffer::SetRX(float x)
+	void Transform::SetRX(float x)
 	{
 		m_vRotation.x = x;
 
@@ -417,7 +438,7 @@ namespace Engine
 		UpdateRelativeRotation();
 	}
 
-	void TransformBuffer::SetRY(float y)
+	void Transform::SetRY(float y)
 	{
 		m_vRotation.y = y;
 
@@ -426,7 +447,7 @@ namespace Engine
 		UpdateRelativeRotation();
 	}
 
-	void TransformBuffer::SetRZ(float z)
+	void Transform::SetRZ(float z)
 	{
 		m_vRotation.z = z;
 
@@ -435,7 +456,7 @@ namespace Engine
 		UpdateRelativeRotation();
 	}
 
-	void TransformBuffer::AddRX(float x)
+	void Transform::AddRX(float x)
 	{
 		m_vRotation.x += x;
 
@@ -444,7 +465,7 @@ namespace Engine
 		UpdateRelativeRotation();
 	}
 
-	void TransformBuffer::AddRY(float y)
+	void Transform::AddRY(float y)
 	{
 		m_vRotation.y += y;
 
@@ -453,7 +474,7 @@ namespace Engine
 		UpdateRelativeRotation();
 	}
 
-	void TransformBuffer::AddRZ(float z)
+	void Transform::AddRZ(float z)
 	{
 		m_vRotation.z += z;
 
@@ -462,67 +483,67 @@ namespace Engine
 		UpdateRelativeRotation();
 	}
 
-	float TransformBuffer::GetRX() const
+	float Transform::GetRX() const
 	{
 		return m_vRotation.x;
 	}
 
-	float TransformBuffer::GetRY() const
+	float Transform::GetRY() const
 	{
 		return m_vRotation.y;
 	}
 
-	float TransformBuffer::GetRZ() const
+	float Transform::GetRZ() const
 	{
 		return m_vRotation.z;
 	}
 
-	void TransformBuffer::SetDRX(float x)
+	void Transform::SetDRX(float x)
 	{
 		m_vRotationVelocity.x = x;
 	}
 
-	void TransformBuffer::SetDRY(float y)
+	void Transform::SetDRY(float y)
 	{
 		m_vRotationVelocity.y = y;
 	}
 
-	void TransformBuffer::SetDRZ(float z)
+	void Transform::SetDRZ(float z)
 	{
 		m_vRotationVelocity.z = z;
 	}
 
-	void TransformBuffer::AddDRX(float x)
+	void Transform::AddDRX(float x)
 	{
 		m_vRotationVelocity.x += x;
 	}
 
-	void TransformBuffer::AddDRY(float y)
+	void Transform::AddDRY(float y)
 	{
 		m_vRotationVelocity.y += y;
 	}
 
-	void TransformBuffer::AddDRZ(float z)
+	void Transform::AddDRZ(float z)
 	{
 		m_vRotationVelocity.z += z;
 	}
 
-	float TransformBuffer::GetDRX() const
+	float Transform::GetDRX() const
 	{
 		return m_vRotationVelocity.x;
 	}
 
-	float TransformBuffer::GetDRY() const
+	float Transform::GetDRY() const
 	{
 		return m_vRotationVelocity.y;
 	}
 
-	float TransformBuffer::GetDRZ() const
+	float Transform::GetDRZ() const
 	{
 		return m_vRotationVelocity.z;
 	}
 
-	void TransformBuffer::SetRandomPosAndRotation()
+	void Transform::SetRandomPosAndRotation()
 	{
 		SetX((float)(rand() % 5 - 2));
 		SetY((float)(rand() % 5 - 2));
@@ -538,17 +559,17 @@ namespace Engine
 		SetDRZ((float)(rand() % 50 - 25) / 20.f);
 	}
 
-	const Vector3& TransformBuffer::GetAxis(AXIS_TYPE type) const
+	const Vector3& Transform::GetAxis(AXIS_TYPE type) const
 	{
 		return m_vAxis[static_cast<int>(type)];
 	}
 
-	const Vector3& TransformBuffer::GetPosition() const
+	const Vector3& Transform::GetPosition() const
 	{
 		return m_vPosition;
 	}
 
-	void TransformBuffer::SetPosition(const Vector3& pos)
+	void Transform::SetPosition(const Vector3& pos)
 	{
 		m_vVelocity += pos - m_vPosition;
 
@@ -559,12 +580,12 @@ namespace Engine
 		UpdateRelativePosition();
 	}
 
-	void TransformBuffer::SetPosition(float x, float y, float z)
+	void Transform::SetPosition(float x, float y, float z)
 	{
 		SetPosition({ x,y,z });
 	}
 
-	void TransformBuffer::AddPosition(const Vector3& pos)
+	void Transform::AddPosition(const Vector3& pos)
 	{
 		m_vVelocity += pos;
 
@@ -575,19 +596,19 @@ namespace Engine
 		UpdateRelativePosition();
 	}
 
-	void TransformBuffer::SetRelativePosition(const Vector3& pos)
+	void Transform::SetRelativePosition(const Vector3& pos)
 	{
 		m_vRelativePosition = pos;
 
 		UpdatePosition();
 	}
 
-	void TransformBuffer::SetRelativePosition(float x, float y, float z)
+	void Transform::SetRelativePosition(float x, float y, float z)
 	{
 		SetRelativePosition({ x,y,z });
 	}
 
-	void TransformBuffer::SetRelativeScale(float x, float y, float z)
+	void Transform::SetRelativeScale(float x, float y, float z)
 	{
 		m_vRelativeScale.x = x;
 		m_vRelativeScale.y = y;
@@ -596,24 +617,24 @@ namespace Engine
 		UpdateScale();
 	}
 
-	void TransformBuffer::SetRelativeRotation(float x, float y, float z)
+	void Transform::SetRelativeRotation(float x, float y, float z)
 	{
 		SetRelativeRotation({ x,y,z });
 	}
 
-	void TransformBuffer::SetRelativeRotation(const Vector3& vRotation)
+	void Transform::SetRelativeRotation(const Vector3& vRotation)
 	{
 		m_vRelativeRotation = vRotation;
 
 		UpdateRotation();
 	}
 
-	const Matrix& TransformBuffer::GetTransformMatrix() const
+	const Matrix& Transform::GetTransformMatrix() const
 	{
 		return m_matTransform;
 	}
 
-	void TransformBuffer::SetScale(const Vector3& scale)
+	void Transform::SetScale(const Vector3& scale)
 	{
 		m_vScaleVelocity += scale - m_vScale;
 
@@ -622,7 +643,7 @@ namespace Engine
 		UpdateRelativeScale();
 	}
 
-	void TransformBuffer::SetScale(float x, float y, float z)
+	void Transform::SetScale(float x, float y, float z)
 	{
 		m_vScaleVelocity.x += x - m_vScale.x;
 		m_vScaleVelocity.y += y - m_vScale.y;
@@ -635,7 +656,7 @@ namespace Engine
 		UpdateRelativeScale();
 	}
 
-	void TransformBuffer::SetRotation(const Vector3& rot)
+	void Transform::SetRotation(const Vector3& rot)
 	{
 		m_vRotation = rot;
 
@@ -644,47 +665,47 @@ namespace Engine
 		UpdateRelativeRotation();
 	}
 
-	void TransformBuffer::SetRotation(float x, float y, float z)
+	void Transform::SetRotation(float x, float y, float z)
 	{
 		SetRotation({ x,y,z });
 	}
 
-	const Vector3& TransformBuffer::GetRotation() const
+	const Vector3& Transform::GetRotation() const
 	{
 		return m_vRotation;
 	}
 
-	const Vector3& TransformBuffer::GetScale() const
+	const Vector3& Transform::GetScale() const
 	{
 		return m_vScale;
 	}
 
-	const Vector3& TransformBuffer::GetVelocity() const
+	const Vector3& Transform::GetVelocity() const
 	{
 		return m_vVelocity;
 	}
 
-	const Matrix& TransformBuffer::GetRotationMatrix() const
+	const Matrix& Transform::GetRotationMatrix() const
 	{
 		return m_matRotation;
 	}
 
-	const Matrix& TransformBuffer::GetRotationTranslationMatrix() const
+	const Matrix& Transform::GetRotationTranslationMatrix() const
 	{
 		return m_matRotationTranslation;
 	}
 
-	const Matrix& TransformBuffer::GetWV() const
+	const Matrix& Transform::GetWV() const
 	{
 		return m_matWV;
 	}
 
-	void TransformBuffer::SetVelocity(const Vector3& vVelocity)
+	void Transform::SetVelocity(const Vector3& vVelocity)
 	{
 		m_vVelocity = vVelocity;
 	}
 
-	void TransformBuffer::SetAxis(AXIS_TYPE eType, const Vector3& vAxisZ, const Vector3& vUp)
+	void Transform::SetAxis(AXIS_TYPE eType, const Vector3& vAxisZ, const Vector3& vUp)
 	{
 		m_vAxis[static_cast<int>(eType)] = vAxisZ;
 
@@ -707,14 +728,14 @@ namespace Engine
 		m_matTransform = Matrix::Scaling(m_vScale) * m_matRotationTranslation * m_matParent;*/
 	}
 
-	void TransformBuffer::SetParentMatrix(const Matrix& matParent, int iJointIndex, std::shared_ptr<class StructuredBuffer> pBuffer)
+	void Transform::SetParentMatrix(const Matrix& matParent, int iJointIndex, std::shared_ptr<class StructuredBuffer> pBuffer)
 	{
 		m_tBuffer.matJoint = matParent;
 
 		//m_tBuffer.iJointSocket = iJointIndex;
 		//m_pJointSequenceBuffer = pBuffer;
 	}
-	void TransformBuffer::SetRotationTranslationMatrix(const Matrix& mat)
+	void Transform::SetRotationTranslationMatrix(const Matrix& mat)
 	{
 		m_matRotationTranslation = mat;
 	}

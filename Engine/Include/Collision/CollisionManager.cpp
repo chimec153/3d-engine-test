@@ -95,7 +95,7 @@ namespace Engine
 
 	void CollisionManager::AddDrawable(const std::shared_ptr<class Drawable>& pDrawable)
 	{
-		const std::shared_ptr<class TransformBuffer>& pTransform = pDrawable->GetTransform();
+		const std::shared_ptr<class Transform>& pTransform = pDrawable->GetTransform();
 
 		if (!pTransform)
 		{

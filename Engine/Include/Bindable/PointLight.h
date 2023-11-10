@@ -1,7 +1,7 @@
 #pragma once
 #include "Drawable.h"
-#include "PixelCBuffer.h"
-#include "VertexCBuffer.h"
+#include "ConstantBuffer.h"
+#include "ConstantBuffer.h"
 
 namespace Engine
 {
@@ -26,8 +26,8 @@ namespace Engine
         virtual ~PointLight() override = default;
 
     private:
-        std::shared_ptr<PixelCBuffer<POINTLIGHT>> pPointCBuffer;
-        std::shared_ptr<VertexCBuffer<POINTLIGHT>> pVSPointCBuffer;
+        std::shared_ptr<ConstantBuffer<POINTLIGHT>> pPointCBuffer;
+        std::shared_ptr<ConstantBuffer<POINTLIGHT>> pVSPointCBuffer;
         POINTLIGHT  tPointLight;
         Matrix  matView;
         Matrix  matViewProject;
@@ -37,7 +37,7 @@ namespace Engine
         void SetLightType(LIGHT_TYPE eType);
         LIGHT_TYPE GetLightType()   const;
         void SetIntensity(float fIntensity);
-        const std::shared_ptr<PixelCBuffer<POINTLIGHT>>& GetLightCBuffer()    const;
+        const std::shared_ptr<ConstantBuffer<POINTLIGHT>>& GetLightCBuffer()    const;
         const Matrix& GetView() const;
         const Matrix& GetViewProject() const;
         const ORTHOINFO& GetOrthoInfo() const;

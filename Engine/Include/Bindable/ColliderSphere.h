@@ -4,9 +4,9 @@ namespace Engine
 {
 #ifdef _DEBUG
     template <typename T>
-    class PixelCBuffer;
+    class ConstantBuffer;
     template <typename T>
-    class DomainCBuffer;
+    class ConstantBuffer;
 #endif
     class ENGINE_DLL ColliderSphere :
         public Collider
@@ -21,7 +21,7 @@ namespace Engine
         Vector3 m_vOffset;
         SPHERECOLLIDERINFO  m_tInfo;
 #ifdef _DEBUG
-        std::shared_ptr<class PixelCBuffer<COLOR>>    m_pDebugPSConst;
+        std::shared_ptr<class ConstantBuffer<COLOR>>    m_pDebugPSConst;
 #endif
 
     public:

@@ -83,7 +83,7 @@ VS_Terrain_Out VS_Terrain(VSStandardIn input)
     float2 downuv = downpos / g_iTerrainWidth;
     downuv.y = 1.f - downuv.y;
     
-    pos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, output.blend_uv, 0.f).r * 10.f;
+    pos.y = g_HeightTexture.SampleLevel(g_sPoint, output.blend_uv, 0.f).r * 10.f;
     leftpos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, leftuv, 0.f).r * 10.f;
     rightpos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, rightuv, 0.f).r * 10.f;
     uppos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, upuv, 0.f).r * 10.f;
@@ -220,18 +220,7 @@ PSOut PS(VSOut input)
 {
     PSOut output;
     
-    float3 normal = normalize(input.normal);
-    
-    float3 tangent = normalize(input.tangent.xyz);
-    
-    float3 bitangent = cross(normal, tangent) * input.tangent.w;
-    
-    float3 N = normalize(g_NormalTexture.Sample(g_sAnisotropic, input.uv).xyz * 2.f - 1.f);
-    
-    output.value1.xyz = normalize(float3(
-    tangent.x * N.x + bitangent.x * N.y + normal.x * N.z, 
-    tangent.y * N.x + bitangent.y * N.y + normal.y * N.z, 
-    tangent.z * N.x + bitangent.z * N.y + normal.z * N.z)) * 0.5f + 0.5f;
+    output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
     
     output.value0.xyz = g_vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz + g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     
@@ -251,18 +240,7 @@ PSOut PS_NoSpecMap(VSOut input)
 {
     PSOut output;
     
-    float3 normal = normalize(input.normal);
-    
-    float3 tangent = normalize(input.tangent.xyz);
-    
-    float3 bitangent = cross(normal, tangent) * input.tangent.w;
-    
-    float3 N = normalize(g_NormalTexture.Sample(g_sAnisotropic, input.uv).xyz * 2.f - 1.f);
-    
-    output.value1.xyz = normalize(float3(
-    tangent.x * N.x + bitangent.x * N.y + normal.x * N.z,
-    tangent.y * N.x + bitangent.y * N.y + normal.y * N.z,
-    tangent.z * N.x + bitangent.z * N.y + normal.z * N.z)) * 0.5f + 0.5f;
+    output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
     
     output.value0.xyz = g_vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
     
@@ -342,18 +320,7 @@ PSOut PS_NoTexture(VSOut input)
 {
     PSOut output;
     
-    float3 normal = normalize(input.normal);
-    
-    float3 tangent = normalize(input.tangent.xyz);
-    
-    float3 bitangent = cross(normal, tangent) * input.tangent.w;
-    
-    float3 N = normalize(g_NormalTexture.Sample(g_sAnisotropic, input.uv).xyz * 2.f - 1.f);
-    
-    output.value1.xyz = normalize(float3(
-    tangent.x * N.x + bitangent.x * N.y + normal.x * N.z,
-    tangent.y * N.x + bitangent.y * N.y + normal.y * N.z,
-    tangent.z * N.x + bitangent.z * N.y + normal.z * N.z)) * 0.5f + 0.5f;
+    output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
     
     output.value0.xyz = g_vDiffuseColor.xyz;
     
@@ -566,6 +533,11 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     shadowpos.y = 1.f - shadowpos.y;
     
+    float4 decal0 = g_DecalTexture0.Sample(g_sPoint, input.uv);
+    float4 decal1 = g_DecalTexture1.Sample(g_sPoint, input.uv);
+    float4 decal2 = g_DecalTexture2.Sample(g_sPoint, input.uv);
+    float4 decal3 = g_DecalTexture3.Sample(g_sPoint, input.uv);
+    
     float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
     
     float4 value0 = g_GBufferTexture0.Sample(g_sPoint, input.uv);
@@ -574,15 +546,15 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     float2 vMaterialRoughness = float2(value0.w, value1.w);
     
-    float3 albedo = value0.xyz;
+    float3 albedo = value0.xyz * (1.f - decal0.w) + decal0.xyz * decal0.w;
     
-    float3 normal = (value1.xyz - 0.5f) * 2.f;
+    float3 normal = ((value1.xyz * (1.f - decal1.w) + decal1.xyz * decal1.w) - 0.5f) * 2.f;
     
     float4 value2 = g_GBufferTexture2.Sample(g_sPoint, input.uv);
     
     float4 value3 = g_GBufferTexture3.Sample(g_sPoint, input.uv);
     
-    float3 vSpecColor = value3.xyz;
+    float3 vSpecColor = value3.xyz * (1.f - decal3.w) + decal3.xyz * decal3.w;
     
     float3 G = value2.xyz;
     
@@ -729,18 +701,7 @@ PSOut PSInst(VSInstOut input)
 {
     PSOut output;
     
-    float3 normal = normalize(input.normal);
-    
-    float3 tangent = normalize(input.tangent.xyz);
-    
-    float3 bitangent = cross(normal, tangent) * input.tangent.w;
-    
-    float3 N = normalize(g_NormalTexture.Sample(g_sAnisotropic, input.uv).xyz * 2.f - 1.f);
-    
-    output.value1.xyz = normalize(float3(
-    tangent.x * N.x + bitangent.x * N.y + normal.x * N.z,
-    tangent.y * N.x + bitangent.y * N.y + normal.y * N.z,
-    tangent.z * N.x + bitangent.z * N.y + normal.z * N.z)) * 0.5f + 0.5f;
+    output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
     
     output.value0.xyz = input.vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
     
@@ -760,18 +721,7 @@ PSOut PS_NoSpecInst(VSInstOut input)
 {
     PSOut output;
     
-    float3 normal = normalize(input.normal);
-    
-    float3 tangent = normalize(input.tangent.xyz);
-    
-    float3 bitangent = cross(normal, tangent) * input.tangent.w;
-    
-    float3 N = normalize(g_NormalTexture.Sample(g_sAnisotropic, input.uv).xyz * 2.f - 1.f);
-    
-    output.value1.xyz = normalize(float3(
-    tangent.x * N.x + bitangent.x * N.y + normal.x * N.z,
-    tangent.y * N.x + bitangent.y * N.y + normal.y * N.z,
-    tangent.z * N.x + bitangent.z * N.y + normal.z * N.z)) * 0.5f + 0.5f;
+    output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
     
     output.value0.xyz = input.vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
     
@@ -857,18 +807,7 @@ PSOut PS_NoTextureInst(VSInstOut input)
 {
     PSOut output;
     
-    float3 normal = normalize(input.normal);
-    
-    float3 tangent = normalize(input.tangent.xyz);
-    
-    float3 bitangent = cross(normal, tangent) * input.tangent.w;
-    
-    float3 N = normalize(g_NormalTexture.Sample(g_sAnisotropic, input.uv).xyz * 2.f - 1.f);
-    
-    output.value1.xyz = normalize(float3(
-    tangent.x * N.x + bitangent.x * N.y + normal.x * N.z,
-    tangent.y * N.x + bitangent.y * N.y + normal.y * N.z,
-    tangent.z * N.x + bitangent.z * N.y + normal.z * N.z)) * 0.5f + 0.5f;
+    output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
     
     output.value0.xyz = input.vDiffuseColor.xyz;
     

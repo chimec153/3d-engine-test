@@ -7,7 +7,7 @@
 #include "VertexShader.h"
 #include "PixelShader.h"
 #include "Topology.h"
-#include "PixelCBuffer.h"
+#include "ConstantBuffer.h"
 #include "IndexBuffer.h"
 #include "VertexBuffer.h"
 #include "../Core/Window.h"
@@ -31,6 +31,17 @@ namespace Engine
 		{0.f, 0.f, 0.f, 0.f, 0.5f, -0.5f, -0.5f,	0.f, 0.f, 0.f, 1.f, 1.f},
 		{0.f, 0.f, 0.f, 0.f, -0.5f, -0.5f, -0.5f,	0.f, 0.f, 0.f, 0.f, 1.f},
 	};
+	//std::vector<VertexTexture> Box::vertex =
+	//{
+	//	{0.f, 0.f, 0.f, 0.f, 1.f, 1.f, 1.f,		0.f, 0.f, 0.f, 0.f, 0.f},
+	//	{0.f, 0.f, 0.f, 0.f, 0.f, 1.f, 1.f,		0.f, 0.f, 0.f, 1.f, 0.f},
+	//	{0.f, 0.f, 0.f, 0.f, 1.f, 0.f, 1.f,		0.f, 0.f, 0.f, 0.f, 1.f},
+	//	{0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 1.f,	0.f, 0.f, 0.f, 1.f, 1.f},
+	//	{0.f, 0.f, 0.f, 0.f, 1.f, 1.f, 0.f,		0.f, 0.f, 0.f, 1.f, 0.f},
+	//	{0.f, 0.f, 0.f, 0.f, 0.f, 1.f, 0.f,	0.f, 0.f, 0.f, 0.f, 0.f},
+	//	{0.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f,	0.f, 0.f, 0.f, 1.f, 1.f},
+	//	{0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f,	0.f, 0.f, 0.f, 0.f, 1.f},
+	//};
 
 	std::vector<unsigned int> Box::index =
 	{

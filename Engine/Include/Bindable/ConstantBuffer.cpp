@@ -68,6 +68,19 @@ namespace Engine
 	template<typename T>
 	inline void ConstantBuffer<T>::Bind()
 	{
+		Graphics::GetInst()->GetDeviceContext()->VSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->HSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->DSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->GSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->PSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->CSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
+	}
+
+	template<typename T>
+	std::shared_ptr<Bindable> ConstantBuffer<T>::Clone()
+	{
+		assert(false);
+		return nullptr;
 	}
 
 	template<typename T>
@@ -113,5 +126,19 @@ namespace Engine
 				return;
 			}
 		}
+	}
+	template<typename T>
+	void ConstantBuffer<T>::GetAndBind()
+	{
+		std::shared_ptr<ID3D11Buffer>& pPrevBuffer = ConstantBuffer<T>::GetPrevBuffer();
+
+		Graphics::GetInst()->GetDeviceContext()->PSGetConstantBuffers(ConstantBuffer<T>::GetSlot(), 1, &pPrevBuffer);
+
+		Graphics::GetInst()->GetDeviceContext()->PSSetConstantBuffers(ConstantBuffer<T>::GetSlot(), 1, ConstantBuffer<T>::pConstantBuffer.GetAdressof());
+	}
+	template<typename T>
+	void ConstantBuffer<T>::BindEnd()
+	{
+		Graphics::GetInst()->GetDeviceContext()->PSSetConstantBuffers(ConstantBuffer<T>::GetSlot(), 1, ConstantBuffer<T>::GetPrevBuffer().GetAdressof());
 	}
 }

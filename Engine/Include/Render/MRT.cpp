@@ -163,6 +163,30 @@ namespace Engine
 		}
 	}
 
+	void MRT::SetRenderTargets()
+	{
+		std::vector<ID3D11RenderTargetView*> vecRTV(8);
+
+		Graphics::GetInst()->GetDeviceContext()->OMGetRenderTargets((UINT)vecRTV.size(), &vecRTV[0], m_pPrevDSV.GetAdressof());
+
+		for (size_t i = 0; i < vecRTV.size(); ++i)
+		{
+			m_vecPrevRTV.push_back(vecRTV[i]);
+		}
+
+		vecRTV.clear();
+
+		for (size_t i = 0; i < m_vecRTV.size(); ++i)
+		{
+			vecRTV.push_back(*m_vecRTV[i]);
+		}
+
+		if (vecRTV.size())
+		{
+			Graphics::GetInst()->GetDeviceContext()->OMSetRenderTargets((UINT)m_vecRTV.size(), &vecRTV[0], nullptr);
+		}
+	}
+
 	void MRT::ResetTargets()
 	{
 		std::vector<ID3D11RenderTargetView*> vecRTV;

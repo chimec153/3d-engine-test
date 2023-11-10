@@ -3,7 +3,6 @@
 #include "../Core/Ptr.h"
 #include "../Core/Window.h"
 #include "Sampler.h"
-#include "VertexCBuffer.h"
 #include "RasterizerState.h"
 #include "Material.h"
 #include "FbxLoader.h"

@@ -57,7 +57,7 @@ Player::Player() :
 
 	//pWeapon->CreateBindable<Engine::Mesh>("weapon_mesh", "Bow005.mesh");
 #ifdef _DEBUG
-	/*std::shared_ptr<Engine::TransformBuffer> pSphereTransform = m_pSphere->GetTransform();
+	/*std::shared_ptr<Engine::Transform> pSphereTransform = m_pSphere->GetTransform();
 
 	if (pSphereTransform)
 	{
@@ -132,7 +132,7 @@ Player::Player(const Player& player) :
 
 		std::shared_ptr<Engine::Drawable> pDrawable = pScene->CreateDrawable<Engine::Sphere>(strSphere, pScene->FindLayer(DEFAULT_LAYER), 32, 32);
 
-		std::shared_ptr<Engine::TransformBuffer> pTransform = pDrawable->GetTransform();
+		std::shared_ptr<Engine::Transform> pTransform = pDrawable->GetTransform();
 
 		/*m_pFootLineCollider[i] = pDrawable->CreateBindable<Engine::ColliderLine>("LeftFootLineCollider");
 
@@ -186,7 +186,7 @@ void Player::Update(float fDeltaTime)
 		}
 	}
 
-	std::shared_ptr<Engine::TransformBuffer> pTransform = GetTransform();
+	std::shared_ptr<Engine::Transform> pTransform = GetTransform();
 
 	if (pTransform)
 	{
@@ -211,7 +211,7 @@ void Player::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, floa
 
 	if (pParent)
 	{
-		std::shared_ptr<Engine::TransformBuffer> pColliderTransform = pParent->GetTransform();
+		std::shared_ptr<Engine::Transform> pColliderTransform = pParent->GetTransform();
 
 		if (pColliderTransform)
 		{
@@ -229,7 +229,7 @@ void Player::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, floa
 		if (m_pFootLineCollider[i].get() == pSrc ||
 			m_pFootLineCollider[i].get() == pDest)
 		{
-			std::shared_ptr<Engine::TransformBuffer> pTransform = m_pSphere[i]->GetTransform();
+			std::shared_ptr<Engine::Transform> pTransform = m_pSphere[i]->GetTransform();
 
 			if (pTransform)
 			{

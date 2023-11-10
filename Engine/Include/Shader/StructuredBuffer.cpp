@@ -130,6 +130,7 @@ namespace Engine
 	void StructuredBuffer::SetSRV(int iSlot)
 	{
 		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(iSlot, 1, m_pSRV.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->GSSetShaderResources(iSlot, 1, m_pSRV.GetAdressof());
 		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(iSlot, 1, m_pSRV.GetAdressof());
 	}
 	void StructuredBuffer::SetUAV(int iSlot)
@@ -142,6 +143,7 @@ namespace Engine
 		ID3D11ShaderResourceView* pSRV = nullptr;
 
 		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(iSlot, 1, &pSRV);
+		Graphics::GetInst()->GetDeviceContext()->GSSetShaderResources(iSlot, 1, &pSRV);
 		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(iSlot, 1, &pSRV);
 	}
 	void StructuredBuffer::ResetUAV(int iSlot)

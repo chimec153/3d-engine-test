@@ -27,6 +27,7 @@ namespace Engine
     public:
         void Clear(D3D11_CLEAR_FLAG eClearFlag = (D3D11_CLEAR_FLAG)((int)D3D11_CLEAR_DEPTH | (int)D3D11_CLEAR_STENCIL));
         void SetTargets();
+        void SetRenderTargets();
         void ResetTargets();
         void SetSRV();
         void SetSRV(int iIndex, UINT iSlot);

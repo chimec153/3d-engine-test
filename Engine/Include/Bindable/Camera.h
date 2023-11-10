@@ -24,6 +24,7 @@ namespace Engine
         const Matrix& GetView()  const;
         virtual void Reset() override;
         void UpdateView();
+        const Matrix& GetInvView() const;
 
     public:
         virtual bool Init() override;

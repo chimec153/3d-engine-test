@@ -15,8 +15,8 @@ namespace Engine
 {
 	PointLight::PointLight() :
 		Drawable()
-		, pPointCBuffer(StaticFindBindable<PixelCBuffer<POINTLIGHT>>("PointLight"))
-		, pVSPointCBuffer(StaticFindBindable<VertexCBuffer<POINTLIGHT>>("PointLight"))
+		, pPointCBuffer(StaticFindBindable<ConstantBuffer<POINTLIGHT>>("PointLight"))
+		, pVSPointCBuffer(StaticFindBindable<ConstantBuffer<POINTLIGHT>>("PointLight"))
 	{
 		m_tOrthoInfo.fLeft = -2500.f;
 		m_tOrthoInfo.fRight = 2500.f;
@@ -28,18 +28,6 @@ namespace Engine
 		SetBindableType(Engine::BINDABLE_TYPE::LIGHT);
 
 		Reset();
-
-		if (pPointCBuffer)
-		{
-			pPointCBuffer = std::static_pointer_cast<PixelCBuffer<POINTLIGHT>>(pPointCBuffer->Clone());
-		}
-
-		if (pVSPointCBuffer)
-		{
-			pVSPointCBuffer = std::static_pointer_cast<VertexCBuffer<POINTLIGHT>>(pVSPointCBuffer->Clone());
-
-			pVSPointCBuffer->SetBuffer(pPointCBuffer->GetBuffer());
-		}
 
 		AddChild(pVSPointCBuffer);
 
@@ -141,7 +129,7 @@ namespace Engine
 		tPointLight.fIntensity = fIntensity;
 	}
 
-	const std::shared_ptr<PixelCBuffer<POINTLIGHT>>& PointLight::GetLightCBuffer() const
+	const std::shared_ptr<ConstantBuffer<POINTLIGHT>>& PointLight::GetLightCBuffer() const
 	{
 		return pPointCBuffer;
 	}
@@ -252,7 +240,7 @@ namespace Engine
 	{
 		__super::Update(fDeltaTime);
 
-		const std::shared_ptr<TransformBuffer>& pLightTransform = GetTransform();
+		const std::shared_ptr<Transform>& pLightTransform = GetTransform();
 
 		if (!pLightTransform)
 		{
@@ -286,8 +274,6 @@ namespace Engine
 
 		tPointLight.pos = Graphics::GetInst()->GetView().TransformCoord(GetTransform()->GetPosition());
 		tPointLight.dir = Graphics::GetInst()->GetView().TransformNormal(GetTransform()->GetAxis(AXIS_TYPE::Z));
-
-		pVSPointCBuffer->UpdateBuffer(tPointLight);
 	}
 
 	void PointLight::PreDraw(float fDeltaTime)
@@ -299,6 +285,8 @@ namespace Engine
 
 	void PointLight::Bind()
 	{
+		pVSPointCBuffer->UpdateBuffer(tPointLight);
+
 		__super::Bind();
 	}
 

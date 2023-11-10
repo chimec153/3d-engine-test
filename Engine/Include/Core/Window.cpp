@@ -35,7 +35,10 @@
 #include "../Thread/ThreadManager.h"
 #include "../Animation/JointSocket.h"
 #include "../Bindable/Terrain.h"
-#include "../Bindable/ComputeCBuffer.h"
+#include "../Bindable/ConstantBuffer.h"
+#include "../Bindable/ColliderMesh.h"
+#include "../Bindable/GeometryShader.h"
+#include "../Bindable/ConstantBuffer.h"
 
 namespace Engine
 {
@@ -70,6 +73,7 @@ namespace Engine
 		Engine::BindableManager<class Engine::VertexShader>::DestroyInst();
 		Engine::BindableManager<class Engine::HullShader>::DestroyInst();
 		Engine::BindableManager<class Engine::DomainShader>::DestroyInst();
+		Engine::BindableManager<class Engine::GeometryShader>::DestroyInst();
 		Engine::BindableManager<class Engine::PixelShader>::DestroyInst();
 		Engine::BindableManager<class Engine::ComputeShader>::DestroyInst();
 		Engine::BindableManager<class Engine::Sampler>::DestroyInst();
@@ -77,21 +81,19 @@ namespace Engine
 		Engine::BindableManager<class Engine::InputLayout>::DestroyInst();
 		Engine::BindableManager<class Engine::Material>::DestroyInst();
 		Engine::BindableManager<class Engine::Mesh>::DestroyInst();
-		Engine::BindableManager<class Engine::TransformBuffer>::DestroyInst();
+		Engine::BindableManager<class Engine::Transform>::DestroyInst();
 		Engine::BindableManager<class Engine::Texture>::DestroyInst();
-		Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagTransformBuffer>>::DestroyInst();
-		Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagBoneCBuffer> >::DestroyInst();
-		Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagTerrainCBuffer> >::DestroyInst();
-		Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagPointLight> >::DestroyInst();
-		Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagMaterial> >::DestroyInst();
-		Engine::BindableManager<class Engine::DomainCBuffer<struct Engine::_tagTransformBuffer>>::DestroyInst();
-		Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagPerspectiveBuffer> >::DestroyInst();
-		Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagColor> >::DestroyInst();
-		Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagMaterial> >::DestroyInst();
-		Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagTerrainCBuffer> >::DestroyInst();
-		Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagPointLight> >::DestroyInst();
-		Engine::BindableManager<class Engine::ComputeCBuffer<struct Engine::_tagBoneCBuffer> >::DestroyInst();
-		Engine::BindableManager<class Engine::ComputeCBuffer<struct Engine::_tagIKCBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagTransformBuffer>>::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagBoneCBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagTerrainCBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPointLight> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagMaterial> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPerspectiveBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagColor> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagIKCBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagParticleCBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >::DestroyInst();
 
 		ThreadManager::DestroyInst();
 
@@ -244,45 +246,13 @@ namespace Engine
 			return false;
 		}
 
-		StaticCreateBindable<VertexCBuffer<POINTLIGHT>>("PointLight", 1);
+		StaticCreateBindable<ConstantBuffer<POINTLIGHT>>("PointLight", 1);
 
-		StaticCreateBindable<PixelCBuffer<POINTLIGHT>>("PointLight", 1);
+		StaticCreateBindable<ConstantBuffer<POINTLIGHT>>("PointLight", 1);
 
 		CInput::GetInst()->AddKey(DIK_ESCAPE);
 
 		Scene* pCurrentScene = SceneManager::GetInst()->GetScene(SCENE_TYPE::CURRENT);
-
-		std::vector<const TCHAR*> vecTexture =
-		{
-			TEXT("LandScape\\Terrain_Cliff_15_Large.dds"),
-			TEXT("LandScape\\BD_Terrain_Cliff05.dds"),
-		};
-
-		std::vector<const TCHAR*> vecNormalTexture =
-		{
-			TEXT("LandScape\\Terrain_Cliff_15_Large_NRM.bmp"),
-			TEXT("LandScape\\BD_Terrain_Cliff05_NRM.bmp"),
-		};
-
-		std::vector<const TCHAR*> vecSpecularTexture =
-		{
-			TEXT("LandScape\\Terrain_Cliff_15_Large_SPEC.bmp"),
-			TEXT("LandScape\\BD_Terrain_Cliff05_SPEC.bmp"),
-		};
-
-		std::vector<const TCHAR*> vecBlendTexture =
-		{
-			TEXT("LandScape\\baseAlpha.bmp"),
-			TEXT("LandScape\\RoadAlpha.bmp"),
-		};
-
-		std::shared_ptr<Terrain> pTerrain = pCurrentScene->CreateDrawable<Terrain>("Terrain", pCurrentScene->FindLayer(DEFAULT_LAYER));
-
-		pTerrain->CreateTerrainTexture(vecTexture);
-		pTerrain->CreateTerrainNormalTexture(vecNormalTexture);
-		pTerrain->CreateTerrainSpecularTexture(vecSpecularTexture);
-		pTerrain->CreateBlendTerrainTexture(vecBlendTexture);
-		pTerrain->CreateHeightMap(TEXT("LandScape\\height2.bmp"));
 
 #ifdef _DEBUG
 		const std::shared_ptr<Drawable>& pLine = pCurrentScene->CreateProtoType<Drawable>("Line", SCENE_TYPE::CURRENT);
@@ -368,13 +338,15 @@ namespace Engine
 
 		TCHAR strFPS[MAX_PATH] = {};
 
-		swprintf_s(strFPS, TEXT("Google SoftwareEngineer FPS: %d, Elapsed Time: %.4f"), static_cast<int>(pTimer->GetFPS()), fDeltaTime);
+		swprintf_s(strFPS, TEXT("FPS: %d, Elapsed Time: %.4f"), static_cast<int>(pTimer->GetFPS()), fDeltaTime);
 
 		SetWindowText(m_hWnd, strFPS);
 
 		CInput::GetInst()->Update(fDeltaTime * !bStop);
 
 		Graphics::GetInst()->Update(fDeltaTime);
+
+		ShaderManager::GetInst()->Update(fDeltaTime, fTime);
 
 		return SceneManager::GetInst()->Update(fDeltaTime * !bStop);
 	}

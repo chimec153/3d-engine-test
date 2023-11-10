@@ -12,13 +12,14 @@ namespace Engine
 	class Mesh;
 	class Collider;
 	class NavMesh;
-	class TransformBuffer;
+	class Transform;
 	class PointLight;
 	class Sphere;
 	class MRT;
 	class Material;
 	class Shader;
 	class Scene;
+	class Particle;
 }
 
 class ImguiManager
@@ -71,11 +72,12 @@ public:
 	void Mesh_ImGuiWindow(std::shared_ptr<Engine::Mesh> pMesh);
 	void Material_ImGuiWindow(std::shared_ptr<Engine::Material> pMaterial);
 	std::shared_ptr<Engine::Bindable> Drawable_ShowImGuiTree(std::shared_ptr<Engine::Bindable>, bool& bSelect);
-	void TransformBuffer_ImGuiWindow(std::shared_ptr<Engine::TransformBuffer> pTransform);
+	void TransformBuffer_ImGuiWindow(std::shared_ptr<Engine::Transform> pTransform);
 	void PointLight_ImGuiWindow(std::shared_ptr<Engine::PointLight> pLight);
 	void Shader_ImGuiWindow(std::shared_ptr<Engine::Shader> pShader);
 	void Sphere_ImGuiWindow(std::shared_ptr<Engine::Sphere> pSphere);
-	void MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT);
+	void MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT, const std::string& name = "MRT: ");
+	void Particle_ShowImGuiImage(std::shared_ptr<Engine::Particle> pParticle);
 	void RenderManager_ShowImGuiWindow();
 
 private:
@@ -109,4 +111,5 @@ public:
 	void CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);
 	void LoadNavMesh(const TCHAR* pFullPath, class Engine::Scene* pScene);
 	void LoadNavMesh(class Engine::Scene* pScene, const TCHAR* pFilePath, const std::string& strPathKey);
+	std::shared_ptr<Engine::NavMesh> CreateNavMesh(const std::vector<float>& vecPoint, const std::vector<int>& vecTris, const Engine::Vector3& vMax, const Engine::Vector3& vMin);
 };

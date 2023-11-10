@@ -5,14 +5,14 @@
 #include "../Bindable/BindableManager.h"
 #include "../Bindable/VertexShader.h"
 #include "../Bindable/PixelShader.h"
-#include "../Bindable/PixelCBuffer.h"
+#include "../Bindable/ConstantBuffer.h"
 #include "../Bindable/BlendState.h"
 #include "../Bindable/HullShader.h"
 #include "../Bindable/DomainShader.h"
 #include "../Bindable/DepthStencilState.h"
 #include "../Bindable/RasterizerState.h"
 #include "../Bindable/TransformBuffer.h"
-#include "../Bindable/DomainCBuffer.h"
+#include "../Bindable/ConstantBuffer.h"
 #include "../Bindable/Camera.h"
 #include "../Bindable/PointLight.h"
 #include "../Bindable/IndexBuffer.h"
@@ -24,6 +24,7 @@
 #include "../Bindable/Mesh.h"
 #include "../Bindable/Animation.h"
 #include "../Animation/Skeleton.h"
+#include "../Bindable/ConstantBuffer.h"
 
 namespace Engine
 {
@@ -42,7 +43,7 @@ namespace Engine
 		m_LightList[static_cast<int>(pLight->GetLightType())].push_back(pLight);
 	}
 
-	void RenderManager::AddDrawable(const std::shared_ptr<Drawable>& pDrawable, int iLayer)
+	void RenderManager::AddDrawable(const std::shared_ptr<Drawable>& pDrawable)
 	{
 		const std::shared_ptr<Material>& pMaterial = pDrawable->GetMaterial();
 
@@ -61,6 +62,8 @@ namespace Engine
 
 		const std::shared_ptr<Mesh>& pMesh = pDrawable->GetMesh();
 
+		int iLayer = static_cast<int>(pDrawable->GetRenderLayer());
+
 		if (pVertexShader && pPixelShader)
 		{
 			iKey *= pMesh ? hs(pMesh->GetTag()) : 1;
@@ -73,9 +76,9 @@ namespace Engine
 			{
 				if (pDrawable->UseInstance())
 				{
-					std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[0].find(iKey);
+					std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[iLayer].find(iKey);
 
-					if (iter == m_mapInstance[0].end())
+					if (iter == m_mapInstance[iLayer].end())
 					{
 						const std::shared_ptr<InputLayout>& pInputLayout = pDrawable->FindChild<InputLayout>();
 
@@ -104,7 +107,7 @@ namespace Engine
 							pRenderInstancing->SetSkeleton(pAnimation->GetSkeleton());
 						}
 
-						m_mapInstance[0].insert(std::make_pair(iKey, pRenderInstancing));
+						m_mapInstance[iLayer].insert(std::make_pair(iKey, pRenderInstancing));
 					}
 					else
 					{
@@ -113,7 +116,7 @@ namespace Engine
 				}
 				else
 				{
-					m_RenderList[0].push_back(pDrawable);
+					m_RenderList[iLayer].push_back(pDrawable);
 				}
 			}
 
@@ -164,7 +167,7 @@ namespace Engine
 		{
 			if (pDrawable->IsInViewFrustum())
 			{
-				m_RenderList[0].push_back(pDrawable);
+				m_RenderList[iLayer].push_back(pDrawable);
 			}
 
 			if (pDrawable->IsInLightViewfFrustum())
@@ -182,6 +185,11 @@ namespace Engine
 	std::shared_ptr<MRT> RenderManager::GetDepthBuffer(LIGHT_TYPE eType) const
 	{
 		return pDepthBuffer[static_cast<int>(eType)];
+	}
+
+	std::shared_ptr<MRT> RenderManager::GetDecalMRT() const
+	{
+		return m_pDecalMRT;
 	}
 
 	bool RenderManager::Init()
@@ -211,6 +219,10 @@ namespace Engine
 
 			pDepthBuffer[i]->Clear();
 		}
+
+		m_pDecalMRT = std::make_shared<MRT>(format, 25);
+
+		m_pDecalMRT->SetTag("DecalMRT");
 
 #ifdef _DEBUG
 		pVertexShader = StaticFindBindable<VertexShader>("NullVS");
@@ -305,7 +317,7 @@ namespace Engine
 			return false;
 		}
 
-		m_pPerspecCBuffer = StaticFindBindable<PixelCBuffer<PERSPECTIVEBUFFER>>("Perspective");
+		m_pPerspecCBuffer = StaticFindBindable<ConstantBuffer<PERSPECTIVEBUFFER>>("Perspective");
 
 		if (m_pPerspecCBuffer == nullptr)
 		{
@@ -319,9 +331,30 @@ namespace Engine
 			return false;
 		}
 
-		m_pTransformBuffer = StaticFindBindable<VertexCBuffer<TRANSFORMBUFFER>>("Transform");
+		m_pTransformBuffer = StaticFindBindable<ConstantBuffer<TRANSFORMBUFFER>>("Transform");
 
 		if (!m_pTransformBuffer)
+		{
+			return false;
+		}
+
+		m_pDecalBlend = StaticFindBindable<BlendState>("DecalBlend");
+
+		if (!m_pDecalBlend) 
+		{
+			return false;
+		}
+
+		m_pNoDepthRead = StaticFindBindable<DepthStencilState>("NoDepth");
+
+		if (!m_pNoDepthRead)
+		{
+			return false;
+		}
+
+		m_pDecalCBuffer = StaticFindBindable<ConstantBuffer<DECALCBUFFER>>("Decal");
+
+		if (!m_pDecalCBuffer)
 		{
 			return false;
 		}
@@ -331,28 +364,31 @@ namespace Engine
 
 	void RenderManager::Update(float fDeltaTime)
 	{
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[0].begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[0].end();
-
-		for (; iter != iterEnd; ++iter)
+		for (int i = 0; i < static_cast<int>(RENDER_LAYER::END); ++i)
 		{
-			if (iter->second->GetCount() < 5)
+			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[i].begin();
+			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[i].end();
+
+			for (; iter != iterEnd; ++iter)
 			{
-				const std::list<std::shared_ptr<Drawable>>& RenderList = iter->second->GetRenderList();
-
-				std::list<std::shared_ptr<Drawable>>::const_iterator iterR = RenderList.begin();
-				std::list<std::shared_ptr<Drawable>>::const_iterator iterREnd = RenderList.end();
-
-				for (; iterR != iterREnd; ++iterR)
+				if (iter->second->GetCount() < 5)
 				{
-					m_RenderList[0].push_back(*iterR);
-				}
+					const std::list<std::shared_ptr<Drawable>>& RenderList = iter->second->GetRenderList();
 
-				iter->second->Clear();
-			}
-			else
-			{
-				iter->second->Update();
+					std::list<std::shared_ptr<Drawable>>::const_iterator iterR = RenderList.begin();
+					std::list<std::shared_ptr<Drawable>>::const_iterator iterREnd = RenderList.end();
+
+					for (; iterR != iterREnd; ++iterR)
+					{
+						m_RenderList[i].push_back(*iterR);
+					}
+
+					iter->second->Clear();
+				}
+				else
+				{
+					iter->second->Update();
+				}
 			}
 		}
 
@@ -411,7 +447,11 @@ namespace Engine
 	{
 		pMRT->Clear();
 
+		m_pDecalMRT->Clear();
+
 		RenderOpaque();
+
+		RenderDecal();
 
 		RenderShadow();
 
@@ -459,8 +499,8 @@ namespace Engine
 
 	void RenderManager::RenderAlpha()
 	{
-		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[1].begin();
-		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[1].end();
+		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::ALPHA)].begin();
+		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::ALPHA)].end();
 
 		for (; iter != iterEnd; ++iter)
 		{
@@ -480,7 +520,7 @@ namespace Engine
 
 		if (pCamera)
 		{
-			const std::shared_ptr<TransformBuffer>& pTransform = pCamera->GetTransform();
+			const std::shared_ptr<Transform>& pTransform = pCamera->GetTransform();
 
 			const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();
 
@@ -496,6 +536,7 @@ namespace Engine
 
 		m_pPerspecCBuffer->Bind();
 
+		m_pDecalMRT->SetSRV();
 		pMRT->SetSRV();
 		pMRT->SetDepthSRV(10);
 
@@ -504,38 +545,6 @@ namespace Engine
 		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
 
 		Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
-
-		/*Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
-
-		m_pCullFront->Bind();
-
-		m_pGreaterOrEqual->Bind();
-
-		pPointVertexShader->Bind();
-
-		pPointHullShader->Bind();
-
-		pPointDomainShader->Bind();
-
-		std::list<std::shared_ptr<PointLight>>::iterator iter = m_LightList[static_cast<int>(LIGHT_TYPE::POINT)].begin();
-		std::list<std::shared_ptr<PointLight>>::iterator iterEnd = m_LightList[static_cast<int>(LIGHT_TYPE::POINT)].end();
-
-		const Matrix& matCamTranslateProj = Matrix::TranslateFromVector(-gfx.GetCamera()->GetTransform()->GetPosition()) * gfx.GetProjectMatrix();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			(*iter)->Draw();
-
-			Graphics::GetInst()->GetDeviceContext()->Draw(2, 0);
-		}
-
-		pPointHullShader->PostBind();
-
-		pPointDomainShader->PostBind();
-
-		m_pGreaterOrEqual->PostBind();
-
-		m_pCullFront->PostBind();*/
 
 		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
@@ -565,6 +574,7 @@ namespace Engine
 
 		m_pAccBlend->PostBind();
 
+		m_pDecalMRT->ResetSRV();
 		pMRT->ResetSRV(10);
 		pMRT->ResetSRV();
 
@@ -622,22 +632,59 @@ namespace Engine
 		pDepthBuffer[2]->ResetTargets();
 	}
 
+	void RenderManager::RenderDecal()
+	{
+		pMRT->SetDepthSRV(10);
+
+		m_pDecalMRT->SetTargets();
+
+		m_pDecalBlend->Bind();
+
+		m_pNoDepthRead->Bind();
+
+		DECALCBUFFER tBuffer = {};
+
+		tBuffer.matInvView = Graphics::GetInst()->GetCamera()->GetInvView();
+
+		m_pDecalCBuffer->UpdateBuffer(tBuffer);
+
+		m_pDecalCBuffer->Bind();
+
+		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::DECAL)].begin();
+		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::DECAL)].end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			(*iter)->Bind();
+		}
+
+		m_pNoDepthRead->PostBind();
+
+		m_pDecalBlend->PostBind();
+
+		m_pDecalMRT->ResetTargets();
+
+		pMRT->ResetSRV(10);
+	}
+
 	void RenderManager::Clear()
 	{
-		m_RenderList[0].clear();
-		m_RenderList[1].clear();
+		for (int i = 0; i < static_cast<int>(RENDER_LAYER::END); ++i)
+		{
+			m_RenderList[i].clear();
+
+			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterR = m_mapInstance[i].begin();
+			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterREnd = m_mapInstance[i].end();
+
+			for (; iterR != iterREnd; ++iterR)
+			{
+				iterR->second->Clear();
+			}
+		}
 
 		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
 		{
 			m_LightList[i].clear();
-		}
-
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterR = m_mapInstance[0].begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterREnd = m_mapInstance[0].end();
-
-		for (; iterR != iterREnd; ++iterR)
-		{
-			iterR->second->Clear();
 		}
 
 		m_ShadowList.clear();

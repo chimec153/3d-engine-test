@@ -5,7 +5,6 @@ namespace Engine
     class ENGINE_DLL InputLayout :
         public Bindable
     {
-        friend class BindableManager<InputLayout>;
     public:
         InputLayout(const class std::shared_ptr<class VertexShader>& pShader, D3D11_INPUT_ELEMENT_DESC* pInputElement, int iCount, int iInstSize = 0);
         virtual ~InputLayout() noexcept override;

@@ -10,7 +10,7 @@ namespace Engine
 	Scene::Scene()
 	{
 		AddLayer(DEFAULT_LAYER);
-		AddLayer(ALPHA_LAYER);
+		AddLayer(ALPHA_LAYER, 1);
 	}
 
 	Scene::~Scene()

@@ -6,7 +6,7 @@
 #include "../Bindable/ComputeShader.h"
 #include "../Bindable/Drawable.h"
 #include "../Bindable/TransformBuffer.h"
-#include "../Bindable/ComputeCBuffer.h"
+#include "../Bindable/ConstantBuffer.h"
 
 namespace Engine
 {
@@ -18,7 +18,7 @@ namespace Engine
 		, m_pPostProcessShader(StaticFindBindable<ComputeShader>("PostProcess"))
 		, m_pMidBuffer()
 		, m_fTime(0.f)
-		, m_pIKCBuffer(StaticFindBindable<ComputeCBuffer<IKCBUFFER>>("IK"))
+		, m_pIKCBuffer(StaticFindBindable<ConstantBuffer<IKCBUFFER>>("IK"))
 		, m_pOwner(nullptr)
 	{
 		SetBindableType(Engine::BINDABLE_TYPE::ANIMATION);
@@ -159,7 +159,7 @@ namespace Engine
 
 		for (; iter != iterEnd; ++iter)
 		{
-			std::shared_ptr<TransformBuffer> pTransform = m_pOwner->GetTransform();
+			std::shared_ptr<Transform> pTransform = m_pOwner->GetTransform();
 
 			(*iter)->Update(m_pPoseBuffer, pTransform->GetTransformMatrix());
 		}

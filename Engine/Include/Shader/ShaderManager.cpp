@@ -3,12 +3,17 @@
 #include "../Bindable/PixelShader.h"
 #include "../Bindable/InputLayout.h"
 #include "../Bindable/BindableManager.h"
+#include "../Bindable/ConstantBuffer.h"
+#include "../Types.h"
+#include "../Bindable/Texture.h"
 
 namespace Engine
 {
 	ShaderManager* ShaderManager::m_pInst = nullptr;
 
-	ShaderManager::ShaderManager()
+	ShaderManager::ShaderManager()	:
+		m_tCBuffer()
+		, m_pCBuffer(StaticFindBindable<ConstantBuffer<GLOBALCBUFFER>>("Global"))
 	{
 	}
 
@@ -39,10 +44,10 @@ namespace Engine
 
 		std::vector<std::shared_ptr<Bindable>> vecMicro;
 
-		std::shared_ptr<VertexShader> pMicroVS = StaticFindBindable<VertexShader>("anisotropic_microfacet VS");
+		std::shared_ptr<VertexShader> pMicroVS = StaticFindBindable<VertexShader>("anisotropic_microfacet VSNoSkin");
 		std::shared_ptr<Bindable> pMicroPS = StaticCreateBindable<PixelShader>("anisotropic_microfacet PS", TEXT("anisotropic_microfacet.hlsl"), "PS");
 
-		std::shared_ptr<Bindable> pInputLayoutTPNT = StaticFindBindable<InputLayout>("TPNT");
+		std::shared_ptr<Bindable> pInputLayoutTPNT = StaticFindBindable<InputLayout>(STANDARD_INPUT_LAYOUT);
 
 		vecMicro.push_back(pMicroVS);
 		vecMicro.push_back(pMicroPS);
@@ -141,7 +146,24 @@ namespace Engine
 
 		m_mapShader.insert(std::make_pair("Phong_NoDiffuseNoNormalNoSpec", vecNormalNoDiffuseNoNormalNoSpec));
 
+		std::shared_ptr<Texture> pNoiseTexture = StaticFindBindable<Texture>("Noise");
+
+		assert(pNoiseTexture);
+
+		m_tCBuffer.iNoiseTextureWidth = pNoiseTexture->GetImageWidth();
+		m_tCBuffer.iNoiseTextureHeight = pNoiseTexture->GetImageHeight();
+
 		return true;
+	}
+
+	void ShaderManager::Update(float fDeltaTime, float fAccTime)
+	{
+		m_tCBuffer.fDeltaTime = fDeltaTime;
+		m_tCBuffer.fAccTime = fAccTime;
+
+		m_pCBuffer->UpdateBuffer(m_tCBuffer);
+
+		m_pCBuffer->Bind();
 	}
 
 	const std::vector<std::shared_ptr<Bindable>>* ShaderManager::FindShader(const std::string& strShader)	const

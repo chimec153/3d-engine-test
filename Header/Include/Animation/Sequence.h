@@ -1,16 +1,15 @@
 #pragma once
 
 #include "../Core/Ref.h"
-#include "../Bindable/VertexCBuffer.h"
 #include "../Bindable/FbxLoader.h"
 #include "../Shader/StructuredBuffer.h"
 
 namespace Engine
 {
     template <typename T>
-    class VertexCBuffer;
+    class ConstantBuffer;
     template <typename T>
-    class ComputeCBuffer;
+    class ConstantBuffer;
     template <typename T>
     class std::shared_ptr;
 
@@ -38,8 +37,7 @@ namespace Engine
         virtual ~Sequence() override;
 
     private:
-        class std::shared_ptr<class VertexCBuffer<BONECBUFFER>>    m_pBoneVertexCBuffer;
-        class std::shared_ptr<class ComputeCBuffer<BONECBUFFER>>    m_pBoneComputeCBuffer;
+        class std::shared_ptr<class ConstantBuffer<BONECBUFFER>>    m_pBoneConstantBuffer;
         std::vector<PSEQUENCEINFO>    m_vecInfo;
         bool m_bRootMotion;
         std::shared_ptr<class StructuredBuffer> m_pBuffer;

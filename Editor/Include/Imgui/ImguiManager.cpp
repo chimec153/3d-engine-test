@@ -38,6 +38,7 @@
 #include "Bindable/PointLight.h"
 #include "Bindable/Sphere.h"
 #include "Render/MRT.h"
+#include "Bindable/Particle.h"
 
 ImguiManager* ImguiManager::m_pInst = nullptr;
 
@@ -521,6 +522,33 @@ void ImguiManager::LoadNavMesh(const TCHAR* pFullPath, class Engine::Scene* pSce
 
 	pNavigation->AddChild(pMaterial->Clone());
 
+	m_pNavMesh = CreateNavMesh(vecPoint, vecTris, vMax, vMin);
+
+	m_pNavMesh->SetTag("NavigationMesh");
+
+	pNavigation->AddChild(m_pNavMesh);
+
+	pColliderMesh->SetCallBack(Engine::COLLISION_TYPE::STAY, this, &ImguiManager::CollisionStay);
+}
+
+void ImguiManager::LoadNavMesh(Engine::Scene* pScene, const TCHAR* pFilePath, const std::string& strPathKey)
+{
+	TCHAR strFullPath[MAX_PATH] = {};
+
+	const TCHAR* pPath = Engine::CPathManager::GetInst()->FindPath(strPathKey);
+
+	if (pPath)
+	{
+		_tcscpy_s(strFullPath, pPath);
+	}
+
+	_tcscat_s(strFullPath, pFilePath);
+
+	LoadNavMesh(strFullPath, pScene);
+}
+
+std::shared_ptr<Engine::NavMesh> ImguiManager::CreateNavMesh(const std::vector<float>& vecPoint, const std::vector<int>& vecTris, const Engine::Vector3& vMax, const Engine::Vector3& vMin)
+{
 	rcConfig config = {};
 
 	memcpy_s(config.bmax, 12, &vMax.x, 12);
@@ -551,19 +579,19 @@ void ImguiManager::LoadNavMesh(const TCHAR* pFullPath, class Engine::Scene* pSce
 
 	if (!m_pHeightField)
 	{
-		return;
+		return nullptr;
 	}
 
 	if (!rcCreateHeightfield(&m_tContext, *m_pHeightField, config.width, config.height, config.bmin, config.bmax, config.cs, config.ch))
 	{
-		return;
+		return nullptr;
 	}
 
 	m_pTriAreas = std::make_unique<unsigned char[]>(vecTris.size() / 3);
 
 	if (!m_pTriAreas)
 	{
-		return;
+		return nullptr;
 	}
 
 	memset(m_pTriAreas.get(), 0, vecTris.size() / 3);
@@ -572,70 +600,70 @@ void ImguiManager::LoadNavMesh(const TCHAR* pFullPath, class Engine::Scene* pSce
 
 	if (!rcRasterizeTriangles(&m_tContext, &vecPoint[0], static_cast<int>(vecPoint.size()), &vecTris[0], m_pTriAreas.get(), static_cast<int>(vecTris.size() / 3), *m_pHeightField, config.walkableClimb))
 	{
-		return;
+		return nullptr;
 	}
 
 	m_pCompactHeightField = rcAllocCompactHeightfield();
 
 	if (!m_pCompactHeightField)
 	{
-		return;
+		return nullptr;
 	}
 
 	if (!rcBuildCompactHeightfield(&m_tContext, config.walkableHeight, config.walkableClimb, *m_pHeightField, *m_pCompactHeightField))
 	{
-		return;
+		return nullptr;
 	}
 
 	if (!rcErodeWalkableArea(&m_tContext, config.walkableRadius, *m_pCompactHeightField))
 	{
-		return;
+		return nullptr;
 	}
 
 	if (!rcBuildDistanceField(&m_tContext, *m_pCompactHeightField))
 	{
-		return;
+		return nullptr;
 	}
 
 	if (!rcBuildRegions(&m_tContext, *m_pCompactHeightField, 0, config.minRegionArea, config.mergeRegionArea))
 	{
-		return;
+		return nullptr;
 	}
 
 	m_pContourSet = rcAllocContourSet();
 
 	if (!m_pContourSet)
 	{
-		return;
+		return nullptr;
 	}
 
 	if (!rcBuildContours(&m_tContext, *m_pCompactHeightField, config.maxSimplificationError, config.maxEdgeLen, *m_pContourSet))
 	{
-		return;
+		return nullptr;
 	}
 
 	m_pPolyMesh = rcAllocPolyMesh();
 
 	if (!m_pPolyMesh)
 	{
-		return;
+		return nullptr;
 	}
 
 	if (!rcBuildPolyMesh(&m_tContext, *m_pContourSet, config.maxVertsPerPoly, *m_pPolyMesh))
 	{
-		return;
+		return nullptr;
 	}
 
 	m_pPolyMeshDetail = rcAllocPolyMeshDetail();
 
 	if (!m_pPolyMeshDetail)
 	{
-		return;
+		return nullptr;
 	}
 
 	if (!rcBuildPolyMeshDetail(&m_tContext, *m_pPolyMesh, *m_pCompactHeightField, config.detailSampleDist, config.detailSampleMaxError, *m_pPolyMeshDetail))
 	{
-		return;
+		return nullptr;
 	}
 
 	for (int i = 0; i < m_pPolyMesh->npolys; ++i)
@@ -674,25 +702,7 @@ void ImguiManager::LoadNavMesh(const TCHAR* pFullPath, class Engine::Scene* pSce
 	tParams.ch = config.ch;
 	tParams.buildBvTree = true;
 
-	m_pNavMesh = pNavigation->CreateBindable<Engine::NavMesh>("NavMesh", tParams, m_fAgentRadius, m_fAgentHeight);
-
-	pColliderMesh->SetCallBack(Engine::COLLISION_TYPE::STAY, this, &ImguiManager::CollisionStay);
-}
-
-void ImguiManager::LoadNavMesh(Engine::Scene* pScene, const TCHAR* pFilePath, const std::string& strPathKey)
-{
-	TCHAR strFullPath[MAX_PATH] = {};
-
-	const TCHAR* pPath = Engine::CPathManager::GetInst()->FindPath(strPathKey);
-
-	if (pPath)
-	{
-		_tcscpy_s(strFullPath, pPath);
-	}
-
-	_tcscat_s(strFullPath, pFilePath);
-
-	LoadNavMesh(strFullPath, pScene);
+	return std::make_shared<Engine::NavMesh>(tParams, m_fAgentRadius, m_fAgentHeight);
 }
 
 void ImguiManager::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
@@ -765,7 +775,7 @@ void ImguiManager::Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawa
 	switch (eDrawableType)
 	{
 	case Engine::BINDABLE_TYPE::TRANSFORM:
-		TransformBuffer_ImGuiWindow(std::static_pointer_cast<Engine::TransformBuffer>(pDrawable));
+		TransformBuffer_ImGuiWindow(std::static_pointer_cast<Engine::Transform>(pDrawable));
 		break;
 	case Engine::BINDABLE_TYPE::MESH:
 		Mesh_ImGuiWindow(std::static_pointer_cast<Engine::Mesh>(pDrawable));
@@ -834,6 +844,9 @@ void ImguiManager::Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawa
 		}
 		break;
 	}
+	case Engine::BINDABLE_TYPE::PARTICLE:
+		Particle_ShowImGuiImage(std::static_pointer_cast<Engine::Particle>(pDrawable));
+		break;
 	default:
 		CRef_ImGuiWindow(pDrawable);
 		break;
@@ -850,24 +863,7 @@ void ImguiManager::Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawa
 
 	for (; iter != iterEnd; ++iter)
 	{
-		switch ((*iter)->GetBindableType())
-		{
-		case Engine::BINDABLE_TYPE::TRANSFORM:
-			TransformBuffer_ImGuiWindow(std::static_pointer_cast<Engine::TransformBuffer>(*iter));
-			break;
-		case Engine::BINDABLE_TYPE::MESH:
-			Mesh_ImGuiWindow(std::static_pointer_cast<Engine::Mesh>(*iter));
-			break;
-		case Engine::BINDABLE_TYPE::MATERIAL:
-			Material_ImGuiWindow(std::static_pointer_cast<Engine::Material>(*iter));
-			break;
-		case Engine::BINDABLE_TYPE::LIGHT:
-			PointLight_ImGuiWindow(std::static_pointer_cast<Engine::PointLight>(*iter));
-			break;
-		default:
-			CRef_ImGuiWindow(*iter);
-			break;
-		}
+		Drawable_ImGuiWindow(*iter);
 	}
 
 	static bool bOpen = false;
@@ -927,7 +923,7 @@ void ImguiManager::Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawa
 				pDrawable->FindAndAddBind<Engine::Material>(strBindable);
 				break;
 			case Engine::BINDABLE_TYPE::TRANSFORM:
-				pDrawable->FindAndAddBind<Engine::TransformBuffer>(strBindable);
+				pDrawable->FindAndAddBind<Engine::Transform>(strBindable);
 				break;
 			case Engine::BINDABLE_TYPE::INPUTLAYOUT:
 				pDrawable->FindAndAddBind<Engine::InputLayout>(strBindable);
@@ -1168,7 +1164,7 @@ void ImguiManager::Sphere_ImGuiWindow(std::shared_ptr<Engine::Sphere> pSphere)
 //	ImGui::Text("Texture Slot: %d", m_iSlot);
 //}
 
-void ImguiManager::TransformBuffer_ImGuiWindow(std::shared_ptr<Engine::TransformBuffer> pTransform)
+void ImguiManager::TransformBuffer_ImGuiWindow(std::shared_ptr<Engine::Transform> pTransform)
 {
 	ImGui::Text("Transform");
 
@@ -1252,9 +1248,9 @@ void ImguiManager::TransformBuffer_ImGuiWindow(std::shared_ptr<Engine::Transform
 //	ImGui::End();
 //}
 
-void ImguiManager::MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT)
+void ImguiManager::MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT, const std::string& _name)
 {
-	std::string name = "MRT: ";
+	std::string name = _name;
 
 	name += pMRT->GetTag();
 
@@ -1278,6 +1274,44 @@ void ImguiManager::MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT)
 	}
 
 	ImGui::End();
+}
+
+void ImguiManager::Particle_ShowImGuiImage(std::shared_ptr<Engine::Particle> pParticle)
+{
+	static float fEmit = 0.f;
+
+	if (ImGui::InputFloat("emit frequency", &fEmit))
+	{
+		pParticle->SetEmitTime(fEmit);
+	}
+
+	static Engine::Vector4 vStartColor = {};
+
+	if (ImGui::ColorPicker4("Start Color", &vStartColor.x))
+	{
+		pParticle->SetStartColor(vStartColor);
+	}
+
+	static Engine::Vector4 vEndColor = {};
+
+	if (ImGui::ColorPicker4("End Color", &vEndColor.x))
+	{
+		pParticle->SetEndColor(vEndColor);
+	}
+
+	static Engine::Vector3 vSpeed = {};
+
+	if (ImGui::InputFloat3("speed", &vSpeed.x))
+	{
+		pParticle->SetVelocity(vSpeed);
+	}
+
+	static Engine::Vector3 vAccel = {};
+
+	if (ImGui::InputFloat3("accel", &vAccel.x))
+	{
+		pParticle->SetAccelaration(vAccel);
+	}
 }
 
 //void ImguiManager::RenderManager_ShowImGuiWindow()
@@ -1311,6 +1345,11 @@ void ImguiManager::MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT)
 
 void ImguiManager::Layer_DrawListImgui(std::shared_ptr<Engine::Layer> pLayer)
 {
+	if(!pLayer || !ImGui::Begin(pLayer->GetTag().c_str()))
+	{
+		return;
+	}
+
 	static int iCurrent = -1;
 
 	const std::list<std::shared_ptr<Engine::Bindable>>& DrawList = pLayer->GetDrawList();
@@ -1389,4 +1428,6 @@ void ImguiManager::Layer_DrawListImgui(std::shared_ptr<Engine::Layer> pLayer)
 	{
 		ImGui::Text("Loading ...");
 	}
+
+	ImGui::End();
 }

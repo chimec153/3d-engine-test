@@ -46,13 +46,17 @@ void Window::Logic()
 
 	if (pScene)
 	{
-		std::shared_ptr<Engine::Layer> pLayer = pScene->FindLayer(DEFAULT_LAYER);
+		static char strLayer[MAX_PATH] = DEFAULT_LAYER;
 
-		ImguiManager::GetInst()->Layer_DrawListImgui(pLayer);
+		ImGui::InputText("Layer", strLayer, MAX_PATH);
+
+		ImguiManager::GetInst()->Layer_DrawListImgui(pScene->FindLayer(strLayer));
 	}
 
 	ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetMRT());
 	ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetDepthBuffer(Engine::LIGHT_TYPE::DIRECTIONAL));
+
+	ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetDecalMRT(), "DecalMRT");
 
 	Engine::Graphics::GetInst()->SetRenderTarget();
 

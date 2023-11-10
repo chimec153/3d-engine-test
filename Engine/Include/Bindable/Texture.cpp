@@ -10,6 +10,7 @@ namespace Engine
 		, m_iSlot(0)
 		, m_strFullPath()
 		, m_pTexture(nullptr)
+		, m_pImage(nullptr)
 	{
 	}
 
@@ -19,19 +20,21 @@ namespace Engine
 		, m_iSlot(iSlot)
 		, m_strFullPath()
 		, m_pTexture(nullptr)
+		, m_pImage(nullptr)
 	{
 
 	}
 
-	Texture::Texture(const TCHAR* pFileName, int iSlot) :
+	Texture::Texture(const TCHAR* pFullPath, int iSlot) :
 		Bindable()
 		, m_iSlot(iSlot)
 		, m_strFullPath()
 		, m_pTexture(nullptr)
+		, m_pImage(nullptr)
 	{
 		SetBindableType(BINDABLE_TYPE::TEXTURE);
 
-		LoadTextureFromFullPath(pFileName);
+		LoadTextureFromFullPath(pFullPath);
 	}
 
 	Texture::Texture(const char* pFileName, int iSlot) :
@@ -39,6 +42,7 @@ namespace Engine
 		, m_iSlot(iSlot)
 		, m_strFullPath()
 		, m_pTexture(nullptr)
+		, m_pImage(nullptr)
 	{
 		SetBindableType(BINDABLE_TYPE::TEXTURE);
 
@@ -58,6 +62,7 @@ namespace Engine
 		, m_iSlot(iSlot)
 		, m_strFullPath()
 		, m_pTexture(nullptr)
+		, m_pImage(nullptr)
 	{
 		SetBindableType(BINDABLE_TYPE::TEXTURE);
 
@@ -80,6 +85,7 @@ namespace Engine
 		, m_iSlot(iSlot)
 		, m_strFullPath()
 		, m_pTexture(nullptr)
+		, m_pImage(nullptr)
 	{
 		SetBindableType(BINDABLE_TYPE::TEXTURE);
 
@@ -185,14 +191,14 @@ namespace Engine
 	{
 		_tcscpy_s(m_strFullPath, strFullPath);
 
-		DirectX::ScratchImage image;
+		m_pImage = std::make_unique<DirectX::ScratchImage>();
 
-		if (!LoadTexture(strFullPath, image))
+		if (!LoadTexture(strFullPath, *m_pImage))
 		{
 			return false;
 		}
 
-		if (!CreateShaderResourceView(image, D3D11_SRV_DIMENSION_TEXTURE2D, eCpuFlag, eUsage))
+		if (!CreateShaderResourceView(*m_pImage, D3D11_SRV_DIMENSION_TEXTURE2D, eCpuFlag, eUsage))
 		{
 			return false;
 		}
@@ -257,10 +263,6 @@ namespace Engine
 			{
 				const DirectX::Image* pImage = image.GetImage(j, i, 0);
 
-				char str[MAX_PATH];
-
-				sprintf_s(str, "%d\n", *pImage->pixels);
-
 				vecSub[i * image.GetMetadata().mipLevels + j].pSysMem = pImage->pixels;
 				vecSub[i * image.GetMetadata().mipLevels + j].SysMemPitch = static_cast<unsigned int>(pImage->rowPitch);
 			}
@@ -297,21 +299,53 @@ namespace Engine
 		return true;
 	}
 
-	bool Texture::CreateTexture(int iCount, int iSize, int iSplice, void* pData)
-	{
-		D3D11_TEXTURE2D_DESC tDesc = {};
-
-		tDesc.Format = DXGI_FORMAT_UNKNOWN;
-		tDesc.ArraySize = 1;
-		tDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-		tDesc.Width = iCount;
-
-		return false;
-	}
-
 	CPtr<ID3D11ShaderResourceView> Texture::GetSRV() const
 	{
 		return m_pSRV;
+	}
+
+	DirectX::ScratchImage* Texture::GetImage() const
+	{
+		return m_pImage.get();
+	}
+
+	bool Texture::SaveTexture(const TCHAR* pFilePath, const std::string& strPathKey)
+	{
+		TCHAR strFullPath[MAX_PATH] = {};
+
+		const TCHAR* pPath = CPathManager::GetInst()->FindPath(strPathKey);
+
+		if (pPath) {
+			_tcscpy_s(strFullPath, pPath);
+		}
+
+		_tcscat_s(strFullPath, pFilePath);
+
+		if (FAILED(DirectX::SaveToWICFile(*m_pImage->GetImage(0, 0, 0), DirectX::WIC_FLAGS::WIC_FLAGS_NONE, DirectX::GetWICCodec(DirectX::WIC_CODEC_BMP), strFullPath, nullptr, nullptr))) {
+			return false;
+		}
+
+		return true;
+	}
+
+	int Texture::GetImageWidth() const noexcept
+	{
+		if (!m_pImage)
+		{
+			return 0;
+		}
+
+		return m_pImage->GetMetadata().width;
+	}
+
+	int Texture::GetImageHeight() const noexcept
+	{
+		if (!m_pImage)
+		{
+			return 0;
+		}
+
+		return m_pImage->GetMetadata().height;
 	}
 
 	void Texture::Update(float fDeltaTime)
@@ -322,6 +356,7 @@ namespace Engine
 	{
 		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(m_iSlot, 1, m_pSRV.GetAdressof());
 		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(m_iSlot, 1, m_pSRV.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(m_iSlot, 1, m_pSRV.GetAdressof());
 	}
 
 	std::shared_ptr<Bindable> Texture::Clone()

@@ -2,6 +2,7 @@
 
 #include "Math.h"
 #include "Matrix.h"
+#include "Vector2.h"
 
 namespace Engine
 {
@@ -136,6 +137,10 @@ namespace Engine
 		Matrix matWorldView;
 		Matrix matLightWVP;
 		Matrix matJoint;
+		Matrix matWorld;
+		Matrix matView;
+		Matrix matProj;
+		Matrix matInvWorldView;
 		int	iJointSocket;
 
 		_tagTransformBuffer() :
@@ -143,6 +148,10 @@ namespace Engine
 			, matWorldView()
 			, matLightWVP()
 			, matJoint()
+			, matWorld()
+			, matView()
+			, matProj()
+			, matInvWorldView()
 			, iJointSocket(-1)
 		{
 		}
@@ -328,4 +337,65 @@ namespace Engine
 	{
 		_tagIKInfo tInfo[256];
 	}IKCBUFFER, *PIKCBUFFER;
+
+	typedef ENGINE_DLL struct alignas(16) _tagParticleCBuffer
+	{
+		Vector4 vStartColor;
+		Vector4 vEndColor;
+		Vector3 vVelocity;
+		float   fMaxLifeTime;
+		Vector3 vAccelation;
+		int     iMaxParticleCount;
+		Vector3 vMinimumPosition;
+		int		iCreateCount;
+		Vector2 vStartSize;
+		Vector2 vEndSize;
+		Vector3 vMaximumPosition;
+		int		iMaxFrame;
+		int		iFrameWidth;
+		int		iFrameHeight;
+
+		_tagParticleCBuffer(int iCount) :
+			vStartColor()
+			, vEndColor()
+			, vVelocity()
+			, fMaxLifeTime()
+			, vAccelation()
+			, iMaxParticleCount(iCount)
+			, vMinimumPosition()
+			, iCreateCount()
+			, vStartSize()
+			, vEndSize()
+			, vMaximumPosition()
+			, iMaxFrame(1)
+			, iFrameWidth(1)
+			, iFrameHeight(1)
+		{
+		}
+	}PARTICLECBUFFER, * PPARTICLECBUFFER;
+
+	ENGINE_DLL typedef struct _tagParticle
+	{
+		Vector3 pos;
+		bool alive;
+		Vector4 color;
+		Vector3 speed;
+		float age;
+		Vector2 size;
+		float maxage;
+		int frame;
+	}PARTICLE, *PPARTICLE;
+
+	ENGINE_DLL typedef struct alignas(16) _tagGlobalCBuffer
+	{
+		float	fAccTime;
+		float	fDeltaTime;
+		int		iNoiseTextureWidth;
+		int		iNoiseTextureHeight;
+	}GLOBALCBUFFER, *PGLOBALCBUFFER;
+
+	ENGINE_DLL typedef struct alignas(16) _tagDecalCBuffer
+	{
+		Matrix matInvView;
+	}DECALCBUFFER, *PDECALCBUFFER;
 }

@@ -8,9 +8,9 @@
 namespace Engine
 {
 	template <typename T>
-	class PixelCBuffer;
+	class ConstantBuffer;
 	template <typename T>
-	class VertexCBuffer;
+	class ConstantBuffer;
 
 	class ENGINE_DLL Drawable :
 		public Bindable
@@ -23,7 +23,7 @@ namespace Engine
 		virtual ~Drawable() override = default;
 
 	private:
-		std::shared_ptr<class TransformBuffer> m_pTransform;
+		std::shared_ptr<class Transform> m_pTransform;
 		std::shared_ptr<class Material> m_pMaterial;
 		std::vector<std::shared_ptr<class Texture>>  m_vecTexture;
 		std::shared_ptr<class Mesh> m_pMesh;
@@ -31,11 +31,12 @@ namespace Engine
 		std::shared_ptr<class PixelShader> m_pPixelShader;
 		std::shared_ptr<class Collider> m_pCollider;
 		std::shared_ptr<class Animation> m_pAnimation;
+		RENDER_LAYER m_eRenderLayer;
 
 	public:
-		void SetTransform(const std::shared_ptr<class TransformBuffer>& pTransform);
+		void SetTransform(const std::shared_ptr<class Transform>& pTransform);
 		void AddChild(const std::vector<std::shared_ptr<class Bindable>>& bind);
-		std::shared_ptr<class TransformBuffer> GetTransform()    const;
+		std::shared_ptr<class Transform> GetTransform()    const;
 		std::shared_ptr<class Material> GetMaterial()    const;
 		void SetMaterial(const std::shared_ptr<Material>& pMaterial);
 		virtual void AddChild(const class std::shared_ptr<class Bindable>& pChild) override;
@@ -52,6 +53,8 @@ namespace Engine
 		void SetCollider(const std::shared_ptr<Collider>& pCollider);
 		void SetAnimation(std::shared_ptr<Animation> pAnimation);
 		std::shared_ptr<Animation> GetAnimation()	const;
+		void SetRenderLayer(RENDER_LAYER eLayer);
+		RENDER_LAYER GetRenderLayer()	const;
 
 	public:
 		virtual bool Init();
@@ -71,7 +74,7 @@ namespace Engine
 
 	public:
 		template <typename T, typename P>
-		static void SetNormals(std::vector<T>& vecVertex, const std::vector<P>& vecIndex, int iIndexOffset = 0)
+		static void SetNormals(std::vector<T>& vecVertex, const std::vector<P>& vecIndex)
 		{
 			// triangle List
 			assert(vecIndex.size() % 3 == 0);
@@ -83,9 +86,9 @@ namespace Engine
 
 			for (int i = 0; i < vecIndex.size() / 3; ++i)
 			{
-				unsigned int iIndex = vecIndex[i * 3] - iIndexOffset;
-				unsigned int iIndex2 = vecIndex[i * 3 + 1] - iIndexOffset;
-				unsigned int iIndex3 = vecIndex[i * 3 + 2] - iIndexOffset;
+				unsigned int iIndex = vecIndex[i * 3];
+				unsigned int iIndex2 = vecIndex[i * 3 + 1];
+				unsigned int iIndex3 = vecIndex[i * 3 + 2];
 				const Vector3& p0 = vecVertex[iIndex].pos;
 				const Vector3& p1 = vecVertex[iIndex2].pos;
 				const Vector3& p2 = vecVertex[iIndex3].pos;
@@ -94,7 +97,7 @@ namespace Engine
 
 				for (int j = 0; j < 3; ++j)
 				{
-					vecVertex[vecIndex[i * 3 + j] - iIndexOffset].normal += n;
+					vecVertex[vecIndex[i * 3 + j]].normal += n;
 				}
 			}
 
@@ -105,17 +108,13 @@ namespace Engine
 		}
 
 		template <typename T, typename P>
-		static void SetTotalNormals(std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<P>>& vecIndex)
+		static void SetNormals(std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<P>>& vecIndex)
 		{
 			assert(vecVertex.size() == vecIndex.size());
 
-			int iOffsetCount = 0;
-
 			for (int i = 0; i < static_cast<int>(vecVertex.size()); ++i)
 			{
-				SetNormals(vecVertex[i], vecIndex[i], iOffsetCount);
-
-				iOffsetCount += vecIndex[i].size();
+				SetNormals(vecVertex[i], vecIndex[i]);
 			}
 		}
 
@@ -126,17 +125,17 @@ namespace Engine
 
 			for (int i = 0; i < vecIndex.size() / 3; ++i)
 			{
-				const Vector3& p0 = vecVertex[vecIndex[i * 3] - iIndexOffset].pos;
-				const Vector3& p1 = vecVertex[vecIndex[i * 3 + 1] - iIndexOffset].pos;
-				const Vector3& p2 = vecVertex[vecIndex[i * 3 + 2] - iIndexOffset].pos;
+				const Vector3& p0 = vecVertex[vecIndex[i * 3]].pos;
+				const Vector3& p1 = vecVertex[vecIndex[i * 3 + 1]].pos;
+				const Vector3& p2 = vecVertex[vecIndex[i * 3 + 2]].pos;
 
 				Vector3 Q1 = p1 - p0;
 				Vector3 Q2 = p2 - p0;
 
-				float s1 = vecVertex[vecIndex[i * 3 + 1] - iIndexOffset].uv.x - vecVertex[vecIndex[i * 3] - iIndexOffset].uv.x;
-				float s2 = vecVertex[vecIndex[i * 3 + 2] - iIndexOffset].uv.x - vecVertex[vecIndex[i * 3] - iIndexOffset].uv.x;
-				float t1 = vecVertex[vecIndex[i * 3 + 1] - iIndexOffset].uv.y - vecVertex[vecIndex[i * 3] - iIndexOffset].uv.y;
-				float t2 = vecVertex[vecIndex[i * 3 + 2] - iIndexOffset].uv.y - vecVertex[vecIndex[i * 3] - iIndexOffset].uv.y;
+				float s1 = vecVertex[vecIndex[i * 3 + 1]].uv.x - vecVertex[vecIndex[i * 3]].uv.x;
+				float s2 = vecVertex[vecIndex[i * 3 + 2]].uv.x - vecVertex[vecIndex[i * 3]].uv.x;
+				float t1 = vecVertex[vecIndex[i * 3 + 1]].uv.y - vecVertex[vecIndex[i * 3]].uv.y;
+				float t2 = vecVertex[vecIndex[i * 3 + 2]].uv.y - vecVertex[vecIndex[i * 3]].uv.y;
 
 				float D = s1 * t2 - s2 * t1;
 
@@ -153,13 +152,13 @@ namespace Engine
 
 				for (int j = 0; j < 3; ++j)
 				{
-					vecVertex[vecIndex[i * 3 + j] - iIndexOffset].tangent.x += Tx;
-					vecVertex[vecIndex[i * 3 + j] - iIndexOffset].tangent.y += Ty;
-					vecVertex[vecIndex[i * 3 + j] - iIndexOffset].tangent.z += Tz;
+					vecVertex[vecIndex[i * 3 + j]].tangent.x += Tx;
+					vecVertex[vecIndex[i * 3 + j]].tangent.y += Ty;
+					vecVertex[vecIndex[i * 3 + j]].tangent.z += Tz;
 
-					vecBitangent[vecIndex[i * 3 + j] - iIndexOffset].x += Bx;
-					vecBitangent[vecIndex[i * 3 + j] - iIndexOffset].y += By;
-					vecBitangent[vecIndex[i * 3 + j] - iIndexOffset].z += Bz;
+					vecBitangent[vecIndex[i * 3 + j]].x += Bx;
+					vecBitangent[vecIndex[i * 3 + j]].y += By;
+					vecBitangent[vecIndex[i * 3 + j]].z += Bz;
 				}
 			}
 
@@ -193,17 +192,13 @@ namespace Engine
 			}
 		}
 		template <typename T, typename P>
-		static void SetTotalTangent(std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<P>>& vecIndex)
+		static void SetTangent(std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<P>>& vecIndex)
 		{
 			assert(vecVertex.size() == vecIndex.size());
 
-			int iIndexCount = 0;
-
 			for (int i = 0; i < static_cast<int>(vecVertex.size()); ++i)
 			{
-				SetTangent(vecVertex[i], vecIndex[i], iIndexCount);
-
-				iIndexCount += static_cast<int>(vecIndex[i].size());
+				SetTangent(vecVertex[i], vecIndex[i]);
 			}
 		}
 

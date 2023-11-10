@@ -5,7 +5,7 @@
 namespace Engine
 {
     template <typename T>
-    class ComputeCBuffer;
+    class ConstantBuffer;
 
     class ENGINE_DLL Animation :
         public Bindable
@@ -27,7 +27,7 @@ namespace Engine
         std::shared_ptr<class StructuredBuffer> m_pPoseBuffer;
         float   m_fTime;
         std::vector<IKINFO>  m_vecIKInfo;
-        std::shared_ptr<class ComputeCBuffer<IKCBUFFER>> m_pIKCBuffer;
+        std::shared_ptr<class ConstantBuffer<IKCBUFFER>> m_pIKCBuffer;
         Drawable* m_pOwner;
 
     public:

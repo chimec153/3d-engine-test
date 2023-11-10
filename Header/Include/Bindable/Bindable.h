@@ -32,6 +32,7 @@ namespace Engine
 		void SetScene(class Scene* pScene);
 		void SetLayer(class Layer* pLayer);
 		class Scene* GetScene()	const;
+		Layer* GetLayer()	const;
 
 		template <typename T>
 		void FindChilds(std::vector<std::shared_ptr<T>>& vecBindable)   const
@@ -81,7 +82,7 @@ namespace Engine
 		}
 
 		template <typename T>
-		bool FindAndAddBind(const std::string& strTag)
+		std::shared_ptr<T> FindAndAddBind(const std::string& strTag)
 		{
 			std::shared_ptr<T> pBindable = StaticFindBindable<T>(strTag);
 
@@ -91,12 +92,12 @@ namespace Engine
 				OutputDebugStringA(strTag.c_str());
 				OutputDebugStringA("\n");
 #endif
-				return false;
+				return nullptr;
 			}
 
 			AddChild(pBindable);
 
-			return true;
+			return pBindable;
 		}
 	public:
 		template <typename T, typename ...Args>

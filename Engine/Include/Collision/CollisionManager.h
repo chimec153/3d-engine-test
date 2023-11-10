@@ -62,7 +62,7 @@ namespace Engine
 
 			pDebugBox = pScene->CreateCloneDrawable("TextureBox", "TextureBox", pScene->FindLayer(DEFAULT_LAYER));
 
-			const std::shared_ptr<TransformBuffer>& pTransform = pDebugBox->GetTransform();
+			const std::shared_ptr<Transform>& pTransform = pDebugBox->GetTransform();
 
 			pTransform->SetScale(Vector3{fSize, fSize , fSize });
 			pTransform->SetPosition(vPos);*/

@@ -1,7 +1,6 @@
 #include "BindableManager.h"
 #include "Texture.h"
 #include "TransformBuffer.h"
-#include "ComputeCBuffer.h"
 
 namespace Engine
 {
@@ -10,6 +9,9 @@ namespace Engine
 	class Topology;
 	class DepthStencilState;
 	class DomainShader;
+	template <typename T>
+	class ConstantBuffer;
+	class GeometryShader;
 	
 	Engine::BindableManager<class Engine::RasterizerState>* Engine::BindableManager<class Engine::RasterizerState>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::DepthStencilState>* Engine::BindableManager<class Engine::DepthStencilState>::m_pInst = nullptr;
@@ -17,6 +19,7 @@ namespace Engine
 	Engine::BindableManager<class Engine::VertexShader>* Engine::BindableManager<class Engine::VertexShader>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::HullShader>* Engine::BindableManager<class Engine::HullShader>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::DomainShader>* Engine::BindableManager<class Engine::DomainShader>::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::GeometryShader>* Engine::BindableManager<class Engine::GeometryShader>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::PixelShader>* Engine::BindableManager<class Engine::PixelShader>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ComputeShader>* Engine::BindableManager<class Engine::ComputeShader>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::Sampler>* Engine::BindableManager<class Engine::Sampler>::m_pInst = nullptr;
@@ -24,21 +27,19 @@ namespace Engine
 	Engine::BindableManager<class Engine::InputLayout>* Engine::BindableManager<class Engine::InputLayout>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::Material>* Engine::BindableManager<class Engine::Material>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::Mesh>* Engine::BindableManager<class Engine::Mesh>::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::TransformBuffer>* Engine::BindableManager<class Engine::TransformBuffer>::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::Transform>* Engine::BindableManager<class Engine::Transform>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::Texture>* Engine::BindableManager<class Engine::Texture>::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagTransformBuffer>>* Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagTransformBuffer>>::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagBoneCBuffer> >* Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagBoneCBuffer> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagTerrainCBuffer> >* Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagTerrainCBuffer> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagPointLight> >* Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagPointLight> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagMaterial> >* Engine::BindableManager<class Engine::VertexCBuffer<struct Engine::_tagMaterial> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::DomainCBuffer<struct Engine::_tagTransformBuffer>>* Engine::BindableManager<class Engine::DomainCBuffer<struct Engine::_tagTransformBuffer>>::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagPerspectiveBuffer> >* Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagPerspectiveBuffer> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagColor> >* Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagColor> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagMaterial> >* Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagMaterial> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagTerrainCBuffer> >* Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagTerrainCBuffer> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagPointLight> >* Engine::BindableManager<class Engine::PixelCBuffer<struct Engine::_tagPointLight> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::ComputeCBuffer<struct Engine::_tagBoneCBuffer> >* Engine::BindableManager<class Engine::ComputeCBuffer<struct Engine::_tagBoneCBuffer> >::m_pInst = nullptr;
-	Engine::BindableManager<class Engine::ComputeCBuffer<struct Engine::_tagIKCBuffer> >* Engine::BindableManager<class Engine::ComputeCBuffer<struct Engine::_tagIKCBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagTransformBuffer>>* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagTransformBuffer>>::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagBoneCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagBoneCBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagTerrainCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagTerrainCBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPointLight> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPointLight> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagMaterial> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagMaterial> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagParticleCBuffer>>* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagParticleCBuffer>>::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPerspectiveBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPerspectiveBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagColor> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagColor> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagIKCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagIKCBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >::m_pInst = nullptr;
 
 	template <typename T>
 	ENGINE_DLL std::shared_ptr<T> StaticFindBindable(const std::string& strTag)
@@ -46,7 +47,7 @@ namespace Engine
 		return BindableManager<T>::GetInst()->BindableManager<T>::FindBindable(strTag);
 	}
 
-	template ENGINE_DLL std::shared_ptr<TransformBuffer> StaticFindBindable(const std::string& strTag);
+	template ENGINE_DLL std::shared_ptr<Transform> StaticFindBindable(const std::string& strTag);
 	template ENGINE_DLL std::shared_ptr<VertexShader> StaticFindBindable(const std::string& strTag);
 	template ENGINE_DLL std::shared_ptr<HullShader> StaticFindBindable(const std::string& strTag);
 	template ENGINE_DLL std::shared_ptr<InputLayout> StaticFindBindable(const std::string& strTag);
@@ -82,7 +83,7 @@ namespace Engine
 			pRasterizer->Bind();
 		}
 
-		CreateBindable("CullFront", true, D3D11_CULL_BACK, D3D11_FILL_SOLID);
+		CreateBindable("CullFront", true, D3D11_CULL_FRONT, D3D11_FILL_SOLID);
 		CreateBindable("NoDepth", false, D3D11_CULL_NONE, D3D11_FILL_SOLID);
 
 #ifdef _DEBUG
@@ -108,6 +109,16 @@ namespace Engine
 		CreateBindable("AlphaBlend");
 
 		CreateBindable("AccBlend", D3D11_BLEND_ONE, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD);
+
+		std::vector<D3D11_RENDER_TARGET_BLEND_DESC> vecRenderTargetBlend = 
+		{
+			{true, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_OP_ADD, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_DEST_ALPHA, D3D11_BLEND_OP_MAX, D3D11_COLOR_WRITE_ENABLE_ALL},
+			{true, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_OP_ADD, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_DEST_ALPHA, D3D11_BLEND_OP_MAX, D3D11_COLOR_WRITE_ENABLE_ALL},
+			{true, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_OP_ADD, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_DEST_ALPHA, D3D11_BLEND_OP_MAX, D3D11_COLOR_WRITE_ENABLE_ALL},
+			{true, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_OP_ADD, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_DEST_ALPHA, D3D11_BLEND_OP_MAX, D3D11_COLOR_WRITE_ENABLE_ALL},
+		};
+
+		CreateBindable("DecalBlend", false, true, vecRenderTargetBlend);
 	}
 
 	template<>
@@ -133,6 +144,9 @@ namespace Engine
 		CreateBindable("ShadowAnimVS", TEXT("Shadow.hlsl"), "ShadowAnimVS");
 		CreateBindable("anisotropic_microfacet VSInstShadow", TEXT("Shadow.hlsl"), "VSInstShadow");
 		CreateBindable("anisotropic_microfacet VSSkinInstShadow", TEXT("Shadow.hlsl"), "VS_SkinInstShadow");
+
+		CreateBindable("ParticleVS", TEXT("Particle.fx"), "VS_PARTICLE");
+		CreateBindable("DecalVS", TEXT("Decal.fx"), "VS_DECAL");
 	}
 
 	template<>
@@ -145,6 +159,12 @@ namespace Engine
 	inline BindableManager<class DomainShader>::BindableManager()
 	{
 		CreateBindable("PointLightDS", TEXT("anisotropic_microfacet.hlsl"), "DS_PointLight");
+	}
+
+	template<>
+	inline BindableManager<class GeometryShader>::BindableManager()
+	{
+		CreateBindable("ParticleGS", TEXT("Particle.fx"), "GS_PARTICLE");
 	}
 
 	template<>
@@ -169,6 +189,9 @@ namespace Engine
 		CreateBindable("anisotropic_microfacet PS_NoNormalInst", TEXT("anisotropic_microfacet.hlsl"), "PS_NoNormalInst");
 		CreateBindable("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormalInst", TEXT("anisotropic_microfacet.hlsl"), "PS_NoDiffuseNoSpecNoNormalInst");
 		CreateBindable("anisotropic_microfacet PS_NoTextureInst", TEXT("anisotropic_microfacet.hlsl"), "PS_NoTextureInst");
+
+		CreateBindable("ParticlePS", TEXT("Particle.fx"), "PS_PARTICLE");
+		CreateBindable("DecalPS", TEXT("Decal.fx"), "PS_DECAL");
 	}
 
 	template <>
@@ -177,86 +200,71 @@ namespace Engine
 		CreateBindable("Sequence", TEXT("ComputeShader.hlsl"), "Sequence");
 		CreateBindable("SequenceInst", TEXT("ComputeShader.hlsl"), "SequenceInst");
 		CreateBindable("PostProcess", TEXT("ComputeShader.hlsl"), "PostProcess");
+
+		CreateBindable("ParticleCS", TEXT("Particle.fx"), "CS_PARTICLE");
 	}
 
 	template <typename T>
-	class VertexCBuffer;
+	class ConstantBuffer;
 
 	template <>
-	inline BindableManager<class VertexCBuffer<TRANSFORMBUFFER>>::BindableManager()
+	inline BindableManager<class ConstantBuffer<TRANSFORMBUFFER>>::BindableManager()
 	{
 		CreateBindable("Transform");
 	}
 
 	template <>
-	inline BindableManager<VertexCBuffer<MATERIAL>>::BindableManager()
+	inline BindableManager<ConstantBuffer<MATERIAL>>::BindableManager()
 	{
 		CreateBindable("Material", 2);
 	}
 
 	template <>
-	inline BindableManager<VertexCBuffer<BONECBUFFER>>::BindableManager()
+	inline BindableManager<ConstantBuffer<BONECBUFFER>>::BindableManager()
 	{
 		CreateBindable("Bone", 4);
 	}
 
 	template <>
-	inline BindableManager<VertexCBuffer<TERRAINCBUFFER>>::BindableManager()
+	inline BindableManager<ConstantBuffer<TERRAINCBUFFER>>::BindableManager()
 	{
 		CreateBindable("Terrain", 5);
 	}
 
-	template <typename T>
-	class DomainCBuffer;
-
 	template <>
-	inline BindableManager<class DomainCBuffer<TRANSFORMBUFFER>>::BindableManager()
+	inline BindableManager<class ConstantBuffer<PARTICLECBUFFER>>::BindableManager()
 	{
-		const std::shared_ptr<class VertexCBuffer<TRANSFORMBUFFER>>& pVertexCBuffer = StaticFindBindable<VertexCBuffer<TRANSFORMBUFFER>>("Transform");
-
-		if (pVertexCBuffer)
-		{
-			CreateBindable("Transform", pVertexCBuffer->GetBuffer(), pVertexCBuffer->GetSlot());
-		}
+		CreateBindable("Particle", 7);
 	}
 
-	template <typename T>
-	class PixelCBuffer;
+	template <>
+	inline BindableManager<class ConstantBuffer<DECALCBUFFER>>::BindableManager()
+	{
+		CreateBindable("Decal", 9);
+	}
 
 	template <>
-	inline BindableManager<class PixelCBuffer<PERSPECTIVEBUFFER>>::BindableManager()
+	inline BindableManager<class ConstantBuffer<PERSPECTIVEBUFFER>>::BindableManager()
 	{
 		CreateBindable("Perspective", 3);
 	}
 
 	template <>
-	inline BindableManager<class PixelCBuffer<COLOR>>::BindableManager()
+	inline BindableManager<class ConstantBuffer<COLOR>>::BindableManager()
 	{
 		CreateBindable("COLOR", 0);
 	}
 
 	template <>
-	inline BindableManager<class PixelCBuffer<MATERIAL>>::BindableManager()
-	{
-		CreateBindable("Material", 2);
-	}
-
-	template <>
-	inline BindableManager<class PixelCBuffer<TERRAINCBUFFER>>::BindableManager()
-	{
-		CreateBindable("Terrain", 5);
-	}
-
-	template <>
-	BindableManager<class ComputeCBuffer<BONECBUFFER>>::BindableManager()
-	{
-		CreateBindable("Bone", 4);
-	}
-
-	template <>
-	inline BindableManager<ComputeCBuffer<IKCBUFFER>>::BindableManager()
+	inline BindableManager<ConstantBuffer<IKCBUFFER>>::BindableManager()
 	{
 		CreateBindable("IK", 6);
+	}
+
+	template <>
+	inline BindableManager<ConstantBuffer<GLOBALCBUFFER>>::BindableManager()
+	{
+		CreateBindable("Global", 8);
 	}
 
 	template <>
@@ -299,7 +307,9 @@ namespace Engine
 		CreateBindable("LineStrip", D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 #endif
 
+		CreateBindable("PointList", D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 		CreateBindable("TriangleList", D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		CreateBindable("TriangleStrip", D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		CreateBindable("1ControlPointPatch", D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
 	}
 
@@ -455,5 +465,15 @@ namespace Engine
 #ifdef _DEBUG
 		CreateBindable("Line", std::vector<VertexTexture>	{ {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f}, { 0.f,0.f,0.f,0.f,0.f,0.f,100.f,0.f,0.f,0.f,0.f,0.f }	}, std::vector<unsigned int>{ 0, 1 });
 #endif
+	}
+
+	template <>
+	inline BindableManager<Texture>::BindableManager()
+	{
+		std::shared_ptr<Texture> pNoiseTexture = CreateBindable("Noise", TEXT("noise_01.png"), TEXTURE_PATH, 17);
+
+		assert(pNoiseTexture);
+
+		pNoiseTexture->Bind();
 	}
 }

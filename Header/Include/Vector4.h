@@ -149,4 +149,13 @@ namespace Engine
 	{
 		return { f * v.x, f * v.y, f * v.z, f * v.w };
 	}
+
+	static Vector4 White = Vector4(1.f, 1.f, 1.f, 1.f);
+	static Vector4 Cyan = Vector4(0.f, 1.f, 1.f, 1.f);
+	static Vector4 Magenta = Vector4(1.f, 0.f, 1.f, 1.f);
+	static Vector4 Yellow = Vector4(1.f, 1.f, 0.f, 1.f);
+	static Vector4 Red = Vector4(1.f, 0.f, 0.f, 1.f);
+	static Vector4 Green = Vector4(0.f, 1.f, 0.f, 1.f);
+	static Vector4 Blue = Vector4(0.f, 0.f, 1.f, 1.f);
+	static Vector4 Black = Vector4(0.f, 0.f, 0.f, 1.f);
 }

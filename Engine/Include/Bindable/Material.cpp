@@ -1,14 +1,13 @@
 #include "Material.h"
 #include "BindableManager.h"
-#include "VertexCBuffer.h"
+#include "ConstantBuffer.h"
 
 namespace Engine
 {
 	Material::Material() :
 		Bindable()
 		, m_tMaterial()
-		, m_pVertexCBuffer(StaticFindBindable<VertexCBuffer<MATERIAL>>("Material"))
-		, m_pPixelCBuffer(StaticFindBindable<PixelCBuffer<MATERIAL>>("Material"))
+		, m_pConstantBuffer(StaticFindBindable<ConstantBuffer<MATERIAL>>("Material"))
 	{
 		SetBindableType(BINDABLE_TYPE::MATERIAL);
 
@@ -38,10 +37,10 @@ namespace Engine
 		m_tMaterial.vRoughness.y = 0.1f;
 	}
 
-	Material::Material(const std::shared_ptr<PixelCBuffer<MATERIAL>>& pBuffer) :
+	Material::Material(const std::shared_ptr<ConstantBuffer<MATERIAL>>& pBuffer) :
 		Bindable()
 		, m_tMaterial()
-		, m_pPixelCBuffer(pBuffer)
+		, m_pConstantBuffer(pBuffer)
 	{
 		SetBindableType(BINDABLE_TYPE::MATERIAL);
 
@@ -52,8 +51,7 @@ namespace Engine
 	Material::Material(const Material& material) :
 		Bindable(material)
 		, m_tMaterial(material.m_tMaterial)
-		, m_pVertexCBuffer(material.m_pVertexCBuffer)
-		, m_pPixelCBuffer(material.m_pPixelCBuffer)
+		, m_pConstantBuffer(material.m_pConstantBuffer)
 	{
 	}
 
@@ -165,11 +163,9 @@ namespace Engine
 
 	void Material::Bind()
 	{
-		m_pVertexCBuffer->UpdateBuffer(m_tMaterial);
-		m_pPixelCBuffer->UpdateBuffer(m_tMaterial);
+		m_pConstantBuffer->UpdateBuffer(m_tMaterial);
 
-		m_pVertexCBuffer->Bind();
-		m_pPixelCBuffer->Bind();
+		m_pConstantBuffer->Bind();
 	}
 
 	std::shared_ptr<Bindable> Material::Clone()

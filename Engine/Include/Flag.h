@@ -57,6 +57,7 @@ namespace Engine
 		AGENT,
 		NAV_MESH,
 		LIGHT,
+		PARTICLE,
 		END
 	};
 
@@ -93,6 +94,14 @@ namespace Engine
 		BIND,
 		DRAW,
 		COLLIDER,
+		END
+	};
+
+	enum class RENDER_LAYER
+	{
+		OPACUE,
+		DECAL,
+		ALPHA,
 		END
 	};
 }

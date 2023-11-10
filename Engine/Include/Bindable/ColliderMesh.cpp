@@ -6,8 +6,10 @@
 
 Engine::ColliderMesh::ColliderMesh(const std::vector<float>& vecPoint, const std::vector<int>& vecIndex) :
     Collider()
-    , m_pInfo(std::make_shared<MESHCOLLIDERINFO>(vecPoint, vecIndex))
+    , m_pInfo()
 {
+    SetInfo(vecPoint, vecIndex);
+
     SetColliderType(Engine::COLLIDER_TYPE::MESH);
 }
 
@@ -46,19 +48,33 @@ void Engine::ColliderMesh::SetInfo(const std::vector<float>& vecPoint, const std
 		vecVertex.push_back(vertex);
 	}
 
-    std::shared_ptr<Drawable> pDebug = CreateBindable<Drawable>("debug");
+    std::shared_ptr<Drawable> pDebug = std::static_pointer_cast<Drawable>(FindChild("debug"));
 
-	std::shared_ptr<Mesh> pMesh = pDebug->CreateBindable<Mesh>("mesh_debug", vecVertex, vecIndex);
+    if (!pDebug) {
+        pDebug = CreateBindable<Drawable>("debug");
 
-    pDebug->FindAndAddBind<VertexShader>(STANDARD_VS);
-    pDebug->FindAndAddBind<PixelShader>("DebugPS");
-    pDebug->FindAndAddBind<InputLayout>(STANDARD_INPUT_LAYOUT);
-    pDebug->FindAndAddBind<Topology>(STANDARD_TOPOLOGY);
-    pDebug->FindAndAddBind<RasterizerState>(WIREFRAME);
+        pDebug->FindAndAddBind<VertexShader>(STANDARD_VS);
+        pDebug->FindAndAddBind<PixelShader>("DebugPS");
+        pDebug->FindAndAddBind<InputLayout>(STANDARD_INPUT_LAYOUT);
+        pDebug->FindAndAddBind<Topology>(STANDARD_TOPOLOGY);
+        pDebug->FindAndAddBind<RasterizerState>(WIREFRAME);
 
-    std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
+        std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
 
-    pDebug->AddChild(pMaterial->Clone());
+        pDebug->AddChild(pMaterial->Clone());
+    }
+
+	std::shared_ptr<Mesh> pMesh = std::static_pointer_cast<Mesh>(pDebug->FindChild("mesh_debug"));
+
+	if (!pMesh) {
+		pMesh = pDebug->CreateBindable<Mesh>("mesh_debug", vecVertex, vecIndex, D3D11_USAGE_DYNAMIC);
+    }
+    else {
+        pMesh->SetVertexBuffer(0, &vecVertex[0], static_cast<int>(sizeof(VertexStandard) * vecVertex.size()));
+        pMesh->SetIndexBuffer(0, 0, &vecIndex[0], static_cast<int>(4 * vecIndex.size()));
+    }
+
+
 #endif
 }
 

@@ -5,7 +5,6 @@ namespace Engine
     class ENGINE_DLL Topology :
         public Bindable
     {
-        friend class BindableManager<Topology>;
     public:
         Topology(D3D_PRIMITIVE_TOPOLOGY topology);
         virtual ~Topology() noexcept override;

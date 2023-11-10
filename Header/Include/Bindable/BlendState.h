@@ -11,6 +11,7 @@ namespace Engine
     public:
         BlendState(D3D11_BLEND srcBlend = D3D11_BLEND_SRC_ALPHA, D3D11_BLEND destBlend = D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_OP blendOp = D3D11_BLEND_OP_ADD,
             D3D11_BLEND srcBlendAlpha = D3D11_BLEND_ONE, D3D11_BLEND destBlendAlpha = D3D11_BLEND_ZERO, D3D11_BLEND_OP blendOpAlpha = D3D11_BLEND_OP_ADD);
+        BlendState(bool bAlphaToCoverageEnable, bool bIndependentBlendEnable, const std::vector<D3D11_RENDER_TARGET_BLEND_DESC>& vecRenderTargetDesc);
         virtual ~BlendState() = default;
 
     private:

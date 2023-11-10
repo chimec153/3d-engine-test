@@ -50,14 +50,15 @@ namespace Engine
 		, m_pInstancing(nullptr)
 		, m_iInstID(-1)
 		, m_iParentJointCount(0)
+		, m_eRenderLayer(RENDER_LAYER::OPACUE)
 	{
 		SetObjectType(OBJECT_TYPE::DRAW);
-		AddChild(std::make_shared<TransformBuffer>());
+		AddChild(std::make_shared<Transform>());
 	}
 
 	Drawable::Drawable(const Drawable& drawable) :
 		Bindable(drawable)
-		, m_pTransform(std::static_pointer_cast<TransformBuffer>(FindChild(BINDABLE_TYPE::TRANSFORM)))
+		, m_pTransform(std::static_pointer_cast<Transform>(FindChild(BINDABLE_TYPE::TRANSFORM)))
 		, m_pMaterial(std::static_pointer_cast<Material>(FindChild(BINDABLE_TYPE::MATERIAL)))
 		, m_vecTexture(drawable.m_vecTexture)
 		, m_pMesh(drawable.m_pMesh)
@@ -76,6 +77,7 @@ namespace Engine
 		, m_pInstancing(nullptr)
 		, m_iInstID(-1)
 		, m_iParentJointCount(0)
+		, m_eRenderLayer(drawable.m_eRenderLayer)
 	{
 		SetTransform(m_pTransform);
 
@@ -85,13 +87,13 @@ namespace Engine
 		}
 	}
 
-	void Drawable::SetTransform(const std::shared_ptr<class TransformBuffer>& pTransform)
+	void Drawable::SetTransform(const std::shared_ptr<class Transform>& pTransform)
 	{
 		m_pTransform = pTransform;
 
 		if (GetParent())
 		{
-			std::shared_ptr<TransformBuffer> pParentTransform = GetParent()->FindChild<TransformBuffer>();
+			std::shared_ptr<Transform> pParentTransform = GetParent()->FindChild<Transform>();
 
 			m_pTransform->SetParentTransform(pParentTransform.get());
 
@@ -106,7 +108,7 @@ namespace Engine
 
 		for (; iter != iterEnd; ++iter)
 		{
-			std::shared_ptr<TransformBuffer> pChildTransform = (*iter)->FindChild<TransformBuffer>();
+			std::shared_ptr<Transform> pChildTransform = (*iter)->FindChild<Transform>();
 
 			if (pChildTransform != nullptr)
 			{
@@ -128,7 +130,7 @@ namespace Engine
 		}
 	}
 
-	std::shared_ptr<TransformBuffer> Drawable::GetTransform() const
+	std::shared_ptr<Transform> Drawable::GetTransform() const
 	{
 		return m_pTransform;
 	}
@@ -165,7 +167,7 @@ namespace Engine
 			SetMaterial(std::static_pointer_cast<Material>(bind));
 			break;
 		case BINDABLE_TYPE::TRANSFORM:
-			SetTransform(std::static_pointer_cast<TransformBuffer>(bind));
+			SetTransform(std::static_pointer_cast<Transform>(bind));
 			break;
 		case BINDABLE_TYPE::ANIMATION:
 			SetAnimation(std::static_pointer_cast<Animation>(bind));
@@ -181,9 +183,9 @@ namespace Engine
 
 	void Drawable::AddDrawable(const std::shared_ptr<class Bindable>& pChild)
 	{
-		std::vector<std::shared_ptr<TransformBuffer>> vecChildTransform;
+		std::vector<std::shared_ptr<Transform>> vecChildTransform;
 
-		pChild->FindChilds<TransformBuffer>(vecChildTransform);
+		pChild->FindChilds<Transform>(vecChildTransform);
 
 		for (int i = 0; i < static_cast<int>(vecChildTransform.size()); ++i)
 		{
@@ -328,6 +330,16 @@ namespace Engine
 		return m_pAnimation;
 	}
 
+	void Drawable::SetRenderLayer(RENDER_LAYER eLayer)
+	{
+		m_eRenderLayer = eLayer;
+	}
+
+	RENDER_LAYER Drawable::GetRenderLayer() const
+	{
+		return m_eRenderLayer;
+	}
+
 	bool Drawable::Init()
 	{
 		return true;
@@ -372,7 +384,7 @@ namespace Engine
 			UpdateInLightViewFrustum();
 		}
 
-		RenderManager::GetInst()->AddDrawable(std::static_pointer_cast<Drawable>(shared_from_this()), 0);
+		RenderManager::GetInst()->AddDrawable(std::static_pointer_cast<Drawable>(shared_from_this()));
 
 		__super::PreDraw(fDeltaTime);
 	}
@@ -834,6 +846,7 @@ namespace Engine
 			std::vector<Vector3> vecPos;
 			std::vector<unsigned int> vecSubIndex;
 			std::vector<std::vector<unsigned int>> vecIndex;
+			std::vector<std::vector<std::vector<unsigned int>>> vecTotalIndex;
 
 			std::vector<std::shared_ptr<Texture>> vecTexture;
 			std::vector<std::vector<std::shared_ptr<Texture>>> vecTotalTexture;
@@ -844,8 +857,6 @@ namespace Engine
 			bool bHasNormal = false;
 			bool bHasUV = false;
 			int iNormalCount = 0;
-
-			std::shared_ptr<Drawable> pCurrentDrawable = std::static_pointer_cast<Drawable>(shared_from_this());
 
 			std::vector<MATERIALINFO> vecMaterial;
 
@@ -895,6 +906,12 @@ namespace Engine
 							iPrevNormal = static_cast<int>(vecNormal.size());
 
 							vecIndex.push_back(vecSubIndex);
+
+							std::vector<std::vector<unsigned int>> _vecSubIndex;
+
+							_vecSubIndex.push_back(vecSubIndex);
+
+							vecTotalIndex.push_back(_vecSubIndex);
 
 							vecTotalTexture.push_back(vecTexture);
 
@@ -1174,7 +1191,7 @@ namespace Engine
 
 			SetTangent<VertexStandard>(vecTotalVertex, vecIndex);
 
-			const std::shared_ptr<Mesh>& pMesh = StaticCreateBindable<Mesh>(pCurrentDrawable->GetTag(), vecTotalVertex, vecIndex);
+			const std::shared_ptr<Mesh>& pMesh = StaticCreateBindable<Mesh>(GetTag(), vecTotalVertex, vecTotalIndex);
 
 			pMesh->SetTextures(vecTotalTexture);
 
@@ -1241,9 +1258,13 @@ namespace Engine
 				break;
 			}
 
-			const Vector4& vSphereInfo = pCurrentDrawable->GetBoundingSphere(vecVertex);
+			const Vector4& vSphereInfo = GetBoundingSphere(vecVertex);
 
-			pCurrentDrawable->SetBoundingSphereInfo(vSphereInfo);
+			SetBoundingSphereInfo(vSphereInfo);
+
+			FindAndAddBind<Topology>("TriangleList");
+
+			FindAndAddBind<Material>("Material");
 
 			fclose(pFile);
 		}

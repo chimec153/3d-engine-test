@@ -9,10 +9,10 @@
 #include "HullShader.h"
 #include "DomainShader.h"
 #include "PixelShader.h"
-#include "PixelCBuffer.h"
+#include "ConstantBuffer.h"
 #include "DepthStencilState.h"
 #include "Topology.h"
-#include "DomainCBuffer.h"
+#include "ConstantBuffer.h"
 #endif
 
 namespace Engine
@@ -21,7 +21,7 @@ namespace Engine
 		Collider()
 		, m_vOffset()
 #ifdef _DEBUG
-		, m_pDebugPSConst(StaticFindBindable<class PixelCBuffer<COLOR>>("COLOR"))
+		, m_pDebugPSConst(StaticFindBindable<class ConstantBuffer<COLOR>>("COLOR"))
 #endif
 	{
 #ifdef _DEBUG
@@ -73,7 +73,7 @@ namespace Engine
 
 		if (pParent)
 		{
-			std::shared_ptr<TransformBuffer> pTransform = std::static_pointer_cast<TransformBuffer>(pParent->FindChild(BINDABLE_TYPE::TRANSFORM));
+			std::shared_ptr<Transform> pTransform = std::static_pointer_cast<Transform>(pParent->FindChild(BINDABLE_TYPE::TRANSFORM));
 
 			if (pTransform)
 			{

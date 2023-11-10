@@ -70,7 +70,7 @@ namespace Engine
 	{
 		if (m_pDrawable)
 		{
-			std::shared_ptr<TransformBuffer> pTransform = m_pDrawable->GetTransform();
+			std::shared_ptr<Transform> pTransform = m_pDrawable->GetTransform();
 
 			if (pTransform)
 			{

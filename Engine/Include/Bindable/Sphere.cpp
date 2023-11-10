@@ -5,7 +5,7 @@
 #include "VertexBuffer.h"
 #include "IndexBuffer.h"
 #include "TransformBuffer.h"
-#include "PixelCBuffer.h"
+#include "ConstantBuffer.h"
 #include "Topology.h"
 #include "Material.h"
 #include "../Shader/ShaderManager.h"
@@ -81,7 +81,7 @@ namespace Engine
 	{
 		m_vDir.Normalize();
 
-		const std::shared_ptr<TransformBuffer>& pTransform = GetTransform();
+		const std::shared_ptr<Transform>& pTransform = GetTransform();
 
 		if (pTransform != nullptr)
 		{

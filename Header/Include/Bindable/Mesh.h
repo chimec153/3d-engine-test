@@ -44,28 +44,28 @@ namespace Engine
     {
     public:
         template <typename T, typename P>
-        Mesh(const std::vector<T>& vecVertex, const std::vector<P>& vecIndex) :
+        Mesh(const std::vector<T>& vecVertex, const std::vector<P>& vecIndex, D3D11_USAGE eUsage = D3D11_USAGE_IMMUTABLE) :
             Bindable()
         {
             SetBindableType(BINDABLE_TYPE::MESH);
 
-            CreateMesh(vecVertex, vecIndex);
+            CreateMesh(vecVertex, vecIndex, eUsage);
         }
         template <typename T, typename P>
-        Mesh(const std::vector<T>& vecVertex, const std::vector<std::vector<P>>& vecIndex) :
+        Mesh(const std::vector<T>& vecVertex, const std::vector<std::vector<P>>& vecIndex, D3D11_USAGE eUsage = D3D11_USAGE_IMMUTABLE) :
             Bindable()
         {
             SetBindableType(BINDABLE_TYPE::MESH);
 
-            CreateMesh(vecVertex, vecIndex);
+            CreateMesh(vecVertex, vecIndex, eUsage);
         }
         template <typename T, typename P>
-        Mesh(const std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<std::vector<P>>>& vecIndex) :
+        Mesh(const std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<std::vector<P>>>& vecIndex, D3D11_USAGE eUsage = D3D11_USAGE_IMMUTABLE) :
             Bindable()
         {
             SetBindableType(BINDABLE_TYPE::MESH);
 
-            CreateMesh(vecVertex, vecIndex);
+            CreateMesh(vecVertex, vecIndex, eUsage);
         }
         Mesh(const char* pFileName, const std::string& strPathKey = MESH_PATH) :
             Bindable()
@@ -97,26 +97,26 @@ namespace Engine
         std::shared_ptr<Material> GetMaterial(int iIndex = 0)   const;
 
         template <typename T, typename P>
-        void CreateMesh(const std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<std::vector<P>>>& vecIndex)
+        void CreateMesh(const std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<std::vector<P>>>& vecIndex, D3D11_USAGE eUsage = D3D11_USAGE_IMMUTABLE)
         {
             for (int i = 0; i < vecVertex.size(); ++i)
             {
-                CreateMesh(vecVertex[i], vecIndex[i]);
+                CreateMesh(vecVertex[i], vecIndex[i], eUsage);
             }
         }
 
         template <typename T, typename P>
-        void CreateMesh(const std::vector<T>& vecVertex, const std::vector<P>& vecIndex)
+        void CreateMesh(const std::vector<T>& vecVertex, const std::vector<P>& vecIndex, D3D11_USAGE eUsage = D3D11_USAGE_IMMUTABLE)
         {
             std::vector<std::vector<P>> _vecIndex;
 
             _vecIndex.push_back(vecIndex);
 
-            CreateMesh(vecVertex, _vecIndex);
+            CreateMesh(vecVertex, _vecIndex, eUsage);
         }
 
         template <typename T, typename P>
-        void CreateMesh(const std::vector<T>& vecVertex, const std::vector<std::vector<P>>& vecIndex)
+        void CreateMesh(const std::vector<T>& vecVertex, const std::vector<std::vector<P>>& vecIndex, D3D11_USAGE eUsage = D3D11_USAGE_IMMUTABLE)
         {
             m_vecMeshContainer.emplace_back();
 
@@ -125,9 +125,19 @@ namespace Engine
             D3D11_BUFFER_DESC tVertexDesc = {};
 
             tVertexDesc.ByteWidth = static_cast<unsigned int>(sizeof(T) * vecVertex.size());
-            tVertexDesc.Usage = D3D11_USAGE_IMMUTABLE;
+            tVertexDesc.Usage = eUsage;
             tVertexDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
             tVertexDesc.StructureByteStride = sizeof(T);
+
+            switch (eUsage)
+            {
+            case D3D11_USAGE_DYNAMIC:
+                tVertexDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+                break;
+            case D3D11_USAGE_STAGING:
+                tVertexDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+                break;
+            }
 
             D3D11_SUBRESOURCE_DATA tVertexData = {};
 
@@ -151,7 +161,17 @@ namespace Engine
                     tIndexDesc.ByteWidth = static_cast<unsigned int>(4 * vecIndex[i].size());
                     tIndexDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
                     tIndexDesc.StructureByteStride = 4;
-                    tIndexDesc.Usage = D3D11_USAGE_IMMUTABLE;
+                    tIndexDesc.Usage = eUsage;
+
+                    switch (eUsage)
+                    {
+                    case D3D11_USAGE_DYNAMIC:
+                        tIndexDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+                        break;
+                    case D3D11_USAGE_STAGING:
+                        tIndexDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+                        break;
+                    }
 
                     D3D11_SUBRESOURCE_DATA tIndexData = {};
 
@@ -175,6 +195,10 @@ namespace Engine
             container.m_iCount = static_cast<int>(vecVertex.size());
             container.m_iSize = sizeof(T);
         }
+
+    public:
+        bool SetVertexBuffer(int iIndex, const void* pData, int iSize);
+        bool SetIndexBuffer(int iIndex, int iSubIndex, const void* pData, int iSize);
 
     public:
         virtual void Bind() override;

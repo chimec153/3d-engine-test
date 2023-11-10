@@ -1,35 +1,33 @@
 #pragma once
-#include "VertexCBuffer.h"
 
 namespace Engine
 {
     template <typename T>
-    class DomainCBuffer;
+    class ConstantBuffer;
 
-    class ENGINE_DLL TransformBuffer :
+    class ENGINE_DLL Transform :
         public Bindable
     {
         friend class Drawable;
 
     public:
-        TransformBuffer();
-        TransformBuffer(const TransformBuffer& buffer);
+        Transform();
+        Transform(const Transform& buffer);
     public:
-        virtual ~TransformBuffer() noexcept override = default;
+        virtual ~Transform() noexcept override = default;
 
     private:
-        std::shared_ptr<VertexCBuffer<_tagTransformBuffer>> m_pVertexCBuffer;
-        std::shared_ptr<class DomainCBuffer<_tagTransformBuffer>> m_pDomainCBuffer;
+        std::shared_ptr<ConstantBuffer<_tagTransformBuffer>> m_pConstantBuffer;
 
-        TransformBuffer* m_pParentTrasnform;
-        std::list<TransformBuffer*> m_ChildTransformList;
+        Transform* m_pParentTrasnform;
+        std::list<Transform*> m_ChildTransformList;
         _tagTransformBuffer m_tBuffer;
         std::shared_ptr<class StructuredBuffer> m_pJointSequenceBuffer;
 
     public:
-        void SetParentTransform(TransformBuffer* pParent);
-        void AddChildTransform(TransformBuffer* pChild);
-        const std::shared_ptr<class DomainCBuffer<_tagTransformBuffer>>& GetDomainCBuffer()    const;
+        void SetParentTransform(Transform* pParent);
+        void AddChildTransform(Transform* pChild);
+        const std::shared_ptr<class ConstantBuffer<_tagTransformBuffer>>& GetConstantBuffer()    const;
         const _tagTransformBuffer& GetBuffer()  const;
 
     private:

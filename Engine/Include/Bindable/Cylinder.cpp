@@ -7,7 +7,7 @@
 #include "InputLayout.h"
 #include "Topology.h"
 #include "Material.h"
-#include "PixelCBuffer.h"
+#include "ConstantBuffer.h"
 #include "BindableManager.h"
 
 namespace Engine
@@ -68,11 +68,11 @@ namespace Engine
 			{1.f, 1.f, 0.f, 1.f},
 		};
 
-		std::shared_ptr<PixelCBuffer<COLOR>> pColor = StaticFindBindable<PixelCBuffer<COLOR>>("COLOR");
+		std::shared_ptr<ConstantBuffer<COLOR>> pColor = StaticFindBindable<ConstantBuffer<COLOR>>("COLOR");
 
 		if (pColor == nullptr)
 		{
-			pColor = StaticCreateBindable<PixelCBuffer<COLOR>>("COLOR", color, 0);
+			pColor = StaticCreateBindable<ConstantBuffer<COLOR>>("COLOR", color, 0);
 		}
 
 		AddChild(pColor);
@@ -81,7 +81,7 @@ namespace Engine
 	Cylinder::Cylinder(const Cylinder& cylinder) :
 		Drawable(cylinder)
 	{
-		const std::shared_ptr<TransformBuffer>& pTransform = GetTransform();
+		const std::shared_ptr<Transform>& pTransform = GetTransform();
 
 		if (pTransform != nullptr)
 		{

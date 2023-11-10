@@ -1,6 +1,7 @@
 #include "Mesh.h"
 #include "Drawable.h"
 #include "Animation.h"
+#include "../Core/Graphics.h"
 
 namespace Engine
 {
@@ -69,6 +70,48 @@ namespace Engine
 		}
 
 		return m_vecMeshContainer[iIndex].pMaterial;
+	}
+
+	bool Mesh::SetVertexBuffer(int iIndex, const void* pData, int iSize)
+	{
+		D3D11_MAPPED_SUBRESOURCE tSub = {};
+
+		if (FAILED(Graphics::GetInst()->GetDeviceContext()->Map(m_vecMeshContainer[iIndex].m_pVertexBuffer.Get(), 0, D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0, &tSub))) {
+			return false;
+		}
+
+		memcpy_s(tSub.pData, m_vecMeshContainer[iIndex].m_iSize * m_vecMeshContainer[iIndex].m_iCount, pData, iSize);
+
+		Graphics::GetInst()->GetDeviceContext()->Unmap(m_vecMeshContainer[iIndex].m_pVertexBuffer.Get(), 0);
+
+		return true;
+	}
+
+	bool Mesh::SetIndexBuffer(int iIndex, int iSubIndex, const void* pData, int iSize)
+	{
+		D3D11_MAPPED_SUBRESOURCE tSub = {};
+
+		if (FAILED(Graphics::GetInst()->GetDeviceContext()->Map(m_vecMeshContainer[iIndex].m_vecIndexBuffer[iSubIndex].pBuffer.Get(), 0, D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0, &tSub))) {
+			return false;
+		}
+
+		int iDataSize = 0;
+
+		switch (m_vecMeshContainer[iIndex].m_vecIndexBuffer[iSubIndex].eFormat)
+		{
+		case DXGI_FORMAT_R32_UINT:
+			iDataSize = 4;
+			break;
+		case DXGI_FORMAT_R16_UINT:
+			iDataSize = 2;
+			break;
+		}
+
+		memcpy_s(tSub.pData, m_vecMeshContainer[iIndex].m_vecIndexBuffer[iSubIndex].iCount * iDataSize, pData, iSize);
+
+		Graphics::GetInst()->GetDeviceContext()->Unmap(m_vecMeshContainer[iIndex].m_vecIndexBuffer[iSubIndex].pBuffer.Get(), 0);
+
+		return true;
 	}
 
 	void Mesh::Bind()

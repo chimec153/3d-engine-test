@@ -83,7 +83,7 @@ namespace Engine
 	Cone::Cone(const Cone& cone) :
 		Drawable(cone)
 	{
-		const std::shared_ptr<TransformBuffer>& pTransform = GetTransform();
+		const std::shared_ptr<Transform>& pTransform = GetTransform();
 
 		if (pTransform != nullptr)
 		{

@@ -2,26 +2,24 @@
 
 #include "Bindable.h"
 #include "../Types.h"
-#include "PixelCBuffer.h"
 
 namespace Engine
 {
     template <typename T>
-    class VertexCBuffer;
+    class ConstantBuffer;
 
     class ENGINE_DLL Material :
         public Bindable
     {
     public:
         Material();
-        Material(const std::shared_ptr<class PixelCBuffer<MATERIAL>>& pBuffer);
+        Material(const std::shared_ptr<class ConstantBuffer<MATERIAL>>& pBuffer);
         Material(const Material& material);
         virtual ~Material() override = default;
 
     private:
         MATERIAL m_tMaterial;
-        std::shared_ptr<class VertexCBuffer<MATERIAL>>    m_pVertexCBuffer;
-        std::shared_ptr<class PixelCBuffer<MATERIAL>>    m_pPixelCBuffer;
+        std::shared_ptr<class ConstantBuffer<MATERIAL>>    m_pConstantBuffer;
 
     public:
         void SetDiffuseColor(float r, float g, float b, float w);

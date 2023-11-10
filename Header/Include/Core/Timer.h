@@ -4,6 +4,9 @@
 
 namespace Engine
 {
+	template <typename T>
+	class ConstantBuffer;
+
 	class ENGINE_DLL Timer :
 		public CRef
 	{
@@ -16,17 +19,17 @@ namespace Engine
 		LARGE_INTEGER m_tFreq;
 		float m_fElapsedTime;
 		float m_fFPS;
-		float fDeltaTime;
 		int iFrame;
 		float fFrameTime;
 		float m_fScale;
+		float m_fDeltaTime;
 
 	public:
-		float GetElapsedTime() const noexcept;
-		const float GetDeltTime() const noexcept;
-		float GetFPS()	const;
+		constexpr float GetElapsedTime() const noexcept;
+		constexpr  float GetDeltTime() const noexcept;
+		constexpr float GetFPS()	const noexcept;
 		void SetScale(float fScale) noexcept;
-		const float GetScale()	const noexcept;
+		constexpr float GetScale()	const noexcept;
 
 	public:
 		bool Init();

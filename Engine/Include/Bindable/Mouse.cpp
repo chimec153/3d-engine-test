@@ -21,7 +21,7 @@ namespace Engine
 	{
 		__super::Update(fDeltaTime);
 
-		const std::shared_ptr<TransformBuffer>& pTransform = Graphics::GetInst()->GetCamera()->GetTransform();
+		const std::shared_ptr<Transform>& pTransform = Graphics::GetInst()->GetCamera()->GetTransform();
 
 		const Vector3& vPos = pTransform->GetPosition();
 

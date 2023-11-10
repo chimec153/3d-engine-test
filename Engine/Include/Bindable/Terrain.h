@@ -12,10 +12,15 @@ namespace Engine
     private:
         std::shared_ptr<Mesh>   m_pMesh;
         std::vector<std::shared_ptr<Texture>> m_vecTexture;
-        std::shared_ptr<VertexCBuffer<TERRAINCBUFFER>> m_pVSTerrainBuffer;
-        std::shared_ptr<PixelCBuffer<TERRAINCBUFFER>> m_pPSTerrainBuffer;
+        std::shared_ptr<ConstantBuffer<TERRAINCBUFFER>> m_pVSTerrainBuffer;
+        std::shared_ptr<ConstantBuffer<TERRAINCBUFFER>> m_pPSTerrainBuffer;
         TERRAINCBUFFER m_tTerrainBuffer;
         std::shared_ptr<Texture> m_pHeightMap;
+        std::vector<int>    m_vecHeight;
+        bool    m_bEditting;
+        float   m_fEditRange;
+        std::vector<VertexStandard> m_vecVertex;
+        std::vector<unsigned int> m_vecIndex;
 
     public:
         void CreateTerrain(int iWidth, int iHeight);
@@ -25,9 +30,18 @@ namespace Engine
         void CreateTerrainEmissiveTexture(const std::vector<const TCHAR*>& vecFullPath);
         void CreateBlendTerrainTexture(const std::vector<const TCHAR*>& vecFullPath);
         void CreateHeightMap(const TCHAR* pFilePath);
+        void SaveHeightMap(const TCHAR* pFilePath, const std::string& strPathKey = TEXTURE_PATH);
+        void CreateMeshCollider(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex);
+
+    private:
+        void CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight);
 
     public:
         virtual void Bind() override;
+
+    public:
+        void CollisionStay(Collider* pSrc, Collider* pDest, float fDeltaTime);
+        void CollisionEnd(Collider* pSrc, Collider* pDest, float fDeltaTime);
     };
 
 }

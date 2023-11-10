@@ -28,6 +28,30 @@ namespace Engine
 		}
 	}
 
+	BlendState::BlendState(bool bAlphaToCoverageEnable, bool bIndependentBlendEnable, const std::vector<D3D11_RENDER_TARGET_BLEND_DESC>& vecRenderTargetDesc)	:
+		Bindable()
+		, m_vPrevColor()
+		, m_iPrevMask()
+	{
+		D3D11_BLEND_DESC tDesc = {};
+
+		tDesc.AlphaToCoverageEnable = bAlphaToCoverageEnable;
+		tDesc.IndependentBlendEnable = bIndependentBlendEnable;
+
+		assert(vecRenderTargetDesc.size() <= 8);
+
+		for (int i = 0; i < vecRenderTargetDesc.size(); ++i)
+		{
+			tDesc.RenderTarget[i] = vecRenderTargetDesc[i];
+		}
+
+		if (FAILED(Graphics::GetInst()->GetDevice()->CreateBlendState(&tDesc, &m_pBlendState)))
+		{
+			assert(false);
+			return;
+		}
+	}
+
 	void BlendState::Bind()
 	{
 		float color[] = { 1.f, 1.f, 1.f, 1.f };

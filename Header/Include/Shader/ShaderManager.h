@@ -38,9 +38,12 @@ namespace Engine
 
 	private:
 		std::unordered_map<std::string, std::vector<class std::shared_ptr<class Bindable>>>	m_mapShader;
+		GLOBALCBUFFER m_tCBuffer;
+		std::shared_ptr<ConstantBuffer<GLOBALCBUFFER>>	m_pCBuffer;
 
 	public:
 		bool Init();
+		void Update(float fDeltaTime, float fAccTime);
 		const std::vector<std::shared_ptr<Bindable>>* FindShader(const std::string& strShader)	const;
 	};
 

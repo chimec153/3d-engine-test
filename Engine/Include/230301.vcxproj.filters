@@ -109,6 +109,12 @@
     <Filter Include="03. Shader\01. Shader">
       <UniqueIdentifier>{28a6cce7-ce0f-4925-b197-56a997de9a59}</UniqueIdentifier>
     </Filter>
+    <Filter Include="05. Drawable\07. Particle">
+      <UniqueIdentifier>{38aec1ca-3233-49fe-ae67-91a195df8cd1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Drawable\08. Decal">
+      <UniqueIdentifier>{63811607-0355-4c3b-a265-a225cec25fd6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\Window.cpp">
@@ -143,12 +149,6 @@
     </ClCompile>
     <ClCompile Include="Bindable\InputLayout.cpp">
       <Filter>04. Bindable</Filter>
-    </ClCompile>
-    <ClCompile Include="Bindable\VertexCBuffer.cpp">
-      <Filter>04. Bindable\01. ConstantBuffer</Filter>
-    </ClCompile>
-    <ClCompile Include="Bindable\PixelCBuffer.cpp">
-      <Filter>04. Bindable\01. ConstantBuffer</Filter>
     </ClCompile>
     <ClCompile Include="Bindable\ConstantBuffer.cpp">
       <Filter>04. Bindable\01. ConstantBuffer</Filter>
@@ -246,9 +246,6 @@
     <ClCompile Include="Bindable\DomainShader.cpp">
       <Filter>04. Bindable\02. Shader</Filter>
     </ClCompile>
-    <ClCompile Include="Bindable\DomainCBuffer.cpp">
-      <Filter>04. Bindable\01. ConstantBuffer</Filter>
-    </ClCompile>
     <ClCompile Include="Render\RenderInstancing.cpp">
       <Filter>09. Render</Filter>
     </ClCompile>
@@ -312,14 +309,20 @@
     <ClCompile Include="Bindable\Agent.cpp">
       <Filter>04. Bindable\10. Navigation</Filter>
     </ClCompile>
-    <ClCompile Include="Bindable\ComputeCBuffer.cpp">
-      <Filter>04. Bindable\01. ConstantBuffer</Filter>
-    </ClCompile>
     <ClCompile Include="Bindable\ComputeShader.cpp">
       <Filter>04. Bindable\02. Shader</Filter>
     </ClCompile>
     <ClCompile Include="Shader\StructuredBuffer.cpp">
       <Filter>03. Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Particle.cpp">
+      <Filter>05. Drawable\07. Particle</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\GeometryShader.cpp">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Decal.cpp">
+      <Filter>05. Drawable\08. Decal</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -364,12 +367,6 @@
     </ClInclude>
     <ClInclude Include="Bindable\InputLayout.h">
       <Filter>04. Bindable</Filter>
-    </ClInclude>
-    <ClInclude Include="Bindable\VertexCBuffer.h">
-      <Filter>04. Bindable\01. ConstantBuffer</Filter>
-    </ClInclude>
-    <ClInclude Include="Bindable\PixelCBuffer.h">
-      <Filter>04. Bindable\01. ConstantBuffer</Filter>
     </ClInclude>
     <ClInclude Include="Bindable\ConstantBuffer.h">
       <Filter>04. Bindable\01. ConstantBuffer</Filter>
@@ -475,9 +472,6 @@
     </ClInclude>
     <ClInclude Include="Bindable\DomainShader.h">
       <Filter>04. Bindable\02. Shader</Filter>
-    </ClInclude>
-    <ClInclude Include="Bindable\DomainCBuffer.h">
-      <Filter>04. Bindable\01. ConstantBuffer</Filter>
     </ClInclude>
     <ClInclude Include="Render\RenderInstancing.h">
       <Filter>09. Render</Filter>
@@ -596,14 +590,23 @@
     <ClInclude Include="Navigation\Detour\DetourTileCacheBuilder.h">
       <Filter>13. Navigation\01. Detour</Filter>
     </ClInclude>
-    <ClInclude Include="Bindable\ComputeCBuffer.h">
-      <Filter>04. Bindable\01. ConstantBuffer</Filter>
-    </ClInclude>
     <ClInclude Include="Bindable\ComputeShader.h">
       <Filter>04. Bindable\02. Shader</Filter>
     </ClInclude>
     <ClInclude Include="Shader\StructuredBuffer.h">
       <Filter>03. Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Particle.h">
+      <Filter>05. Drawable\07. Particle</Filter>
+    </ClInclude>
+    <ClInclude Include="Vector2.h">
+      <Filter>07. Math</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\GeometryShader.h">
+      <Filter>04. Bindable\02. Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Decal.h">
+      <Filter>05. Drawable\08. Decal</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -642,6 +645,12 @@
       <Filter>03. Shader\01. Shader</Filter>
     </FxCompile>
     <FxCompile Include="..\Bin\Resource\Shader\ComputeShader.hlsl">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\Particle.fx">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\Decal.fx">
       <Filter>03. Shader\01. Shader</Filter>
     </FxCompile>
   </ItemGroup>

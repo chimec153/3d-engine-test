@@ -212,6 +212,11 @@ namespace Engine
 		return m_pScene;
 	}
 
+	Layer* Bindable::GetLayer() const
+	{
+		return m_pLayer;
+	}
+
 	bool Bindable::Init()
 	{
 		return true;

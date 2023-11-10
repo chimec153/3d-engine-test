@@ -2,7 +2,7 @@
 #include "NavMesh.h"
 #include "TransformBuffer.h"
 
-Engine::Agent::Agent(std::shared_ptr<TransformBuffer> pTransform, class NavMesh* pNavMesh, const Vector3& pos)	:
+Engine::Agent::Agent(std::shared_ptr<Transform> pTransform, class NavMesh* pNavMesh, const Vector3& pos)	:
 	Bindable()
 	, m_pTransform(pTransform)
 	, m_pNavMesh(pNavMesh)
@@ -42,7 +42,7 @@ int Engine::Agent::CreateAgent(const Vector3& pos)
 	return m_pNavMesh ? m_pNavMesh->CreateAgent(pos) : -1;
 }
 
-void Engine::Agent::SetTransform(std::shared_ptr<TransformBuffer> pTransform)
+void Engine::Agent::SetTransform(std::shared_ptr<Transform> pTransform)
 {
 	if (m_iAgentIndex != -1)
 	{
