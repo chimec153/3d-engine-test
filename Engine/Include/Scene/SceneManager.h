@@ -70,6 +70,7 @@ namespace Engine
 	public:
 		bool Input(float fDeltaTime);
 		bool Update(float fDeltaTime);
+		void FixedUpdate(float fDelatTime);
 		bool Collision(float fDeltaTime);
 		void PreDraw(float fDeltaTime);
 		void Draw();

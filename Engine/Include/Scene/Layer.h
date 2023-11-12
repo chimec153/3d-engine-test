@@ -34,6 +34,7 @@ namespace Engine
     public:
         void Input(float fDeltaTime);
         void Update(float fDeltaTime);
+        void FixedUpdate(float fDeltaTime);
         void Collision(float fDeltaTime);
         void PreDraw(float fDeltaTime);
         void Draw();

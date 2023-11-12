@@ -14,6 +14,7 @@
 #include "Bindable/Sphere.h"
 #include "Scene/SceneManager.h"
 #include "Bindable/BlendState.h"
+#include "Bindable/PaperBurn.h"
 
 Player::Player() :
 	Drawable()
@@ -45,13 +46,23 @@ Player::Player() :
 	m_pAnimation->AddSequance("walk", pWalkSequence);
 
 	FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
-	FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS");
+	FindAndAddBind<Engine::PixelShader>("PaperBurnPS");
 	FindAndAddBind<Engine::InputLayout>("Standard");
 	FindAndAddBind<Engine::Topology>("TriangleList");
 
 	GetTransform()->SetScale(Engine::Vector3(0.02f, 0.02f, 0.02f));
 	GetTransform()->SetRX(Engine::DegToRad(180.f));
 
+	std::shared_ptr<Engine::PaperBurn> pPaperBurn = CreateBindable<Engine::PaperBurn>("PaperBurn", Engine::StaticFindBindable<Engine::Texture>("PaperBurn"));
+
+	pPaperBurn->SetStartColor(Engine::Red);
+	pPaperBurn->SetMidColor(Engine::Yellow);
+	pPaperBurn->SetFinalColor(Engine::White);
+	pPaperBurn->SetStartRate(0.4f);
+	pPaperBurn->SetMidRate(0.55f);
+	pPaperBurn->SetFinalRate(0.6f);
+	pPaperBurn->SetEndRate(0.65f);
+	pPaperBurn->SetMaxTime(8.f);
 
 	//std::shared_ptr<Drawable> pWeapon = CreateBindable<Drawable>("weapon");
 
@@ -108,10 +119,10 @@ Player::Player(const Player& player) :
 	pHeadAni->SetSkeleton(pHeadSkeleton);
 
 	pHead->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
-	pHead->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS");
+	pHead->FindAndAddBind<Engine::PixelShader>("PaperBurnPS");
 	pHead->FindAndAddBind<Engine::InputLayout>("Standard");
 	pHead->FindAndAddBind<Engine::Topology>("TriangleList");
-	pHead->FindAndAddBind<Engine::BlendState>("AlphaBlend");
+	//pHead->FindAndAddBind<Engine::BlendState>("AlphaBlend");
 
 	pJointSocket->SetDrawable(pHead);
 
@@ -153,6 +164,10 @@ Player::Player(const Player& player) :
 
 	//m_pAnimation->AddIkInfo(6, 1);
 	//m_pAnimation->AddIkInfo(13, 1);
+
+	std::shared_ptr<Engine::PaperBurn> pPaperBurn = std::static_pointer_cast<Engine::PaperBurn>(FindChild(Engine::BINDABLE_TYPE::PAPERBURN));
+
+	pPaperBurn->StartPaperBurn();
 }
 
 void Player::CreateAgent(std::shared_ptr<Engine::NavMesh> pNavMesh, const Engine::Vector3& pos)

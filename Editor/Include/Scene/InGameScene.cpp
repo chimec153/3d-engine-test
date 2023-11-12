@@ -70,9 +70,9 @@ bool InGameScene::Init()
 	pLight->SetIntensity(1.2f);
 	pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
 
-	//ImguiManager::GetInst()->LoadNavMesh(this, TEXT("navmesh\\nav_test.obj"), MESH_PATH);
+	ImguiManager::GetInst()->LoadNavMesh(this, TEXT("navmesh\\nav_test.obj"), MESH_PATH);
 
-	//Engine::Scene::CreateProtoType<Player>("Player", Engine::SCENE_TYPE::CURRENT);
+	Engine::Scene::CreateProtoType<Player>("Player", Engine::SCENE_TYPE::CURRENT);
 
 	std::shared_ptr<Engine::Drawable> pSponza = Engine::Scene::CreateDrawable<Engine::Drawable>("sponza", FindLayer(DEFAULT_LAYER));
 
@@ -165,10 +165,21 @@ bool InGameScene::Init()
 
 		if (pDecalTransform)
 		{
-			pDecalTransform->SetScale(50.f, 50.f, 50.f);
+			if (i == 0)
+			{
+				pDecalTransform->SetScale(10.f, 10.f, 10.f);
+			}
+			else
+			{
+				pDecalTransform->SetScale(50.f, 50.f, 50.f);
+			}
 
 			pDecalTransform->SetPosition(60.f * i, 0.f, 0.f);
 		}
+
+		pDecal->SetMaxFadeTime(20.f);
+
+		pDecal->SetFadeStartTime(15.f);
 	}
 
 	//std::shared_ptr<Engine::Drawable> pBox = CreateDrawable<Engine::Drawable>("box", FindLayer(DEFAULT_LAYER));

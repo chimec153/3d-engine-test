@@ -78,6 +78,7 @@ namespace Engine
 		virtual bool Init();
 		virtual void Input(float fDeltaTime);
 		virtual void Update(float fDeltaTime);
+		virtual void FixedUpdate(float fDelatTime);
 		virtual void Collision(float fDeltaTime);
 		virtual void PreDraw(float fDeltaTime);
 		virtual void Draw();

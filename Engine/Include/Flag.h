@@ -58,6 +58,8 @@ namespace Engine
 		NAV_MESH,
 		LIGHT,
 		PARTICLE,
+		DECAL,
+		PAPERBURN,
 		END
 	};
 

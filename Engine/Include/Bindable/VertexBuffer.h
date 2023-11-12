@@ -72,7 +72,7 @@ namespace Engine
 
 	inline std::shared_ptr<Bindable> VertexBuffer::Clone()
 	{
-		return std::shared_ptr<Bindable>();
+		return std::static_pointer_cast<Bindable>(shared_from_this());
 	}
 
 	inline void VertexBuffer::CreateBuffer(const void* pData, int iCount)

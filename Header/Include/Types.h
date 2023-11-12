@@ -140,7 +140,6 @@ namespace Engine
 		Matrix matWorld;
 		Matrix matView;
 		Matrix matProj;
-		Matrix matInvWorldView;
 		int	iJointSocket;
 
 		_tagTransformBuffer() :
@@ -151,7 +150,6 @@ namespace Engine
 			, matWorld()
 			, matView()
 			, matProj()
-			, matInvWorldView()
 			, iJointSocket(-1)
 		{
 		}
@@ -396,6 +394,50 @@ namespace Engine
 
 	ENGINE_DLL typedef struct alignas(16) _tagDecalCBuffer
 	{
-		Matrix matInvView;
+		Matrix matInvWorldView;
+		float fFadeTime;
+		float fMaxFadeTime;
+		float fFadeStartTime;
+
+		_tagDecalCBuffer() :
+			fFadeTime(0.f)
+			, fMaxFadeTime(1.f)
+			, fFadeStartTime(0.f)
+		{
+		}
 	}DECALCBUFFER, *PDECALCBUFFER;
+
+	typedef struct ENGINE_DLL alignas(16) _tagPaperBurnCBuffer
+	{
+		Vector4 vStartColor;
+		Vector4 vMidColor;
+		Vector4 vFinalColor;
+		float fStartRate;
+		float fMidRate;
+		float fFinalRate;
+		float fEndRate;
+		float fTime;
+		float fMaxTime;
+
+		_tagPaperBurnCBuffer() :
+			vStartColor()
+			, vMidColor()
+			, vFinalColor()
+			, fStartRate()
+			, fMidRate()
+			, fFinalRate()
+			, fEndRate()
+			, fTime()
+			, fMaxTime()
+		{
+		}
+	}PAPERBURNCBUFFER, *PPAPERBURNCBUFFER;
+
+	typedef struct ENGINE_DLL alignas(16)_tagFluidCBuffer
+	{
+		float c1;
+		float c2;
+		float c3;
+		int iWidth;
+	}FLUIDCBUFFER, *PFLUIDCBUFFER;
 }

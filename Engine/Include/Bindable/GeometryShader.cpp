@@ -31,5 +31,5 @@ void Engine::GeometryShader::PostBind()
 
 std::shared_ptr<Engine::Bindable> Engine::GeometryShader::Clone()
 {
-	return std::shared_ptr<Bindable>();
+	return std::static_pointer_cast<Bindable>(shared_from_this());
 }

@@ -214,6 +214,7 @@
     <ClCompile Include="Bindable\DomainShader.cpp" />
     <ClCompile Include="Bindable\Drawable.cpp" />
     <ClCompile Include="Bindable\FbxLoader.cpp" />
+    <ClCompile Include="Bindable\Fluid.cpp" />
     <ClCompile Include="Bindable\GeometryShader.cpp" />
     <ClCompile Include="Bindable\HullShader.cpp" />
     <ClCompile Include="Bindable\IndexBuffer.cpp" />
@@ -222,6 +223,7 @@
     <ClCompile Include="Bindable\Mesh.cpp" />
     <ClCompile Include="Bindable\Mouse.cpp" />
     <ClCompile Include="Bindable\NavMesh.cpp" />
+    <ClCompile Include="Bindable\PaperBurn.cpp" />
     <ClCompile Include="Bindable\Particle.cpp" />
     <ClCompile Include="Bindable\PixelShader.cpp" />
     <ClCompile Include="Bindable\PointLight.cpp" />
@@ -286,6 +288,7 @@
     <ClInclude Include="Bindable\DomainShader.h" />
     <ClInclude Include="Bindable\Drawable.h" />
     <ClInclude Include="Bindable\FbxLoader.h" />
+    <ClInclude Include="Bindable\Fluid.h" />
     <ClInclude Include="Bindable\GeometryShader.h" />
     <ClInclude Include="Bindable\HullShader.h" />
     <ClInclude Include="Bindable\IndexBuffer.h" />
@@ -294,6 +297,7 @@
     <ClInclude Include="Bindable\Mesh.h" />
     <ClInclude Include="Bindable\Mouse.h" />
     <ClInclude Include="Bindable\NavMesh.h" />
+    <ClInclude Include="Bindable\PaperBurn.h" />
     <ClInclude Include="Bindable\Particle.h" />
     <ClInclude Include="Bindable\PixelShader.h" />
     <ClInclude Include="Bindable\PointLight.h" />

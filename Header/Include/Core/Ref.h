@@ -8,8 +8,7 @@ namespace Engine
 	{
 	public:
 		CRef() :
-			m_iRef(0)
-			, m_bActive(true)
+			m_bActive(true)
 			, m_bEnable(true)
 			, m_strTag()
 		{
@@ -17,8 +16,7 @@ namespace Engine
 		}
 
 		CRef(const CRef& ref) :
-			m_iRef(0)
-			, m_bActive(ref.m_bActive)
+			m_bActive(ref.m_bActive)
 			, m_bEnable(ref.m_bEnable)
 			, m_strTag(ref.m_strTag)
 		{
@@ -31,28 +29,11 @@ namespace Engine
 		}
 
 	private:
-		int m_iRef;
 		bool m_bActive;
 		bool m_bEnable;
 		std::string m_strTag;
 
 	public:
-		int Release()
-		{
-			if (--m_iRef == 0)
-			{
-				delete this;
-				return 0;
-			}
-
-			return m_iRef;
-		}
-
-		void AddRef()
-		{
-			++m_iRef;
-		}
-
 		void SetTag(const std::string& strTag)
 		{
 			m_strTag = strTag;

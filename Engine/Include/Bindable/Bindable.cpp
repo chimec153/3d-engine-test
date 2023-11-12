@@ -28,26 +28,7 @@ namespace Engine
 
 		for (; iter != iterEnd; ++iter)
 		{
-			switch ((*iter)->GetBindableType())
-			{
-			case Engine::BINDABLE_TYPE::MATERIAL:
-			case Engine::BINDABLE_TYPE::TRANSFORM:
-			case BINDABLE_TYPE::AGENT:
-			case BINDABLE_TYPE::ANIMATION:
-				AddChild((*iter)->Clone());
-				continue;
-			} 
-
-			switch ((*iter)->GetObjectType())
-			{
-			case Engine::OBJECT_TYPE::BIND:
-				Bindable::AddChild(*iter);
-				break;
-			case Engine::OBJECT_TYPE::DRAW:
-			case Engine::OBJECT_TYPE::COLLIDER:
-				Bindable::AddChild((*iter)->Clone());
-				break;
-			}
+			AddChild((*iter)->Clone());
 		}
 	}
 
@@ -273,6 +254,31 @@ namespace Engine
 
 			(*iterC)->Update(fDeltaTime);
 			++iterC;
+		}
+	}
+
+	void Bindable::FixedUpdate(float fDeltaTime)
+	{
+		std::list<std::shared_ptr<Bindable>>::iterator iter = m_ChildList.begin();
+		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_ChildList.end();
+
+		for (; iter != iterEnd;)
+		{
+			if (!(*iter)->IsActive())
+			{
+				iter = m_ChildList.erase(iter);
+				iterEnd = m_ChildList.end();
+				continue;
+			}
+
+			else if (!(*iter)->IsEnable())
+			{
+				++iter;
+				continue;
+			}
+
+			(*iter)->FixedUpdate(fDeltaTime);
+			++iter;
 		}
 	}
 

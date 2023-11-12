@@ -127,6 +127,31 @@ namespace Engine
 		}
 	}
 
+	void Layer::FixedUpdate(float fDeltaTime)
+	{
+		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
+		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
+
+		for (; iter != iterEnd;)
+		{
+			if (!(*iter)->IsActive())
+			{
+				iter = m_DrawList.erase(iter);
+				iterEnd = m_DrawList.end();
+				continue;
+			}
+
+			else if (!(*iter)->IsEnable())
+			{
+				++iter;
+				continue;
+			}
+
+			(*iter)->FixedUpdate(fDeltaTime);
+			++iter;
+		}
+	}
+
 	void Layer::Collision(float fDeltaTime)
 	{
 		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();

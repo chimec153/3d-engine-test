@@ -352,13 +352,6 @@ namespace Engine
 			return false;
 		}
 
-		m_pDecalCBuffer = StaticFindBindable<ConstantBuffer<DECALCBUFFER>>("Decal");
-
-		if (!m_pDecalCBuffer)
-		{
-			return false;
-		}
-
 		return true;
 	}
 
@@ -641,14 +634,6 @@ namespace Engine
 		m_pDecalBlend->Bind();
 
 		m_pNoDepthRead->Bind();
-
-		DECALCBUFFER tBuffer = {};
-
-		tBuffer.matInvView = Graphics::GetInst()->GetCamera()->GetInvView();
-
-		m_pDecalCBuffer->UpdateBuffer(tBuffer);
-
-		m_pDecalCBuffer->Bind();
 
 		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::DECAL)].begin();
 		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::DECAL)].end();

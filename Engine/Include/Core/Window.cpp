@@ -40,6 +40,7 @@
 #include "../Bindable/GeometryShader.h"
 #include "../Bindable/ConstantBuffer.h"
 
+
 namespace Engine
 {
 	class DepthStencilState;
@@ -59,6 +60,7 @@ namespace Engine
 		, m_iHeight(0)
 		, bCursorEnable(false)
 		, bLockRotate(false)
+		, m_fFixedTime(0.f)
 	{
 #ifdef _DEBUG
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -94,6 +96,7 @@ namespace Engine
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagParticleCBuffer> >::DestroyInst();
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >::DestroyInst();
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPaperBurnCBuffer> >::DestroyInst();
 
 		ThreadManager::DestroyInst();
 
@@ -351,6 +354,11 @@ namespace Engine
 		return SceneManager::GetInst()->Update(fDeltaTime * !bStop);
 	}
 
+	void Window::FixedUpdate(float fDeltaTime)
+	{
+		SceneManager::GetInst()->FixedUpdate(fDeltaTime);
+	}
+
 	void Window::Collision(float fDeltaTime)
 	{
 		SceneManager::GetInst()->Collision(fDeltaTime);
@@ -407,6 +415,15 @@ namespace Engine
 		if (!Input(fDeltaTime))
 		{
 			return;
+		}
+
+		m_fFixedTime += fDeltaTime;
+
+		while (m_fFixedTime >= FIXED_UPDATE_TIME)
+		{
+			FixedUpdate(FIXED_UPDATE_TIME);
+
+			m_fFixedTime -= FIXED_UPDATE_TIME;
 		}
 
 		if (!Update(fDeltaTime))

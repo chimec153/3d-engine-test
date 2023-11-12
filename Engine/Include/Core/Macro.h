@@ -75,6 +75,7 @@
 #define ALPHA_LAYER		"AlphaLayer"
 
 #define epsilon	0.0001
+#define FIXED_UPDATE_TIME	0.01666666f
 
 #define STANDARD_VS "anisotropic_microfacet VSNoSkin"
 #define STANDARD_ANIM_VS "anisotropic_microfacet VSSkin"

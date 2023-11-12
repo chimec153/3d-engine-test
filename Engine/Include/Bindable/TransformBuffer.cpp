@@ -113,14 +113,6 @@ namespace Engine
 
 		matInvRot.Transpose();
 
-		m_tBuffer.matInvWorldView = Graphics::GetInst()->GetCamera()->GetInvView() * Matrix::TranslateFromVector(-m_vPosition) * matInvRot * Matrix::Scaling(1.f / m_vScale);
-
-#ifdef _DEBUG
-		Matrix matDebug = m_tBuffer.matWorldView * m_tBuffer.matInvWorldView;
-#endif
-
-		m_tBuffer.matInvWorldView.Transpose();
-
 		m_tBuffer.matView = Graphics::GetInst()->GetView();
 
 		m_tBuffer.matProj = Graphics::GetInst()->GetProjectMatrix();

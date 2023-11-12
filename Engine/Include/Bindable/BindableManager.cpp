@@ -40,6 +40,8 @@ namespace Engine
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagIKCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagIKCBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPaperBurnCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPaperBurnCBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagFluidCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagFluidCBuffer> >::m_pInst = nullptr;
 
 	template <typename T>
 	ENGINE_DLL std::shared_ptr<T> StaticFindBindable(const std::string& strTag)
@@ -192,6 +194,8 @@ namespace Engine
 
 		CreateBindable("ParticlePS", TEXT("Particle.fx"), "PS_PARTICLE");
 		CreateBindable("DecalPS", TEXT("Decal.fx"), "PS_DECAL");
+
+		CreateBindable("PaperBurnPS", TEXT("PixelShader.hlsl"), "PS_PaperBurn");
 	}
 
 	template <>
@@ -214,9 +218,21 @@ namespace Engine
 	}
 
 	template <>
+	inline BindableManager<class ConstantBuffer<COLOR>>::BindableManager()
+	{
+		CreateBindable("COLOR", 0);
+	}
+
+	template <>
 	inline BindableManager<ConstantBuffer<MATERIAL>>::BindableManager()
 	{
 		CreateBindable("Material", 2);
+	}
+
+	template <>
+	inline BindableManager<class ConstantBuffer<PERSPECTIVEBUFFER>>::BindableManager()
+	{
+		CreateBindable("Perspective", 3);
 	}
 
 	template <>
@@ -232,9 +248,21 @@ namespace Engine
 	}
 
 	template <>
+	inline BindableManager<ConstantBuffer<IKCBUFFER>>::BindableManager()
+	{
+		CreateBindable("IK", 6);
+	}
+
+	template <>
 	inline BindableManager<class ConstantBuffer<PARTICLECBUFFER>>::BindableManager()
 	{
 		CreateBindable("Particle", 7);
+	}
+
+	template <>
+	inline BindableManager<ConstantBuffer<GLOBALCBUFFER>>::BindableManager()
+	{
+		CreateBindable("Global", 8);
 	}
 
 	template <>
@@ -244,27 +272,9 @@ namespace Engine
 	}
 
 	template <>
-	inline BindableManager<class ConstantBuffer<PERSPECTIVEBUFFER>>::BindableManager()
+	inline BindableManager<class ConstantBuffer<PAPERBURNCBUFFER>>::BindableManager()
 	{
-		CreateBindable("Perspective", 3);
-	}
-
-	template <>
-	inline BindableManager<class ConstantBuffer<COLOR>>::BindableManager()
-	{
-		CreateBindable("COLOR", 0);
-	}
-
-	template <>
-	inline BindableManager<ConstantBuffer<IKCBUFFER>>::BindableManager()
-	{
-		CreateBindable("IK", 6);
-	}
-
-	template <>
-	inline BindableManager<ConstantBuffer<GLOBALCBUFFER>>::BindableManager()
-	{
-		CreateBindable("Global", 8);
+		CreateBindable("PaperBurn", 10);
 	}
 
 	template <>
@@ -475,5 +485,7 @@ namespace Engine
 		assert(pNoiseTexture);
 
 		pNoiseTexture->Bind();
+
+		CreateBindable("PaperBurn", TEXT("DefaultBurn.png"), TEXTURE_PATH, 4);
 	}
 }

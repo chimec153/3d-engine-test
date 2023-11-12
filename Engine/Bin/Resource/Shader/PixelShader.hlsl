@@ -75,3 +75,19 @@ float4 PS_White(float4 pos  :   SV_Position) :   SV_Target
 {
     return g_vLightColor;
 }
+
+PSOut PS_PaperBurn(VSOut input)
+{
+    PSOut output;
+    
+    output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor * g_Texture.Sample(g_sAnisotropic, input.uv) + g_vEmissiveColor * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv), input.uv).xyz;
+    output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
+    output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value3.xyz = g_vSpecularColor.xyz;
+    
+    output.value0.w = g_vMaterialRoughness.x;
+    output.value1.w = g_vMaterialRoughness.y;
+    output.value2.w = g_fMaterialFraction;
+    
+    return output;
+}

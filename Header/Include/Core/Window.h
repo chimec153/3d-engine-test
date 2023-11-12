@@ -44,6 +44,7 @@ namespace Engine
 		int m_iHeight;
 		bool bCursorEnable;
 		bool bLockRotate;
+		float m_fFixedTime;
 
 	public:
 		std::shared_ptr<Timer> GetTimer()	const;
@@ -68,6 +69,7 @@ namespace Engine
 		int Register(const TCHAR* pClass, HINSTANCE hInst, WNDPROC proc);
 		bool Input(float fDeltaTime);
 		bool Update(float fDeltaTime);
+		void FixedUpdate(float fDeltaTime);
 		void Collision(float fDeltaTime);
 		void PreDraw(float fDeltaTime);
 		void Draw(float fDeltaTime);

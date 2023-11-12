@@ -67,7 +67,6 @@ namespace Engine
 		std::shared_ptr<class ConstantBuffer<TRANSFORMBUFFER>>	m_pTransformBuffer;
 		std::shared_ptr<class BlendState>	m_pDecalBlend;
 		std::shared_ptr<class DepthStencilState> m_pNoDepthRead;
-		std::shared_ptr<class ConstantBuffer<DECALCBUFFER>>	m_pDecalCBuffer;
 
 	public:
 		void AddLight(const std::shared_ptr<PointLight>& pLight);

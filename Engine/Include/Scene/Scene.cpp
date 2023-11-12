@@ -115,6 +115,31 @@ namespace Engine
 		}
 	}
 
+	void Scene::FixedUpdate(float fDelatTime)
+	{
+		std::list<std::shared_ptr<Layer>>::iterator iter = m_LayerList.begin();
+		std::list<std::shared_ptr<Layer>>::iterator iterEnd = m_LayerList.end();
+
+		for (; iter != iterEnd;)
+		{
+			if (!(*iter)->IsActive())
+			{
+				iter = m_LayerList.erase(iter);
+				iterEnd = m_LayerList.end();
+				continue;
+			}
+
+			else if (!(*iter)->IsEnable())
+			{
+				++iter;
+				continue;
+			}
+
+			(*iter)->FixedUpdate(fDelatTime);
+			++iter;
+		}
+	}
+
 	void Scene::Collision(float fDeltaTime)
 	{
 		std::list<std::shared_ptr<Layer>>::iterator iter = m_LayerList.begin();

@@ -154,3 +154,20 @@ void PostProcess(uint3 DTid : SV_DispatchThreadID)
     //    iParentIndex = g_vecJointHierarchyBuffer[iParentIndex];
     //}
 }
+
+[numthreads(32,32,1)]
+void CS_FLUID(uint3 iDispatchThreadID   :   SV_DispatchThreadID)
+{
+    int index = iDispatchThreadID.x + iDispatchThreadID.y * g_fFluidWidth;
+    
+    int indexleft = iDispatchThreadID.x - 1 + iDispatchThreadID.y * g_fFluidWidth;
+    
+    int indexright = iDispatchThreadID.x + 1 + iDispatchThreadID.y * g_fFluidWidth;
+    
+    int indexup = iDispatchThreadID.x + (iDispatchThreadID.y + 1) * g_fFluidWidth;
+    
+    int indexdown = iDispatchThreadID.x + (iDispatchThreadID.y - 1) * g_fFluidWidth;
+    
+    g_vecHeightField[index] = g_fFluidc1 * g_vecCurrentHeightField[index] + g_fFluidc2 * g_vecPrevHeightField[index] 
+    + g_fFluidc3 * (g_vecCurrentHeightField[indexleft] + g_vecCurrentHeightField[indexright] + g_vecCurrentHeightField[indexup] + g_vecCurrentHeightField[indexdown]);
+}

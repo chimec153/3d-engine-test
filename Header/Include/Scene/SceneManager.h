@@ -45,6 +45,12 @@ namespace Engine
 		{
 			T* pScene = dbg_new T;
 
+			if (!pScene->Init())
+			{
+				SAFE_DELETE(pScene);
+				return nullptr;
+			}
+
 			switch (type)
 			{
 			case SCENE_TYPE::CURRENT:
@@ -57,12 +63,6 @@ namespace Engine
 				break;
 			}
 
-			if (!pScene->Init())
-			{
-				SAFE_DELETE(pScene);
-				return nullptr;
-			}
-
 			return static_cast<T*>(pScene);
 		}
 		Scene* GetScene(SCENE_TYPE type = SCENE_TYPE::CURRENT)	const;
@@ -70,6 +70,7 @@ namespace Engine
 	public:
 		bool Input(float fDeltaTime);
 		bool Update(float fDeltaTime);
+		void FixedUpdate(float fDelatTime);
 		bool Collision(float fDeltaTime);
 		void PreDraw(float fDeltaTime);
 		void Draw();

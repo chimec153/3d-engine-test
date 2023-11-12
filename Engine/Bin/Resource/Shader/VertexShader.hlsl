@@ -54,3 +54,22 @@ float4 VS(float3 pos    :   Position)   :   SV_Position
 {
     return mul(float4(pos, 1.f), g_matTransform);
 }
+
+VSOut VS_FLUID(VSStandardIn input, uint i : SV_VertexID)
+{
+    VSOut output;
+    
+    float4 pos = float4(input.pos.x, g_vecCurrentHeightField[i], input.pos.z, 1.f);
+    
+    output.pos = mul(pos, g_matTransform);
+    
+    float3 tangent = normalize(float3(2 * g_fFluidDist, 0.f, g_vecCurrentHeightField[i + 1] - g_vecCurrentHeightField[i - 1]));
+    float3 bitangent = normalize(float3(0.f, -2 * g_fFluidDist, g_vecCurrentHeightField[i + g_fFluidWidth] - g_vecCurrentHeightField[i - g_fFluidWidth]));
+    float3 normal = normalize(cross(tangent, bitangent));
+    
+    output.normal = normalize(mul(normal, (float3x3) g_matWorldView));
+    output.tangent = normalize(mul(tangent, (float3x3) g_matWorldView));
+    output.tangent.w = 1.f;
+    
+    return output;
+}

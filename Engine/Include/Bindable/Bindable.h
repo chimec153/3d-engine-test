@@ -121,6 +121,7 @@ namespace Engine
 		virtual void Start();
 		virtual void Input(float fDeltaTime);
 		virtual void Update(float fDeltaTime);
+		virtual void FixedUpdate(float fDeltaTime);
 		virtual void Collision(float fDeltaTime);
 		virtual void PreDraw(float fDeltaTime);
 		virtual void Bind();

@@ -37,6 +37,6 @@ namespace Engine
 	}
 	std::shared_ptr<Bindable> DepthStencilState::Clone()
 	{
-		return std::shared_ptr<Bindable>();
+		return std::static_pointer_cast<Bindable>(shared_from_this());
 	}
 }

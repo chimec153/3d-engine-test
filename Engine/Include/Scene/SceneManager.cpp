@@ -72,6 +72,11 @@ namespace Engine
 		return true;
 	}
 
+	void SceneManager::FixedUpdate(float fDeltaTime)
+	{
+		m_pScene->FixedUpdate(fDeltaTime);
+	}
+
 	bool SceneManager::Collision(float fDeltaTime)
 	{
 		if (m_pNextScene)

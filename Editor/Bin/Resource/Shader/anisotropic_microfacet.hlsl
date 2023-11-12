@@ -220,18 +220,17 @@ PSOut PS(VSOut input)
 {
     PSOut output;
     
-    output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
-    
     output.value0.xyz = g_vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz + g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     
-    output.value0.w = g_vMaterialRoughness.x;
-    output.value1.w = g_vMaterialRoughness.y;
+    output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
     
     output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
     
-    output.value2.w = g_fMaterialFraction;
-    
     output.value3.xyz = g_vSpecularColor.xyz;
+    
+    output.value0.w = g_vMaterialRoughness.x;
+    output.value1.w = g_vMaterialRoughness.y;
+    output.value2.w = g_fMaterialFraction;
     
     return output;
 }

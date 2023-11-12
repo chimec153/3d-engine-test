@@ -115,6 +115,12 @@
     <Filter Include="05. Drawable\08. Decal">
       <UniqueIdentifier>{63811607-0355-4c3b-a265-a225cec25fd6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="04. Bindable\11. PaperBurn">
+      <UniqueIdentifier>{8f8d15c1-6d14-4531-8d20-600d9759658e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Drawable\09. Fluid">
+      <UniqueIdentifier>{7e2cee04-f3db-4320-b1fa-5cf6883a789d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\Window.cpp">
@@ -323,6 +329,12 @@
     </ClCompile>
     <ClCompile Include="Bindable\Decal.cpp">
       <Filter>05. Drawable\08. Decal</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\PaperBurn.cpp">
+      <Filter>04. Bindable\11. PaperBurn</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Fluid.cpp">
+      <Filter>05. Drawable\09. Fluid</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -607,6 +619,12 @@
     </ClInclude>
     <ClInclude Include="Bindable\Decal.h">
       <Filter>05. Drawable\08. Decal</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\PaperBurn.h">
+      <Filter>04. Bindable\11. PaperBurn</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Fluid.h">
+      <Filter>05. Drawable\09. Fluid</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

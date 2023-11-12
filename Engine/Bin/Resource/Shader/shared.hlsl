@@ -131,7 +131,6 @@ cbuffer transform : register(b0)
     float4x4 g_matWorld;
     float4x4 g_matView;
     float4x4 g_matProj;
-    float4x4 g_matInvWorldView;
     int g_iTransformJointSocket;
 };
 
@@ -231,7 +230,32 @@ cbuffer Global : register(b8)
 
 cbuffer Decal : register(b9)
 {
-    matrix g_matInvView;
+    float4x4 g_matInvWorldView;
+    float g_fDecalFadeTime;
+    float g_fDecalMaxFade;
+    float g_fDecalFadeStart;
+}
+
+cbuffer PaperBurn : register(b10)
+{
+    float4  g_vPaperStartColor;
+    float4  g_vPaperMidColor;
+    float4  g_vPaperFinalColor;
+    float   g_fPaperStartRate;
+    float   g_fPaperMidRate;
+    float   g_fPaperFinalRate;
+    float   g_fPaperEndRate;
+    float   g_fPaperTime;
+    float   g_fPaperMaxTime;
+}
+
+cbuffer Fluid : register(b11)
+{
+    float g_fFluidc1;
+    float g_fFluidc2;
+    float g_fFluidc3;
+    int g_fFluidWidth;
+    float g_fFluidDist;
 }
 
 struct Transform
@@ -273,6 +297,7 @@ Texture2D g_Texture : register(t0);
 Texture2D g_NormalTexture : register(t1);
 Texture2D g_SpecularTexture : register(t2);
 Texture2D g_EmissiveTexture : register(t3);
+Texture2D g_PaperBurnTexture : register(t4);
 
 Texture2D g_DepthTexture0 : register(t10);
 Texture2D g_GBufferTexture0 : register(t11);
@@ -301,12 +326,16 @@ StructuredBuffer<Transform> g_vecBonePalette : register(t33);
 StructuredBuffer<Bone> g_vecBoneBuffer : register(t34);
 StructuredBuffer<int> g_vecJointHierarchyBuffer : register(t35);
 
+StructuredBuffer<float> g_vecPrevHeightField : register(t38);
+StructuredBuffer<float> g_vecCurrentHeightField : register(t39);
+
 StructuredBuffer<Particle> g_vecParticle : register(t40);
 
 RWStructuredBuffer<matrix> g_vecFinalBuffer : register(u0);
 RWStructuredBuffer<matrix> g_vecPoseBuffer : register(u1);
 RWStructuredBuffer<Particle> g_vecParticleInfo : register(u2);
 RWStructuredBuffer<int> g_vecEmitter : register(u3);
+RWStructuredBuffer<float> g_vecHeightField : register(u4);
 
 sampler g_sPoint : register(s0);
 sampler g_sLinear : register(s1);
@@ -348,7 +377,7 @@ float3 BumpMapping(float3 n, float4 t, float2 uv)
     );
 }
 
-float3 BumpMapping(float3 n, float4 t, float2 uv, float3 bump)
+float3 BumpMapping(float3 n, float4 t, float3 bump)
 {
     float3 normal = normalize(n);
     
@@ -365,4 +394,39 @@ float3 BumpMapping(float3 n, float4 t, float2 uv, float3 bump)
             tangent.z * N.x + bitangent.z * N.y + normal.z * N.z
         )
     );
+}
+
+float4 GetPaperBurnColor(float4 color, float2 uv)
+{
+    float fRate = g_fPaperTime / g_fPaperMaxTime * 3.0 - 1.f + g_PaperBurnTexture.Sample(g_sAnisotropic, uv).r; //  0.0 ~ 3.0
+    
+    if (fRate < g_fPaperStartRate)
+    {
+        return color;
+    }
+    
+    else if(fRate < g_fPaperMidRate)
+    {
+        float fBlendRate = (fRate - g_fPaperStartRate) / (g_fPaperMidRate - g_fPaperStartRate);
+        
+        return color * (1.0 - fBlendRate) + g_vPaperStartColor * fBlendRate;
+    }
+    
+    else if(fRate < g_fPaperFinalRate)
+    {
+        float fBlendRate = (fRate - g_fPaperMidRate) / (g_fPaperFinalRate - g_fPaperMidRate);
+        
+        return g_vPaperStartColor * (1.0 - fBlendRate) + g_vPaperMidColor * fBlendRate;
+    }
+    
+    else if(fRate < g_fPaperEndRate)
+    {
+        float fBlendRate = (fRate - g_fPaperFinalRate) / (g_fPaperEndRate - g_fPaperFinalRate);
+        
+        return g_vPaperMidColor * (1.0 - fBlendRate) + g_vPaperFinalColor * fBlendRate;
+    }
+    
+    clip(-1);
+
+    return 0.0;
 }
