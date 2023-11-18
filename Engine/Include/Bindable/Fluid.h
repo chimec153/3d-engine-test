@@ -7,7 +7,7 @@ namespace Engine
         public Drawable
     {
     public:
-        Fluid(int n, int m, int d, float p, float mu, float c, float t = FIXED_UPDATE_TIME);//c^2 = T / rho
+        Fluid(int n, int m, float d, float mu, float c, float t = FIXED_UPDATE_TIME);//c^2 = T / rho
         virtual ~Fluid() override = default;
     private:
         std::shared_ptr<class StructuredBuffer> m_pBuffer[FLUID_BUFFER_COUNT];
@@ -21,6 +21,7 @@ namespace Engine
         void CreateVertexBufferAndIndexBuffer(int n, int m);
 
     public:
+        virtual void Input(float fDeltaTime) override;
         virtual void FixedUpdate(float fDeltaTime) override;
         virtual void Bind() override;
     };

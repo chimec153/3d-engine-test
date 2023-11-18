@@ -1283,3 +1283,5 @@ Editor/Bin/Resource/Texture/Decal/Decal.png
 .vs/230301/v17/Solution.VC.db-shm
 .vs/230301/v17/Solution.VC.db-wal
 Editor/Bin/Resource/Texture/DefaultBurn.png
+*.dds
+*.jpg

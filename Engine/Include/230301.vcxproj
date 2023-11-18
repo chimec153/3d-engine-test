@@ -231,6 +231,7 @@
     <ClCompile Include="Bindable\RasterizerState.cpp" />
     <ClCompile Include="Bindable\Sampler.cpp" />
     <ClCompile Include="Bindable\Shader.cpp" />
+    <ClCompile Include="Bindable\SkyBox.cpp" />
     <ClCompile Include="Bindable\Sphere.cpp" />
     <ClCompile Include="Bindable\Terrain.cpp" />
     <ClCompile Include="Bindable\Texture.cpp" />
@@ -305,6 +306,7 @@
     <ClInclude Include="Bindable\RasterizerState.h" />
     <ClInclude Include="Bindable\Sampler.h" />
     <ClInclude Include="Bindable\Shader.h" />
+    <ClInclude Include="Bindable\SkyBox.h" />
     <ClInclude Include="Bindable\Sphere.h" />
     <ClInclude Include="Bindable\Terrain.h" />
     <ClInclude Include="Bindable\Texture.h" />

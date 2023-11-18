@@ -97,6 +97,7 @@ namespace Engine
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >::DestroyInst();
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >::DestroyInst();
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPaperBurnCBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagFluidCBuffer> >::DestroyInst();
 
 		ThreadManager::DestroyInst();
 

@@ -439,5 +439,6 @@ namespace Engine
 		float c2;
 		float c3;
 		int iWidth;
+		float dist;
 	}FLUIDCBUFFER, *PFLUIDCBUFFER;
 }

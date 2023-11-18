@@ -255,6 +255,16 @@ namespace Engine
 		tTextureDesc.SampleDesc.Quality = 0;
 		tTextureDesc.CPUAccessFlags = eCpuFlag;
 
+		switch (tTextureDesc.Format)
+		{
+		case DXGI_FORMAT_BC1_UNORM:
+			tTextureDesc.Width = tTextureDesc.Width + (4 - tTextureDesc.Width % 4) % 4;
+			tTextureDesc.Height = tTextureDesc.Height + (4 - tTextureDesc.Height % 4) % 4;
+			break;
+		default:
+			break;
+		}
+
 		std::vector<D3D11_SUBRESOURCE_DATA> vecSub(image.GetMetadata().arraySize * image.GetMetadata().mipLevels);
 
 		for (int i = 0; i < image.GetMetadata().arraySize; ++i)

@@ -25,6 +25,7 @@
 #include "../Bindable/Animation.h"
 #include "../Animation/Skeleton.h"
 #include "../Bindable/ConstantBuffer.h"
+#include "../Bindable/SkyBox.h"
 
 namespace Engine
 {
@@ -36,6 +37,11 @@ namespace Engine
 
 	RenderManager::~RenderManager()
 	{
+	}
+
+	void RenderManager::SetSkyBox(std::shared_ptr<SkyBox> pSkyBox)
+	{
+		m_pSkyBox = pSkyBox;
 	}
 
 	void RenderManager::AddLight(const std::shared_ptr<PointLight>& pLight)
@@ -352,6 +358,13 @@ namespace Engine
 			return false;
 		}
 
+		m_pAlphaBlend = StaticFindBindable<BlendState>("AlphaBlend");
+
+		if (!m_pAlphaBlend)
+		{
+			return false;
+		}
+
 		return true;
 	}
 
@@ -452,6 +465,8 @@ namespace Engine
 
 		RenderLight();
 
+		RenderSkyBox();
+
 		RenderAlpha();
 
 		m_pNoDepthWrite->PostBind();
@@ -492,13 +507,34 @@ namespace Engine
 
 	void RenderManager::RenderAlpha()
 	{
-		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::ALPHA)].begin();
-		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::ALPHA)].end();
+		pMRT->SetDepthSRV(10);
+		m_pAlphaBlend->Bind();
 
-		for (; iter != iterEnd; ++iter)
+		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
 		{
-			(*iter)->Bind();
+			std::list<std::shared_ptr<PointLight>>::iterator iterL = m_LightList[i].begin();
+			std::list<std::shared_ptr<PointLight>>::iterator iterLEnd = m_LightList[i].end();
+
+			pDepthBuffer[i]->SetDepthSRV(15);
+
+			for (; iterL != iterLEnd; ++iterL)
+			{
+				(*iterL)->Bind();
+
+				std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::ALPHA)].begin();
+				std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::ALPHA)].end();
+
+				for (; iter != iterEnd; ++iter)
+				{
+					(*iter)->Bind();
+				}
+			}
+
+			pDepthBuffer[i]->ResetSRV(15);
 		}
+
+		m_pAlphaBlend->PostBind();
+		pMRT->ResetSRV(10);
 	}
 
 	void RenderManager::RenderLight()
@@ -648,6 +684,28 @@ namespace Engine
 		m_pDecalBlend->PostBind();
 
 		m_pDecalMRT->ResetTargets();
+
+		pMRT->ResetSRV(10);
+	}
+
+	void RenderManager::RenderSkyBox()
+	{
+		if (!m_pSkyBox)
+		{
+			return;
+		}
+
+		pMRT->SetDepthSRV(10);
+
+		m_pNoDepthRead->Bind();
+
+		m_pCullFront->Bind();
+
+		m_pSkyBox->Bind();
+
+		m_pCullFront->PostBind();
+
+		m_pNoDepthRead->PostBind();
 
 		pMRT->ResetSRV(10);
 	}

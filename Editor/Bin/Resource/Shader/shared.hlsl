@@ -65,6 +65,7 @@ struct VSOut
     float3 light : LIGHT;
     float3 lightDir : LIGHTDIR;
     float3 view : VIEW;
+    float4 clip : Position;
 };
 
 struct VS_Terrain_Out
@@ -254,7 +255,8 @@ cbuffer Fluid : register(b11)
     float g_fFluidc1;
     float g_fFluidc2;
     float g_fFluidc3;
-    int g_fFluidWidth;
+    int g_iFluidWidth;
+    float g_fFluidDist;
 }
 
 struct Transform

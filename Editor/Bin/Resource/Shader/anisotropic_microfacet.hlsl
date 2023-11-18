@@ -5,6 +5,7 @@ VSOut VS(VSIn input)
     VSOut output;
     
     output.pos = mul(float4(input.pos, 1.f), g_matTransform);
+    output.view = mul(input.pos, (float3x3) g_matWorldView);
     output.uv = input.uv;
     
     output.normal = normalize(mul(input.normal, (float3x3) g_matWorldView));
@@ -20,6 +21,7 @@ VSOut VS_NoSkin(VSStandardIn input)
     VSOut output;
     
     output.pos = mul(float4(input.pos, 1.f), g_matTransform);
+    output.view = mul(input.pos, (float3x3) g_matWorldView);
     output.uv = input.uv;
     
     output.normal = normalize(mul(input.normal, (float3x3) g_matWorldView));
@@ -35,6 +37,7 @@ VSInstOut VS_NoSkinInst(VSStandardInstIn input)
     VSInstOut output;
     
     output.pos = mul(float4(input.pos, 1.f), input.WVP);
+    output.view = mul(input.pos, (float3x3) input.WV);
     output.uv = input.uv;
     
     output.normal = normalize(mul(input.normal, (float3x3) input.WV));
@@ -62,25 +65,25 @@ VS_Terrain_Out VS_Terrain(VSStandardIn input)
     float3 leftpos = input.pos;
     leftpos.x -= 1.f;
     
-    float2 leftuv = leftpos / g_iTerrainWidth;
+    float2 leftuv = leftpos.xz / g_iTerrainWidth;
     leftuv.y = 1.f - leftuv.y;
     
     float3 rightpos = input.pos;
     rightpos.x += 1.f;
     
-    float2 rightuv = rightpos / g_iTerrainWidth;
+    float2 rightuv = rightpos.xz / g_iTerrainWidth;
     rightuv.y = 1.f - rightuv.y;
     
     float3 uppos = input.pos;
     uppos.z += 1.f;
     
-    float2 upuv = uppos / g_iTerrainWidth;
+    float2 upuv = uppos.xz / g_iTerrainWidth;
     upuv.y = 1.f - upuv.y;
     
     float3 downpos = input.pos;
     downpos.z -= 1.f;
     
-    float2 downuv = downpos / g_iTerrainWidth;
+    float2 downuv = downpos.xz / g_iTerrainWidth;
     downuv.y = 1.f - downuv.y;
     
     pos.y = g_HeightTexture.SampleLevel(g_sPoint, output.blend_uv, 0.f).r * 10.f;
@@ -131,10 +134,12 @@ VSOut VS_Skin(VSStandardIn input)
     if(g_iTransformJointSocket == -1)
     {
         output.pos = mul(pos, g_matTransform);
+        output.view = mul(pos.xyz, (float3x3)g_matWorldView);
     }
     else
     {
         output.pos = mul(pos, mul(g_matJoint, mul(g_vecJointSockets[g_iTransformJointSocket], g_matTransform)));
+        output.view = mul(pos.xyz, mul((float3x3) g_matJoint, mul((float3x3) g_vecJointSockets[g_iTransformJointSocket], (float3x3) g_matWorldView)));
     }
     
     output.uv = input.uv;
@@ -166,13 +171,16 @@ VSInstOut VS_SkinInst(VSStandardInstIn input, uint iInstId : SV_InstanceID)
     }
     
     matrix matWVP = input.WVP;
+    float3x3 matWV = (float3x3)input.WV;
     
     if(input.parentJoint != -1)
     {
         matWVP = mul(input.joint, mul(g_vecJointSockets[input.parentJoint + input.parentJointCount * input.instID], matWVP));
+        matWV = mul((float3x3) input.joint, mul((float3x3) g_vecJointSockets[input.parentJoint + input.parentJointCount * input.instID], (float3x3) matWV));
     }
     
     output.pos = mul(pos, matWVP);
+    output.view = mul(pos.xyz, matWV);
     output.uv = input.uv;
     
     output.normal = normalize(mul(normal, (float3x3) input.WV));
@@ -186,6 +194,18 @@ VSInstOut VS_SkinInst(VSStandardInstIn input, uint iInstId : SV_InstanceID)
     output.fMaterialFraction = g_fMaterialFraction;
     
     return output;
+}
+
+float4 GetFresnel(float LDotH, float4 vSpecColor)
+{
+    float4 rt = sqrt(vSpecColor);
+    
+    float4 etha = (1.f + rt) / (1.f - rt);
+    
+    float4 g = sqrt(etha * etha - 1.f + LDotH * LDotH);
+    
+    return (g - LDotH) * (g - LDotH) / (g + LDotH) / (g + LDotH) *
+    ((LDotH * (g + LDotH) - 1.f) * (LDotH * (g + LDotH) - 1.f) / (LDotH * (g - LDotH) + 1.f) / (LDotH * (g - LDotH) + 1.f) + 1.f) / 2.f;
 }
 
 float3 GetFresnel(float LDotH, float3 vSpecColor)
@@ -820,4 +840,169 @@ PSOut PS_NoTextureInst(VSInstOut input)
     output.value3.xyz = input.vSpecularColor.xyz;
     
     return output;
+}
+
+float4 PS_Alpha(VSOut input) : SV_Target
+{
+    float3 viewPos = 0.f;
+    
+    float depth = input.clip.z / input.clip.w;
+    
+    float2 pos = input.clip.xy * 0.5f + 0.5f;
+    
+    pos.y = -pos.y;
+    
+    viewPos.z = g_vProjectValues.w / (g_vProjectValues.z - depth);
+    viewPos.xy = pos * viewPos.z * g_vProjectValues.xy;
+    
+    float4 shadowpos = mul(float4(viewPos, 1.f), g_matCameraViewToLightClip);
+    
+    shadowpos.xyz /= shadowpos.w;
+    
+    shadowpos.xy += 1.f;
+    
+    shadowpos.xy *= 0.5f;
+    
+    shadowpos.y = 1.f - shadowpos.y;
+    
+    float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
+    
+    float2 vMaterialRoughness = g_vMaterialRoughness;
+    
+    float4 albedo = g_Texture.Sample(g_sAnisotropic, input.uv) * g_vDiffuseColor + g_vEmissiveColor * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv);
+    
+    float3 normal = BumpMapping(input.normal, input.tangent, input.uv);
+    
+    float4 vSpecColor = g_SpecularTexture.Sample(g_sAnisotropic, input.uv) * g_vSpecularColor;
+    
+    float materialFraction = g_fMaterialFraction;
+    
+    float3 light = 0.f;
+    
+    float4 C = 0.f;
+    
+    if (g_iLightType == POINT_LIGHT)
+    {
+        C = GetLightAtt(g_vLightPos - input.view) * g_fLightIntensity;
+        
+        light = normalize(g_vLightPos - input.view);
+    }
+    else if (g_iLightType == SPOT_LIGHT)
+    {
+        light = normalize(g_vLightPos - input.view);
+        
+        C = GetLightAtt(g_vLightPos - input.view) * pow(max(dot(g_vLightDir, light), 0.f), g_fLightIntensity);
+    }
+    else if (g_iLightType == DIRECTIONAL_LIGHT)
+    {
+        light = normalize(-g_vLightDir);
+        
+        C = g_vLightColor * g_fLightIntensity;
+    }
+    
+    float3 view = normalize(-viewPos);
+    
+    float3 hdir = normalize(light + view);
+    
+    float NDotH = dot(normal, hdir);
+    
+    float NDotL = dot(normal, light);
+    
+    float LDotH = dot(light, hdir);
+    
+    float NDotV = dot(normal, view);
+    
+    float3 P = normalize(hdir - NDotH * normal);
+    
+    float4 vFresnel = float4(GetFresnel(LDotH, vSpecColor.xyz), 1.f);
+    
+    float4 vMicroFacet = GetMicrofacetDistribution(NDotH, hdir.x * hdir.x / (hdir.x * hdir.x + hdir.y * hdir.y), vMaterialRoughness);
+    
+    float4 vGeometry = GetGeometricAttenuation(NDotH, NDotV, NDotL, LDotH);
+    
+    return (materialFraction * C * albedo * max(NDotL, 0.f)
+    + (1.f - materialFraction) * saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
+}
+
+
+float4 PS_AlphaNoUV(VSOut input) : SV_Target
+{
+    float3 viewPos = 0.f;
+    
+    float depth = input.clip.z / input.clip.w;
+    
+    float2 pos = input.clip.xy * 0.5f + 0.5f;
+    
+    pos.y = -pos.y;
+    
+    viewPos.z = g_vProjectValues.w / (g_vProjectValues.z - depth);
+    viewPos.xy = pos * viewPos.z * g_vProjectValues.xy;
+    
+    float4 shadowpos = mul(float4(viewPos, 1.f), g_matCameraViewToLightClip);
+    
+    shadowpos.xyz /= shadowpos.w;
+    
+    shadowpos.xy += 1.f;
+    
+    shadowpos.xy *= 0.5f;
+    
+    shadowpos.y = 1.f - shadowpos.y;
+    
+    float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
+    
+    float2 vMaterialRoughness = g_vMaterialRoughness;
+    
+    float4 albedo = g_vDiffuseColor + g_vEmissiveColor;
+    
+    float3 normal = input.normal;
+    
+    float4 vSpecColor = g_vSpecularColor;
+    
+    float materialFraction = g_fMaterialFraction;
+    
+    float3 light = 0.f;
+    
+    float4 C = 0.f;
+    
+    if (g_iLightType == POINT_LIGHT)
+    {
+        C = GetLightAtt(g_vLightPos - input.view) * g_fLightIntensity;
+        
+        light = normalize(g_vLightPos - input.view);
+    }
+    else if (g_iLightType == SPOT_LIGHT)
+    {
+        light = normalize(g_vLightPos - input.view);
+        
+        C = GetLightAtt(g_vLightPos - input.view) * pow(max(dot(g_vLightDir, light), 0.f), g_fLightIntensity);
+    }
+    else if (g_iLightType == DIRECTIONAL_LIGHT)
+    {
+        light = normalize(-g_vLightDir);
+        
+        C = g_vLightColor * g_fLightIntensity;
+    }
+    
+    float3 view = normalize(-input.view);
+    
+    float3 hdir = normalize(light + view);
+    
+    float NDotH = dot(normal, hdir);
+    
+    float NDotL = dot(normal, light);
+    
+    float LDotH = dot(light, hdir);
+    
+    float NDotV = dot(normal, view);
+    
+    float3 P = normalize(hdir - NDotH * normal);
+    
+    float4 vFresnel = float4(GetFresnel(LDotH, vSpecColor.xyz), 1.f);
+    
+    float4 vMicroFacet = GetMicrofacetDistribution(NDotH, hdir.x * hdir.x / (hdir.x * hdir.x + hdir.y * hdir.y), vMaterialRoughness);
+    
+    float4 vGeometry = GetGeometricAttenuation(NDotH, NDotV, NDotL, LDotH);
+    
+    return (materialFraction * C * albedo * max(NDotL, 0.f)
+    + (1.f - materialFraction) * saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
 }

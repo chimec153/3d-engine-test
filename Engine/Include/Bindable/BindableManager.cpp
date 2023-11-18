@@ -1,6 +1,7 @@
 #include "BindableManager.h"
 #include "Texture.h"
 #include "TransformBuffer.h"
+#include "Box.h"
 
 namespace Engine
 {
@@ -149,6 +150,8 @@ namespace Engine
 
 		CreateBindable("ParticleVS", TEXT("Particle.fx"), "VS_PARTICLE");
 		CreateBindable("DecalVS", TEXT("Decal.fx"), "VS_DECAL");
+		CreateBindable("FluidVS", TEXT("VertexShader.hlsl"), "VS_FLUID");
+		CreateBindable("EnvironmentVS", TEXT("VertexShader.hlsl"), "VS_ENV");
 	}
 
 	template<>
@@ -184,6 +187,7 @@ namespace Engine
 
 		CreateBindable("anisotropic_microfacet PS_NoTexture", TEXT("anisotropic_microfacet.hlsl"), "PS_NoTexture");
 		CreateBindable("anisotropic_microfacet PS_Terrain", TEXT("anisotropic_microfacet.hlsl"), "PS_Terrain");
+		CreateBindable("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal", TEXT("anisotropic_microfacet.hlsl"), "PS_NoDiffuseNoSpecMapNoNormalMap");
 
 		CreateBindable("anisotropic_microfacet PSInst", TEXT("anisotropic_microfacet.hlsl"), "PSInst");
 		CreateBindable("anisotropic_microfacet PS_NoSpecInst", TEXT("anisotropic_microfacet.hlsl"), "PS_NoSpecInst");
@@ -192,10 +196,14 @@ namespace Engine
 		CreateBindable("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormalInst", TEXT("anisotropic_microfacet.hlsl"), "PS_NoDiffuseNoSpecNoNormalInst");
 		CreateBindable("anisotropic_microfacet PS_NoTextureInst", TEXT("anisotropic_microfacet.hlsl"), "PS_NoTextureInst");
 
+		CreateBindable("AlphaPS", TEXT("anisotropic_microfacet.hlsl"), "PS_Alpha");
+		CreateBindable("AlphaNoUVPS", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaNoUV");
+
 		CreateBindable("ParticlePS", TEXT("Particle.fx"), "PS_PARTICLE");
 		CreateBindable("DecalPS", TEXT("Decal.fx"), "PS_DECAL");
 
 		CreateBindable("PaperBurnPS", TEXT("PixelShader.hlsl"), "PS_PaperBurn");
+		CreateBindable("EnvironmentPS", TEXT("PixelShader.hlsl"), "PS_ENV");
 	}
 
 	template <>
@@ -206,6 +214,7 @@ namespace Engine
 		CreateBindable("PostProcess", TEXT("ComputeShader.hlsl"), "PostProcess");
 
 		CreateBindable("ParticleCS", TEXT("Particle.fx"), "CS_PARTICLE");
+		CreateBindable("FluidCS", TEXT("ComputeShader.hlsl"), "CS_FLUID");
 	}
 
 	template <typename T>
@@ -275,6 +284,12 @@ namespace Engine
 	inline BindableManager<class ConstantBuffer<PAPERBURNCBUFFER>>::BindableManager()
 	{
 		CreateBindable("PaperBurn", 10);
+	}
+
+	template <>
+	inline BindableManager<class ConstantBuffer<FLUIDCBUFFER>>::BindableManager()
+	{
+		CreateBindable("Fluid", 11);
 	}
 
 	template <>
@@ -475,6 +490,8 @@ namespace Engine
 #ifdef _DEBUG
 		CreateBindable("Line", std::vector<VertexTexture>	{ {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f}, { 0.f,0.f,0.f,0.f,0.f,0.f,100.f,0.f,0.f,0.f,0.f,0.f }	}, std::vector<unsigned int>{ 0, 1 });
 #endif
+
+		CreateBindable("Box", Box::CreateTextureVertex<VertexStandard>(), Box::GetTextureIndex());
 	}
 
 	template <>

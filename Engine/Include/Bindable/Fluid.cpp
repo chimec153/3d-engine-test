@@ -2,32 +2,43 @@
 #include "ConstantBuffer.h"
 #include "ComputeShader.h"
 #include "../Shader/StructuredBuffer.h"
-#include "VertexBuffer.h"
-#include "IndexBuffer.h"
+#include "Mesh.h"
 #include "BindableManager.h"
+#include "InputLayout.h"
+#include "Topology.h"
+#include "../Input/Input.h"
 
-Engine::Fluid::Fluid(int n, int m, int d, float p, float mu, float c, float t)	:
+Engine::Fluid::Fluid(int n, int m, float d, float mu, float c, float t)	:
 	Drawable()
 	, m_pBuffer()
 	, m_iCurrentBuffer(0)
 	, m_pCS(StaticFindBindable<ComputeShader>("FluidCS"))
 	, m_pCBuffer(FindAndAddBind<ConstantBuffer<FLUIDCBUFFER>>("Fluid"))
-	, m_iHeight(m)
+	, m_iHeight(m + 1)
 {
 	assert(c < d / 2 / t * sqrtf(mu * t + 2.f));
 	assert(t < (mu + sqrtf(mu * mu + 32 * c * c / d / d)) / (8.f * c * c / d / d));
 
-	m_tCBuffer.c1 = 4.f - 8.f * c * c * t * t / d / d;
+	m_tCBuffer.c1 = (4.f - 8.f * c * c * t * t / d / d) / (mu * t + 2.f);
 	m_tCBuffer.c2 = (mu* t - 2.f) / (mu * t + 2.f);
 	m_tCBuffer.c3 = 2 * c * c * t * t / d / d / (mu * t + 2.f);
-	m_tCBuffer.iWidth = n;
+	m_tCBuffer.iWidth = n + 1;
 	m_tCBuffer.dist = d;
 
-	m_pBuffer[0] = std::make_shared<StructuredBuffer>(n * m, 4);
-	m_pBuffer[1] = std::make_shared<StructuredBuffer>(n * m, 4);
-	m_pBuffer[2] = std::make_shared<StructuredBuffer>(n * m, 4);
+	m_pBuffer[0] = std::make_shared<StructuredBuffer>(m_iHeight * m_tCBuffer.iWidth, 4);
+	m_pBuffer[1] = std::make_shared<StructuredBuffer>(m_iHeight * m_tCBuffer.iWidth, 4);
+	m_pBuffer[2] = std::make_shared<StructuredBuffer>(m_iHeight * m_tCBuffer.iWidth, 4);
 
 	CreateVertexBufferAndIndexBuffer(n, m);
+
+	FindAndAddBind<VertexShader>("FluidVS");
+	FindAndAddBind<PixelShader>("AlphaNoUVPS");
+	FindAndAddBind<InputLayout>(STANDARD_INPUT_LAYOUT);
+	FindAndAddBind<Topology>("TriangleList");
+
+	std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
+
+	AddChild(pMaterial->Clone());
 }
 
 void Engine::Fluid::CreateVertexBufferAndIndexBuffer(int n, int m)
@@ -64,28 +75,40 @@ void Engine::Fluid::CreateVertexBufferAndIndexBuffer(int n, int m)
 			if ((i + j) % 2 == 0)
 			{
 				vecIndex.push_back(lt);
-				vecIndex.push_back(rt);
 				vecIndex.push_back(rb);
+				vecIndex.push_back(rt);
 
 				vecIndex.push_back(lt);
-				vecIndex.push_back(rb);
 				vecIndex.push_back(lb);
+				vecIndex.push_back(rb);
 			}
 			else
 			{
 				vecIndex.push_back(lt);
-				vecIndex.push_back(rt);
 				vecIndex.push_back(lb);
+				vecIndex.push_back(rt);
 
 				vecIndex.push_back(rt);
-				vecIndex.push_back(rb);
 				vecIndex.push_back(lb);
+				vecIndex.push_back(rb);
 			}
 		}
 	}
 
-	CreateBindable<VertexBuffer>("FluidVertex", vecVertex);
-	CreateBindable<IndexBuffer>("FluidIndex", vecIndex);
+	CreateBindable<Mesh>("FluidMesh", vecVertex, vecIndex);
+}
+
+void Engine::Fluid::Input(float fDeltaTime)
+{
+	if (CInput::GetInst()->IsKey(CInput::KEY_STATE::UP, DIK_SPACE))
+	{
+		int x = rand() % m_tCBuffer.iWidth;
+		int z = rand() % m_iHeight;
+
+		float fHeight = 15.f;
+
+		m_pBuffer[m_iCurrentBuffer]->WriteData(&fHeight, 4 * (x + z * m_tCBuffer.iWidth), 4);
+	}
 }
 
 void Engine::Fluid::FixedUpdate(float fDeltaTime)
@@ -108,6 +131,12 @@ void Engine::Fluid::FixedUpdate(float fDeltaTime)
 
 	m_pCS->PostBind();
 
+	m_pBuffer[iNextBuffer]->ResetUAV(4);
+
+	m_pBuffer[m_iCurrentBuffer]->ResetSRV(39);
+
+	m_pBuffer[(m_iCurrentBuffer + FLUID_BUFFER_COUNT - 1) % FLUID_BUFFER_COUNT]->ResetSRV(38);
+
 	m_iCurrentBuffer = iNextBuffer;
 }
 
@@ -116,4 +145,6 @@ void Engine::Fluid::Bind()
 	m_pBuffer[m_iCurrentBuffer]->SetSRV(39);
 
 	__super::Bind();
+
+	m_pBuffer[m_iCurrentBuffer]->ResetSRV(39);
 }

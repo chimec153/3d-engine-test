@@ -121,6 +121,9 @@
     <Filter Include="05. Drawable\09. Fluid">
       <UniqueIdentifier>{7e2cee04-f3db-4320-b1fa-5cf6883a789d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="05. Drawable\10. SkyBox">
+      <UniqueIdentifier>{6881592d-d8bf-4da2-99ce-25b5c7c3304e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\Window.cpp">
@@ -335,6 +338,9 @@
     </ClCompile>
     <ClCompile Include="Bindable\Fluid.cpp">
       <Filter>05. Drawable\09. Fluid</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\SkyBox.cpp">
+      <Filter>05. Drawable\10. SkyBox</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -625,6 +631,9 @@
     </ClInclude>
     <ClInclude Include="Bindable\Fluid.h">
       <Filter>05. Drawable\09. Fluid</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\SkyBox.h">
+      <Filter>05. Drawable\10. SkyBox</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -20,7 +20,7 @@ namespace Engine
 		, m_pPS(StaticFindBindable<PixelShader>("ParticlePS"))
 		, m_pCS(StaticFindBindable<ComputeShader>("ParticleCS"))
 		, m_tCBuffer(iMaxCount)
-		, m_pBuffer(std::make_shared<StructuredBuffer>(iMaxCount, sizeof(PARTICLE)))
+		, m_pBuffer(std::make_shared<StructuredBuffer>(iMaxCount, static_cast<int>(sizeof(PARTICLE))))
 		, m_pSystemBuffer(std::make_shared<StructuredBuffer>(1, 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS))
 		, m_pTransformGSCBuffer(StaticFindBindable<ConstantBuffer<TRANSFORMBUFFER>>("Transform"))
 		, m_pParticleGSCBuffer(StaticFindBindable<ConstantBuffer<PARTICLECBUFFER>>("Particle"))

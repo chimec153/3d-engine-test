@@ -67,6 +67,11 @@ namespace Engine
 		std::shared_ptr<class ConstantBuffer<TRANSFORMBUFFER>>	m_pTransformBuffer;
 		std::shared_ptr<class BlendState>	m_pDecalBlend;
 		std::shared_ptr<class DepthStencilState> m_pNoDepthRead;
+		std::shared_ptr<class SkyBox>	m_pSkyBox;
+		std::shared_ptr<class BlendState>	m_pAlphaBlend;
+
+	public:
+		void SetSkyBox(std::shared_ptr<SkyBox> pSkyBox);
 
 	public:
 		void AddLight(const std::shared_ptr<PointLight>& pLight);
@@ -86,6 +91,7 @@ namespace Engine
 		void RenderLight();
 		void RenderShadow();
 		void RenderDecal();
+		void RenderSkyBox();
 		void Clear();
 	};
 
