@@ -103,7 +103,13 @@ namespace Engine
 
 			for (int i = 0; i < vecVertex.size(); ++i)
 			{
-				vecVertex[i].normal.Normalize();
+				float fLength = vecVertex[i].normal.Length();
+
+				if (!fLength) {
+					continue;
+				}
+
+				vecVertex[i].normal /= fLength;
 			}
 		}
 
@@ -164,7 +170,13 @@ namespace Engine
 
 			for (int i = 0; i < vecBitangent.size(); ++i)
 			{
-				const Vector3& N = vecVertex[i].normal.Normalize();
+				float fNormalLength = vecVertex[i].normal.Length();
+
+				if (!fNormalLength) {
+					continue;
+				}
+
+				const Vector3& N = vecVertex[i].normal / fNormalLength;
 
 				Vector3 vTangent = { vecVertex[i].tangent.x, vecVertex[i].tangent.y, vecVertex[i].tangent.z };
 
@@ -484,11 +496,19 @@ namespace Engine
 				double x1 = vStart[i];
 				double y0 = 0.0;
 
+				int iCount = 0;
+
 				do
 				{
 					x0 = x1;
 					y0 = x0 * x0 * x0 + bb * x0 * x0 + cc * x0 + dd;
 					x1 = x0 - y0 / (3.0 * x0 * x0 + b * 6.0 * x0 + c * 3.0);
+					++iCount;
+
+					if (iCount > 10000)
+					{
+						break;
+					}
 				} while (abs(x1 - x0) > epsilon);
 
 				vLambda[i] = (float)x1;

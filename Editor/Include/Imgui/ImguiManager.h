@@ -20,6 +20,7 @@ namespace Engine
 	class Shader;
 	class Scene;
 	class Particle;
+	class Cloth;
 }
 
 class ImguiManager
@@ -79,6 +80,7 @@ public:
 	void MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT, const std::string& name = "MRT: ");
 	void Particle_ShowImGuiImage(std::shared_ptr<Engine::Particle> pParticle);
 	void RenderManager_ShowImGuiWindow();
+	void Cloth_ShowImguiWindow(std::shared_ptr<Engine::Cloth> pCloth);
 
 private:
 	float m_fCellSize;

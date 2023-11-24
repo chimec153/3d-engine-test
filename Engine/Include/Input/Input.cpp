@@ -98,7 +98,7 @@ namespace Engine
 		return m_tMousePos.x;
 	}
 
-	bool CInput::IsKey(KEY_STATE state, char iDikKey)
+	bool CInput::IsKey(KEY_STATE state, unsigned char iDikKey)
 	{
 		PKEYINFO pInfo = FindKey(iDikKey);
 
@@ -294,7 +294,7 @@ namespace Engine
 		pActionInfo->pCallBack[static_cast<int>(eState)] = std::bind(pFunc, std::placeholders::_1);
 	}
 
-	bool CInput::CreateAction(const std::string& strAction, char iKey)
+	bool CInput::CreateAction(const std::string& strAction, unsigned char iKey)
 	{
 		PACTIONINFO pActionInfo = FindAction(strAction);
 
@@ -365,12 +365,12 @@ namespace Engine
 		return iter->second;
 	}
 
-	void CInput::AddKey(char iKey)
+	void CInput::AddKey(unsigned char iKey)
 	{
 		m_KeyList.push_back(dbg_new KEYINFO(iKey));
 	}
 
-	const CInput::PKEYINFO CInput::FindKey(char iKey) const
+	const CInput::PKEYINFO CInput::FindKey(unsigned char iKey) const
 	{
 		std::list<PKEYINFO>::const_iterator iter = m_KeyList.begin();
 		std::list<PKEYINFO>::const_iterator iterEnd = m_KeyList.end();

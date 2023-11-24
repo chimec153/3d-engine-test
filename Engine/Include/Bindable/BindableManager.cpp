@@ -88,10 +88,10 @@ namespace Engine
 
 		CreateBindable("CullFront", true, D3D11_CULL_FRONT, D3D11_FILL_SOLID);
 		CreateBindable("NoDepth", false, D3D11_CULL_NONE, D3D11_FILL_SOLID);
+		CreateBindable("CullNone", true, D3D11_CULL_NONE, D3D11_FILL_SOLID);
 
 #ifdef _DEBUG
 		CreateBindable("WireFrame", false, D3D11_CULL_NONE, D3D11_FILL_WIREFRAME);
-		CreateBindable("CullNone", true, D3D11_CULL_NONE, D3D11_FILL_SOLID);
 #endif
 	}
 
@@ -187,6 +187,7 @@ namespace Engine
 
 		CreateBindable("anisotropic_microfacet PS_NoTexture", TEXT("anisotropic_microfacet.hlsl"), "PS_NoTexture");
 		CreateBindable("anisotropic_microfacet PS_Terrain", TEXT("anisotropic_microfacet.hlsl"), "PS_Terrain");
+		CreateBindable("anisotropic_microfacet PS_NoSpecMapNoNormalMap", TEXT("anisotropic_microfacet.hlsl"), "PS_NoSpecMapNoNormalMap");
 		CreateBindable("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal", TEXT("anisotropic_microfacet.hlsl"), "PS_NoDiffuseNoSpecMapNoNormalMap");
 
 		CreateBindable("anisotropic_microfacet PSInst", TEXT("anisotropic_microfacet.hlsl"), "PSInst");

@@ -124,6 +124,9 @@
     <Filter Include="05. Drawable\10. SkyBox">
       <UniqueIdentifier>{6881592d-d8bf-4da2-99ce-25b5c7c3304e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="05. Drawable\11. Cloth">
+      <UniqueIdentifier>{a559edb2-79fc-49d9-90e2-82e432390285}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\Window.cpp">
@@ -341,6 +344,9 @@
     </ClCompile>
     <ClCompile Include="Bindable\SkyBox.cpp">
       <Filter>05. Drawable\10. SkyBox</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\Cloth.cpp">
+      <Filter>05. Drawable\11. Cloth</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -634,6 +640,9 @@
     </ClInclude>
     <ClInclude Include="Bindable\SkyBox.h">
       <Filter>05. Drawable\10. SkyBox</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\Cloth.h">
+      <Filter>05. Drawable\11. Cloth</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

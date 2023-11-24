@@ -39,6 +39,7 @@
 #include "Bindable/Sphere.h"
 #include "Render/MRT.h"
 #include "Bindable/Particle.h"
+#include "Bindable/Cloth.h"
 
 ImguiManager* ImguiManager::m_pInst = nullptr;
 
@@ -847,6 +848,9 @@ void ImguiManager::Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawa
 	case Engine::BINDABLE_TYPE::PARTICLE:
 		Particle_ShowImGuiImage(std::static_pointer_cast<Engine::Particle>(pDrawable));
 		break;
+	case Engine::BINDABLE_TYPE::CLOTH:
+		Cloth_ShowImguiWindow(std::static_pointer_cast<Engine::Cloth>(pDrawable));
+		break;
 	default:
 		CRef_ImGuiWindow(pDrawable);
 		break;
@@ -1311,6 +1315,16 @@ void ImguiManager::Particle_ShowImGuiImage(std::shared_ptr<Engine::Particle> pPa
 	if (ImGui::InputFloat3("accel", &vAccel.x))
 	{
 		pParticle->SetAccelaration(vAccel);
+	}
+}
+
+void ImguiManager::Cloth_ShowImguiWindow(std::shared_ptr<Engine::Cloth> pCloth)
+{
+	float fWind = pCloth->GetWindHeavyness();
+
+	if (ImGui::SliderFloat("Wind Heavyness", &fWind, 0.f, 50.f))
+	{
+		pCloth->SetWindHeavyness(fWind);
 	}
 }
 

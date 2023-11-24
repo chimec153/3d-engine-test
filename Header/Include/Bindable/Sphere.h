@@ -23,6 +23,7 @@ namespace Engine
 
     public:
         virtual bool Init() override;
+        virtual void Input(float) override;
         virtual void Update(float fDeltaTime) override;
         virtual void Bind();
         virtual std::shared_ptr<Bindable> Clone() override;

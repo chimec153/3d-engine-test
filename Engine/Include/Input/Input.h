@@ -25,12 +25,12 @@ namespace Engine
 	private:
 		typedef struct _tagKeyInfo
 		{
-			char iKey;
+			unsigned char iKey;
 			bool bDown;
 			bool bPressed;
 			bool bUp;
 
-			_tagKeyInfo(char key) :
+			_tagKeyInfo(unsigned char key) :
 				iKey(key)
 				, bDown(false)
 				, bPressed(false)
@@ -97,9 +97,9 @@ namespace Engine
 	public:
 		int GetMouseX()	const;
 		int GetMouseY()	const;
-		bool IsKey(KEY_STATE state, char iDikKey);
-		void AddKey(char iKey);
-		const PKEYINFO FindKey(char iKey)	const;
+		bool IsKey(KEY_STATE state, unsigned char iDikKey);
+		void AddKey(unsigned char iKey);
+		const PKEYINFO FindKey(unsigned char iKey)	const;
 		int GetMouseDeltaX()	const;
 		int GetMouseDeltaY()	const;
 		int GetMouseDeltaZ()	const;
@@ -108,7 +108,7 @@ namespace Engine
 		bool IsMouseButtonUp(MOUSE_TYPE eType)	const;
 		void Disable();
 		void Enable();
-		bool CreateAction(const std::string& strAction, char iKey);
+		bool CreateAction(const std::string& strAction, unsigned char iKey);
 		void AddAction(const std::string& strAction, KEY_STATE eState, void(*pFunc)(float));
 
 		template <typename T>

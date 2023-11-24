@@ -7,6 +7,7 @@
 #include "InputLayout.h"
 #include "Topology.h"
 #include "../Input/Input.h"
+#include "TransformBuffer.h"
 
 Engine::Fluid::Fluid(int n, int m, float d, float mu, float c, float t)	:
 	Drawable()
@@ -39,6 +40,8 @@ Engine::Fluid::Fluid(int n, int m, float d, float mu, float c, float t)	:
 	std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
 
 	AddChild(pMaterial->Clone());
+
+	GetTransform()->SetScale(d, GetTransform()->GetScale().y, d);
 }
 
 void Engine::Fluid::CreateVertexBufferAndIndexBuffer(int n, int m)

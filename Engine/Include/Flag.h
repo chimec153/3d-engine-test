@@ -60,6 +60,9 @@ namespace Engine
 		PARTICLE,
 		DECAL,
 		PAPERBURN,
+		FLUID,
+		SKYBOX,
+		CLOTH,
 		END
 	};
 

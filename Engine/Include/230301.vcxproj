@@ -201,6 +201,7 @@
     <ClCompile Include="Bindable\BindableManager.cpp" />
     <ClCompile Include="Bindable\Box.cpp" />
     <ClCompile Include="Bindable\Camera.cpp" />
+    <ClCompile Include="Bindable\Cloth.cpp" />
     <ClCompile Include="Bindable\Collider.cpp" />
     <ClCompile Include="Bindable\ColliderLine.cpp" />
     <ClCompile Include="Bindable\ColliderMesh.cpp" />
@@ -275,6 +276,7 @@
     <ClInclude Include="Bindable\BindableManager.h" />
     <ClInclude Include="Bindable\Box.h" />
     <ClInclude Include="Bindable\Camera.h" />
+    <ClInclude Include="Bindable\Cloth.h" />
     <ClInclude Include="Bindable\Collider.h" />
     <ClInclude Include="Bindable\ColliderLine.h" />
     <ClInclude Include="Bindable\ColliderMesh.h" />

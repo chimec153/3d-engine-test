@@ -47,40 +47,19 @@ namespace Engine
 	bool Collision::CollisionSphereToSphere(const SPHERECOLLIDERINFO& tSrc, const SPHERECOLLIDERINFO& tDest, const Vector3& vSrcVelocity, const Vector3& vDestVelocity, float fDeltaTime, Vector3& vCross)
 	{
 		const Vector3& vA = tSrc.vCenter - tDest.vCenter;
-		const Vector3& vB = vSrcVelocity - vDestVelocity;
-
-		float fDot = vA.Dot(vB);
 
 		float fA = vA.Length();
 
-		float fB = vB.Length();
-
-		float fLength = fB * fB;
-
-		if (!fLength)
+		if (fA > tSrc.fRadius + tDest.fRadius)
 		{
 			return false;
 		}
 
-		float fD = fDot * fDot - fLength * (fA * fA - (tSrc.fRadius + tDest.fRadius) * (tSrc.fRadius + tDest.fRadius));
+		const Vector3& vDestPos = tDest.vCenter + vDestVelocity * fDeltaTime;
 
-		if (fD < 0.f)
-		{
-			return false;
-		}
+		vCross = tDest.vCenter + vA / fA * tDest.fRadius;
 
-		float t = (-fDot - sqrtf(fD)) / fLength;
-
-		if (t >= 0.f && t <= 1.f)
-		{
-			const Vector3& vDestPos = tDest.vCenter + vDestVelocity * fDeltaTime;
-
-			vCross = ((tSrc.vCenter + vSrcVelocity * fDeltaTime) - vDestPos).Normalize() * tDest.fRadius + vDestPos;
-
-			return true;
-		}
-
-		return false;
+		return true;
 	}
 
 	bool Collision::CollisionLineToMesh(const LINECOLLIDERINFO& tSrc, const PMESHCOLLIDERINFO pDest, Vector3& vCross)

@@ -14,12 +14,13 @@
 #include "Collider.h"
 #include "Mesh.h"
 #include "Drawable.h"
+#include "../Input/Input.h"
 
 namespace Engine
 {
 	Sphere::Sphere(int iRings, int iSector) :
 		Drawable()
-		, m_fSpeed(0.f)
+		, m_fSpeed(8.f)
 		, m_vDir(static_cast<float>(rand()), static_cast<float>(rand()), static_cast<float>(rand()))
 	{
 		m_vDir.Normalize();
@@ -134,14 +135,42 @@ namespace Engine
 
 	bool Sphere::Init()
 	{
+		CInput::GetInst()->AddKey(DIK_LEFTARROW);
+		CInput::GetInst()->AddKey(DIK_RIGHTARROW);
+		CInput::GetInst()->AddKey(DIK_UPARROW);
+		CInput::GetInst()->AddKey(DIK_DOWNARROW);
+
 		return __super::Init();
+	}
+
+	void Sphere::Input(float fDeltaTime)
+	{
+		if (CInput::GetInst()->IsKey(CInput::KEY_STATE::PRESS, DIK_LEFTARROW))
+		{
+			GetTransform()->AddX(fDeltaTime * m_fSpeed);
+		}
+
+		if (CInput::GetInst()->IsKey(CInput::KEY_STATE::PRESS, DIK_RIGHTARROW))
+		{
+			GetTransform()->AddX(-fDeltaTime * m_fSpeed);
+		}
+
+		if (CInput::GetInst()->IsKey(CInput::KEY_STATE::PRESS, DIK_UPARROW))
+		{
+			GetTransform()->AddZ(fDeltaTime * m_fSpeed);
+		}
+
+		if (CInput::GetInst()->IsKey(CInput::KEY_STATE::PRESS, DIK_DOWNARROW))
+		{
+			GetTransform()->AddZ(-fDeltaTime * m_fSpeed);
+		}
 	}
 
 	void Sphere::Update(float fDeltaTime)
 	{
-		Drawable::CheckRangeAndMove();
+		//Drawable::CheckRangeAndMove();
 
-		GetTransform()->AddPosition(m_vDir * m_fSpeed * fDeltaTime);
+		//GetTransform()->AddPosition(m_vDir * m_fSpeed * fDeltaTime);
 
 		__super::Update(fDeltaTime);
 	}
