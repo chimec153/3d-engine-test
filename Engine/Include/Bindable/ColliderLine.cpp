@@ -111,6 +111,8 @@ namespace Engine
 			return Collision::CollisionLineToSphere(this, static_cast<ColliderSphere*>(pDest));
 		case COLLIDER_TYPE::MESH:
 			return Collision::CollisionLineToMesh(this, static_cast<ColliderMesh*>(pDest));
+		case COLLIDER_TYPE::TERRAIN:
+			return Collision::CollisionLineToMesh(this, static_cast<ColliderMesh*>(pDest));
 		}
 
 		return false;

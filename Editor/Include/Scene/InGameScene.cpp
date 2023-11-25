@@ -18,6 +18,7 @@
 #include "Bindable/Cloth.h"
 #include "Bindable/Sphere.h"
 #include "Bindable/ColliderSphere.h"
+#include "Bindable/NavMesh.h"
 
 InGameScene::InGameScene()
 {
@@ -78,160 +79,97 @@ bool InGameScene::Init()
 
 	//ImguiManager::GetInst()->LoadNavMesh(this, TEXT("navmesh\\nav_test.obj"), MESH_PATH);
 
-	//Engine::Scene::CreateProtoType<Player>("Player", Engine::SCENE_TYPE::CURRENT);
+	Engine::Scene::CreateProtoType<Player>("Player", Engine::SCENE_TYPE::CURRENT);
 
 	//std::shared_ptr<Engine::Drawable> pSponza = Engine::Scene::CreateDrawable<Engine::Drawable>("sponza", FindLayer(DEFAULT_LAYER));
 
 	//pSponza->Load(TEXT("Sponza\\sponza.obj"));
 
-	//std::vector<const TCHAR*> vecTexture =
-	//{
-	//	TEXT("LandScape\\Terrain_Cliff_15_Large.dds"),
-	//	TEXT("LandScape\\BD_Terrain_Cliff05.dds"),
-	//};
+	std::vector<const TCHAR*> vecTexture =
+	{
+		TEXT("LandScape\\Terrain_Cliff_15_Large.dds"),
+		TEXT("LandScape\\BD_Terrain_Cliff05.dds"),
+	};
 
-	//std::vector<const TCHAR*> vecNormalTexture =
-	//{
-	//	TEXT("LandScape\\Terrain_Cliff_15_Large_NRM.bmp"),
-	//	TEXT("LandScape\\BD_Terrain_Cliff05_NRM.bmp"),
-	//};
+	std::vector<const TCHAR*> vecNormalTexture =
+	{
+		TEXT("LandScape\\Terrain_Cliff_15_Large_NRM.bmp"),
+		TEXT("LandScape\\BD_Terrain_Cliff05_NRM.bmp"),
+	};
 
-	//std::vector<const TCHAR*> vecSpecularTexture =
-	//{
-	//	TEXT("LandScape\\Terrain_Cliff_15_Large_SPEC.bmp"),
-	//	TEXT("LandScape\\BD_Terrain_Cliff05_SPEC.bmp"),
-	//};
+	std::vector<const TCHAR*> vecSpecularTexture =
+	{
+		TEXT("LandScape\\Terrain_Cliff_15_Large_SPEC.bmp"),
+		TEXT("LandScape\\BD_Terrain_Cliff05_SPEC.bmp"),
+	};
 
-	//std::vector<const TCHAR*> vecBlendTexture =
-	//{
-	//	TEXT("LandScape\\baseAlpha.bmp"),
-	//	TEXT("LandScape\\RoadAlpha.bmp"),
-	//};
+	std::vector<const TCHAR*> vecBlendTexture =
+	{
+		TEXT("LandScape\\baseAlpha.bmp"),
+		TEXT("LandScape\\RoadAlpha.bmp"),
+	};
 
-	//std::shared_ptr<Engine::Terrain> pTerrain = CreateDrawable<Engine::Terrain>("Terrain", FindLayer(DEFAULT_LAYER));
+	std::shared_ptr<Engine::Terrain> pTerrain = CreateDrawable<Engine::Terrain>("Terrain", FindLayer(DEFAULT_LAYER));
 
-	//pTerrain->CreateTerrainTexture(vecTexture);
-	//pTerrain->CreateTerrainNormalTexture(vecNormalTexture);
-	//pTerrain->CreateTerrainSpecularTexture(vecSpecularTexture);
-	//pTerrain->CreateBlendTerrainTexture(vecBlendTexture);
-	//pTerrain->CreateHeightMap(TEXT("LandScape\\height2.bmp"));
+	pTerrain->CreateTerrainTexture(vecTexture);
+	pTerrain->CreateTerrainNormalTexture(vecNormalTexture);
+	pTerrain->CreateTerrainSpecularTexture(vecSpecularTexture);
+	pTerrain->CreateBlendTerrainTexture(vecBlendTexture);
+	pTerrain->CreateHeightMap(TEXT("LandScape\\height2.bmp"));
 
-	//std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = pTerrain->FindChild<Engine::ColliderMesh>();
+	std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = pTerrain->FindChild<Engine::ColliderMesh>();
 
-	//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pTerrain.get(), &Engine::Terrain::CollisionStay);
-	//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::LAST, pTerrain.get(), &Engine::Terrain::CollisionEnd);
+	pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, ImguiManager::GetInst(), &ImguiManager::CollisionStay);
 
-	//std::shared_ptr<Engine::Particle> pParticle = CreateDrawable<Engine::Particle>("particle", FindLayer(ALPHA_LAYER), 1024);
+	std::vector<float> vecPoints;
 
-	//pParticle->SetEmitTime(1.0f);
-	//pParticle->SetStartColor(Engine::White);
-	//pParticle->SetEndColor(Engine::Blue);
-	//pParticle->SetStartSize({ 1.f, 1.f });
-	//pParticle->SetEndSize({ 1.f, 1.f });
-	//pParticle->SetMaxLifeTime(5.f);
-	//pParticle->SetVelocity(Engine::Vector3(0.f, 1.f, 0.f));
-	//pParticle->SetMinCreatePosition(Engine::Vector3(-10.f, -10.f, -10.f));
-	//pParticle->SetMaxCreatePosition(Engine::Vector3(10.f, 10.f, 10.f));
-	//pParticle->CreateBindable<Engine::Texture>("ParticleTexture", TEXT("Particle\\Snow50px.png"), TEXTURE_PATH, 0);
+	pTerrain->GetPoints(vecPoints);
 
-	//std::vector<std::wstring> vecDiffuse = { 
-	//	TEXT("Decal\\Decal.png") ,
-	//	TEXT("Decal\\Decal1.png") ,
-	//	TEXT("Decal\\free-blood-texture_COLOR.png") ,
-	//	TEXT("Decal\\Shout24674-perfil3_COLOR.png") ,
-	//};
-	//std::vector<std::wstring> vecNormal = { 
-	//	TEXT("Decal\\Decal_NRM.png") ,
-	//	TEXT("Decal\\Decal1_NRM.png") ,
-	//	TEXT("Decal\\free-blood-texture_NRM.png") ,
-	//	TEXT("Decal\\Shout24674-perfil3_NRM.png") ,
-	//};
-	//std::vector<std::wstring> vecSpec = { 
-	//	TEXT("Decal\\Decal_SPEC.png") ,
-	//	TEXT("Decal\\Decal1_SPEC.png") ,
-	//	TEXT("Decal\\free-blood-texture_SPEC.png") ,
-	//	TEXT("Decal\\Shout24674-perfil3_SPEC.png") ,
-	//};
+	std::vector<int> vecTris;
 
-	//for (int i = 0; i < 4; ++i)
-	//{
-	//	std::shared_ptr<Engine::Decal> pDecal = CreateDrawable<Engine::Decal>("decal", FindLayer(DEFAULT_LAYER));
+	pTerrain->GetTris(vecTris);
 
-	//	pDecal->CreateBindable<Engine::Texture>("DecalDiffuse", vecDiffuse[i].c_str(), TEXTURE_PATH);
-	//	pDecal->CreateBindable<Engine::Texture>("DecalNormal", vecNormal[i].c_str(), TEXTURE_PATH, 1);
-	//	pDecal->CreateBindable<Engine::Texture>("DecalSpecular", vecSpec[i].c_str(), TEXTURE_PATH, 2);
+	Engine::Vector3 vMin = {FLT_MAX,FLT_MAX, FLT_MAX};
+	Engine::Vector3 vMax = { FLT_MIN, FLT_MIN, FLT_MIN};
 
-	//	std::shared_ptr<Engine::Mesh> pBoxMesh = pDecal->CreateBindable<Engine::Mesh>("Box", Engine::Box::CreateTextureVertex<Engine::VertexStandard>(), Engine::Box::GetTextureIndex());
-	//	pDecal->FindAndAddBind<Engine::Topology>("TriangleList");
+	for (int i = 0; i < static_cast<int>(vecPoints.size()) / 3; ++i)
+	{
+		if (vMin.x > vecPoints[i * 3])
+		{
+			vMin.x = vecPoints[i * 3];
+		}
 
-	//	std::shared_ptr<Engine::Transform> pDecalTransform = pDecal->GetTransform();
+		if (vMin.y > vecPoints[i * 3 + 1])
+		{
+			vMin.y = vecPoints[i * 3 + 1];
+		}
 
-	//	if (pDecalTransform)
-	//	{
-	//		if (i == 0)
-	//		{
-	//			pDecalTransform->SetScale(10.f, 10.f, 10.f);
-	//		}
-	//		else
-	//		{
-	//			pDecalTransform->SetScale(50.f, 50.f, 50.f);
-	//		}
+		if (vMin.z > vecPoints[i * 3 + 2])
+		{
+			vMin.z = vecPoints[i * 3 + 2];
+		}
 
-	//		pDecalTransform->SetPosition(60.f * i, 0.f, 0.f);
-	//	}
+		if (vMax.x < vecPoints[i * 3])
+		{
+			vMax.x = vecPoints[i * 3];
+		}
 
-	//	pDecal->SetMaxFadeTime(20.f);
+		if (vMax.y < vecPoints[i * 3 + 1])
+		{
+			vMax.y = vecPoints[i * 3 + 1];
+		}
 
-	//	pDecal->SetFadeStartTime(15.f);
-	//}
+		if (vMax.z < vecPoints[i * 3 + 2])
+		{
+			vMax.z = vecPoints[i * 3 + 2];
+		}
+	}
 
-	//std::shared_ptr<Engine::Drawable> pBox = CreateDrawable<Engine::Drawable>("box", FindLayer(DEFAULT_LAYER));
+	std::shared_ptr<Engine::NavMesh> pTerrainNavMesh = ImguiManager::GetInst()->CreateNavMesh(vecPoints, vecTris, vMax, vMin);
 
-	//pBox->CreateBindable<Engine::Texture>("DecalDiffuse", TEXT("Decal\\Decal.png"), TEXTURE_PATH);
-	//pBox->CreateBindable<Engine::Texture>("DecalNormal", TEXT("Decal\\Decal_NRM.png"), TEXTURE_PATH, 1);
-	//pBox->CreateBindable<Engine::Texture>("DecalSpecular", TEXT("Decal\\Decal_SPEC.png"), TEXTURE_PATH, 2); 
-	//pBox->FindAndAddBind<Engine::Topology>("TriangleList");
-	//pBox->FindAndAddBind<Engine::InputLayout>(STANDARD_INPUT_LAYOUT);
-	//pBox->FindAndAddBind<Engine::VertexShader>(STANDARD_VS);
-	//pBox->FindAndAddBind<Engine::PixelShader>(STANDARD_PS);
-	////pBox->AddChild(std::static_pointer_cast<Engine::Bindable>(pBoxMesh));
-
-	//std::shared_ptr<Engine::Transform> pBoxTransform = pBox->GetTransform();
-
-	//pBoxTransform->SetScale(50.f, 50.f, 50.f);
-	//pBoxTransform->SetPosition(50.f, 0.f, 0.f);
-
-	//pBox->Disable();
-
-	//std::shared_ptr<Engine::Fluid> pFluid = CreateDrawable<Engine::Fluid>("Fluid", FindLayer(DEFAULT_LAYER), 200, 200, 0.1f, 1.f, 2.f);
-
-	//pFluid->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
-
-	//std::shared_ptr<Engine::Transform> pFluidTransform = pFluid->GetTransform();
-
-	//pFluidTransform->SetScale(10.f, 10.f, 10.f);
-
-	//pFluidTransform->SetPosition(0.f, -10.f, 0.f);
+	pTerrain->AddChild(pTerrainNavMesh);
 
 	Engine::RenderManager::GetInst()->SetSkyBox(CreateDrawable<Engine::SkyBox>("SkyBox", FindLayer(DEFAULT_LAYER), TEXT("gnbRv.jpg")));
-
-	std::shared_ptr<Engine::Cloth> pCloth = CreateDrawable<Engine::Cloth>("Cloth", FindLayer(DEFAULT_LAYER), 20, 20, 1.9f, 1.8f, 1.7f, 0.5f, 0.4f, 0.2f, 1.f, 0.1f);
-
-	pCloth->CreateBindable<Engine::Texture>("Texture", TEXT("118.png"), TEXTURE_PATH);
-
-	pCloth->SetWind(Engine::Vector3(0.f, 0.f, 1.f));
-	pCloth->SetWindHeavyness(18.f);
-
-	//std::shared_ptr<Engine::Sphere> pSphere = CreateDrawable<Engine::Sphere>("Sphere", FindLayer(DEFAULT_LAYER), 10, 10);
-
-	//float fRadius = 12.5f;
-
-	//pSphere->GetTransform()->SetScale(2.f * fRadius, 2.f * fRadius, 2.f * fRadius);
-	//pSphere->GetTransform()->SetPosition(100.f, 0.f, 0.f);
-
-	//std::shared_ptr<Engine::ColliderSphere> pColliderSphere = pSphere->CreateBindable<Engine::ColliderSphere>("ColliderSphere");
-
-	//pColliderSphere->SetRadius(fRadius);
 
 	return true;
 }

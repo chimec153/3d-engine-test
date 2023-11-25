@@ -62,18 +62,18 @@ namespace Engine
 		return true;
 	}
 
-	bool Collision::CollisionLineToMesh(const LINECOLLIDERINFO& tSrc, const PMESHCOLLIDERINFO pDest, Vector3& vCross)
+	bool Collision::CollisionLineToMesh(const LINECOLLIDERINFO& tLineInfo, const PMESHCOLLIDERINFO pMeshColliderInfo, Vector3& vCross)
 	{
-		Vector3 D = tSrc.vDir;
+		Vector3 D = tLineInfo.vDir;
 
 		float min_w = FLT_MAX;
 
-		for (int i = 0; i < pDest->vecIndex.size(); i += 3)
+		for (int i = 0; i < pMeshColliderInfo->vecIndex.size(); i += 3)
 		{
-			Vector3 PV0 = tSrc.vStart - Vector3(pDest->vecPoint[pDest->vecIndex[i] * 3], pDest->vecPoint[pDest->vecIndex[i] * 3 + 1], pDest->vecPoint[pDest->vecIndex[i] * 3 + 2]);
+			Vector3 PV0 = tLineInfo.vStart - Vector3(pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i] * 3], pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i] * 3 + 1], pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i] * 3 + 2]);
 
-			Vector3 U = { pDest->vecPoint[pDest->vecIndex[i + 1] * 3] - pDest->vecPoint[pDest->vecIndex[i] * 3],pDest->vecPoint[pDest->vecIndex[i + 1] * 3 + 1] - pDest->vecPoint[pDest->vecIndex[i] * 3 + 1], pDest->vecPoint[pDest->vecIndex[i + 1] * 3 + 2] - pDest->vecPoint[pDest->vecIndex[i] * 3 + 2] };
-			Vector3 V = { pDest->vecPoint[pDest->vecIndex[i + 2] * 3] - pDest->vecPoint[pDest->vecIndex[i] * 3],pDest->vecPoint[pDest->vecIndex[i + 2] * 3 + 1] - pDest->vecPoint[pDest->vecIndex[i] * 3 + 1], pDest->vecPoint[pDest->vecIndex[i + 2] * 3 + 2] - pDest->vecPoint[pDest->vecIndex[i] * 3 + 2] };
+			Vector3 U = { pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i + 1] * 3] - pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i] * 3],pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i + 1] * 3 + 1] - pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i] * 3 + 1], pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i + 1] * 3 + 2] - pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i] * 3 + 2] };
+			Vector3 V = { pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i + 2] * 3] - pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i] * 3],pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i + 2] * 3 + 1] - pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i] * 3 + 1], pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i + 2] * 3 + 2] - pMeshColliderInfo->vecPoint[pMeshColliderInfo->vecIndex[i] * 3 + 2] };
 
 			float fDet = U.x * (V.y * -D.z - V.z * -D.y) - U.y * (V.x * -D.z - V.z * -D.x) + U.z * (V.x * -D.y - V.y * -D.x);
 
@@ -98,11 +98,225 @@ namespace Engine
 				w < min_w)
 			{
 				min_w = w;
-				vCross = tSrc.vStart + D * w;
+				vCross = tLineInfo.vStart + D * w;
 			}
 		}
 
 		return min_w != FLT_MAX;
+	}
+
+	bool Collision::CollisionLineToTerrain(const LINECOLLIDERINFO& tSrc, const PMESHCOLLIDERINFO tDest, Vector3& vCross)
+	{
+		int iSize =static_cast<int>( tDest->vecPoint.size());
+
+		float width = FLT_MIN;
+		float height = FLT_MIN;
+		float min_x = FLT_MAX;
+		float min_z = FLT_MAX;
+
+		for (int i = 0; i < iSize / 3; ++i)
+		{
+			if (width < tDest->vecPoint[i * 3])
+			{
+				width = tDest->vecPoint[i * 3];
+			}
+
+			if (height < tDest->vecPoint[i * 3 + 2])
+			{
+				height = tDest->vecPoint[i * 3 + 2];
+			}
+
+			if (min_x > tDest->vecPoint[i * 3])
+			{
+				min_x = tDest->vecPoint[i * 3];
+			}
+
+			if (min_z > tDest->vecPoint[i * 3 + 2])
+			{
+				min_z = tDest->vecPoint[i * 3 + 2];
+			}
+		}
+
+		Vector3 s = tSrc.vStart - Vector3(min_x, 0.f, min_z);
+		Vector3 d = tSrc.vDir;
+
+		bool bMainAxisZ = abs(d.x) < abs(d.z);
+
+		if (bMainAxisZ)
+		{
+			if (d.x != 0.f)
+			{
+				if (d.z < 0.f)
+				{
+					d = -d;
+				}
+					// z = a * x + b
+					// 
+					// a = d.z / d.x
+					// 
+					// b = sz - d.z / d.x * sx
+					// 
+					// z = d.z / d.x * x + sz - d.z / d.x * sx
+					// 
+					// z = 0, x = (dz / dx * sx - sz) /dz /dx
+					//
+					// x = 0, z = sz - d.z / d.x * sx
+					// x = width, z = d.z / d.x * width + sz - d.z / d.x * sx
+					// 
+					// start_z = d.z / d.x * x + sz - d.z / d.x * sx
+					// x = (start_z - sz + d.z / d.x * sx) / (d.z / d.x)
+					// 
+					//
+
+				float start_x = (d.z / d.x * s.x - s.z) / (d.z / d.x);
+
+				if (start_x >= 0.f && start_x < width)
+				{
+					s.x = start_x;
+					s.z = 0.f;
+				}
+				else
+				{
+					float start_z = s.z - d.z / d.x * s.x;
+
+					if (start_z >= 0.f && start_z < height)
+					{
+						start_z = static_cast<float>(static_cast<int>(start_z));
+
+						s.x = (start_z - s.z + d.z / d.x * s.x) / (d.z / d.x);
+						s.z = start_z;
+					}
+					else
+					{
+						start_z += d.z / d.x * width;
+
+						if (start_z < 0.f || start_z >= height)
+						{
+							return false;
+						}
+
+						start_z = static_cast<float>(static_cast<int>(start_z));
+
+						s.x = (start_z - s.z + d.z / d.x * s.x) / (d.z / d.x);
+						s.z = start_z;
+					}
+				}
+			}
+		}
+		else
+		{
+			if (d.z != 0.f)
+			{
+				if (d.x < 0.f)
+				{
+					d = -d;
+				}
+				// z = d.z / d.x * x + sz - d.z / d.x * sx
+				// 
+				// x = 0, z = sz - d.z / d.x * sx
+				// 
+				// z = 0, 
+				// x = (d.z / d.x * sx - sz) / d.z / d.x,
+				// 
+				// z = height,
+				// x = (height + d.z / d.x * sx - sz) / d.z / d.x
+				// 
+				// z = d.z / d.x * start_x + sz - d.z / d.x * sx
+				//
+
+				float start_z = (s.z - d.z / d.x * s.x);
+
+				if (start_z >= 0.f && start_z < height)
+				{
+					s.z = start_z;
+					s.x = 0.f;
+				}
+				else
+				{
+					float start_x = (d.z / d.x * s.x - s.z) / (d.z / d.x);
+
+					if (start_x >= 0.f && start_x < width)
+					{
+						start_x = static_cast<float>(static_cast<int>(start_x));
+
+						s.z = d.z / d.x * start_x + s.z - d.z / d.x * s.x;
+						s.x = start_x;
+					}
+					else
+					{
+						start_x = (height + d.z / d.x * s.x - s.z) / (d.z / d.x);
+
+						if (start_x < 0.f || start_x >= width)
+						{
+							return false;
+						}
+
+						start_x = static_cast<float>(static_cast<int>(start_x));
+
+						s.z = d.z / d.x * start_x + s.z - d.z / d.x * s.x;
+						s.x = start_x;
+					}
+				}
+			}
+		}
+
+		float& fMainPos = bMainAxisZ ? s.z : s.x;
+		float& fSubPos = bMainAxisZ ? s.x : s.z;
+
+		float diff = bMainAxisZ ? d.x / d.z : d.z / d.x;
+
+		while (true)
+		{
+			if (s.x < 0.f && d.x < 0.f)
+			{
+				return false;
+			}
+
+			if (s.x > width && d.x > 0.f)
+			{
+				return false;
+			}
+
+			if (s.z < 0.f && d.z < 0.f)
+			{
+				return false;
+			}
+
+			if (s.z > height && d.z > 0.f)
+			{
+				return false;
+			}
+			
+			if (s.x >= 0.f && s.z >= 0.f && s.x < width && s.z < height)
+			{
+				if (CollisionLineToQuad(tSrc, tDest, static_cast<int>(s.x) + static_cast<int>((height - static_cast<int>(s.z) - 1.f) * width), vCross))
+				{
+					return true;
+				}
+			}
+
+			if (ceilf(fSubPos + diff) != ceilf(fSubPos))
+			{
+				fSubPos += diff;
+
+				if (s.x >= 0.f && s.z >= 0.f && s.x < width && s.z < height)
+				{
+					if (CollisionLineToQuad(tSrc, tDest, static_cast<int>(s.x) + static_cast<int>((height - static_cast<int>(s.z) - 1.f) * width), vCross))
+					{
+						return true;
+					}
+				}
+
+				fMainPos += 1.f;
+			}
+			else
+			{
+				fMainPos += 1.f;
+				fSubPos += diff;
+			}
+		}
+
+		return false;
 	}
 
 	bool Collision::CollisionLineToSphere(ColliderLine* pSrc, ColliderSphere* pDest)
@@ -142,6 +356,114 @@ namespace Engine
 		{
 			pSrc->SetCross(vCross);
 			pDest->SetCross(vCross);
+			return true;
+		}
+
+		return false;
+	}
+	bool Collision::CollisionLineToTerrain(ColliderLine* pSrc, ColliderMesh* pDest)
+	{
+		Vector3 vCross = {};
+
+		if (CollisionLineToTerrain(pSrc->GetInfo(), pDest->GetInfo(), vCross))
+		{
+			pSrc->SetCross(vCross);
+			pDest->SetCross(vCross);
+
+			return true;
+		}
+
+		return false;
+	}
+	// s =	px	vx	dx
+	//		py	vy	dy
+	//		pz	vz	dz
+	//
+	//		ux	vx	dx
+	//		uy	vy	dy
+	//		uz	vz	dz
+	//
+	bool Collision::CollisionLineToTriangle(const LINECOLLIDERINFO& tLine, const Vector3& p0, const Vector3& p1, const Vector3& p2, Vector3& vCross)
+	{
+		const Vector3& u = p1 - p0;
+		const Vector3& v = p2 - p0;
+		const Vector3& d = -tLine.vDir;
+		const Vector3& p = tLine.vStart - p0;
+
+		float determinent = u.x * (v.y * d.z - v.z * d.y)+ v.x * (u.z * d.y - u.y * d.z) + d.x * (u.y * v.z - v.y * u.z);
+
+		if(!determinent)
+		{
+			return false;
+		}
+
+		float determinent_x = p.x * (v.y * d.z - v.z * d.y) + v.x * (p.z * d.y - p.y * d.z) + d.x * (p.y * v.z - v.y * p.z);
+
+		float s = determinent_x / determinent;
+
+		if (s < 0.f)
+		{
+			return false;
+		}
+
+		float determinent_y = u.x * (p.y * d.z - p.z * d.y) + p.x * (u.z * d.y - u.y * d.z) + d.x * (u.y * p.z - p.y * u.z);
+
+		float t = determinent_y / determinent;
+
+		if (t < 0.f || s + t > 1.f)
+		{
+			return false;
+		}
+
+		float determinent_z = u.x * (v.y * p.z - v.z * p.y) + v.x * (u.z * p.y - u.y * p.z) + p.x * (u.y * v.z - v.y * u.z);
+
+		float k = determinent_z / determinent;
+
+		if (k < 0.f)
+		{
+			return false;
+		}
+
+		vCross = tLine.vStart + k * tLine.vDir;
+
+		return true;
+	}
+	bool Collision::CollisionLineToQuad(const LINECOLLIDERINFO& tSrc, const PMESHCOLLIDERINFO tDest, int index, Vector3& vCross)
+	{
+
+		const Vector3& p0 = Vector3(
+			tDest->vecPoint[tDest->vecIndex[index * 6] * 3],
+			tDest->vecPoint[tDest->vecIndex[index * 6] * 3 + 1],
+			tDest->vecPoint[tDest->vecIndex[index * 6] * 3 + 2]);
+		const Vector3& p1 = Vector3(
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 1] * 3],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 1] * 3 + 1],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 1] * 3 + 2]);
+		const Vector3& p2 = Vector3(
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 2] * 3],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 2] * 3 + 1],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 2] * 3 + 2]);
+
+		if (CollisionLineToTriangle(tSrc, p0, p1, p2, vCross))
+		{
+			return true;
+		}
+
+		const Vector3& p3 = Vector3(
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 3] * 3],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 3] * 3 + 1],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 3] * 3 + 2]);
+		const Vector3& p4 = Vector3(
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 4] * 3],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 4] * 3 + 1],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 4] * 3 + 2]);
+		const Vector3& p5 = Vector3(
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 5] * 3],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 5] * 3 + 1],
+			tDest->vecPoint[tDest->vecIndex[index * 6 + 5] * 3 + 2]);
+
+		if (CollisionLineToTriangle(tSrc, p3, p4, p5, vCross))
+		{
 			return true;
 		}
 

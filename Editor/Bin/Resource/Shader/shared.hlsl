@@ -99,6 +99,7 @@ struct VSInstOut
     float4 vSpecularColor : Specular;
     float2 vMaterialRoughness : Material;
     float fMaterialFraction : MaterialFrac;
+    float4 clip : Position;
 };
 
 struct PSOut

@@ -18,6 +18,7 @@ Engine::NavMesh::NavMesh(dtNavMeshCreateParams& tParams, float fAgentRadius, flo
 
 	if (!dtCreateNavMeshData(&tParams, &m_pNavData, &m_iNavCount))
 	{
+		assert(false);
 		return;
 	}
 
@@ -25,6 +26,7 @@ Engine::NavMesh::NavMesh(dtNavMeshCreateParams& tParams, float fAgentRadius, flo
 
 	if (!m_pNavMesh)
 	{
+		assert(false);
 		return;
 	}
 
@@ -32,6 +34,7 @@ Engine::NavMesh::NavMesh(dtNavMeshCreateParams& tParams, float fAgentRadius, flo
 
 	if (dtStatusFailed(iStatus))
 	{
+		assert(false);
 		return;
 	}
 
@@ -39,6 +42,7 @@ Engine::NavMesh::NavMesh(dtNavMeshCreateParams& tParams, float fAgentRadius, flo
 
 	if (!m_pNavMeshQuery)
 	{
+		assert(false);
 		return;
 	}
 
@@ -46,15 +50,18 @@ Engine::NavMesh::NavMesh(dtNavMeshCreateParams& tParams, float fAgentRadius, flo
 
 	if (dtStatusFailed(iStatus))
 	{
+		assert(false);
 		return;
 	}
 	if (!m_pCrowd)
 	{
+		assert(false);
 		return;
 	}
 
 	if (!m_pCrowd->init(128, m_fAgentRadius, m_pNavMesh))
 	{
+		assert(false);
 		return;
 	}
 

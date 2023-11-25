@@ -77,7 +77,7 @@ void Engine::Cloth::FixedUpdate(float fDeltaTime)
 	m_bSwitch ^= true;
 }
 
-const Engine::Vector3& Engine::Cloth::GetSpringForce(int iSrcIndex, int iDestIndex, float fSpring, float fDist) const
+Engine::Vector3 Engine::Cloth::GetSpringForce(int iSrcIndex, int iDestIndex, float fSpring, float fDist) const
 {
 	if (m_bSwitch)
 	{

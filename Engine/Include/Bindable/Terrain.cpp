@@ -52,7 +52,7 @@ namespace Engine
 
 		GetBoundingSphere(m_vecVertex);
 
-		CreateMeshCollider(m_vecVertex, m_vecIndex);
+		CreateMeshCollider();
 	}
 
 	void Terrain::CreateTerrainTexture(const std::vector<const TCHAR*>& vecFullPath)
@@ -107,7 +107,7 @@ namespace Engine
 			m_vecHeight[i] = *pPixels;
 		}
 
-		CreateTerrain(pImage->GetMetadata().width - 1, pImage->GetMetadata().height - 1);
+		CreateTerrain(static_cast<int>(pImage->GetMetadata().width) - 1, static_cast<int>(pImage->GetMetadata().height) - 1);
 	}
 
 	void Terrain::SaveHeightMap(const TCHAR* pFilePath, const std::string& strPathKey)
@@ -129,21 +129,14 @@ namespace Engine
 		m_pHeightMap->SaveTexture(pFilePath, strPathKey);
 	}
 
-	void Terrain::CreateMeshCollider(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex)
+	void Terrain::CreateMeshCollider()
 	{
 		std::vector<float> vecPoint;
 		std::vector<int> _vecIndex;
 
-		for (int i = 0; i < static_cast<int>(vecVertex.size()); ++i)
-		{
-			vecPoint.push_back(vecVertex[i].pos.x);
-			vecPoint.push_back(m_vecHeight[i] / 25.5f);
-			vecPoint.push_back(vecVertex[i].pos.z);
-		}
+		GetPoints(vecPoint);
 
-		_vecIndex.resize(vecIndex.size());
-
-		memcpy_s(&_vecIndex[0], 4 * _vecIndex.size(), &vecIndex[0], 4 * vecIndex.size());
+		GetTris(_vecIndex);
 
 		std::shared_ptr<ColliderMesh> pCollider = FindChild<ColliderMesh>();
 
@@ -153,6 +146,27 @@ namespace Engine
 		else {
 			pCollider->SetInfo(vecPoint, _vecIndex);
 		}
+
+		pCollider->SetColliderType(COLLIDER_TYPE::TERRAIN);
+	}
+
+	void Terrain::GetPoints(std::vector<float>& vecPoint)
+	{
+		vecPoint.clear();
+
+		for (int i = 0; i < static_cast<int>(m_vecVertex.size()); ++i)
+		{
+			vecPoint.push_back(m_vecVertex[i].pos.x);
+			vecPoint.push_back(m_vecHeight[i] / 25.5f);
+			vecPoint.push_back(m_vecVertex[i].pos.z);
+		}
+	}
+
+	void Terrain::GetTris(std::vector<int>& _vecIndex)
+	{
+		_vecIndex.resize(m_vecIndex.size());
+
+		memcpy_s(&_vecIndex[0], 4 * _vecIndex.size(), &m_vecIndex[0], 4 * m_vecIndex.size());
 	}
 
 	void Terrain::CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight)
@@ -175,9 +189,9 @@ namespace Engine
 			}
 		}
 
-		for (int i = 0; i < iWidth; ++i)
+		for (int j = 0; j < iHeight; ++j)
 		{
-			for (int j = 0; j < iHeight; ++j)
+			for (int i = 0; i < iWidth; ++i)
 			{
 				vecIndex.push_back(i + j * (iWidth + 1));
 				vecIndex.push_back(i + 1 + j * (iWidth + 1));
@@ -271,7 +285,7 @@ namespace Engine
 
 			m_pHeightMap->CreateShaderResourceView(*pImage);
 
-			CreateMeshCollider(m_vecVertex, m_vecIndex);
+			CreateMeshCollider();
 		}
 
 		else if (CInput::GetInst()->IsMouseButtonDown(CInput::MOUSE_TYPE::LEFT)) {

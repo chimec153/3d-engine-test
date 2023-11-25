@@ -31,7 +31,9 @@ namespace Engine
         void CreateBlendTerrainTexture(const std::vector<const TCHAR*>& vecFullPath);
         void CreateHeightMap(const TCHAR* pFilePath);
         void SaveHeightMap(const TCHAR* pFilePath, const std::string& strPathKey = TEXTURE_PATH);
-        void CreateMeshCollider(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex);
+        void CreateMeshCollider();
+        void GetPoints(std::vector<float>& vecPoints);
+        void GetTris(std::vector<int>& vecTris);
 
     private:
         void CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight);

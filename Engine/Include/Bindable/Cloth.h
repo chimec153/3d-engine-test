@@ -40,7 +40,7 @@ namespace Engine
         virtual void FixedUpdate(float fDeltaTime) override;
 
     private:
-        const Vector3& GetSpringForce(int iSrcIndex, int iDestIndex, float fSpring, float fDist) const;
+        Vector3 GetSpringForce(int iSrcIndex, int iDestIndex, float fSpring, float fDist) const;
         void ApplySpringForce(int iSrcIndex, int iDestIndex, float fSpring, float fDist);
         void ApplyDampForce(int iSrcIndex, int iDestIndex, float fDamp);
         void UpdateForce();

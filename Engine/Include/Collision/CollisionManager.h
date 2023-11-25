@@ -74,6 +74,10 @@ namespace Engine
 #ifdef _DEBUG
 			//pDebugBox->InActivate();
 #endif
+			for (int i = 0; i < 8; ++i)
+			{
+				SAFE_DELETE(pChild[i]);
+			}
 		}
 
 		bool IsRight(const Vector4& vSphereInfo)	const

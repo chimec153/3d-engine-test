@@ -57,8 +57,8 @@ void Engine::Fluid::CreateVertexBufferAndIndexBuffer(int n, int m)
 		{
 			VertexStandard vertex;
 
-			vertex.pos.x = i;
-			vertex.pos.z = m - j;
+			vertex.pos.x = static_cast<float>(i);
+			vertex.pos.z = static_cast<float>(m - j);
 
 			vecVertex.push_back(vertex);
 		}

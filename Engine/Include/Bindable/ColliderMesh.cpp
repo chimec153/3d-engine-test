@@ -88,7 +88,13 @@ bool Engine::ColliderMesh::Collision(Collider* pDest, float fDeltaTime)
     switch (pDest->GetColliderType())
     {
     case Engine::COLLIDER_TYPE::LINE:
-        return Collision::CollisionLineToMesh(static_cast<ColliderLine*>(pDest), this);
+        switch (GetColliderType())
+        {
+        case Engine::COLLIDER_TYPE::MESH:
+            return Collision::CollisionLineToMesh(static_cast<ColliderLine*>(pDest), this);
+        case Engine::COLLIDER_TYPE::TERRAIN:
+            return Collision::CollisionLineToTerrain(static_cast<ColliderLine*>(pDest), this);
+        }
     case Engine::COLLIDER_TYPE::SPHERE:
         break;
     case Engine::COLLIDER_TYPE::MESH:

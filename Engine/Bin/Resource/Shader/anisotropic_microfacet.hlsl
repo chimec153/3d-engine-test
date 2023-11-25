@@ -12,6 +12,7 @@ VSOut VS(VSIn input)
     
     output.tangent.xyz = normalize(mul(input.tangent.xyz, (float3x3) g_matWorldView));
     output.tangent.w = input.tangent.w;
+    output.clip = output.pos;
     
     return output;
 }
@@ -28,6 +29,7 @@ VSOut VS_NoSkin(VSStandardIn input)
     
     output.tangent.xyz = normalize(mul(input.tangent.xyz, (float3x3) g_matWorldView));
     output.tangent.w = input.tangent.w;
+    output.clip = output.pos;   
     
     return output;
 }
@@ -49,6 +51,7 @@ VSInstOut VS_NoSkinInst(VSStandardInstIn input)
     output.vSpecularColor = input.specular;
     output.vMaterialRoughness = input.roughness;
     output.fMaterialFraction = input.fraction;
+    output.clip = output.pos;
     
     return output;
 }
@@ -148,6 +151,7 @@ VSOut VS_Skin(VSStandardIn input)
     
     output.tangent.xyz = normalize(mul(tangent, (float3x3) g_matWorldView));
     output.tangent.w = input.tangent.w;
+    output.clip = output.pos;
     
     return output;
 }
@@ -192,6 +196,7 @@ VSInstOut VS_SkinInst(VSStandardInstIn input, uint iInstId : SV_InstanceID)
     output.vSpecularColor = g_vSpecularColor;
     output.vMaterialRoughness = g_vMaterialRoughness;
     output.fMaterialFraction = g_fMaterialFraction;
+    output.clip = output.pos;
     
     return output;
 }
@@ -1005,4 +1010,87 @@ float4 PS_AlphaNoUV(VSOut input) : SV_Target
     
     return (materialFraction * C * albedo * max(NDotL, 0.f)
     + (1.f - materialFraction) * saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
+}
+
+
+float4 PS_AlphaInst(VSInstOut input) : SV_Target
+{
+    float3 viewPos = 0.f;
+    
+    float depth = input.clip.z / input.clip.w;
+    
+    float2 pos = input.clip.xy * 0.5f + 0.5f;
+    
+    pos.y = -pos.y;
+    
+    viewPos.z = g_vProjectValues.w / (g_vProjectValues.z - depth);
+    viewPos.xy = pos * viewPos.z * g_vProjectValues.xy;
+    
+    float4 shadowpos = mul(float4(viewPos, 1.f), g_matCameraViewToLightClip);
+    
+    shadowpos.xyz /= shadowpos.w;
+    
+    shadowpos.xy += 1.f;
+    
+    shadowpos.xy *= 0.5f;
+    
+    shadowpos.y = 1.f - shadowpos.y;
+    
+    float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
+    
+    float2 vMaterialRoughness = input.vMaterialRoughness;
+    
+    float4 albedo = g_Texture.Sample(g_sAnisotropic, input.uv) * input.vDiffuseColor;
+    
+    float3 normal = BumpMapping(input.normal, input.tangent, input.uv);
+    
+    float4 vSpecColor = g_SpecularTexture.Sample(g_sAnisotropic, input.uv) * input.vSpecularColor;
+    
+    float materialFraction = input.fMaterialFraction;
+    
+    float3 light = 0.f;
+    
+    float4 C = 0.f;
+    
+    if (g_iLightType == POINT_LIGHT)
+    {
+        C = GetLightAtt(g_vLightPos - input.view) * g_fLightIntensity;
+        
+        light = normalize(g_vLightPos - input.view);
+    }
+    else if (g_iLightType == SPOT_LIGHT)
+    {
+        light = normalize(g_vLightPos - input.view);
+        
+        C = GetLightAtt(g_vLightPos - input.view) * pow(max(dot(g_vLightDir, light), 0.f), g_fLightIntensity);
+    }
+    else if (g_iLightType == DIRECTIONAL_LIGHT)
+    {
+        light = normalize(-g_vLightDir);
+        
+        C = g_vLightColor * g_fLightIntensity;
+    }
+    
+    float3 view = normalize(-viewPos);
+    
+    float3 hdir = normalize(light + view);
+    
+    float NDotH = dot(normal, hdir);
+    
+    float NDotL = dot(normal, light);
+    
+    float LDotH = dot(light, hdir);
+    
+    float NDotV = dot(normal, view);
+    
+    float3 P = normalize(hdir - NDotH * normal);
+    
+    float4 vFresnel = float4(GetFresnel(LDotH, vSpecColor.xyz), 1.f);
+    
+    float4 vMicroFacet = GetMicrofacetDistribution(NDotH, hdir.x * hdir.x / (hdir.x * hdir.x + hdir.y * hdir.y), vMaterialRoughness);
+    
+    float4 vGeometry = GetGeometricAttenuation(NDotH, NDotV, NDotL, LDotH);
+    
+    return float4(((materialFraction * C * albedo * max(NDotL, 0.f)
+    + (1.f - materialFraction) * saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr).xyz, albedo.w);
 }

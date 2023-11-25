@@ -198,6 +198,7 @@ namespace Engine
 		CreateBindable("anisotropic_microfacet PS_NoTextureInst", TEXT("anisotropic_microfacet.hlsl"), "PS_NoTextureInst");
 
 		CreateBindable("AlphaPS", TEXT("anisotropic_microfacet.hlsl"), "PS_Alpha");
+		CreateBindable("AlphaPSInst", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaInst");
 		CreateBindable("AlphaNoUVPS", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaNoUV");
 
 		CreateBindable("ParticlePS", TEXT("Particle.fx"), "PS_PARTICLE");

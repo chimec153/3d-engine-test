@@ -46,23 +46,12 @@ Player::Player() :
 	m_pAnimation->AddSequance("walk", pWalkSequence);
 
 	FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
-	FindAndAddBind<Engine::PixelShader>("PaperBurnPS");
+	FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS");
 	FindAndAddBind<Engine::InputLayout>("Standard");
 	FindAndAddBind<Engine::Topology>("TriangleList");
 
 	GetTransform()->SetScale(Engine::Vector3(0.02f, 0.02f, 0.02f));
 	GetTransform()->SetRX(Engine::DegToRad(180.f));
-
-	std::shared_ptr<Engine::PaperBurn> pPaperBurn = CreateBindable<Engine::PaperBurn>("PaperBurn", Engine::StaticFindBindable<Engine::Texture>("PaperBurn"));
-
-	pPaperBurn->SetStartColor(Engine::Red);
-	pPaperBurn->SetMidColor(Engine::Yellow);
-	pPaperBurn->SetFinalColor(Engine::White);
-	pPaperBurn->SetStartRate(0.4f);
-	pPaperBurn->SetMidRate(0.55f);
-	pPaperBurn->SetFinalRate(0.6f);
-	pPaperBurn->SetEndRate(0.65f);
-	pPaperBurn->SetMaxTime(8.f);
 
 	//std::shared_ptr<Drawable> pWeapon = CreateBindable<Drawable>("weapon");
 
@@ -102,6 +91,8 @@ Player::Player(const Player& player) :
 
 	std::shared_ptr<Drawable> pHead = pScene->CreateDrawable<Drawable>("head", pScene->FindLayer(ALPHA_LAYER));
 
+	pHead->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
+
 	std::shared_ptr<Engine::Mesh> pHeadMesh = pHead->CreateBindable<Engine::Mesh>("head_mesh", "FaceIs255boneAndHair.mesh", MESH_PATH);
 
 	std::shared_ptr<Engine::Animation> pHeadAni = pHead->CreateBindable<Engine::Animation>("head_ani");
@@ -119,7 +110,7 @@ Player::Player(const Player& player) :
 	pHeadAni->SetSkeleton(pHeadSkeleton);
 
 	pHead->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
-	pHead->FindAndAddBind<Engine::PixelShader>("PaperBurnPS");
+	pHead->FindAndAddBind<Engine::PixelShader>("AlphaPS");
 	pHead->FindAndAddBind<Engine::InputLayout>("Standard");
 	pHead->FindAndAddBind<Engine::Topology>("TriangleList");
 	//pHead->FindAndAddBind<Engine::BlendState>("AlphaBlend");
@@ -131,7 +122,7 @@ Player::Player(const Player& player) :
 	{
 		m_pSphere[i] = pScene->CreateDrawable<Engine::Sphere>("DebugSphere", pScene->FindLayer(DEFAULT_LAYER), 16, 16);
 
-		m_pSphere[i]->GetMaterial()->SetDiffuseColor(i, 0.f, 1.f, 1.f);
+		m_pSphere[i]->GetMaterial()->SetDiffuseColor(static_cast<float>(i), 0.f, 1.f, 1.f);
 	}
 #endif
 
@@ -164,10 +155,6 @@ Player::Player(const Player& player) :
 
 	//m_pAnimation->AddIkInfo(6, 1);
 	//m_pAnimation->AddIkInfo(13, 1);
-
-	std::shared_ptr<Engine::PaperBurn> pPaperBurn = std::static_pointer_cast<Engine::PaperBurn>(FindChild(Engine::BINDABLE_TYPE::PAPERBURN));
-
-	pPaperBurn->StartPaperBurn();
 }
 
 void Player::CreateAgent(std::shared_ptr<Engine::NavMesh> pNavMesh, const Engine::Vector3& pos)

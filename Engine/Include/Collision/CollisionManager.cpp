@@ -70,27 +70,7 @@ namespace Engine
 
 	CollisionManager::~CollisionManager()
 	{
-		std::list<PSPACE> pSpaceList;
-
-		pSpaceList.push_back(m_pSpace);
-
-		while (!pSpaceList.empty())
-		{
-			PSPACE pSpace = pSpaceList.back();
-
-			pSpaceList.pop_back();
-
-			for (int i = 0; i < 8; ++i)
-			{
-				if (pSpace->pChild[i])
-				{
-					pSpaceList.push_back(pSpace->pChild[i]);
-				}
-			}
-
-			delete pSpace;
-		}
-
+		SAFE_DELETE(m_pSpace);
 	}
 
 	void CollisionManager::AddDrawable(const std::shared_ptr<class Drawable>& pDrawable)

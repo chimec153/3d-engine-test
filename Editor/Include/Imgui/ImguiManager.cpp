@@ -710,8 +710,19 @@ void ImguiManager::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest
 {
 	if (Engine::CInput::GetInst()->IsMouseButtonUp(Engine::CInput::MOUSE_TYPE::LEFT))
 	{
-		if ((pSrc->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pSrc->GetTag() == "MouseLine") ||
-			(pDest->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pDest->GetTag() == "MouseLine"))
+		Engine::Collider* pNavOwner = nullptr;
+
+		if ((pSrc->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pSrc->GetTag() == "MouseLine"))
+		{
+			pNavOwner = pDest;
+		}
+
+		else if (pDest->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pDest->GetTag() == "MouseLine")
+		{
+			pNavOwner = pSrc;
+		}
+
+		if(pNavOwner)
 		{
 			if (m_bMode)
 			{
@@ -727,7 +738,14 @@ void ImguiManager::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest
 
 				if (pPlayer)
 				{
-					pPlayer->CreateAgent(m_pNavMesh, pSrc->GetCross());
+					Engine::Bindable* pParent = pNavOwner->GetParent();
+
+					if (pParent)
+					{
+						std::shared_ptr<Engine::NavMesh> pNavMesh = std::static_pointer_cast<Engine::NavMesh>(pParent->FindChild(Engine::BINDABLE_TYPE::NAV_MESH));
+
+						pPlayer->CreateAgent(pNavMesh, pSrc->GetCross());
+					}
 				}
 
 				m_PlayerList.push_back(pPlayer);

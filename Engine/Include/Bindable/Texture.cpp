@@ -345,7 +345,7 @@ namespace Engine
 			return 0;
 		}
 
-		return m_pImage->GetMetadata().width;
+		return static_cast<int>(m_pImage->GetMetadata().width);
 	}
 
 	int Texture::GetImageHeight() const noexcept
@@ -355,7 +355,7 @@ namespace Engine
 			return 0;
 		}
 
-		return m_pImage->GetMetadata().height;
+		return static_cast<int>(m_pImage->GetMetadata().height);
 	}
 
 	void Texture::Update(float fDeltaTime)

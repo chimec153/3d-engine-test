@@ -1285,3 +1285,4 @@ Editor/Bin/Resource/Texture/Decal/Decal.png
 Editor/Bin/Resource/Texture/DefaultBurn.png
 *.dds
 *.jpg
+*.cso
