@@ -21,6 +21,9 @@ namespace Engine
         float   m_fEditRange;
         std::vector<VertexStandard> m_vecVertex;
         std::vector<unsigned int> m_vecIndex;
+        std::shared_ptr<Texture>    m_pBrushTexture;
+        std::shared_ptr<class Decal> m_pDecal;
+        bool m_bEraseMode;
 
     public:
         void CreateTerrain(int iWidth, int iHeight);
@@ -34,6 +37,9 @@ namespace Engine
         void CreateMeshCollider();
         void GetPoints(std::vector<float>& vecPoints);
         void GetTris(std::vector<int>& vecTris);
+        void SetEraseMode();
+        void SetAddMode();
+        bool IsEraseMode()  const;
 
     private:
         void CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight);
@@ -44,6 +50,10 @@ namespace Engine
     public:
         void CollisionStay(Collider* pSrc, Collider* pDest, float fDeltaTime);
         void CollisionEnd(Collider* pSrc, Collider* pDest, float fDeltaTime);
+
+    public:
+        void EditHeightMapWithTexture(const Vector3& vCross);
+        void SetBrushTexture(std::shared_ptr<Texture> pBrushTexture);
     };
 
 }

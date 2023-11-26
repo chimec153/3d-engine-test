@@ -95,15 +95,12 @@ VS_Terrain_Out VS_Terrain(VSStandardIn input)
     uppos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, upuv, 0.f).r * 10.f;
     downpos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, downuv, 0.f).r * 10.f;
     
-    float3 v1 = float3(2.f, rightpos.y - leftpos.y, 0.f);
-    float3 v2 = float3(0.f, downpos.y - uppos.y, -2.f);
+    float3 v1 = normalize(float3(2.f, rightpos.y - leftpos.y, 0.f));
+    float3 v2 = normalize(float3(0.f, downpos.y - uppos.y, -2.f));
     
     float3 normal = normalize(cross(v1, v2));
     
-    float3 tangent = 0.f;
-    
-    tangent.x = sqrt(1.f - (1.f / (pow(normal.y, 2.f) / pow(normal.x, 2.f))));
-    tangent.y = -tangent.x * normal.x / normal.y;
+    float3 tangent = cross(v1, normal);
     
     output.pos = mul(float4(pos, 1.f), g_matTransform);
     output.uv = input.uv;
@@ -406,6 +403,8 @@ PSOut PS_Terrain(VS_Terrain_Out input)
     tangent.x * N.x + bitangent.x * N.y + normal.x * N.z,
     tangent.y * N.x + bitangent.y * N.y + normal.y * N.z,
     tangent.z * N.x + bitangent.z * N.y + normal.z * N.z)) * 0.5f + 0.5f;
+        
+    //output.value1.xyz = normalize(normal.xyz) * 0.5f + 0.5f;
     
     output.value0.xyz = g_vDiffuseColor.xyz * vTexture + g_vEmissiveColor.xyz * vEmissive;
     

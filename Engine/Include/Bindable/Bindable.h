@@ -55,7 +55,7 @@ namespace Engine
 		std::shared_ptr<Bindable> FindChild(BINDABLE_TYPE eType)   const;
 		void FindChilds(BINDABLE_TYPE eType, std::vector<std::shared_ptr<Bindable>>& vecBindables)   const;
 		std::shared_ptr<Bindable> FindChild(const std::string& strTag) const;
-		void DeleteChild(const Bindable* const pBindable);
+		void DeleteChild(std::shared_ptr<Bindable> pBindable);
 		std::shared_ptr<Bindable> FindChild(OBJECT_TYPE eType)  const;
 		template <typename T>
 		std::shared_ptr<T> FindChild() const

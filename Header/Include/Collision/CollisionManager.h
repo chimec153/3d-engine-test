@@ -26,7 +26,7 @@ namespace Engine
 	{
 		Vector3	vPos;
 		float	fSize;
-		_tagSpace* pChild[8];
+		std::unique_ptr<_tagSpace> pChild[static_cast<int>(SPACE_DIR::END)];
 		_tagSpace* pParent;
 		std::list<std::shared_ptr<class Drawable>>	DrawableList;
 		std::list<struct _tagPortal>	PortalList;
@@ -74,10 +74,6 @@ namespace Engine
 #ifdef _DEBUG
 			//pDebugBox->InActivate();
 #endif
-			for (int i = 0; i < 8; ++i)
-			{
-				SAFE_DELETE(pChild[i]);
-			}
 		}
 
 		bool IsRight(const Vector4& vSphereInfo)	const
@@ -108,6 +104,1354 @@ namespace Engine
 		bool IsFar(const Vector4& vSphereInfo)	const
 		{
 			return vSphereInfo.z + vSphereInfo.w - vPos.z >= 0.f;
+		}
+
+		template <int T>
+		int GetTotalDrawableCountSub(int iPrevCount)	const
+		{
+			return pChild[T] ? 
+				pChild[T]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) :
+				GetTotalDrawableCountSub<T - 1>(iPrevCount);
+		}
+
+		template <>
+		int GetTotalDrawableCountSub<0>(int iPrevCount)	const
+		{
+			return pChild[0] ?
+				pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) :
+				iPrevCount + static_cast<int>(DrawableList.size());
+		}
+
+		int GetTotalDrawableCount(int iPrevCount = 0)	const
+		{
+			return GetTotalDrawableCountSub<7>(iPrevCount);
+			/*return
+				pChild[7] ? pChild[7]->GetTotalDrawableCount(
+					pChild[6] ? pChild[6]->GetTotalDrawableCount(
+						pChild[5] ? pChild[5]->GetTotalDrawableCount(
+							pChild[4] ? pChild[4]->GetTotalDrawableCount(
+								pChild[3] ? pChild[3]->GetTotalDrawableCount(
+									pChild[2] ? pChild[2]->GetTotalDrawableCount(
+										pChild[1] ? pChild[1]->GetTotalDrawableCount(
+											pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+										: (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size()))))
+									: (pChild[1] ? pChild[1]->GetTotalDrawableCount(
+										pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+										: (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))))
+								: (pChild[2] ? pChild[2]->GetTotalDrawableCount(
+									pChild[1] ? pChild[1]->GetTotalDrawableCount(
+										pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+									: (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+								) : (pChild[1] ? pChild[1]->GetTotalDrawableCount(
+									pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+									: (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size()))))))
+							: (pChild[3] ? pChild[3]->GetTotalDrawableCount(
+								pChild[2] ? pChild[2]->GetTotalDrawableCount(
+									pChild[1] ? pChild[1]->GetTotalDrawableCount(
+										pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size()))
+									) : (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+								) : (pChild[1] ? pChild[1]->GetTotalDrawableCount(
+									pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size()))
+								) : (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))))
+								: (pChild[2] ? pChild[2]->GetTotalDrawableCount(
+									pChild[1] ? pChild[1]->GetTotalDrawableCount(
+										pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size()))
+									) : (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+								) : (pChild[1] ? pChild[1]->GetTotalDrawableCount(
+									pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+									: (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))))))
+						:			(pChild[4] ? pChild[4]->GetTotalDrawableCount(
+							pChild[3] ? pChild[3]->GetTotalDrawableCount(
+								pChild[2] ? pChild[2]->GetTotalDrawableCount(
+									pChild[1] ? pChild[1]->GetTotalDrawableCount(
+										pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size()))
+									) : (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size()))))
+								: (pChild[1] ? pChild[1]->GetTotalDrawableCount(
+									pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+									: (pChild[0] ? pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) : (iPrevCount + static_cast<int>(DrawableList.size())))
+									)
+							)
+							:
+							(
+								pChild[2] ?
+								pChild[2]->GetTotalDrawableCount(
+									pChild[1] ?
+									pChild[1]->GetTotalDrawableCount(
+										pChild[0] ?
+										pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+										:
+										(
+											iPrevCount + static_cast<int>(DrawableList.size())
+											)
+									)
+									:
+									(
+										pChild[0] ?
+										pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+										:
+										(
+											iPrevCount + static_cast<int>(DrawableList.size())
+											)
+										)
+								)
+								:
+								(
+									pChild[1] ?
+									pChild[1]->GetTotalDrawableCount(
+										pChild[0] ?
+										pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+										:
+										(
+											iPrevCount + static_cast<int>(DrawableList.size())
+											)
+									)
+									:
+									(
+										pChild[0] ?
+										pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+										:
+										(
+											iPrevCount + static_cast<int>(DrawableList.size())
+											)
+										)
+									)
+								)
+						)
+							:
+			(
+				pChild[3] ?
+				pChild[3]->GetTotalDrawableCount(
+					pChild[2] ?
+					pChild[2]->GetTotalDrawableCount(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+					)
+					:
+					(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+						)
+				)
+				:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size()))
+						)
+					)
+				)
+				)
+				)
+					)
+					:
+			(
+				pChild[5] ?
+				pChild[5]->GetTotalDrawableCount(
+					pChild[4] ?
+					pChild[4]->GetTotalDrawableCount(
+						pChild[3] ?
+						pChild[3]->GetTotalDrawableCount(
+							pChild[2] ?
+							pChild[2]->GetTotalDrawableCount(
+								pChild[1] ?
+								pChild[1]->GetTotalDrawableCount(
+									pChild[0] ?
+									pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+									:
+									(
+										iPrevCount + static_cast<int>(DrawableList.size())
+										)
+								)
+								:
+								(
+									pChild[0] ?
+									pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+									:
+									(
+										iPrevCount + static_cast<int>(DrawableList.size())
+										)
+									)
+							)
+							:
+							(
+								pChild[1] ?
+								pChild[1]->GetTotalDrawableCount(
+									pChild[0] ?
+									pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+									:
+									(
+										iPrevCount + static_cast<int>(DrawableList.size())
+										)
+								)
+								:
+								(
+									pChild[0] ?
+									pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+									:
+									(
+										iPrevCount + static_cast<int>(DrawableList.size())
+										)
+									)
+								)
+						)
+						:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+					)
+				)
+				)
+					:
+			(
+				pChild[3] ?
+				pChild[3]->GetTotalDrawableCount(
+					pChild[2] ?
+					pChild[2]->GetTotalDrawableCount(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+					)
+					:
+					(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+						)
+				)
+				:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size()))
+						)
+					)
+				)
+				)
+				)
+				:
+			(
+				pChild[4] ?
+				pChild[4]->GetTotalDrawableCount(
+					pChild[3] ?
+					pChild[3]->GetTotalDrawableCount(
+						pChild[2] ?
+						pChild[2]->GetTotalDrawableCount(
+							pChild[1] ?
+							pChild[1]->GetTotalDrawableCount(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+							)
+							:
+							(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+								)
+						)
+						:
+						(
+							pChild[1] ?
+							pChild[1]->GetTotalDrawableCount(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+							)
+							:
+							(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+								)
+							)
+					)
+					:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+					)
+				)
+				)
+				:
+			(
+				pChild[3] ?
+				pChild[3]->GetTotalDrawableCount(
+					pChild[2] ?
+					pChild[2]->GetTotalDrawableCount(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+					)
+					:
+					(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+						)
+				)
+				:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size()))
+						)
+					)
+				)
+				)
+				)
+				)
+				)
+				:
+			(
+				pChild[6] ?
+				pChild[6]->GetTotalDrawableCount(
+					pChild[5] ?
+					pChild[5]->GetTotalDrawableCount(
+						pChild[4] ?
+						pChild[4]->GetTotalDrawableCount(
+							pChild[3] ?
+							pChild[3]->GetTotalDrawableCount(
+								pChild[2] ?
+								pChild[2]->GetTotalDrawableCount(
+									pChild[1] ?
+									pChild[1]->GetTotalDrawableCount(
+										pChild[0] ?
+										pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+										:
+										(
+											iPrevCount + static_cast<int>(DrawableList.size())
+											)
+									)
+									:
+									(
+										pChild[0] ?
+										pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+										:
+										(
+											iPrevCount + static_cast<int>(DrawableList.size())
+											)
+										)
+								)
+								:
+								(
+									pChild[1] ?
+									pChild[1]->GetTotalDrawableCount(
+										pChild[0] ?
+										pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+										:
+										(
+											iPrevCount + static_cast<int>(DrawableList.size())
+											)
+									)
+									:
+									(
+										pChild[0] ?
+										pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+										:
+										(
+											iPrevCount + static_cast<int>(DrawableList.size())
+											)
+										)
+									)
+							)
+							:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+					)
+				)
+				)
+						:
+			(
+				pChild[3] ?
+				pChild[3]->GetTotalDrawableCount(
+					pChild[2] ?
+					pChild[2]->GetTotalDrawableCount(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+					)
+					:
+					(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+						)
+				)
+				:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size()))
+						)
+					)
+				)
+				)
+				)
+					:
+			(
+				pChild[4] ?
+				pChild[4]->GetTotalDrawableCount(
+					pChild[3] ?
+					pChild[3]->GetTotalDrawableCount(
+						pChild[2] ?
+						pChild[2]->GetTotalDrawableCount(
+							pChild[1] ?
+							pChild[1]->GetTotalDrawableCount(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+							)
+							:
+							(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+								)
+						)
+						:
+						(
+							pChild[1] ?
+							pChild[1]->GetTotalDrawableCount(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+							)
+							:
+							(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+								)
+							)
+					)
+					:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+					)
+				)
+				)
+				:
+			(
+				pChild[3] ?
+				pChild[3]->GetTotalDrawableCount(
+					pChild[2] ?
+					pChild[2]->GetTotalDrawableCount(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+					)
+					:
+					(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+						)
+				)
+				:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size()))
+						)
+					)
+				)
+				)
+				)
+				)
+				:
+			(
+				pChild[5] ?
+				pChild[5]->GetTotalDrawableCount(
+					pChild[4] ?
+					pChild[4]->GetTotalDrawableCount(
+						pChild[3] ?
+						pChild[3]->GetTotalDrawableCount(
+							pChild[2] ?
+							pChild[2]->GetTotalDrawableCount(
+								pChild[1] ?
+								pChild[1]->GetTotalDrawableCount(
+									pChild[0] ?
+									pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+									:
+									(
+										iPrevCount + static_cast<int>(DrawableList.size())
+										)
+								)
+								:
+								(
+									pChild[0] ?
+									pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+									:
+									(
+										iPrevCount + static_cast<int>(DrawableList.size())
+										)
+									)
+							)
+							:
+							(
+								pChild[1] ?
+								pChild[1]->GetTotalDrawableCount(
+									pChild[0] ?
+									pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+									:
+									(
+										iPrevCount + static_cast<int>(DrawableList.size())
+										)
+								)
+								:
+								(
+									pChild[0] ?
+									pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+									:
+									(
+										iPrevCount + static_cast<int>(DrawableList.size())
+										)
+									)
+								)
+						)
+						:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+					)
+				)
+				)
+					:
+			(
+				pChild[3] ?
+				pChild[3]->GetTotalDrawableCount(
+					pChild[2] ?
+					pChild[2]->GetTotalDrawableCount(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+					)
+					:
+					(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+						)
+				)
+				:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size()))
+						)
+					)
+				)
+				)
+				)
+				:
+			(
+				pChild[4] ?
+				pChild[4]->GetTotalDrawableCount(
+					pChild[3] ?
+					pChild[3]->GetTotalDrawableCount(
+						pChild[2] ?
+						pChild[2]->GetTotalDrawableCount(
+							pChild[1] ?
+							pChild[1]->GetTotalDrawableCount(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+							)
+							:
+							(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+								)
+						)
+						:
+						(
+							pChild[1] ?
+							pChild[1]->GetTotalDrawableCount(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+							)
+							:
+							(
+								pChild[0] ?
+								pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+								:
+								(
+									iPrevCount + static_cast<int>(DrawableList.size())
+									)
+								)
+							)
+					)
+					:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+					)
+				)
+				)
+				:
+			(
+				pChild[3] ?
+				pChild[3]->GetTotalDrawableCount(
+					pChild[2] ?
+					pChild[2]->GetTotalDrawableCount(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+					)
+					:
+					(
+						pChild[1] ?
+						pChild[1]->GetTotalDrawableCount(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+						)
+						:
+						(
+							pChild[0] ?
+							pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+							:
+							(
+								iPrevCount + static_cast<int>(DrawableList.size())
+								)
+							)
+						)
+				)
+				:
+			(
+				pChild[2] ?
+				pChild[2]->GetTotalDrawableCount(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+						)
+				)
+				:
+				(
+					pChild[1] ?
+					pChild[1]->GetTotalDrawableCount(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size())
+							)
+					)
+					:
+					(
+						pChild[0] ?
+						pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size()))
+						:
+						(
+							iPrevCount + static_cast<int>(DrawableList.size()))
+						)
+					)
+				)
+				)
+				)
+				)
+				);*/
 		}
 	}SPACE, * PSPACE;
 

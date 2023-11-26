@@ -84,8 +84,8 @@ Player::Player(const Player& player) :
 	
 	std::shared_ptr<Engine::JointSocket> pJointSocket = std::make_shared<Engine::JointSocket>();
 
-	pJointSocket->SetPosition(Engine::Vector3(0.f, 0.f, 0.f));
-	pJointSocket->SetRotation(Engine::Vector3(-0.7, 0.f, 0.f));
+	pJointSocket->SetPosition(Engine::Vector3(2.f, -10.f, -3.5f));
+	pJointSocket->SetRotation(Engine::Vector3(-1.57, 0.f, 0.f));
 
 	m_pAnimation->AddSocket(117, pJointSocket);
 
@@ -202,7 +202,9 @@ void Player::Update(float fDeltaTime)
 
 		for (int i = 0; i < 2; ++i)
 		{
+#ifdef _DEBUG
 			m_pAnimation->SetIkPosition(6 + 7 * i, matInverse.TransformCoord(m_pSphere[i]->GetTransform()->GetPosition()));
+#endif
 		}
 	}
 }

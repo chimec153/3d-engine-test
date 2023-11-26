@@ -7,6 +7,7 @@
 #include "Topology.h"
 #include "../Input/Input.h"
 #include "TransformBuffer.h"
+#include "Decal.h"
 
 namespace Engine
 {
@@ -16,7 +17,11 @@ namespace Engine
 		, m_pHeightMap(nullptr)
 		, m_bEditting(false)
 		, m_fEditRange(5.f)
+		, m_pDecal(CreateBindable<Decal>("BrushDecal"))
+		, m_bEraseMode(false)
 	{
+		SetBindableType(BINDABLE_TYPE::TERRAIN);
+
 		FindAndAddBind<InputLayout>("Standard");
 		FindAndAddBind<VertexShader>("anisotropic_microfacet VS_Terrain");
 		FindAndAddBind<PixelShader>("anisotropic_microfacet PS_Terrain");
@@ -35,6 +40,9 @@ namespace Engine
 
 		AddChild(m_pVSTerrainBuffer);
 		AddChild(m_pPSTerrainBuffer);
+
+		m_pDecal->FindAndAddBind<Mesh>("Box");
+		m_pDecal->FindAndAddBind<Topology>("TriangleList");
 	}
 
 	void Terrain::CreateTerrain(int iWidth, int iHeight)
@@ -169,6 +177,21 @@ namespace Engine
 		memcpy_s(&_vecIndex[0], 4 * _vecIndex.size(), &m_vecIndex[0], 4 * m_vecIndex.size());
 	}
 
+	void Terrain::SetEraseMode()
+	{
+		m_bEraseMode = true;
+	}
+
+	void Terrain::SetAddMode()
+	{
+		m_bEraseMode = false;
+	}
+
+	bool Terrain::IsEraseMode() const
+	{
+		return m_bEraseMode;
+	}
+
 	void Terrain::CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight)
 	{
 		for (int j = iHeight; j >= 0; --j)
@@ -213,89 +236,172 @@ namespace Engine
 	}
 	void Terrain::CollisionStay(Collider* pSrc, Collider* pDest, float fDeltaTime)
 	{
-		if (m_bEditting && CInput::GetInst()->IsMouseButtonPress(CInput::MOUSE_TYPE::LEFT)) {
-			Vector3 vCross = pSrc->GetCross();
-
-			std::shared_ptr<Transform> pTransform = GetTransform();
-
-			vCross -= pTransform->GetPosition();
-
-			vCross = pTransform->GetRotationMatrix().Transpose().TransformNormal(vCross);
-
-			const Vector3 vScale = pTransform->GetScale();
-
-			vCross.x /= vScale.x;
-			vCross.y /= vScale.y;
-			vCross.z /= vScale.z;
-
-
-			int iMinX = static_cast<int>(vCross.x - m_fEditRange);
-
-			iMinX = iMinX < 0 ? 0 : iMinX;
-
-			int iMaxX = static_cast<int>(vCross.x + m_fEditRange);
-
-			iMaxX = iMaxX >= m_tTerrainBuffer.m_iWidth ? m_tTerrainBuffer.m_iWidth : iMaxX;
-
-			int iMinY = m_tTerrainBuffer.m_iHeight - static_cast<int>(vCross.z + m_fEditRange) - 1;
-
-			iMinY = iMinY < 0 ? 0 : iMinY;
-
-			int iMaxY = m_tTerrainBuffer.m_iHeight - static_cast<int>(vCross.z - m_fEditRange) - 1;
-
-			iMaxY = iMaxY >= m_tTerrainBuffer.m_iWidth ? m_tTerrainBuffer.m_iWidth : iMaxY;
-
-			DirectX::ScratchImage* pImage = m_pHeightMap->GetImage();
-
-			if (!pImage) {
-				return;
-			}
-
-			uint8_t* pPixel = pImage->GetPixels();
-
-			if (!pPixel) {
-				return;
-			}
-
-			for (int i = iMinX; i <= iMaxX; ++i)
+		if (m_bEditting)
+		{
+			if (CInput::GetInst()->IsMouseButtonUp(CInput::MOUSE_TYPE::LEFT)) 
 			{
-				for (int j = iMinY; j <= iMaxY; ++j)
-				{
-					float fDist = sqrtf((vCross.x - i) * (vCross.x - i) + (m_tTerrainBuffer.m_iHeight - static_cast<int>(vCross.z) - 1 - j) * (m_tTerrainBuffer.m_iHeight - static_cast<int>(vCross.z) - 1 - j));
+				Vector3 vCross = pSrc->GetCross();
 
-					if (fDist > m_fEditRange) {
-						continue;
-					}
+				std::shared_ptr<Transform> pTransform = GetTransform();
 
-					int iIndex = i + j * (m_tTerrainBuffer.m_iWidth + 1);
+				vCross -= pTransform->GetPosition();
 
-					int iHeight = m_vecHeight[iIndex];
+				vCross = pTransform->GetRotationMatrix().Transpose().TransformNormal(vCross);
 
-					m_vecHeight[iIndex] = iHeight + 1;
+				const Vector3 vScale = pTransform->GetScale();
 
-					if (m_vecHeight[iIndex] > UINT8_MAX) {
-						m_vecHeight[iIndex] = UINT8_MAX;
-					}
+				vCross.x /= vScale.x;
+				vCross.y /= vScale.y;
+				vCross.z /= vScale.z;
 
-					pPixel[iIndex * 4] = m_vecHeight[iIndex];
-					pPixel[iIndex * 4 + 1] = m_vecHeight[iIndex];
-					pPixel[iIndex * 4 + 2] = m_vecHeight[iIndex];
-				}
+				EditHeightMapWithTexture(vCross);
 			}
+			else
+			{
 
-			m_pHeightMap->CreateShaderResourceView(*pImage);
-
-			CreateMeshCollider();
+			}
 		}
 
-		else if (CInput::GetInst()->IsMouseButtonDown(CInput::MOUSE_TYPE::LEFT)) {
+		else if (CInput::GetInst()->IsMouseButtonDown(CInput::MOUSE_TYPE::LEFT)) 
+		{
 			m_bEditting = true;
+		}
+
+		std::shared_ptr<Transform> pDecalTransform = m_pDecal->GetTransform();
+
+		const Vector3& vCross = pSrc->GetCross();
+
+		pDecalTransform->SetPosition(ceilf(vCross.x), vCross.y, ceilf(vCross.z));
+
+		if (m_pBrushTexture)
+		{
+			m_pDecal->Enable();
 		}
 	}
 	void Terrain::CollisionEnd(Collider* pSrc, Collider* pDest, float fDeltaTime)
 	{
-		if (m_bEditting) {
+		if (m_bEditting) 
+		{
 			m_bEditting = false;
+		}
+
+		m_pDecal->Disable();
+	}
+
+	void Terrain::EditHeightMapWithTexture(const Vector3& vCross)
+	{
+		if (!m_pBrushTexture)
+		{
+			return;
+		}
+
+		int iBrushWidth = m_pBrushTexture->GetImageWidth();
+
+		int iBrushHeight = m_pBrushTexture->GetImageHeight();
+
+		int iMinX = static_cast<int>(vCross.x - iBrushWidth / 2);
+
+		iMinX = iMinX < 0 ? 0 : iMinX;
+
+		int iMaxX = iMinX + iBrushWidth - 1;
+
+		iMaxX = iMaxX >= m_tTerrainBuffer.m_iWidth ? m_tTerrainBuffer.m_iWidth : iMaxX;
+
+		int iMinY = m_tTerrainBuffer.m_iHeight - static_cast<int>(vCross.z + iBrushHeight / 2) - 1;
+
+		iMinY = iMinY < 0 ? 0 : iMinY;
+
+		int iMaxY = iMinY + iBrushHeight - 1;
+
+		iMaxY = iMaxY >= m_tTerrainBuffer.m_iWidth ? m_tTerrainBuffer.m_iWidth : iMaxY;
+
+		DirectX::ScratchImage* pImage = m_pHeightMap->GetImage();
+
+		if (!pImage)
+		{
+			return;
+		}
+
+		uint8_t* pPixel = pImage->GetPixels();
+
+		if (!pPixel)
+		{
+			return;
+		}
+
+		DirectX::ScratchImage* pBrushImage = m_pBrushTexture->GetImage();
+
+		if (!pBrushImage)
+		{
+			return;
+		}
+
+		uint8_t* pBrushPixel = pBrushImage->GetPixels();
+
+		if (!pBrushPixel)
+		{
+			return;
+		}
+
+		for (int i = iMinX; i <= iMaxX; ++i)
+		{
+			for (int j = iMinY; j <= iMaxY; ++j)
+			{
+				int iIndex = i + j * (m_tTerrainBuffer.m_iWidth + 1);
+
+				int iHeight = m_vecHeight[iIndex];
+
+				int iBrushIndex = i - static_cast<int>(vCross.x - iBrushWidth / 2) + (iBrushHeight - (j - (m_tTerrainBuffer.m_iHeight - static_cast<int>(vCross.z + iBrushHeight / 2) - 1)) - 1) * iBrushWidth;
+
+				int iBrushColor = pBrushPixel[iBrushIndex * 4];
+
+				int iBrushAlpha = pBrushPixel[iBrushIndex * 4 + 3];
+
+				int iNewHeight = iHeight + static_cast<int>(iBrushColor * (iBrushAlpha / 255.f)) * (1 - 2 * m_bEraseMode);
+
+				m_vecHeight[iIndex] = iNewHeight;
+
+				if (m_vecHeight[iIndex] > UINT8_MAX)
+				{
+					m_vecHeight[iIndex] = UINT8_MAX;
+				}
+				else if (m_vecHeight[iIndex] < 0)
+				{
+					m_vecHeight[iIndex] = 0;
+				}
+
+				pPixel[iIndex * 4] = m_vecHeight[iIndex];
+				pPixel[iIndex * 4 + 1] = m_vecHeight[iIndex];
+				pPixel[iIndex * 4 + 2] = m_vecHeight[iIndex];
+			}
+		}
+
+		m_pHeightMap->CreateShaderResourceView(*pImage);
+
+		CreateMeshCollider();
+	}
+	void Terrain::SetBrushTexture(std::shared_ptr<Texture> pBrushTexture)
+	{
+		m_pBrushTexture = pBrushTexture;
+
+		if (m_pBrushTexture)
+		{
+			std::shared_ptr<Bindable> pTexture = m_pDecal->FindChild(BINDABLE_TYPE::TEXTURE);
+
+			if (pTexture)
+			{
+				m_pDecal->DeleteChild(pTexture);
+			}
+
+			m_pDecal->AddChild(m_pBrushTexture);
+
+			std::shared_ptr<Transform> pDecalTransform = m_pDecal->GetTransform();
+
+			int iWidth = m_pBrushTexture->GetImageWidth();
+
+			int iHeight = m_pBrushTexture->GetImageHeight();
+
+			pDecalTransform->SetScale(static_cast<float>(iWidth), (iWidth + iHeight) / 2.f, static_cast<float>(iHeight));
 		}
 	}
 }

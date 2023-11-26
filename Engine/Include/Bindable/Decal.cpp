@@ -9,6 +9,7 @@
 
 Engine::Decal::Decal()	:
 	m_pCBuffer(FindAndAddBind<ConstantBuffer<DECALCBUFFER>>("Decal"))
+	, m_bFadeStart(false)
 {
 	SetBindableType(BINDABLE_TYPE::DECAL);
 	SetRenderLayer(RENDER_LAYER::DECAL);
@@ -32,15 +33,23 @@ void Engine::Decal::SetFadeStartTime(float fStart)
 	m_tCBuffer.fFadeStartTime = fStart;
 }
 
+void Engine::Decal::StartFade()
+{
+	m_bFadeStart = true;
+}
+
 void Engine::Decal::Update(float fDeltaTime)
 {
 	__super::Update(fDeltaTime);
 
-	m_tCBuffer.fFadeTime += fDeltaTime;
-
-	if (m_tCBuffer.fMaxFadeTime < m_tCBuffer.fFadeTime)
+	if (m_bFadeStart)
 	{
-		m_tCBuffer.fFadeTime = m_tCBuffer.fMaxFadeTime;
+		m_tCBuffer.fFadeTime += fDeltaTime;
+
+		if (m_tCBuffer.fMaxFadeTime < m_tCBuffer.fFadeTime)
+		{
+			m_tCBuffer.fFadeTime = m_tCBuffer.fMaxFadeTime;
+		}
 	}
 
 	std::shared_ptr<Transform> pTransform = GetTransform();

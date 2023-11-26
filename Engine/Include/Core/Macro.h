@@ -23,6 +23,7 @@
 #include <tchar.h>
 #include "fbxsdk/scene/geometry/fbxlayer.h"
 #include <fbxsdk.h>
+#include <memory>
 
 #pragma comment(lib, "zlib-md.lib")
 #pragma comment(lib, "libxml2-md.lib")

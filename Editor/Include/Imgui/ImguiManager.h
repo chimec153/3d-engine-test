@@ -21,6 +21,8 @@ namespace Engine
 	class Scene;
 	class Particle;
 	class Cloth;
+	class Terrain;
+	class Texture;
 }
 
 class ImguiManager
@@ -81,6 +83,7 @@ public:
 	void Particle_ShowImGuiImage(std::shared_ptr<Engine::Particle> pParticle);
 	void RenderManager_ShowImGuiWindow();
 	void Cloth_ShowImguiWindow(std::shared_ptr<Engine::Cloth> pCloth);
+	void Terrain_ShowImguiWindow(std::shared_ptr<Engine::Terrain> pTerrain);
 
 private:
 	float m_fCellSize;
@@ -108,6 +111,9 @@ private:
 	std::shared_ptr<Engine::NavMesh> m_pNavMesh;
 	bool m_bMode;
 	std::list<std::shared_ptr<class Player>> m_PlayerList;
+
+private:
+	std::vector<std::shared_ptr<Engine::Texture>> m_vecBrushTexture;
 
 public:
 	void CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);

@@ -147,15 +147,17 @@ namespace Engine
 		return std::shared_ptr<Bindable>();
 	}
 
-	void Bindable::DeleteChild(const Bindable* const pBindable)
+	void Bindable::DeleteChild(std::shared_ptr<Bindable> pBindable)
 	{
 		std::list<std::shared_ptr<Bindable>>::iterator iter = m_ChildList.begin();
 		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_ChildList.end();
 
 		for (; iter != iterEnd; ++iter)
 		{
-			if ((*iter).get() == pBindable)
+			if ((*iter) == pBindable)
 			{
+				(*iter)->SetParent(nullptr);
+
 				m_ChildList.erase(iter);
 				return;
 			}

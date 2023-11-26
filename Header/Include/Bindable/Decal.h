@@ -11,10 +11,12 @@ namespace Engine
     private:
         DECALCBUFFER m_tCBuffer;
         std::shared_ptr<ConstantBuffer<DECALCBUFFER>>   m_pCBuffer;
+        bool m_bFadeStart;
 
     public:
         void SetMaxFadeTime(float fMax);
         void SetFadeStartTime(float fStart);
+        void StartFade();
 
     public:
         virtual void Update(float fDeltaTime) override;

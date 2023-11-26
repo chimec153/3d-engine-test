@@ -98,17 +98,15 @@ namespace Engine
 				}
 			}
 
-			if (pPrevSpace->DrawableList.empty() && pPrevSpace->bDelete)
+			if (!pPrevSpace->GetTotalDrawableCount() && pPrevSpace->bDelete)
 			{
 				if (pPrevSpace->pParent)
 				{
 					for (int i = 0; i < 8; ++i)
 					{
-						if (pPrevSpace->pParent->pChild[i] == pPrevSpace)
+						if (pPrevSpace->pParent->pChild[i].get() == pPrevSpace)
 						{
 							pPrevSpace->pParent->pChild[i] = nullptr;
-
-							delete pPrevSpace;
 							break;
 						}
 					}
@@ -152,7 +150,7 @@ namespace Engine
 				CreateChildSpace(_pSpace, iIndex);
 			}
 
-			_pSpace = _pSpace->pChild[iIndex];
+			_pSpace = _pSpace->pChild[iIndex].get();
 		}
 
 		_pSpace->DrawableList.push_back(pDrawable);
@@ -214,7 +212,7 @@ namespace Engine
 			{
 				if (pSpace->pChild[i])
 				{
-					SpaceList.push_back(pSpace->pChild[i]);
+					SpaceList.push_back(pSpace->pChild[i].get());
 				}
 			}
 		}
@@ -288,18 +286,17 @@ namespace Engine
 
 	PSPACE CollisionManager::CreateChildSpace(SPACE* _pSpace, int iIndex)	const
 	{
-		SPACE* pSpace = dbg_new SPACE(_pSpace->vPos -
+		assert(_pSpace->pChild[iIndex].get() == nullptr);
+
+		_pSpace->pChild[iIndex] = std::make_unique<SPACE>(_pSpace->vPos -
 			Vector3((-2 * ((iIndex & 0b100) >> 2) + 1) * _pSpace->fSize / 4.f,
 				(-2 * ((iIndex & 0b10) >> 1) + 1) * _pSpace->fSize / 4.f,
 				(-2 * (iIndex & 0b1) + 1) * _pSpace->fSize / 4.f),
-			_pSpace->fSize / 2.f
-		);
+			_pSpace->fSize / 2.f);
 
-		pSpace->pParent = _pSpace;
+		_pSpace->pChild[iIndex]->pParent = _pSpace;
 
-		_pSpace->pChild[iIndex] = pSpace;
-
-		return pSpace;
+		return _pSpace->pChild[iIndex].get();
 	}
 
 	void CollisionManager::VisibleTest(PSPACE pSpace, const std::vector<Vector4>& vecPlanes, const std::vector<Vector4>* pvecLocalPlanes)
@@ -318,7 +315,7 @@ namespace Engine
 
 			if (pSpace->pChild[i]->PortalList.empty())
 			{
-				VisibleTest(pSpace->pChild[i], vecPlanes);
+				VisibleTest(pSpace->pChild[i].get(), vecPlanes);
 			}
 			else
 			{
@@ -331,9 +328,9 @@ namespace Engine
 					pSpace->pChild[i]->vPos.z + pSpace->pChild[i]->fSize / 2.f >= vCamPos.z &&
 					pSpace->pChild[i]->vPos.z - pSpace->pChild[i]->fSize / 2.f <= vCamPos.z)
 				{
-					VisibleTest(pSpace->pChild[i], vecPlanes);
+					VisibleTest(pSpace->pChild[i].get(), vecPlanes);
 
-					PortalVisibleTest(pSpace->pChild[i], vecPlanes);
+					PortalVisibleTest(pSpace->pChild[i].get(), vecPlanes);
 				}
 			}
 		}

@@ -40,6 +40,7 @@
 #include "Render/MRT.h"
 #include "Bindable/Particle.h"
 #include "Bindable/Cloth.h"
+#include "Bindable/Terrain.h"
 
 ImguiManager* ImguiManager::m_pInst = nullptr;
 
@@ -130,6 +131,10 @@ bool ImguiManager::Init(HWND hwnd)
 		assert(false);
 		return false;
 	}
+
+	m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush1", TEXT("brush\\circle.png"), TEXTURE_PATH));
+	m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush2", TEXT("brush\\star.png"), TEXTURE_PATH));
+	m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush3", TEXT("brush\\brush.png"), TEXTURE_PATH));
 
 	return true;
 }
@@ -799,6 +804,9 @@ void ImguiManager::Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawa
 	case Engine::BINDABLE_TYPE::MESH:
 		Mesh_ImGuiWindow(std::static_pointer_cast<Engine::Mesh>(pDrawable));
 		break;
+	case Engine::BINDABLE_TYPE::TERRAIN:
+		Terrain_ShowImguiWindow(std::static_pointer_cast<Engine::Terrain>(pDrawable));
+		break;
 	case Engine::BINDABLE_TYPE::MATERIAL:
 		Material_ImGuiWindow(std::static_pointer_cast<Engine::Material>(pDrawable));
 		break;
@@ -1343,6 +1351,36 @@ void ImguiManager::Cloth_ShowImguiWindow(std::shared_ptr<Engine::Cloth> pCloth)
 	if (ImGui::SliderFloat("Wind Heavyness", &fWind, 0.f, 50.f))
 	{
 		pCloth->SetWindHeavyness(fWind);
+	}
+}
+
+void ImguiManager::Terrain_ShowImguiWindow(std::shared_ptr<Engine::Terrain> pTerrain)
+{
+	ImGui::Text("=======Terrain======");
+
+	for (int i = 0; i < m_vecBrushTexture.size(); ++i)
+	{
+		if (ImGui::ImageButton(*m_vecBrushTexture[i]->GetSRV(), ImVec2(32.f, 32.f)))
+		{
+			pTerrain->SetBrushTexture(m_vecBrushTexture[i]);
+		}
+
+		ImGui::SameLine();
+	}
+
+	bool bEraseMode = pTerrain->IsEraseMode();
+
+	if (ImGui::Checkbox("EraseMode", &bEraseMode))
+	{
+		if (bEraseMode)
+		{
+			pTerrain->SetEraseMode();
+		}
+		else
+		{
+			pTerrain->SetAddMode();
+		}
+		
 	}
 }
 

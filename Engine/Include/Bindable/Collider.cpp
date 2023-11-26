@@ -78,6 +78,8 @@ namespace Engine
 
 	void Collider::SetCallBack(COLLISION_TYPE eType, void(*pFunc)(Collider*, Collider*, float))
 	{
+		assert(static_cast<int>(eType) >= 0 && eType < COLLISION_TYPE::END);
+
 		m_CallBack[static_cast<int>(eType)] = std::bind(pFunc, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 	}
 

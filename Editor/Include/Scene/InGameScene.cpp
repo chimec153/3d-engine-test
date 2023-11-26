@@ -121,6 +121,9 @@ bool InGameScene::Init()
 
 	pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, ImguiManager::GetInst(), &ImguiManager::CollisionStay);
 
+	//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pTerrain.get(), &Engine::Terrain::CollisionStay);
+	//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::LAST, pTerrain.get(), &Engine::Terrain::CollisionEnd);
+
 	std::vector<float> vecPoints;
 
 	pTerrain->GetPoints(vecPoints);

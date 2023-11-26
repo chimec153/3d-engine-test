@@ -27,6 +27,8 @@ namespace Engine
         template <typename T>
         void SetCallBack(COLLISION_TYPE eType, T* pObject, void(T::* pFunc)(Collider*, Collider*, float))
         {
+            assert(static_cast<int>(eType) >= 0 && eType < COLLISION_TYPE::END);
+
             m_CallBack[static_cast<int>(eType)] = std::bind(pFunc, pObject, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         }
         void SetCallBack(COLLISION_TYPE eType, void(*pFunc)(Collider*, Collider*, float));
