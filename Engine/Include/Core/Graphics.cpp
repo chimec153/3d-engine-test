@@ -114,7 +114,7 @@ namespace Engine
 			return false;
 		}
 
-		pDeviceContext->OMSetRenderTargets(1, pRenderTargetView.GetAdressof(), *pDepthStencilView);
+		pDeviceContext->OMSetRenderTargets(1, pRenderTargetView.GetAddressof(), *pDepthStencilView);
 
 		D3D11_VIEWPORT tViewPort = { 0.f, 0.f, (float)iWidth,(float)iHeight,0.f, 1.f };
 
@@ -140,7 +140,7 @@ namespace Engine
 
 	void Graphics::SetRenderTarget()
 	{
-		pDeviceContext->OMSetRenderTargets(1, pRenderTargetView.GetAdressof(), *pDepthStencilView);
+		pDeviceContext->OMSetRenderTargets(1, pRenderTargetView.GetAddressof(), *pDepthStencilView);
 	}
 
 	void Graphics::Update(float fDeltaTime)

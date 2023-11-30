@@ -129,14 +129,15 @@ namespace Engine
 	}
 	void StructuredBuffer::SetSRV(int iSlot)
 	{
-		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(iSlot, 1, m_pSRV.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->GSSetShaderResources(iSlot, 1, m_pSRV.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(iSlot, 1, m_pSRV.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(iSlot, 1, m_pSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->GSSetShaderResources(iSlot, 1, m_pSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(iSlot, 1, m_pSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(iSlot, 1, m_pSRV.GetAddressof());
 	}
 	void StructuredBuffer::SetUAV(int iSlot)
 	{
 		UINT iOffset = -1;
-		Graphics::GetInst()->GetDeviceContext()->CSSetUnorderedAccessViews(iSlot, 1, m_pUAV.GetAdressof(), &iOffset);
+		Graphics::GetInst()->GetDeviceContext()->CSSetUnorderedAccessViews(iSlot, 1, m_pUAV.GetAddressof(), &iOffset);
 	}
 	void StructuredBuffer::ResetSRV(int iSlot)
 	{
@@ -144,6 +145,7 @@ namespace Engine
 
 		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(iSlot, 1, &pSRV);
 		Graphics::GetInst()->GetDeviceContext()->GSSetShaderResources(iSlot, 1, &pSRV);
+		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(iSlot, 1, &pSRV);
 		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(iSlot, 1, &pSRV);
 	}
 	void StructuredBuffer::ResetUAV(int iSlot)

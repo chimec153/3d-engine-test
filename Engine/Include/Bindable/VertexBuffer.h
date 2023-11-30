@@ -67,7 +67,7 @@ namespace Engine
 		UINT iStride = m_iSize;
 		UINT iOffset = 0;
 
-		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 1, pBuffer.GetAdressof(), &iStride, &iOffset);
+		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 1, pBuffer.GetAddressof(), &iStride, &iOffset);
 	}
 
 	inline std::shared_ptr<Bindable> VertexBuffer::Clone()

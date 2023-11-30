@@ -689,6 +689,9 @@
     <FxCompile Include="..\Bin\Resource\Shader\Decal.fx">
       <Filter>03. Shader\01. Shader</Filter>
     </FxCompile>
+    <FxCompile Include="..\Bin\Resource\Shader\HDR.fx">
+      <Filter>03. Shader\01. Shader</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Bindable\DirectXTex.inl">

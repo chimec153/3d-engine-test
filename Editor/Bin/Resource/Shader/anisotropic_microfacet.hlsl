@@ -543,7 +543,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     pos.y = -pos.y;
     
-    viewPos.z = g_vProjectValues.w / (g_vProjectValues.z - depth);
+    viewPos.z = ConvertZToLinearDepth(depth);
     viewPos.xy = pos * viewPos.z * g_vProjectValues.xy;
     
     float4 shadowpos = mul(float4(viewPos, 1.f), g_matCameraViewToLightClip);

@@ -441,4 +441,22 @@ namespace Engine
 		int iWidth;
 		float dist;
 	}FLUIDCBUFFER, *PFLUIDCBUFFER;
+
+	typedef struct ENGINE_DLL alignas(16) _tagDownScaleCBuffer
+	{
+		unsigned int iResX;
+		unsigned int iResY;
+		unsigned int iDomain;
+		unsigned int iGroupSize;
+		float fAdaptation;
+		float fBloomThreshold;
+	}DOWNSCALECBUFFER, *PDOWNSCALECBUFFER;
+
+	typedef struct ENGINE_DLL alignas(16) _tagHDRCBuffer
+	{
+		float fMiddleGray;
+		float fLumWhiteSqr;
+		float fBloomScale;
+		Vector2 vDOFFarValues;
+	}HDRCBUFFER, *PHDRCBUFFER;
 }

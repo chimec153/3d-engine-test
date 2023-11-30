@@ -78,7 +78,7 @@ namespace Engine
 	template<>
 	inline BindableManager<class RasterizerState>::BindableManager()
 	{
-		const std::shared_ptr<RasterizerState>& pRasterizer = CreateBindable("Basic", true, D3D11_CULL_BACK, D3D11_FILL_SOLID, 1.2f, 2.5f);
+		const std::shared_ptr<RasterizerState>& pRasterizer = CreateBindable("Basic", true, D3D11_CULL_BACK, D3D11_FILL_SOLID, 0.1f, 1.5f);
 		//const std::shared_ptr<RasterizerState>& pRasterizer = CreateBindable("Basic", true, D3D11_CULL_BACK, D3D11_FILL_SOLID);
 
 		if (pRasterizer)

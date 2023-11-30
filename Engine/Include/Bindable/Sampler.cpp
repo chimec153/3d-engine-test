@@ -32,9 +32,9 @@ namespace Engine
 
 	void Sampler::Bind()
 	{
-		Graphics::GetInst()->GetDeviceContext()->VSSetSamplers(m_iSlot, 1, m_pState.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->PSSetSamplers(m_iSlot, 1, m_pState.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->CSSetSamplers(m_iSlot, 1, m_pState.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->VSSetSamplers(m_iSlot, 1, m_pState.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->PSSetSamplers(m_iSlot, 1, m_pState.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->CSSetSamplers(m_iSlot, 1, m_pState.GetAddressof());
 	}
 	std::shared_ptr<Bindable> Sampler::Clone()
 	{

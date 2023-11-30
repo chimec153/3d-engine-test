@@ -142,7 +142,7 @@ namespace Engine
 			UINT iStride = m_vecMeshContainer[i].m_iSize;
 			UINT iOffset = 0;
 
-			Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 1, m_vecMeshContainer[i].m_pVertexBuffer.GetAdressof(), &iStride, &iOffset);
+			Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 1, m_vecMeshContainer[i].m_pVertexBuffer.GetAddressof(), &iStride, &iOffset);
 
 			for (int j = 0; j < m_vecMeshContainer[i].m_vecIndexBuffer.size(); ++j)
 			{

@@ -376,7 +376,9 @@ namespace Engine
 			}
 		}
 
-		m_pHeightMap->CreateShaderResourceView(*pImage);
+		m_pHeightMap->CreateTexture(*pImage);
+
+		m_pHeightMap->CreateShaderResourceView(pImage->GetMetadata().format, pImage->GetMetadata().mipLevels, pImage->GetMetadata().arraySize);
 
 		CreateMeshCollider();
 	}

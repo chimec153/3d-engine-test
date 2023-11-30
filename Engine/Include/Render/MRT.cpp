@@ -139,7 +139,7 @@ namespace Engine
 	{
 		std::vector<ID3D11RenderTargetView*> vecRTV(8);
 
-		Graphics::GetInst()->GetDeviceContext()->OMGetRenderTargets((UINT)vecRTV.size(), &vecRTV[0], m_pPrevDSV.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->OMGetRenderTargets((UINT)vecRTV.size(), &vecRTV[0], m_pPrevDSV.GetAddressof());
 
 		for (size_t i = 0; i < vecRTV.size(); ++i)
 		{
@@ -167,7 +167,7 @@ namespace Engine
 	{
 		std::vector<ID3D11RenderTargetView*> vecRTV(8);
 
-		Graphics::GetInst()->GetDeviceContext()->OMGetRenderTargets((UINT)vecRTV.size(), &vecRTV[0], m_pPrevDSV.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->OMGetRenderTargets((UINT)vecRTV.size(), &vecRTV[0], m_pPrevDSV.GetAddressof());
 
 		for (size_t i = 0; i < vecRTV.size(); ++i)
 		{
@@ -258,12 +258,12 @@ namespace Engine
 
 	void MRT::SetDepthSRV(UINT iSlot)
 	{
-		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->HSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->DSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->GSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->HSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->DSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->GSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAddressof());
 	}
 
 	void MRT::ResetSRV(UINT iSlot)

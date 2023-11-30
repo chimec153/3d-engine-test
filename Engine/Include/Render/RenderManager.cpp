@@ -26,6 +26,8 @@
 #include "../Animation/Skeleton.h"
 #include "../Bindable/ConstantBuffer.h"
 #include "../Bindable/SkyBox.h"
+#include "../Bindable/ComputeShader.h"
+#include "../Shader/StructuredBuffer.h"
 
 namespace Engine
 {
@@ -44,9 +46,23 @@ namespace Engine
 		m_pSkyBox = pSkyBox;
 	}
 
+	void RenderManager::SetHDRMidGray(float fMidGray)
+	{
+		m_tHDRCBuffer.fMiddleGray = fMidGray;
+
+		m_pHDRCBuffer->UpdateBuffer(m_tHDRCBuffer);
+	}
+
 	void RenderManager::AddLight(const std::shared_ptr<PointLight>& pLight)
 	{
 		m_LightList[static_cast<int>(pLight->GetLightType())].push_back(pLight);
+	}
+
+	void RenderManager::SetHDRWhiteSqr(float fWhiteSqr)
+	{
+		m_tHDRCBuffer.fLumWhiteSqr = fWhiteSqr;
+
+		m_pHDRCBuffer->UpdateBuffer(m_tHDRCBuffer);
 	}
 
 	void RenderManager::AddDrawable(const std::shared_ptr<Drawable>& pDrawable)
@@ -183,9 +199,19 @@ namespace Engine
 		}
 	}
 
+	float RenderManager::GetHDRMidGray() const
+	{
+		return m_tHDRCBuffer.fMiddleGray;
+	}
+
 	std::shared_ptr<class MRT> RenderManager::GetMRT() const
 	{
 		return pMRT;
+	}
+
+	float RenderManager::GetHDRWhiteSqr() const
+	{
+		return m_tHDRCBuffer.fLumWhiteSqr;
 	}
 
 	std::shared_ptr<MRT> RenderManager::GetDepthBuffer(LIGHT_TYPE eType) const
@@ -365,6 +391,55 @@ namespace Engine
 			return false;
 		}
 
+		m_pLightBuffer = std::make_shared<StructuredBuffer>(Window::GetInst()->GetWidth() * Window::GetInst()->GetHeight() / (16 * 1024), 4);
+
+		m_pAverageLightBuffer = std::make_shared<StructuredBuffer>(1, 4);
+
+		m_pPrevAverageLightBuffer = std::make_shared<StructuredBuffer>(1, 4);
+
+		m_pDownScaleCBuffer = std::make_shared<ConstantBuffer<DOWNSCALECBUFFER>>();
+
+		m_pHDRCBuffer = std::make_shared<ConstantBuffer<HDRCBUFFER>>();
+
+		m_tDownScaleCBuffer.iResX = Window::GetInst()->GetWidth() / 4;
+		m_tDownScaleCBuffer.iResY = Window::GetInst()->GetHeight() / 4;
+
+		m_tDownScaleCBuffer.iDomain = (Window::GetInst()->GetWidth() * Window::GetInst()->GetHeight()) / 16;
+
+		m_tDownScaleCBuffer.iGroupSize = (Window::GetInst()->GetWidth() * Window::GetInst()->GetHeight()) / (16 * 1024);
+
+		m_tDownScaleCBuffer.fBloomThreshold = 0.5f;
+
+		m_pDownScaleCBuffer->UpdateBuffer(m_tDownScaleCBuffer);
+
+		m_tHDRCBuffer.fMiddleGray = 0.25f;
+		m_tHDRCBuffer.fLumWhiteSqr = 1.f;
+		m_tHDRCBuffer.fBloomScale = 0.12f;
+		m_tHDRCBuffer.vDOFFarValues.x = 500.f;
+		m_tHDRCBuffer.vDOFFarValues.y = 0.5f;
+
+		m_pHDRCBuffer->UpdateBuffer(m_tHDRCBuffer);
+
+		m_pDownScaleFirstCS = std::make_shared<ComputeShader>(TEXT("HDR.fx"), "DownScaleFirstPass");
+
+		m_pDownScaleSecondCS = std::make_shared<ComputeShader>(TEXT("HDR.fx"), "DownScaleSecondPass");
+
+		m_pBrightCS = std::make_shared<ComputeShader>(TEXT("HDR.fx"), "BrightPass");
+
+		m_pBloomVerticalFilterCS = std::make_shared<ComputeShader>(TEXT("HDR.fx"), "VerticalFilter");
+
+		m_pBloomHorizontalFilterCS = std::make_shared<ComputeShader>(TEXT("HDR.fx"), "HorizonFilter");
+
+		m_pHDRTexture = std::make_shared<MRT>(std::vector<DXGI_FORMAT>({DXGI_FORMAT_R16G16B16A16_FLOAT}), 7);
+
+		m_pHDRPS = std::make_shared<PixelShader>(TEXT("HDR.fx"), "FinalPassPS");
+
+		m_pHDRDownScaleTexture = std::make_shared<Texture>(Window::GetInst()->GetWidth() / 4, Window::GetInst()->GetHeight() / 4, 2, DXGI_FORMAT_R32G32B32A32_FLOAT);
+
+		m_pBloomTexture = std::make_shared<Texture>(Window::GetInst()->GetWidth() / 4, Window::GetInst()->GetHeight() / 4, 0, DXGI_FORMAT_R32G32B32A32_FLOAT);
+
+		m_pBloomFinalTexture = std::make_shared<Texture>(Window::GetInst()->GetWidth() / 4, Window::GetInst()->GetHeight() / 4, 3, DXGI_FORMAT_R32G32B32A32_FLOAT);
+
 		return true;
 	}
 
@@ -422,6 +497,10 @@ namespace Engine
 				iterS->second->Update();
 			}
 		}
+
+		m_tDownScaleCBuffer.fAdaptation = fDeltaTime;// std::max(fDeltaTime / 0.016f, 1.f);
+
+		m_pDownScaleCBuffer->UpdateBuffer(m_tDownScaleCBuffer);
 	}
 
 	void RenderManager::PreRender()
@@ -449,6 +528,13 @@ namespace Engine
 		}
 	}
 
+	void RenderManager::SetBloomScale(float fScale)
+	{
+		m_tHDRCBuffer.fBloomScale = fScale;
+
+		m_pHDRCBuffer->UpdateBuffer(m_tHDRCBuffer);
+	}
+
 	void RenderManager::Render()
 	{
 		pMRT->Clear();
@@ -463,15 +549,28 @@ namespace Engine
 
 		m_pNoDepthWrite->Bind();
 
+		m_pHDRTexture->SetTargets();
+
 		RenderLight();
 
 		RenderSkyBox();
 
 		RenderAlpha();
 
+		m_pHDRTexture->ResetTargets();
+
+		PostProcessing();
+
 		m_pNoDepthWrite->PostBind();
 
 		Clear();
+	}
+
+	void RenderManager::SetBloomThreshold(float fThreshold)
+	{
+		m_tDownScaleCBuffer.fBloomThreshold = fThreshold;
+
+		m_pDownScaleCBuffer->UpdateBuffer(m_tDownScaleCBuffer);
 	}
 
 	void RenderManager::RenderOpaque()
@@ -491,6 +590,13 @@ namespace Engine
 		pMRT->ResetTargets();
 	}
 
+	void RenderManager::SetFOVValueX(float fX)
+	{
+		m_tHDRCBuffer.vDOFFarValues.x = fX;
+
+		m_pHDRCBuffer->UpdateBuffer(m_tHDRCBuffer);
+	}
+
 	void RenderManager::RenderOpaqueInst()
 	{
 		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[0].begin();
@@ -503,6 +609,18 @@ namespace Engine
 				iter->second->Render();
 			}
 		}
+	}
+
+	float RenderManager::GetBloomScale() const
+	{
+		return m_tHDRCBuffer.fBloomScale;
+	}
+
+	void RenderManager::SetFOVValueY(float fY)
+	{
+		m_tHDRCBuffer.vDOFFarValues.y = fY;
+
+		m_pHDRCBuffer->UpdateBuffer(m_tHDRCBuffer);
 	}
 
 	void RenderManager::RenderAlpha()
@@ -609,6 +727,11 @@ namespace Engine
 
 	}
 
+	float RenderManager::GetBloomThreshold() const
+	{
+		return m_tDownScaleCBuffer.fBloomThreshold;
+	}
+
 	void RenderManager::RenderShadow()
 	{
 		const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();
@@ -661,6 +784,27 @@ namespace Engine
 		pDepthBuffer[2]->ResetTargets();
 	}
 
+	std::shared_ptr<class Texture> RenderManager::GetHDRDownScaleTexture() const
+	{
+		return m_pHDRDownScaleTexture;
+	}
+	float RenderManager::GetFOVValueX() const
+	{
+		return m_tHDRCBuffer.vDOFFarValues.x;
+	}
+	float RenderManager::GetFOVValueY()	const
+	{
+		return m_tHDRCBuffer.vDOFFarValues.y;
+	}
+	std::shared_ptr<class Texture> RenderManager::GetBloomTexture()	const
+	{
+		return m_pBloomTexture;
+	}
+	std::shared_ptr<class Texture> RenderManager::GetBloomFinalTexture()	const
+	{
+		return m_pBloomFinalTexture;
+	}
+
 	void RenderManager::RenderDecal()
 	{
 		pMRT->SetDepthSRV(10);
@@ -710,6 +854,21 @@ namespace Engine
 		pMRT->ResetSRV(10);
 	}
 
+	void RenderManager::PostProcessing()
+	{
+		m_pDownScaleCBuffer->Bind();
+
+		HDRDownScaleFirst();
+
+		HDRDownScaleSecond();
+
+		Bloom();
+
+		RenderHDR();
+
+		m_pPrevAverageLightBuffer.swap(m_pAverageLightBuffer);
+	}
+
 	void RenderManager::Clear()
 	{
 		for (int i = 0; i < static_cast<int>(RENDER_LAYER::END); ++i)
@@ -739,5 +898,129 @@ namespace Engine
 		{
 			iterS->second->Clear();
 		}
+
+		m_pHDRTexture->Clear();
+	}
+
+	void RenderManager::HDRDownScaleFirst()
+	{
+		m_pHDRTexture->SetSRV();
+
+		m_pDownScaleFirstCS->Bind();
+
+		m_pLightBuffer->SetUAV(5);
+
+		m_pHDRDownScaleTexture->SetUAV(6);
+
+		int iPixelCount = Window::GetInst()->GetWidth() * Window::GetInst()->GetHeight();
+
+		m_pDownScaleFirstCS->Dispatch(iPixelCount / 1024 + static_cast<bool>(iPixelCount % 1024));
+
+		m_pHDRDownScaleTexture->ResetUAV(6);
+
+		m_pLightBuffer->ResetUAV(5);
+
+		m_pHDRTexture->ResetSRV();
+	}
+
+	void RenderManager::HDRDownScaleSecond()
+	{
+		m_pDownScaleSecondCS->Bind();
+
+		m_pLightBuffer->SetSRV(41);
+
+		m_pAverageLightBuffer->SetUAV(5);
+
+		m_pPrevAverageLightBuffer->SetSRV(2);
+
+		m_pDownScaleSecondCS->Dispatch();
+
+		m_pPrevAverageLightBuffer->ResetSRV(2);
+
+		m_pAverageLightBuffer->ResetUAV(5);
+
+		m_pLightBuffer->ResetSRV(41);
+	}
+
+	void RenderManager::RenderHDR()
+	{
+		m_pHDRCBuffer->Bind();
+
+		m_pHDRTexture->SetSRV(0, 0);
+
+		m_pBloomFinalTexture->Bind();
+
+		m_pHDRDownScaleTexture->Bind();
+
+		pMultiVertexShader->Bind();
+
+		pMRT->SetDepthSRV(10);
+
+		m_pHDRPS->Bind();
+
+		m_pAverageLightBuffer->SetSRV(1);
+
+		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+
+		Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+
+		Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
+
+		m_pAverageLightBuffer->ResetSRV(1);
+
+		pMRT->ResetSRV(10);
+
+		m_pHDRDownScaleTexture->ResetSRV();
+
+		m_pHDRTexture->ResetSRV(0);
+
+		m_pBloomFinalTexture->ResetSRV();
+	}
+
+	void RenderManager::Bloom()
+	{
+		Bright();
+
+		BloomFilter();
+	}
+
+	void RenderManager::Bright()
+	{
+		m_pBloomTexture->SetUAV(0);
+
+		m_pHDRDownScaleTexture->Bind();
+
+		m_pAverageLightBuffer->SetSRV(1);
+
+		m_pBrightCS->Bind();
+
+		m_pBrightCS->Dispatch(m_tDownScaleCBuffer.iGroupSize);
+
+		m_pAverageLightBuffer->ResetSRV(1);
+
+		m_pHDRDownScaleTexture->ResetSRV();
+
+		m_pBloomTexture->ResetUAV(0);
+	}
+
+	void RenderManager::BloomFilter()
+	{
+		m_pBloomTexture->Bind();
+
+		m_pBloomFinalTexture->SetUAV(0);
+
+		m_pBloomVerticalFilterCS->Bind();
+
+		m_pBloomVerticalFilterCS->Dispatch(m_tDownScaleCBuffer.iResX, ceil(m_tDownScaleCBuffer.iResY / (128.f - 12.f)));
+
+		m_pBloomHorizontalFilterCS->Bind();
+
+		m_pBloomHorizontalFilterCS->Dispatch(ceil(m_tDownScaleCBuffer.iResX / (128.f - 12.f)), m_tDownScaleCBuffer.iResY);
+
+		m_pBloomFinalTexture->ResetUAV(0);
+
+		m_pBloomTexture->ResetSRV();
 	}
 }

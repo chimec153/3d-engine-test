@@ -141,6 +141,15 @@ cbuffer color : register(b0)
     float4 g_vColor[6];
 };
 
+cbuffer downscale : register(b0)
+{
+    uint2 g_vDownScaleResolution;
+    uint g_iDownScaleDomain;
+    uint g_iDownScaleGroupSize;
+    float g_fDownScaleAdaptation;
+    float g_fBloomThreshold;
+}
+
 cbuffer light : register(b1)
 {
     float3 g_vLightPos;
@@ -301,6 +310,8 @@ Texture2D g_SpecularTexture : register(t2);
 Texture2D g_EmissiveTexture : register(t3);
 Texture2D g_PaperBurnTexture : register(t4);
 
+Texture2D g_HDRTexture : register(t7);
+
 Texture2D g_DepthTexture0 : register(t10);
 Texture2D g_GBufferTexture0 : register(t11);
 Texture2D g_GBufferTexture1 : register(t12);
@@ -333,16 +344,24 @@ StructuredBuffer<float> g_vecCurrentHeightField : register(t39);
 
 StructuredBuffer<Particle> g_vecParticle : register(t40);
 
+StructuredBuffer<float> g_AverageValues1D : register(t41);
+
 RWStructuredBuffer<matrix> g_vecFinalBuffer : register(u0);
 RWStructuredBuffer<matrix> g_vecPoseBuffer : register(u1);
 RWStructuredBuffer<Particle> g_vecParticleInfo : register(u2);
 RWStructuredBuffer<int> g_vecEmitter : register(u3);
 RWStructuredBuffer<float> g_vecHeightField : register(u4);
+RWStructuredBuffer<float> g_AverageLum : register(u5);
+RWTexture2D<float4> g_HDRDownScaleTexture : register(u6);
 
 sampler g_sPoint : register(s0);
 sampler g_sLinear : register(s1);
 sampler g_sAnisotropic : register(s2);
 SamplerComparisonState g_sShadow : register(s3);
+
+groupshared float SharedPositions[1024];
+
+static const float4 LUM_FACTOR = float4(0.299, 0.587, 0.114, 0);
 
 float4 GetLightAtt(float3 vPointToLight)
 {
@@ -431,4 +450,11 @@ float4 GetPaperBurnColor(float4 color, float2 uv)
     clip(-1);
 
     return 0.0;
+}
+
+float ConvertZToLinearDepth(float depth)
+{
+    float linearDepth = g_vProjectValues.w / (g_vProjectValues.z - depth);
+
+    return linearDepth;
 }

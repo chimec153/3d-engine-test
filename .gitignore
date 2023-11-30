@@ -1305,3 +1305,5 @@ Engine/Include/PixelShader.cso
 .vs/230301/FileContentIndex/2f695681-ac19-4593-83e7-0454a825f28d.vsidx
 .vs/230301/FileContentIndex/0edf7d10-691b-42ac-8c84-b2a53fb7d117.vsidx
 *.cso
+*.vsidx
+*.cso

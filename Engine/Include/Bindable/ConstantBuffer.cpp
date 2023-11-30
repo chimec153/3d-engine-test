@@ -68,12 +68,12 @@ namespace Engine
 	template<typename T>
 	inline void ConstantBuffer<T>::Bind()
 	{
-		Graphics::GetInst()->GetDeviceContext()->VSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->HSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->DSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->GSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->PSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->CSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->VSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->HSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->DSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->GSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->PSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->CSSetConstantBuffers(GetSlot(), 1, pConstantBuffer.GetAddressof());
 	}
 
 	template<typename T>
@@ -134,11 +134,11 @@ namespace Engine
 
 		Graphics::GetInst()->GetDeviceContext()->PSGetConstantBuffers(ConstantBuffer<T>::GetSlot(), 1, &pPrevBuffer);
 
-		Graphics::GetInst()->GetDeviceContext()->PSSetConstantBuffers(ConstantBuffer<T>::GetSlot(), 1, ConstantBuffer<T>::pConstantBuffer.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->PSSetConstantBuffers(ConstantBuffer<T>::GetSlot(), 1, ConstantBuffer<T>::pConstantBuffer.GetAddressof());
 	}
 	template<typename T>
 	void ConstantBuffer<T>::BindEnd()
 	{
-		Graphics::GetInst()->GetDeviceContext()->PSSetConstantBuffers(ConstantBuffer<T>::GetSlot(), 1, ConstantBuffer<T>::GetPrevBuffer().GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->PSSetConstantBuffers(ConstantBuffer<T>::GetSlot(), 1, ConstantBuffer<T>::GetPrevBuffer().GetAddressof());
 	}
 }

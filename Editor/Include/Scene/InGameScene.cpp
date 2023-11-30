@@ -43,13 +43,13 @@ bool InGameScene::Init()
 	Engine::ORTHOINFO tLightOrthoInfo = pDirLight->GetOrthoInfo();
 
 	tLightOrthoInfo.fLeft = -0.f;
-	tLightOrthoInfo.fRight = 0.f;
-	tLightOrthoInfo.fTop = 0.f;
+	tLightOrthoInfo.fRight = 100.f;
+	tLightOrthoInfo.fTop = 100.f;
 	tLightOrthoInfo.fBottom = 0.f;
 
 	pDirLight->SetOrthoInfo(tLightOrthoInfo);
 
-	pDirLight->SetIntensity(3.f);
+	pDirLight->SetIntensity(1.f);
 
 	pDirLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
 
@@ -74,7 +74,7 @@ bool InGameScene::Init()
 		pLightTransform->SetScale({ 5000.f, 5000.f, 5000.f });
 	}
 
-	pLight->SetIntensity(1.2f);
+	pLight->SetIntensity(0.6f);
 	pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
 
 	//ImguiManager::GetInst()->LoadNavMesh(this, TEXT("navmesh\\nav_test.obj"), MESH_PATH);

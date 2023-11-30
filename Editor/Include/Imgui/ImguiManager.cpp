@@ -41,6 +41,7 @@
 #include "Bindable/Particle.h"
 #include "Bindable/Cloth.h"
 #include "Bindable/Terrain.h"
+#include "Render/RenderManager.h"
 
 ImguiManager* ImguiManager::m_pInst = nullptr;
 
@@ -174,6 +175,8 @@ void ImguiManager::Update(float fDeltaTime)
 	}
 
 	ImGui::End();
+
+	RenderManager_ShowImGuiWindow();
 }
 
 void ImguiManager::Render(float fDeltaTime)
@@ -1365,7 +1368,9 @@ void ImguiManager::Terrain_ShowImguiWindow(std::shared_ptr<Engine::Terrain> pTer
 			pTerrain->SetBrushTexture(m_vecBrushTexture[i]);
 		}
 
-		ImGui::SameLine();
+		if (i + 1 != m_vecBrushTexture.size()) {
+			ImGui::SameLine();
+		}
 	}
 
 	bool bEraseMode = pTerrain->IsEraseMode();
@@ -1384,34 +1389,88 @@ void ImguiManager::Terrain_ShowImguiWindow(std::shared_ptr<Engine::Terrain> pTer
 	}
 }
 
-//void ImguiManager::RenderManager_ShowImGuiWindow()
-//{
-//	if (ImGui::Begin("RenderManager"))
-//	{
-//		ImGui::Text("RenderList Size: %d", m_RenderList[0].size());
-//		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
-//		{
-//			ImGui::Text("LightList Type: %d, Size: %d", i, m_LightList[i].size());
-//		}
+void ImguiManager::RenderManager_ShowImGuiWindow()
+{
+	if (ImGui::Begin("RenderManager"))
+	{
+		/*ImGui::Text("RenderList Size: %d", m_RenderList[0].size());
+		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
+		{
+			ImGui::Text("LightList Type: %d, Size: %d", i, m_LightList[i].size());
+		}
 
-//		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[0].begin();
-//		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[0].end();
+		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[0].begin();
+		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[0].end();
 
-//		for (; iter != iterEnd; ++iter)
-//		{
-//			ImGui::Text("Instance: %s, Size: %d", iter->second->GetTag().c_str(), iter->second->GetCount());
-//		}
+		for (; iter != iterEnd; ++iter)
+		{
+			ImGui::Text("Instance: %s, Size: %d", iter->second->GetTag().c_str(), iter->second->GetCount());
+		}
 
-//		if (ImGui::Button("Reload Multi Shader"))
-//		{
-//			pMultiVertexShader->LoadShader();
+		if (ImGui::Button("Reload Multi Shader"))
+		{
+			pMultiVertexShader->LoadShader();
 
-//			pMultiPixelShader->LoadShader();
-//		}
-//	}
+			pMultiPixelShader->LoadShader();
+		}*/
 
-//	ImGui::End();
-//}
+		float fMidGray = Engine::RenderManager::GetInst()->GetHDRMidGray();
+
+		if (ImGui::SliderFloat("Middle Gray", &fMidGray, 0.f, 1.f))
+		{
+			Engine::RenderManager::GetInst()->SetHDRMidGray(fMidGray);
+		}
+
+		float fWhite = sqrtf(Engine::RenderManager::GetInst()->GetHDRWhiteSqr());
+
+		if (ImGui::SliderFloat("White", &fWhite, 0.f, 1.f))
+		{
+			Engine::RenderManager::GetInst()->SetHDRWhiteSqr(fWhite * fWhite);
+		}
+
+		float fBloomScale = Engine::RenderManager::GetInst()->GetBloomScale();
+
+		if (ImGui::SliderFloat("Bloom Scale", &fBloomScale, 0.f, 5.f))
+		{
+			Engine::RenderManager::GetInst()->SetBloomScale(fBloomScale);
+		}
+
+		float fThreshold = Engine::RenderManager::GetInst()->GetBloomThreshold();
+
+		if (ImGui::SliderFloat("Bloom Threshold", &fThreshold, 0.f, 100.f))
+		{
+			Engine::RenderManager::GetInst()->SetBloomThreshold(fThreshold);
+		}
+
+		float fDOFVAlueX = Engine::RenderManager::GetInst()->GetFOVValueX();
+
+		if (ImGui::SliderFloat("FOV Value X", &fDOFVAlueX, 0.f, 1000.f))
+		{
+			Engine::RenderManager::GetInst()->SetFOVValueX(fDOFVAlueX);
+		}
+
+		float fDOFVAlueY = Engine::RenderManager::GetInst()->GetFOVValueY();
+
+		if (ImGui::SliderFloat("FOV Value Y", &fDOFVAlueY, 0.f, 5.f))
+		{
+			Engine::RenderManager::GetInst()->SetFOVValueY(fDOFVAlueY);
+		}
+
+		std::shared_ptr<Engine::Texture> pHDRDownScaleTexture = Engine::RenderManager::GetInst()->GetHDRDownScaleTexture();
+
+		ImGui::Image(*pHDRDownScaleTexture->GetSRV(), ImVec2(512.f, 512.f));
+
+		std::shared_ptr<Engine::Texture> pBloomTexture = Engine::RenderManager::GetInst()->GetBloomTexture();
+
+		ImGui::Image(*pBloomTexture->GetSRV(), ImVec2(512.f, 512.f));
+
+		std::shared_ptr<Engine::Texture> pBloomFinalTexture = Engine::RenderManager::GetInst()->GetBloomFinalTexture();
+
+		ImGui::Image(*pBloomFinalTexture->GetSRV(), ImVec2(512.f, 512.f));
+	}
+
+	ImGui::End();
+}
 
 void ImguiManager::Layer_DrawListImgui(std::shared_ptr<Engine::Layer> pLayer)
 {

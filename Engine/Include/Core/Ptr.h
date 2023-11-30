@@ -136,7 +136,7 @@ namespace Engine
 			return Compare<Child, T>::value;
 		}
 
-		T** GetAdressof()
+		T** GetAddressof()
 		{
 			return &m_pOwner;
 		}

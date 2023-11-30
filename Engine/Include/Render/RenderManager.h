@@ -69,9 +69,41 @@ namespace Engine
 		std::shared_ptr<class DepthStencilState> m_pNoDepthRead;
 		std::shared_ptr<class SkyBox>	m_pSkyBox;
 		std::shared_ptr<class BlendState>	m_pAlphaBlend;
+		std::shared_ptr<class StructuredBuffer>	m_pLightBuffer;
+		std::shared_ptr<class StructuredBuffer>	m_pAverageLightBuffer;
+		std::shared_ptr<class StructuredBuffer>	m_pPrevAverageLightBuffer;
+		std::shared_ptr<class ConstantBuffer<DOWNSCALECBUFFER>> m_pDownScaleCBuffer;
+		std::shared_ptr<class ConstantBuffer<HDRCBUFFER>> m_pHDRCBuffer;
+		std::shared_ptr<class ComputeShader> m_pDownScaleFirstCS;
+		std::shared_ptr<class ComputeShader> m_pDownScaleSecondCS;
+		std::shared_ptr<class ComputeShader> m_pBrightCS;
+		std::shared_ptr<class ComputeShader> m_pBloomVerticalFilterCS;
+		std::shared_ptr<class ComputeShader> m_pBloomHorizontalFilterCS;
+		std::shared_ptr<class MRT> m_pHDRTexture;
+		std::shared_ptr<class Texture> m_pHDRDownScaleTexture;
+		std::shared_ptr<class Texture> m_pBloomTexture;
+		std::shared_ptr<class Texture> m_pBloomFinalTexture;
+		std::shared_ptr<class PixelShader> m_pHDRPS; 
+		HDRCBUFFER m_tHDRCBuffer;
+		DOWNSCALECBUFFER m_tDownScaleCBuffer;
 
 	public:
 		void SetSkyBox(std::shared_ptr<SkyBox> pSkyBox);
+		void SetHDRMidGray(float fMidGray);
+		void SetHDRWhiteSqr(float fWhiteSqr);
+		void SetBloomScale(float fScale);
+		void SetBloomThreshold(float fThreshold);
+		void SetFOVValueX(float fX);
+		void SetFOVValueY(float fY);
+		float GetHDRMidGray()	const;
+		float GetHDRWhiteSqr()	const;
+		float GetBloomScale()	const;
+		float GetBloomThreshold()	const;
+		float GetFOVValueX()	const;
+		float GetFOVValueY()	const;
+		std::shared_ptr<class Texture> GetHDRDownScaleTexture()	const;
+		std::shared_ptr<class Texture> GetBloomTexture()	const;
+		std::shared_ptr<class Texture> GetBloomFinalTexture()	const;
 
 	public:
 		void AddLight(const std::shared_ptr<PointLight>& pLight);
@@ -92,7 +124,18 @@ namespace Engine
 		void RenderShadow();
 		void RenderDecal();
 		void RenderSkyBox();
+		void PostProcessing();
 		void Clear();
+
+	public:
+		void Bloom();
+
+	public:
+		void HDRDownScaleFirst();
+		void HDRDownScaleSecond();
+		void RenderHDR();
+		void Bright();
+		void BloomFilter();
 	};
 
 }

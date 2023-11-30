@@ -14,7 +14,7 @@ namespace Engine
 	{
 	}
 
-	Texture::Texture(int iCount, int iSize, int iSlot, void* pData)	:
+	Texture::Texture(int iWidth, int iHeight, int iSlot, DXGI_FORMAT eFormat)	:
 		Bindable()
 		, m_pSRV(nullptr)
 		, m_iSlot(iSlot)
@@ -22,7 +22,7 @@ namespace Engine
 		, m_pTexture(nullptr)
 		, m_pImage(nullptr)
 	{
-
+		CreateTextureAndSRVAndUAV(iWidth, iHeight, eFormat);
 	}
 
 	Texture::Texture(const TCHAR* pFullPath, int iSlot) :
@@ -198,7 +198,12 @@ namespace Engine
 			return false;
 		}
 
-		if (!CreateShaderResourceView(*m_pImage, D3D11_SRV_DIMENSION_TEXTURE2D, eCpuFlag, eUsage))
+		if (!CreateTexture(*m_pImage))
+		{
+			return false;
+		}
+
+		if (!CreateShaderResourceView(m_pImage->GetMetadata().format, m_pImage->GetMetadata().mipLevels, m_pImage->GetMetadata().arraySize, D3D11_SRV_DIMENSION_TEXTURE2D))
 		{
 			return false;
 		}
@@ -209,30 +214,26 @@ namespace Engine
 	bool Texture::LoadTextureFromFullPath(const std::vector<const TCHAR*>& vecFileName)
 	{
 		std::vector<DirectX::Image> vecImage;
-		std::vector<DirectX::ScratchImage> vecSratchImage;
+		std::vector<DirectX::ScratchImage*> vecSratchImage;
 
 		for (int i = 0; i < static_cast<int>(vecFileName.size()); ++i)
 		{
-			vecSratchImage.emplace_back();
+			DirectX::ScratchImage* pSratchImage = dbg_new DirectX::ScratchImage;
 
-			if (!LoadTexture(vecFileName[i], vecSratchImage.back()))
+			if (!LoadTexture(vecFileName[i], *pSratchImage))
 			{
 				return false;
 			}
 
-			vecImage.push_back(*vecSratchImage.back().GetImage(0, 0, 0));
+			vecSratchImage.push_back(pSratchImage);
 		}
-		DirectX::ScratchImage tTotalImage;
 
-		HRESULT hr = tTotalImage.InitializeArrayFromImages(&vecImage[0], vecImage.size());
-
-		if (FAILED(hr))
+		if (!CreateTexture(vecSratchImage))
 		{
-			assert(false);
 			return false;
 		}
 
-		if (!CreateShaderResourceView(tTotalImage, D3D11_SRV_DIMENSION_TEXTURE2DARRAY))
+		if (!CreateShaderResourceView(vecSratchImage[0]->GetMetadata().format, vecSratchImage[0]->GetMetadata().mipLevels, vecSratchImage.size(), D3D11_SRV_DIMENSION_TEXTURE2DARRAY))
 		{
 			return false;
 		}
@@ -240,16 +241,52 @@ namespace Engine
 		return true;
 	}
 
-	bool Texture::CreateShaderResourceView(const DirectX::ScratchImage& image, D3D_SRV_DIMENSION eDimension, D3D11_CPU_ACCESS_FLAG eCpuFlag, D3D11_USAGE eUsage)
+	bool Texture::CreateTexture(const std::vector<DirectX::ScratchImage*>& image, D3D11_CPU_ACCESS_FLAG eCpuFlag, D3D11_USAGE eUsage)
+	{
+		std::vector<D3D11_SUBRESOURCE_DATA> vecSub(image[0]->GetMetadata().mipLevels * image.size());
+
+		for (int i = 0; i < image.size(); ++i)
+		{
+			for (int j = 0; j < image[i]->GetMetadata().mipLevels; ++j)
+			{
+				const DirectX::Image* pImage = image[i]->GetImage(j, 0, 0);
+
+				vecSub[i * image[0]->GetMetadata().mipLevels + j].pSysMem = pImage->pixels;
+				vecSub[i * image[0]->GetMetadata().mipLevels + j].SysMemPitch = static_cast<unsigned int>(pImage->rowPitch);
+			}
+		}
+
+		return CreateTexture(image[0]->GetMetadata().width, image[0]->GetMetadata().height, image[0]->GetMetadata().format, image[0]->GetMetadata().mipLevels, image.size(), &vecSub[0]);
+	}
+
+	bool Texture::CreateTexture(const DirectX::ScratchImage& image, D3D11_CPU_ACCESS_FLAG eCpuFlag, D3D11_USAGE eUsage)
+	{
+		std::vector<D3D11_SUBRESOURCE_DATA> vecSub(image.GetMetadata().arraySize * image.GetMetadata().mipLevels);
+
+		for (int i = 0; i < image.GetMetadata().arraySize; ++i)
+		{
+			for (int j = 0; j < image.GetMetadata().mipLevels; ++j)
+			{
+				const DirectX::Image* pImage = image.GetImage(j, i, 0);
+
+				vecSub[i * image.GetMetadata().mipLevels + j].pSysMem = pImage->pixels;
+				vecSub[i * image.GetMetadata().mipLevels + j].SysMemPitch = static_cast<unsigned int>(pImage->rowPitch);
+			}
+		}
+
+		return CreateTexture(image.GetMetadata().width, image.GetMetadata().height, image.GetMetadata().format, image.GetMetadata().mipLevels, image.GetMetadata().arraySize, &vecSub[0]);
+	}
+
+	bool Texture::CreateTexture(int iWidth, int iHeight, DXGI_FORMAT eFormat, int iMipLevels, int iArraySize, const D3D11_SUBRESOURCE_DATA* pData, D3D11_CPU_ACCESS_FLAG eCpuFlag, D3D11_USAGE eUsage, D3D11_BIND_FLAG eFlag)
 	{
 		D3D11_TEXTURE2D_DESC tTextureDesc = {};
 
-		tTextureDesc.Format = image.GetMetadata().format;
-		tTextureDesc.ArraySize = static_cast<UINT>(image.GetMetadata().arraySize);
-		tTextureDesc.MipLevels = static_cast<UINT>(image.GetMetadata().mipLevels);
-		tTextureDesc.Width = static_cast<UINT>(image.GetMetadata().width);
-		tTextureDesc.Height = static_cast<UINT>(image.GetMetadata().height);
-		tTextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		tTextureDesc.Format = eFormat;
+		tTextureDesc.ArraySize = static_cast<UINT>(iArraySize);
+		tTextureDesc.MipLevels = static_cast<UINT>(iMipLevels);
+		tTextureDesc.Width = static_cast<UINT>(iWidth);
+		tTextureDesc.Height = static_cast<UINT>(iHeight);
+		tTextureDesc.BindFlags = eFlag;
 		tTextureDesc.Usage = eUsage;
 		tTextureDesc.SampleDesc.Count = 1;
 		tTextureDesc.SampleDesc.Quality = 0;
@@ -265,42 +302,52 @@ namespace Engine
 			break;
 		}
 
-		std::vector<D3D11_SUBRESOURCE_DATA> vecSub(image.GetMetadata().arraySize * image.GetMetadata().mipLevels);
-
-		for (int i = 0; i < image.GetMetadata().arraySize; ++i)
-		{
-			for (int j = 0; j < image.GetMetadata().mipLevels; ++j)
-			{
-				const DirectX::Image* pImage = image.GetImage(j, i, 0);
-
-				vecSub[i * image.GetMetadata().mipLevels + j].pSysMem = pImage->pixels;
-				vecSub[i * image.GetMetadata().mipLevels + j].SysMemPitch = static_cast<unsigned int>(pImage->rowPitch);
-			}
-		}
-
-		if (FAILED(Graphics::GetInst()->GetDevice()->CreateTexture2D(&tTextureDesc, &vecSub[0], &m_pTexture)))
+		if (FAILED(Graphics::GetInst()->GetDevice()->CreateTexture2D(&tTextureDesc, pData, &m_pTexture)))
 		{
 			assert(false);
 			return false;
 		}
 
+		return true;
+	}
+
+	bool Texture::CreateShaderResourceView(DXGI_FORMAT eFormat, int iMipLevels, int iArraySize, D3D_SRV_DIMENSION eDimension)
+	{
+		assert(m_pTexture);
+
 		D3D11_SHADER_RESOURCE_VIEW_DESC tViewDesc = {};
 
-		tViewDesc.Format = tTextureDesc.Format;
+		tViewDesc.Format = eFormat;
 
 		switch (eDimension)
 		{
 		case D3D_SRV_DIMENSION_TEXTURE2D:
-			tViewDesc.Texture2D.MipLevels = static_cast<unsigned int>(image.GetMetadata().mipLevels);
+			tViewDesc.Texture2D.MipLevels = static_cast<unsigned int>(iMipLevels);
 			break;
 		case D3D_SRV_DIMENSION_TEXTURE2DARRAY:
-			tViewDesc.Texture2DArray.MipLevels = static_cast<unsigned int>(image.GetMetadata().mipLevels);
-			tViewDesc.Texture2DArray.ArraySize = static_cast<unsigned int>(image.GetMetadata().arraySize);
+			tViewDesc.Texture2DArray.MipLevels = static_cast<unsigned int>(iMipLevels);
+			tViewDesc.Texture2DArray.ArraySize = static_cast<unsigned int>(iArraySize);
 			break;
 		}
 		tViewDesc.ViewDimension = eDimension;
 
 		if (FAILED(Graphics::GetInst()->GetDevice()->CreateShaderResourceView(m_pTexture.Get(), &tViewDesc, &m_pSRV)))
+		{
+			assert(false);
+			return false;
+		}
+
+		return true;
+	}
+
+	bool Texture::CreateUnorderedAccessView(DXGI_FORMAT eFormat, D3D11_UAV_DIMENSION eDimension)
+	{
+		D3D11_UNORDERED_ACCESS_VIEW_DESC tUAVDesc = {};
+
+		tUAVDesc.Format = eFormat;
+		tUAVDesc.ViewDimension = eDimension;
+
+		if (FAILED(Graphics::GetInst()->GetDevice()->CreateUnorderedAccessView(m_pTexture.Get(), &tUAVDesc, &m_pUAV)))
 		{
 			assert(false);
 			return false;
@@ -358,20 +405,68 @@ namespace Engine
 		return static_cast<int>(m_pImage->GetMetadata().height);
 	}
 
+	bool Texture::CreateTextureAndSRVAndUAV(int iWidth, int iHeight, DXGI_FORMAT eFormat, int iMipLevels, int iArraySize)
+	{
+		if (!CreateTexture(iWidth, iHeight, eFormat, iMipLevels, iArraySize, nullptr, (D3D11_CPU_ACCESS_FLAG)0, D3D11_USAGE_DEFAULT, (D3D11_BIND_FLAG)(D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS)))
+		{
+			assert(false);
+			return false;
+		}
+
+		if (!CreateShaderResourceView(eFormat, iMipLevels, iArraySize))
+		{
+			assert(false);
+			return false;
+		}
+
+		if (!CreateUnorderedAccessView(eFormat))
+		{
+			assert(false);
+			return false;
+		}
+
+		return true;
+	}
+
+	void Texture::SetUAV(int iSlot)
+	{
+		Graphics::GetInst()->GetDeviceContext()->CSSetUnorderedAccessViews(iSlot, 1, m_pUAV.GetAddressof(), nullptr);
+	}
+
+	void Texture::ResetUAV(int iSlot)
+	{
+		ID3D11UnorderedAccessView* pUAV = nullptr;
+
+		Graphics::GetInst()->GetDeviceContext()->CSSetUnorderedAccessViews(iSlot, 1, &pUAV, nullptr);
+	}
+
+	void Texture::ResetSRV()
+	{
+		ID3D11ShaderResourceView* pSRV = nullptr;
+
+		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(m_iSlot, 1, &pSRV);
+		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(m_iSlot, 1, &pSRV);
+		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(m_iSlot, 1, &pSRV);
+	}
+
 	void Texture::Update(float fDeltaTime)
 	{
 	}
 
 	void Texture::Bind()
 	{
-		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(m_iSlot, 1, m_pSRV.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(m_iSlot, 1, m_pSRV.GetAdressof());
-		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(m_iSlot, 1, m_pSRV.GetAdressof());
+		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(m_iSlot, 1, m_pSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(m_iSlot, 1, m_pSRV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(m_iSlot, 1, m_pSRV.GetAddressof());
 	}
 
 	std::shared_ptr<Bindable> Texture::Clone()
 	{
 		return std::static_pointer_cast<Bindable>(shared_from_this());
+	}
+
+	void Texture::PostBind()
+	{
 	}
 
 	void Texture::Save(FILE* pFile)
