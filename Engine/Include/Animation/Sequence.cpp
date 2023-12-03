@@ -40,17 +40,31 @@ namespace Engine
 		Safe_Delete_VecList(m_vecInfo);
 	}
 
-	void Sequence::SetSequance(const std::vector<FbxLoader::FBXBONEKEYFRAME>& vecPose)
+	bool Sequence::SetSequance(const std::vector<FbxLoader::FBXBONEKEYFRAME>& vecPose)
 	{
+		m_iMaxFrame = INT_MIN;
+
+		for (int i = 0; i < static_cast<int>(vecPose.size()); ++i)
+		{
+			if (m_iMaxFrame < static_cast<int>(vecPose[i].vecKeyFrame.size()))
+			{
+				m_iMaxFrame = vecPose[i].vecKeyFrame.size();
+			}
+		}
+
+		if (!m_iMaxFrame)
+		{
+			assert(false);
+			return false;
+		}
+
+		m_tCBuffer.iMaxJoint = static_cast<int>(vecPose.size());
+
 		m_vecInfo.emplace_back(dbg_new SEQUENCEINFO());
 
 		PSEQUENCEINFO pInfo = m_vecInfo.back();
 
-		std::vector<TRANSFORM> vecTransform;
-
-		m_tCBuffer.iMaxJoint = static_cast<int>(vecPose.size());
-
-		m_iMaxFrame = INT_MAX;
+		std::vector<TRANSFORM> vecTransform(m_tCBuffer.iMaxJoint * m_iMaxFrame);
 
 		for (size_t i = 0; i < vecPose.size(); ++i)
 		{
@@ -62,7 +76,10 @@ namespace Engine
 
 			for (size_t j = 0; j < vecPose[i].vecKeyFrame.size(); ++j)
 			{
-				fTotal = static_cast<float>(vecPose[i].vecKeyFrame[j].dTime);
+				if (fTotal < static_cast<float>(vecPose[i].vecKeyFrame[j].dTime))
+				{
+					fTotal = static_cast<float>(vecPose[i].vecKeyFrame[j].dTime);
+				}
 
 				JOINT tJoint;
 
@@ -87,7 +104,9 @@ namespace Engine
 
 				tPose.vecJoint.push_back(tJoint);
 
-				vecTransform.emplace_back(tJoint.vPos, tJoint.vQueternion, tJoint.vScale);
+				vecTransform[i * m_iMaxFrame + j].vPos = tJoint.vPos;
+				vecTransform[i * m_iMaxFrame + j].vScale = tJoint.vScale;
+				vecTransform[i * m_iMaxFrame + j].vQueternion = tJoint.vQueternion;
 			}
 
 			if (fTotal > m_tCBuffer.fMaxTime)
@@ -95,7 +114,7 @@ namespace Engine
 				m_tCBuffer.fMaxTime = fTotal;
 			}
 
-			if (m_iMaxFrame > static_cast<int>(vecPose[i].vecKeyFrame.size()))
+			if (m_iMaxFrame > static_cast<int>(vecPose[i].vecKeyFrame.size()) && !vecPose[i].vecKeyFrame.empty())
 			{
 				m_iMaxFrame = static_cast<int>(vecPose[i].vecKeyFrame.size());
 			}
@@ -128,12 +147,23 @@ namespace Engine
 
 	Sequence::PSEQUENCEINFO Sequence::GetSequenceInfo(int iIndex) const
 	{
+		if (m_vecInfo.size() <= iIndex || 
+			iIndex<0)
+		{
+			return nullptr;
+		}
+
 		return m_vecInfo[iIndex];
 	}
 
 	bool Sequence::IsRootMotion() const
 	{
 		return m_bRootMotion;
+	}
+
+	int Sequence::GetFrame() const
+	{
+		return m_tCBuffer.iFrame;
 	}
 
 	void Sequence::Update(float fDeltaTime)
@@ -180,13 +210,18 @@ namespace Engine
 		/*std::vector<TRANSFORM> vecSrc(m_pBuffer->GetCount());
 		m_pBuffer->DebugBuffer(&vecSrc.front(), 0, sizeof(TRANSFORM));*/
 #endif
-
-		m_pBuffer->SetSRV(31);
+		if (m_pBuffer)
+		{
+			m_pBuffer->SetSRV(31);
+		}
 	}
 
 	void Sequence::ResetResource()
 	{
-		m_pBuffer->ResetSRV(31);
+		if (m_pBuffer)
+		{
+			m_pBuffer->ResetSRV(31);
+		}
 	}
 
 	void Sequence::Save(FILE* pFile)
@@ -234,8 +269,6 @@ namespace Engine
 
 		fread(&iContainerCount, 1, 1, pFile);
 
-		std::vector<TRANSFORM> vecTransform;
-
 		for (int i = 0; i < iContainerCount; ++i)
 		{
 			m_vecInfo.emplace_back(dbg_new SEQUENCEINFO);
@@ -258,6 +291,8 @@ namespace Engine
 			unsigned char iJointCount;
 
 			fread(&iJointCount, 1, 1, pFile);
+
+			std::vector<TRANSFORM> vecTransform(m_iMaxFrame * iJointCount);
 
 			if (iJointCount > m_tCBuffer.iMaxJoint)
 			{
@@ -282,17 +317,18 @@ namespace Engine
 
 					if (static_cast<int>(k) < m_iMaxFrame)
 					{
-						vecTransform.emplace_back(pInfo->vecPose[j].vecJoint[k].vPos, pInfo->vecPose[j].vecJoint[k].vQueternion, pInfo->vecPose[j].vecJoint[k].vScale);
+						vecTransform[k + j * m_iMaxFrame].vPos = pInfo->vecPose[j].vecJoint[k].vPos;
+						vecTransform[k + j * m_iMaxFrame].vQueternion = pInfo->vecPose[j].vecJoint[k].vQueternion;
+						vecTransform[k + j * m_iMaxFrame].vScale = pInfo->vecPose[j].vecJoint[k].vScale;
 					}
 				}
 			}
-		}
 
-		if (vecTransform.size())
-		{
-			m_pBuffer = std::make_shared<StructuredBuffer>(static_cast<int>(vecTransform.size()), static_cast<int>(sizeof(TRANSFORM)), &vecTransform.front());
+			if (vecTransform.size())
+			{
+				m_pBuffer = std::make_shared<StructuredBuffer>(static_cast<int>(vecTransform.size()), static_cast<int>(sizeof(TRANSFORM)), &vecTransform.front());
+			}
 		}
-
 	}
 	std::shared_ptr<Sequence> Sequence::Clone()
 	{

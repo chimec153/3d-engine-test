@@ -173,7 +173,6 @@ cbuffer material : register(b2)
     float g_fMaterialSpecPower;
     float g_fMaterialFraction;
     float2 g_vMaterialRoughness;
-    int g_iMaterialContainerIndex;
 };
 
 cbuffer GBufferProject : register(b3)
@@ -309,6 +308,7 @@ Texture2D g_NormalTexture : register(t1);
 Texture2D g_SpecularTexture : register(t2);
 Texture2D g_EmissiveTexture : register(t3);
 Texture2D g_PaperBurnTexture : register(t4);
+Texture2D g_EnvironmentTexture : register(t5);
 
 Texture2D g_HDRTexture : register(t7);
 
@@ -457,4 +457,15 @@ float ConvertZToLinearDepth(float depth)
     float linearDepth = g_vProjectValues.w / (g_vProjectValues.z - depth);
 
     return linearDepth;
+}
+
+float2 SphereDirectionToUV(float3 dir)
+{    
+    float2 uv = 0.f;
+    
+    uv.x = atan2(dir.x, dir.z) / 3.141592f / 2.f + 0.5f; // -pi ~ pi
+    
+    uv.y = asin(dir.y) / -3.141592 + 0.5f; // -pi/2 ~ pi/2
+    
+    return uv;
 }

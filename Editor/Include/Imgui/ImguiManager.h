@@ -23,6 +23,7 @@ namespace Engine
 	class Cloth;
 	class Terrain;
 	class Texture;
+	class Animation;
 }
 
 class ImguiManager
@@ -84,6 +85,7 @@ public:
 	void RenderManager_ShowImGuiWindow();
 	void Cloth_ShowImguiWindow(std::shared_ptr<Engine::Cloth> pCloth);
 	void Terrain_ShowImguiWindow(std::shared_ptr<Engine::Terrain> pTerrain);
+	void Animation_ImGuiWindow(std::shared_ptr<Engine::Animation> pAnimation);
 
 private:
 	float m_fCellSize;

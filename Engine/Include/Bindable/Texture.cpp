@@ -230,13 +230,17 @@ namespace Engine
 
 		if (!CreateTexture(vecSratchImage))
 		{
+			Safe_Delete_VecList(vecSratchImage);
 			return false;
 		}
 
 		if (!CreateShaderResourceView(vecSratchImage[0]->GetMetadata().format, vecSratchImage[0]->GetMetadata().mipLevels, vecSratchImage.size(), D3D11_SRV_DIMENSION_TEXTURE2DARRAY))
 		{
+			Safe_Delete_VecList(vecSratchImage);
 			return false;
 		}
+
+		Safe_Delete_VecList(vecSratchImage);
 
 		return true;
 	}

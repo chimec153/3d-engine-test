@@ -142,11 +142,6 @@ namespace Engine
 		m_tMaterial = mtrl;
 	}
 
-	void Material::SetContainerIndex(int iIndex)
-	{
-		m_tMaterial.iContainerIndex = iIndex;
-	}
-
 	void Material::SetRoughnessX(float x)
 	{
 		m_tMaterial.vRoughness.x = x;

@@ -29,6 +29,7 @@ namespace Engine
         std::vector<IKINFO>  m_vecIKInfo;
         std::shared_ptr<class ConstantBuffer<IKCBUFFER>> m_pIKCBuffer;
         Drawable* m_pOwner;
+        float   m_fRate;
 
     public:
         void AddSequance(const std::string& strTag, const std::shared_ptr<Sequence>& pSequence);
@@ -50,6 +51,9 @@ namespace Engine
         void AddIkInfo(int iJointIndex, int iRootIndex);
         void SetIkPosition(int iIndex, const Vector3& vPos);
         void SetOwner(Drawable* pOwner);
+        void SetTime(float fTime);
+        float GetRate() const;
+        void SetRate(float fRate);
 
     private:
         std::shared_ptr<Sequence> FindSequence(const std::string& strTag)   const;

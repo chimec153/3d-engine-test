@@ -164,7 +164,6 @@ namespace Engine
 		float fSpecPower;
 		float fFraction;
 		DirectX::XMFLOAT2 vRoughness;
-		int iContainerIndex;
 	}MATERIAL, * PMATERIAL;
 
 	ENGINE_DLL typedef struct _tagPerspectiveBuffer

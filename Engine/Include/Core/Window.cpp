@@ -267,7 +267,7 @@ namespace Engine
 		pLine->FindAndAddBind<Topology>("LineStrip");
 		pLine->FindAndAddBind<DepthStencilState>("DepthAlways");
 		pLine->FindAndAddBind<InputLayout>("TPNT");
-		pLine->FindAndAddBind<Material>("Brick");
+		pLine->FindAndAddBind<Material>("Material");
 #endif
 
 		return true;

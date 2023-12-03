@@ -1307,3 +1307,17 @@ Engine/Include/PixelShader.cso
 *.cso
 *.vsidx
 *.cso
+*.tlog
+*.log
+*.recipe
+*.ilk
+*.json
+*.command
+*.idb
+*.pdb
+*.fbx
+*.mesh
+*.skel
+*.seq
+*.mtl
+*.obj

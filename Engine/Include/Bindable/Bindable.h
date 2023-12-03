@@ -88,10 +88,7 @@ namespace Engine
 
 			if (pBindable == nullptr)
 			{
-#ifdef _DEBUG
-				OutputDebugStringA(strTag.c_str());
-				OutputDebugStringA("\n");
-#endif
+				assert(false);
 				return nullptr;
 			}
 

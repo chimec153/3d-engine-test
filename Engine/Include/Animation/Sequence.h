@@ -47,12 +47,14 @@ namespace Engine
         BONECBUFFER m_tCBuffer;
 
     public:
-        void SetSequance(const std::vector<FbxLoader::FBXBONEKEYFRAME>& vecPose);
+        bool SetSequance(const std::vector<FbxLoader::FBXBONEKEYFRAME>& vecPose);
+        void AddSequenceInfo(PSEQUENCEINFO);
         void UseRootMotion();
         float GetMaxTime()  const;
         int GetMaxFrame()   const;
         PSEQUENCEINFO GetSequenceInfo(int iIndex = 0) const;
         bool IsRootMotion() const;
+        int GetFrame()  const;
 
     public:
         void Update(float fDeltaTime);

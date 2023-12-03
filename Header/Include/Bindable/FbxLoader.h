@@ -102,6 +102,7 @@ namespace Engine
 		bool m_bCalculateTangent;
 		std::vector<SEQUENCE> m_vecSequence;
 		SKELETON m_tSkeleton;
+		std::unordered_map<fbxsdk::FbxNode*, std::vector<fbxsdk::FbxAMatrix>> m_mapGlobalMatrix;
 
 	public:
 		bool Init();
@@ -114,7 +115,8 @@ namespace Engine
 		bool IsCalculatedTangent()	const;
 		const std::vector<TEXTUREINFO>& GetTextures(int iIndex = 0)	const;
 		const std::vector<MATERIALINFO>& GetMaterials(int iIndex = 0)	const;
-		const std::vector<SEQUENCE>& GetSequences(int iLODGroupIndex = 0)	const;
+		const std::vector<SEQUENCE>& GetSequences(int iIndex)	const;
+		const std::vector<SEQUENCE>& GetSequences()	const;
 		const SKELETON& GetSkeleton(int iIndex = 0) const;
 		void LoadOBJ(const TCHAR* pFileName, const std::string& strPathKey);
 
@@ -135,10 +137,14 @@ namespace Engine
 		void LoadAnimation(fbxsdk::FbxMesh* pNode, LODGROUP& group);
 		void LoadOffsetMatrix(fbxsdk::FbxCluster* pNode, fbxsdk::FbxAMatrix& matTrasform, int iBoneIndex, LODGROUP& group);
 		void LoadKeyFrameMatrix(fbxsdk::FbxNode* pNode, fbxsdk::FbxCluster* pCluster, fbxsdk::FbxAMatrix& matTrasform, int iBoneIndex, LODGROUP& group);
+		bool GetGlobalMatrix(fbxsdk::FbxNode* pNode, __int64 iTime, const fbxsdk::FbxTime& tTime, fbxsdk::FbxAMatrix& tMatrix);
 		int LoadBone(fbxsdk::FbxNode* pNode);
 		void LoadAnimationClip(fbxsdk::FbxArray<fbxsdk::FbxString*>& vecName);
 		float GetCurve(int& iIndex, const char* pText, fbxsdk::FbxNode* pNode, fbxsdk::FbxAnimLayer* pAnimLayer)	const;
 		int FindBoneIndex(const std::string& strBone)	const;
+		void LoadAnimation();
+		void LoadAnimation(fbxsdk::FbxNode* pNode, FbxAnimLayer* pAnimLayer, int iAnimStackIndex);
+		void LoadAnimationPosition(fbxsdk::FbxPropertyT<fbxsdk::FbxDouble3>& tProp, FbxAnimLayer* pAnimLayer, int iAnimStackIndex, int iBone, std::vector<Vector3>& vecPos, float fDefaultValue);
 	};
 
 }

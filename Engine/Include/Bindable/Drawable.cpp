@@ -340,6 +340,43 @@ namespace Engine
 		return m_eRenderLayer;
 	}
 
+	void Drawable::AddSeqeunces(const std::vector<FbxLoader::SEQUENCE>& vecSequance, const std::string& strSeq)
+	{
+		for (size_t j = 0; j < vecSequance.size(); ++j)
+		{
+			std::shared_ptr<Sequence> pSequence = std::make_shared<Sequence>();
+
+			std::vector<FbxLoader::FBXBONEKEYFRAME> vecKeyFrame;
+
+			pSequence->SetTag(vecSequance[j].strTag + strSeq);
+
+			if (vecKeyFrame.size() < vecSequance[j].vecBoneKeyFrame.size())
+			{
+				vecKeyFrame.resize(vecSequance[j].vecBoneKeyFrame.size());
+			}
+
+			for (size_t k = 0; k < vecSequance[j].vecBoneKeyFrame.size(); ++k)
+			{
+				for (size_t m = 0; m < vecSequance[j].vecBoneKeyFrame[k].vecKeyFrame.size(); ++m)
+				{
+					vecKeyFrame[k].vecKeyFrame.push_back(vecSequance[j].vecBoneKeyFrame[k].vecKeyFrame[m]);
+				}
+			}
+
+			if (vecKeyFrame.empty())
+			{
+				continue;
+			}
+
+			if (!pSequence->SetSequance(vecKeyFrame))
+			{
+				continue;
+			}
+
+			m_pAnimation->AddSequance(pSequence->GetTag(), pSequence);
+		}
+	}
+
 	bool Drawable::Init()
 	{
 		return true;
@@ -1577,77 +1614,68 @@ namespace Engine
 
 		std::shared_ptr<Mesh> pMesh = StaticCreateBindable<Mesh>(strFileName, vecVertex, vecIndex);
 
-		const std::shared_ptr < Drawable>& pBox = CreateBindable<Box>(strFileName);
+		AddChild(pMesh);
 
-		pBox->AddChild(pMesh);
-
-		pBox->GetBoundingSphere<VertexStandard>(vecVertex);
-
-		pBox->FindAndAddBind<PixelShader>("anisotropic_microfacet PS");
+		GetBoundingSphere<VertexStandard>(vecVertex);
 
 		if (tSkeleton.vecBone.size())
 		{
-			std::shared_ptr<class Animation> pAnimation = pBox->CreateBindable<class Animation>("Animation");
+			CreateBindable<class Animation>("Animation");
 
-			std::shared_ptr<Sequence> pSequence = std::make_shared<Sequence>();
+			const std::vector<FbxLoader::SEQUENCE>& vecSequance = loader.GetSequences();
 
-			std::vector<FbxLoader::FBXBONEKEYFRAME> vecKeyFrame;
+			AddSeqeunces(vecSequance);
 
-			for (int i = 0; i < loader.GetLODCount(); ++i)
+			const std::unordered_map<std::string, std::shared_ptr<Sequence>>& mapSequence = m_pAnimation->GetSequences();
+
+			std::unordered_map<std::string, std::shared_ptr<Sequence>>::const_iterator iter = mapSequence.begin();
+			std::unordered_map<std::string, std::shared_ptr<Sequence>>::const_iterator iterEnd = mapSequence.end();
+
+			for (; iter != iterEnd; ++iter)
 			{
-				const std::vector<FbxLoader::SEQUENCE>& vecSequance = loader.GetSequences(i);
+				char strSeqPath[MAX_PATH] = {};
 
-				for (size_t j = 0; j < vecSequance.size(); ++j)
+				strcat_s(strSeqPath, strFileName);
+
+				strcat_s(strSeqPath, iter->second->GetTag().c_str());
+
+				strcat_s(strSeqPath, ".seq");
+
+				char* pPos = strstr(strSeqPath, "|");
+
+				if (pPos)
 				{
-					pSequence->SetTag(vecSequance[j].strTag);
-
-					if (vecKeyFrame.size() < vecSequance[j].vecBoneKeyFrame.size())
-					{
-						vecKeyFrame.resize(vecSequance[j].vecBoneKeyFrame.size());
-					}
-
-					for (size_t k = 0; k < vecSequance[j].vecBoneKeyFrame.size(); ++k)
-					{
-						for (size_t m = 0; m < vecSequance[j].vecBoneKeyFrame[k].vecKeyFrame.size(); ++m)
-						{
-							vecKeyFrame[k].vecKeyFrame.push_back(vecSequance[j].vecBoneKeyFrame[k].vecKeyFrame[m]);
-						}
-					}
+					*pPos = '_';
 				}
 
+				iter->second->SaveFromPath(strSeqPath, MESH_PATH);
 			}
 
-			pSequence->SetSequance(vecKeyFrame);
-			char strSeqPath[MAX_PATH] = {};
+			//for (int i = 0; i < loader.GetLODCount(); ++i)
+			//{
+			//	AddSeqeunces(loader.GetSequences(i), "_test");
+			//}
 
-			strcat_s(strSeqPath, strFileName);
+			m_pAnimation->SetSkeleton(pSkeleton);
 
-			strcat_s(strSeqPath, pSequence->GetTag().c_str());
+			FindAndAddBind<VertexShader>("anisotropic_microfacet VSSkin");
+			FindAndAddBind<InputLayout>("Standard");
 
-			strcat_s(strSeqPath, ".seq");
+			NotUseInstance();
 
-			pSequence->SaveFromPath(strSeqPath, MESH_PATH);
-
-			pAnimation->AddSequance(pSequence->GetTag(), pSequence);
-
-			pAnimation->SetSkeleton(pSkeleton);
-
-			pBox->FindAndAddBind<VertexShader>("anisotropic_microfacet VSSkin");
-			pBox->FindAndAddBind<InputLayout>("Standard");
-
-			pBox->NotUseInstance();
-
-			pBox->NotUseShadow();
+			NotUseShadow();
 		}
 		else
 		{
-			pBox->FindAndAddBind<VertexShader>("anisotropic_microfacet VSNoSkin");
-			pBox->FindAndAddBind<InputLayout>("Standard");
+			FindAndAddBind<VertexShader>("anisotropic_microfacet VSNoSkin");
+			FindAndAddBind<InputLayout>("Standard");
 		}
 
 		std::vector<std::vector<std::shared_ptr<Texture>>> _vecTexture;
 
 		std::vector<std::shared_ptr<Material>> _vecMaterial;
+
+		int iTextureCount = 0;
 
 		for (int i = 0; i < loader.GetLODCount(); ++i)
 		{
@@ -1672,6 +1700,8 @@ namespace Engine
 					vecTexture.push_back(pTexture);
 					continue;
 				}
+
+				++iTextureCount;
 
 				switch (vecTextureInfo[j].type)
 				{
@@ -1700,20 +1730,23 @@ namespace Engine
 
 			const std::vector<FbxLoader::MATERIALINFO>& vecMaterial = loader.GetMaterials(i);
 
-			if (vecMaterial.size())
+			for (int k=0;k<vecMaterial.size();++k)
 			{
-				std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>(vecMaterial[0].name);
+				std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>(vecMaterial[k].name);
 
 				if (pMaterial == nullptr)
 				{
-					pMaterial = StaticCreateBindable<Material>(vecMaterial[0].name);
+					pMaterial = StaticCreateBindable<Material>(vecMaterial[k].name);
 
-					pMaterial->SetDiffuseColor(vecMaterial[0].tMaterial.diffuseColor);
-					pMaterial->SetAmbientColor(vecMaterial[0].tMaterial.ambientColor);
-					pMaterial->SetSpecularColor(vecMaterial[0].tMaterial.specularColor);
-					pMaterial->SetEmissiveColor(vecMaterial[0].tMaterial.emissiveColor);
-					pMaterial->SetShininess(vecMaterial[0].tMaterial.fSpecPower);
-					pMaterial->SetReflectivity(vecMaterial[0].tMaterial.fFraction);
+					pMaterial->SetDiffuseColor(vecMaterial[k].tMaterial.diffuseColor);
+					pMaterial->SetAmbientColor(vecMaterial[k].tMaterial.ambientColor);
+					pMaterial->SetSpecularColor(vecMaterial[k].tMaterial.specularColor);
+					pMaterial->SetEmissiveColor(vecMaterial[k].tMaterial.emissiveColor);
+					pMaterial->SetShininess(vecMaterial[k].tMaterial.fSpecPower);
+					//pMaterial->SetReflectivity(vecMaterial[k].tMaterial.fFraction);
+					pMaterial->SetReflectivity(1.f);
+
+					pMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
 
 					pMesh->SetMaterial(i, pMaterial);
 				}
@@ -1726,6 +1759,15 @@ namespace Engine
 
 				_vecMaterial.push_back(pMaterial);
 			}
+		}
+
+		if (iTextureCount > 0)
+		{
+			FindAndAddBind<PixelShader>("anisotropic_microfacet PS");
+		}
+		else
+		{
+			FindAndAddBind<PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
 		}
 
 		char strFullPath[MAX_PATH] = {};
@@ -1777,7 +1819,11 @@ namespace Engine
 					int iIndexCount = static_cast<int>(vecIndex[i][j].size());
 
 					fwrite(&iIndexCount, 4, 1, pFile);
-					fwrite(&vecIndex[i][j][0], 4, vecIndex[i][j].size(), pFile);
+
+					if (iIndexCount)
+					{
+						fwrite(&vecIndex[i][j][0], 4, vecIndex[i][j].size(), pFile);
+					}
 				}
 
 				int iTextureCount = static_cast<int>(vecTexture[i].size());
@@ -1849,9 +1895,12 @@ namespace Engine
 
 					fread(&iIndexCount, 4, 1, pFile);
 
-					vecIndex[i].resize(iIndexCount);
+					if (iIndexCount)
+					{
+						vecIndex[i].resize(iIndexCount);
 
-					fread(&vecIndex[i][0], 4, iIndexCount, pFile);
+						fread(&vecIndex[i][0], 4, iIndexCount, pFile);
+					}
 				}
 			}
 

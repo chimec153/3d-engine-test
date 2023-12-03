@@ -26,7 +26,7 @@ namespace Engine
         int m_iSize;
         int m_iCount;
         std::vector<std::shared_ptr<Texture>>   vecTexture;
-        std::shared_ptr<Material> pMaterial;
+        std::vector<std::shared_ptr<Material>> vecMaterial;
 #ifdef _DEBUG
         bool bEnable;
 #endif
@@ -94,7 +94,7 @@ namespace Engine
         void SetTextures(const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture);
         void SetTextures(int iIndex, const std::vector<std::shared_ptr<Texture>>& vecTexture);
         void SetMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial);
-        std::shared_ptr<Material> GetMaterial(int iIndex = 0)   const;
+        std::shared_ptr<Material> GetMaterial(int iIndex = 0, int iSubIndex = 0)   const;
 
         template <typename T, typename P>
         void CreateMesh(const std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<std::vector<P>>>& vecIndex, D3D11_USAGE eUsage = D3D11_USAGE_IMMUTABLE)

@@ -34,7 +34,6 @@ namespace Engine
         void SetRandomColor();
         const MATERIAL& GetMaterial()   const;
         void SetMaterial(const MATERIAL& mtrl);
-        void SetContainerIndex(int iIndex);
         void SetRoughnessX(float x);
         void SetRoughnessY(float y);
 

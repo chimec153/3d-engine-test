@@ -59,9 +59,51 @@ namespace Engine
 			LoadAnimationClip(StringArray);
 
 			LoadBone(m_pScene->GetRootNode());
+
+			for (int i = 0; i < static_cast<int>(m_vecSequence.size()); ++i)
+			{
+				m_vecSequence[i].vecBoneKeyFrame.resize(m_tSkeleton.vecBone.size());
+			}
 		}
 
 		LoadScene(m_pScene->GetRootNode());
+
+		LoadAnimation();
+
+		for (int i = 0; i < static_cast<int>(m_vecSequence.size()); ++i)
+		{
+			for (int j = 0; j < m_vecSequence[i].vecBoneKeyFrame.size(); ++j)
+			{
+				for (int k = 0; k < m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame.size(); ++k)
+				{
+					if (m_tSkeleton.vecBone[j].iParent != -1)
+					{
+						m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame[k].matTransform =
+							m_vecSequence[i].vecBoneKeyFrame[m_tSkeleton.vecBone[j].iParent].vecKeyFrame[k].matTransform * m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame[k].matTransform;
+					}
+				}
+			}
+		}
+
+
+		for (int i = 0; i < static_cast<int>(m_vecSequence.size()); ++i)
+		{
+			for (int j = 0; j < m_vecSequence[i].vecBoneKeyFrame.size(); ++j)
+			{
+				for (int k = 0; k < m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame.size(); ++k)
+				{
+					fbxsdk::FbxAMatrix matConvert;
+
+					matConvert.SetRow(0, { 1.f, 0.f, 0.f, 0.f });
+					matConvert.SetRow(1, { 0.f, 0.f, 1.f, 0.f });
+					matConvert.SetRow(2, { 0.f, 1.f, 0.f, 0.f });
+					matConvert.SetRow(3, { 0.f, 0.f, 0.f, 1.f });
+
+					m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame[k].matTransform =
+						matConvert * m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame[k].matTransform * matConvert.Inverse();
+				}
+			}
+		}
 
 		return true;
 	}
@@ -138,9 +180,14 @@ namespace Engine
 		return m_tScene.vecLODGroup[iIndex].tMesh.m_vecMaterial;
 	}
 
-	const std::vector<FbxLoader::SEQUENCE>& FbxLoader::GetSequences(int iLODGroupIndex) const
+	const std::vector<FbxLoader::SEQUENCE>& FbxLoader::GetSequences(int iIndex) const
 	{
-		return m_tScene.vecLODGroup[iLODGroupIndex].vecSequence;
+		return m_tScene.vecLODGroup[iIndex].vecSequence;
+	}
+
+	const std::vector<FbxLoader::SEQUENCE>& FbxLoader::GetSequences() const
+	{
+		return m_vecSequence;
 	}
 
 	const FbxLoader::SKELETON& FbxLoader::GetSkeleton(int iIndex) const
@@ -442,6 +489,11 @@ namespace Engine
 	{
 		fbxsdk::FbxLayerElementUV* pUV = pNode->GetElementUV();
 
+		if (!pUV)
+		{
+			return;
+		}
+
 		int iUVIndex = iVertexIndex;
 
 		switch (pUV->GetMappingMode())
@@ -554,6 +606,11 @@ namespace Engine
 		fbxsdk::FbxNode* pNode = pGeometry->GetNode();
 
 		if (!pNode)
+		{
+			return;
+		}
+
+		if (mesh.name != (pNode->GetName()[0] != '\0' ? pNode->GetName() : pNode->GetMesh()->GetName()))
 		{
 			return;
 		}
@@ -769,15 +826,58 @@ namespace Engine
 
 				FBXKEYFRAME tKeyFrame;
 
-				fbxsdk::FbxAMatrix matOffset = matConvert * pNode->EvaluateGlobalTransform(tTime) * matConvert.Inverse();
+				fbxsdk::FbxAMatrix tNodeMatrix;
+
+				GetGlobalMatrix(pNode, j - iStart, tTime, tNodeMatrix);
+
+				fbxsdk::FbxAMatrix matOffset = matConvert * tNodeMatrix * matConvert.Inverse();
 
 				tKeyFrame.dTime = tTime.GetSecondDouble();
 
-				tKeyFrame.matTransform = matConvert * matOffset.Inverse() * pCluster->GetLink()->EvaluateGlobalTransform(tTime) * matConvert.Inverse();
+				GetGlobalMatrix(pCluster->GetLink(), j - iStart, tTime, tNodeMatrix);
+
+				tKeyFrame.matTransform = matConvert * matOffset.Inverse() * tNodeMatrix * matConvert.Inverse();
 
 				group.vecSequence[i].vecBoneKeyFrame[iBoneIndex].vecKeyFrame.push_back(tKeyFrame);
 			}
 		}
+	}
+
+	bool FbxLoader::GetGlobalMatrix(fbxsdk::FbxNode* pNode, __int64 iTime, const fbxsdk::FbxTime& tTime, fbxsdk::FbxAMatrix& tNodeMatrix)
+	{
+		std::unordered_map<fbxsdk::FbxNode*, std::vector<fbxsdk::FbxAMatrix>>::iterator iter = m_mapGlobalMatrix.find(pNode);
+
+		if (iter == m_mapGlobalMatrix.end())
+		{
+			m_mapGlobalMatrix.insert(std::make_pair(pNode, std::vector<fbxsdk::FbxAMatrix>()));
+
+			iter = m_mapGlobalMatrix.find(pNode);
+		}
+
+		if (iter != m_mapGlobalMatrix.end())
+		{
+			if (iter->second.size() <= iTime)
+			{
+				std::unordered_map<fbxsdk::FbxNode*, std::vector<fbxsdk::FbxAMatrix>>::iterator iterP = m_mapGlobalMatrix.find(pNode->GetParent());
+
+				if (iterP == m_mapGlobalMatrix.end() || iterP->second.size() <= iTime)
+				{
+					tNodeMatrix = pNode->EvaluateGlobalTransform(tTime);
+				}
+				else
+				{
+					tNodeMatrix = iterP->second[iTime] * pNode->EvaluateLocalTransform(tTime);
+				}
+
+				iter->second.push_back(tNodeMatrix);
+			}
+			else
+			{
+				tNodeMatrix = iter->second[iTime];
+			}
+		}
+
+		return true;
 	}
 
 	int FbxLoader::LoadBone(fbxsdk::FbxNode* pNode)
@@ -835,8 +935,8 @@ namespace Engine
 
 			fbxsdk::FbxTakeInfo* pTakeInfo = m_pScene->GetTakeInfo(tSequence.strTag.c_str());
 
-			tSequence.tStart = pTakeInfo->mLocalTimeSpan.GetStart();
-			tSequence.tEnd = pTakeInfo->mLocalTimeSpan.GetStop();
+			tSequence.tStart = pTakeInfo->mReferenceTimeSpan.GetStart();
+			tSequence.tEnd = pTakeInfo->mReferenceTimeSpan.GetStop();
 
 			tSequence.lFrameLength = tSequence.tEnd.GetFrameCount(eTimeMode) - tSequence.tStart.GetFrameCount(eTimeMode);
 			tSequence.eTimeMode = eTimeMode;
@@ -875,7 +975,301 @@ namespace Engine
 			}
 		}
 
-		return 0;
+		return -1;
+	}
+
+	void FbxLoader::LoadAnimation()
+	{
+		int iAnimStackCount = m_pScene->GetSrcObjectCount<fbxsdk::FbxAnimStack>();
+
+		for (int i = 0; i < iAnimStackCount; ++i)
+		{
+			fbxsdk::FbxAnimStack* pAnimStack = m_pScene->GetSrcObject<fbxsdk::FbxAnimStack>(i);
+
+			int iAnimLayer = pAnimStack->GetMemberCount<FbxAnimLayer>();
+
+			for (int j = 0; j < iAnimLayer; ++j)
+			{
+				FbxAnimLayer* pAnimLayer = pAnimStack->GetMember<FbxAnimLayer>(j);
+
+				LoadAnimation(m_pScene->GetRootNode(), pAnimLayer, i);
+			}
+		}
+	}
+
+	void FbxLoader::LoadAnimation(fbxsdk::FbxNode* pNode, FbxAnimLayer* pAnimLayer, int iAnimStackIndex)
+	{
+		int iBone = FindBoneIndex(pNode->GetName());
+
+		if (iBone != -1)
+		{
+			std::vector<Vector3> vecPos(m_vecSequence[iAnimStackIndex].lFrameLength + 1);
+			std::vector<Vector3> vecRot(m_vecSequence[iAnimStackIndex].lFrameLength + 1);
+			std::vector<Vector3> vecScale(m_vecSequence[iAnimStackIndex].lFrameLength + 1);
+
+			for (int i = 0; i < static_cast<int>(vecScale.size()); ++i)
+			{
+				vecScale[i] = 1.f;
+			}
+
+			m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame.resize(m_vecSequence[iAnimStackIndex].lFrameLength+1 );
+
+			LoadAnimationPosition(pNode->LclTranslation, pAnimLayer, iAnimStackIndex, iBone, vecPos, 0.f);
+
+			LoadAnimationPosition(pNode->LclRotation, pAnimLayer, iAnimStackIndex, iBone, vecRot, 0.f);
+
+			LoadAnimationPosition(pNode->LclScaling, pAnimLayer, iAnimStackIndex, iBone, vecScale, 1.f);
+
+			int iParentIndex = -1;
+
+			fbxsdk::FbxNode* pParentNode = pNode->GetParent();
+
+			if (pParentNode)
+			{
+				iParentIndex = FindBoneIndex(pParentNode->GetName());
+			}
+
+			for (int i = 0; i < m_vecSequence[iAnimStackIndex].lFrameLength + 1; ++i)
+			{
+				fbxsdk::FbxAMatrix matT;
+
+				matT.SetT({ vecPos[i].x, vecPos[i].y, vecPos[i].z ,0.f });
+
+				fbxsdk::FbxAMatrix matS;
+
+				matS.SetS({ vecScale[i].x, vecScale[i].y, vecScale[i].z ,0.f });
+
+				fbxsdk::FbxAMatrix matR;
+
+				matR.SetR({ vecRot[i].x, vecRot[i].y, vecRot[i].z ,0.f });
+
+				fbxsdk::FbxTime tTime;
+
+				tTime.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+				fbxsdk::FbxAMatrix tMatrix;
+
+				m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].matTransform =
+					matT * matR * matS ;
+			}
+		}
+
+	 	int iChildCount = pNode->GetChildCount();
+
+		for (int i = 0; i < iChildCount; ++i)
+		{
+			LoadAnimation(pNode->GetChild(i), pAnimLayer, iAnimStackIndex);
+		}
+	}
+
+	void FbxLoader::LoadAnimationPosition(fbxsdk::FbxPropertyT<fbxsdk::FbxDouble3>& tProp, FbxAnimLayer* pAnimLayer, int iAnimStackIndex, int iBone, std::vector<Vector3>& vecPos, float fDefaultValue)
+	{
+		int iHour;
+		int iMinute;
+		int iSecond;
+		int iField;
+		int iResidual;
+
+		fbxsdk::FbxAnimCurve* pCurvePosX = tProp.GetCurve(pAnimLayer, FBXSDK_CURVENODE_COMPONENT_X);
+
+		if (pCurvePosX)
+		{
+			int iKeyCount = pCurvePosX->KeyGetCount();
+
+			int iPrevFrame = -1;
+
+			float fPrevValue = fDefaultValue;
+
+			for (int k = 0; k < iKeyCount; ++k)
+			{
+				float fX = pCurvePosX->KeyGetValue(k);
+
+				int iFrame;
+
+				pCurvePosX->KeyGetTime(k).GetTime(iHour, iMinute, iSecond, iFrame, iField, iResidual, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+				switch (m_vecSequence[iAnimStackIndex].eTimeMode)
+				{
+				case fbxsdk::FbxTime::eFrames24:
+					iFrame += (iSecond + (iMinute + iHour * 60) * 60) * 24;
+					break;
+				default:
+					assert(false);
+					break;
+				}
+
+				if (vecPos.size() <= iFrame)
+				{
+					vecPos.resize(iFrame + 1);
+				}
+
+				if (iFrame - iPrevFrame - 1 == 0)
+				{
+					vecPos[iFrame].x = fX;
+				}
+				else
+				{
+					for (int i = iPrevFrame + 1; i <= iFrame; ++i)
+					{
+						fbxsdk::FbxTime time;
+
+						time.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+						m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+
+						vecPos[i].x = fX * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
+					}
+				}
+
+				fPrevValue = fX;
+				iPrevFrame = iFrame;
+			}
+
+			for (int i = iPrevFrame + 1; i < m_vecSequence[iAnimStackIndex].lFrameLength + 1; ++i)
+			{
+				fbxsdk::FbxTime time;
+
+				time.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+				m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+
+				vecPos[i].x = fPrevValue;
+			}
+		}
+
+		fbxsdk::FbxAnimCurve* pCurvePosY = tProp.GetCurve(pAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y);
+
+		if (pCurvePosY)
+		{
+			int iKeyCount = pCurvePosY->KeyGetCount();
+
+			int iPrevFrame = -1;
+
+			float fPrevValue = fDefaultValue;
+
+			for (int k = 0; k < iKeyCount; ++k)
+			{
+				float fY = pCurvePosY->KeyGetValue(k);
+
+				int iFrame;
+
+				pCurvePosY->KeyGetTime(k).GetTime(iHour, iMinute, iSecond, iFrame, iField, iResidual, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+				switch (m_vecSequence[iAnimStackIndex].eTimeMode)
+				{
+				case fbxsdk::FbxTime::eFrames24:
+					iFrame += (iSecond + (iMinute + iHour * 60) * 60) * 24;
+					break;
+				default:
+					assert(false);
+					break;
+				}
+
+				if (vecPos.size() <= iFrame)
+				{
+					vecPos.resize(iFrame + 1);
+				}
+
+				if (iFrame - iPrevFrame - 1 == 0)
+				{
+					vecPos[iFrame].y = fY;
+				}
+				else
+				{
+					for (int i = iPrevFrame + 1; i <= iFrame; ++i)
+					{
+						fbxsdk::FbxTime time;
+
+						time.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+						m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+
+						vecPos[i].y = fY * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
+					}
+				}
+
+				fPrevValue = fY;
+				iPrevFrame = iFrame;
+			}
+
+			for (int i = iPrevFrame + 1; i < m_vecSequence[iAnimStackIndex].lFrameLength + 1; ++i)
+			{
+				fbxsdk::FbxTime time;
+
+				time.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+				m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+
+				vecPos[i].y = fPrevValue;
+			}
+		}
+
+		fbxsdk::FbxAnimCurve* pCurvePosZ = tProp.GetCurve(pAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z);
+
+		if (pCurvePosZ)
+		{
+			int iKeyCount = pCurvePosZ->KeyGetCount();
+
+			int iPrevFrame = -1;
+
+			float fPrevValue = fDefaultValue;
+
+			for (int k = 0; k < iKeyCount; ++k)
+			{
+				float fZ = pCurvePosZ->KeyGetValue(k);
+
+				int iFrame;
+
+				pCurvePosZ->KeyGetTime(k).GetTime(iHour, iMinute, iSecond, iFrame, iField, iResidual, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+				switch (m_vecSequence[iAnimStackIndex].eTimeMode)
+				{
+				case fbxsdk::FbxTime::eFrames24:
+					iFrame += (iSecond + (iMinute + iHour * 60) * 60) * 24;
+					break;
+				default:
+					assert(false);
+					break;
+				}
+
+				if (vecPos.size() <= iFrame)
+				{
+					vecPos.resize(iFrame + 1);
+				}
+
+				if (iFrame - iPrevFrame - 1 == 0)
+				{
+					vecPos[iFrame].z = fZ;
+				}
+				else
+				{
+					for (int i = iPrevFrame + 1; i <= iFrame; ++i)
+					{
+						fbxsdk::FbxTime time;
+
+						time.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+						m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+
+						vecPos[i].z = fZ * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
+					}
+				}
+
+				fPrevValue = fZ;
+				iPrevFrame = iFrame;
+			}
+
+			for (int i = iPrevFrame + 1; i < m_vecSequence[iAnimStackIndex].lFrameLength + 1; ++i)
+			{
+				fbxsdk::FbxTime time;
+
+				time.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+				m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+
+				vecPos[i].z = fPrevValue;
+			}
+		}
 	}
 
 	void FbxLoader::LoadOBJ(const TCHAR* pFileName, const std::string& strPathKey)
@@ -1211,3 +1605,4 @@ namespace Engine
 	}
 
 }
+

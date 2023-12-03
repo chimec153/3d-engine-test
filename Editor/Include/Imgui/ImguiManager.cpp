@@ -818,60 +818,7 @@ void ImguiManager::Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawa
 		break;
 	case Engine::BINDABLE_TYPE::ANIMATION:
 	{
-		std::shared_ptr<Engine::Animation> pAnimation = std::static_pointer_cast<Engine::Animation>(pDrawable);
-
-		std::shared_ptr<Engine::Skeleton> pSkeleton = pAnimation->GetSkeleton();
-
-		if (pSkeleton)
-		{
-			const std::vector<Engine::PBONE>& vecJoint = pSkeleton->GetJoints();
-			std::vector<int> vecDepth;
-
-			for (size_t i = 0; i < vecJoint.size(); ++i)
-			{
-				if (vecJoint[i]->iParent != -1)
-				{
-					while (!vecDepth.empty())
-					{
-						if (vecDepth.back() == vecJoint[i]->iParent)
-						{
-							break;
-						}
-
-						vecDepth.pop_back();
-					}
-				}
-
-				char strName[TEXT_LEN] = {};
-
-				for (int j = 0; j < vecDepth.size(); ++j)
-				{
-					strcat_s(strName, "  ");
-				}
-
-				vecDepth.push_back(static_cast<int>(i));
-
-				strcat_s(strName, vecJoint[i]->strName.c_str());
-
-				char strIndex[TEXT_LEN] = {};
-
-				sprintf_s(strIndex, " (index:%d)", static_cast<int>(i));
-
-				strcat_s(strName, strIndex);
-
-				ImGui::Text(strName);
-			}
-
-			const std::list<std::shared_ptr<Engine::JointSocket>>& socketList = pAnimation->GetSocketList();
-
-			std::list<std::shared_ptr<Engine::JointSocket>>::const_iterator iter = socketList.begin();
-			std::list<std::shared_ptr<Engine::JointSocket>>::const_iterator iterEnd = socketList.end();
-
-			for (int i = 0; iter != iterEnd; ++iter, ++i)
-			{
-				JointSocket_ImGuiWindow(*iter, i);
-			}
-		}
+		Animation_ImGuiWindow(std::static_pointer_cast<Engine::Animation>(pDrawable));
 		break;
 	}
 	case Engine::BINDABLE_TYPE::PARTICLE:
@@ -1389,6 +1336,134 @@ void ImguiManager::Terrain_ShowImguiWindow(std::shared_ptr<Engine::Terrain> pTer
 	}
 }
 
+void ImguiManager::Animation_ImGuiWindow(std::shared_ptr<Engine::Animation> pAnimation)
+{
+	ImGui::Text("==============Animation============");
+
+	std::shared_ptr<Engine::Skeleton> pSkeleton = pAnimation->GetSkeleton();
+
+	if (pSkeleton)
+	{
+		const std::vector<Engine::PBONE>& vecJoint = pSkeleton->GetJoints();
+		std::vector<int> vecDepth;
+
+		for (size_t i = 0; i < vecJoint.size(); ++i)
+		{
+			if (vecJoint[i]->iParent != -1)
+			{
+				while (!vecDepth.empty())
+				{
+					if (vecDepth.back() == vecJoint[i]->iParent)
+					{
+						break;
+					}
+
+					vecDepth.pop_back();
+				}
+			}
+
+			char strName[TEXT_LEN] = {};
+
+			for (int j = 0; j < vecDepth.size(); ++j)
+			{
+				strcat_s(strName, "  ");
+			}
+
+			vecDepth.push_back(static_cast<int>(i));
+
+			strcat_s(strName, vecJoint[i]->strName.c_str());
+
+			char strIndex[TEXT_LEN] = {};
+
+			sprintf_s(strIndex, " (index:%d)", static_cast<int>(i));
+
+			strcat_s(strName, strIndex);
+
+			ImGui::Text(strName);
+		}
+
+		const std::list<std::shared_ptr<Engine::JointSocket>>& socketList = pAnimation->GetSocketList();
+
+		std::list<std::shared_ptr<Engine::JointSocket>>::const_iterator iter = socketList.begin();
+		std::list<std::shared_ptr<Engine::JointSocket>>::const_iterator iterEnd = socketList.end();
+
+		for (int i = 0; iter != iterEnd; ++iter, ++i)
+		{
+			JointSocket_ImGuiWindow(*iter, i);
+		}
+
+		const std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>& mapSequence = pAnimation->GetSequences();
+
+		std::vector<const char*> vecSequenceName;
+
+		std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>::const_iterator iterS = mapSequence.begin();
+		std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>::const_iterator iterSEnd = mapSequence.end();
+
+		for (; iterS != iterSEnd; ++iterS)
+		{
+			vecSequenceName.push_back(iterS->second->GetTag().c_str());
+		}
+
+		if (vecSequenceName.size())
+		{
+			static int iSequence = -1;
+
+			ImGui::ListBox("Sequences", &iSequence, &vecSequenceName[0], vecSequenceName.size());
+
+			if (ImGui::Button("Change Sequence"))
+			{
+				if (vecSequenceName.size() > iSequence && iSequence >= 0)
+				{
+					pAnimation->ChangeSequence(vecSequenceName[iSequence]);
+				}
+			}
+
+			std::shared_ptr<Engine::Sequence> pSequence = pAnimation->GetCurrentSequence();
+
+			if (pSequence)
+			{
+				if (ImGui::Begin("CurrentSequence"))
+				{
+					int iFrame = pSequence->GetFrame();
+
+					Engine::Sequence::PSEQUENCEINFO pInfo = pSequence->GetSequenceInfo();
+
+					if (pInfo)
+					{
+						for (int i = 0; i < static_cast<int>(pInfo->vecPose.size()); ++i)
+						{
+							if (pInfo->vecPose[i].vecJoint.size() > iFrame)
+							{
+								ImGui::Text("bone: %d", i);
+								ImGui::SameLine();
+								ImGui::InputFloat3("s", &pInfo->vecPose[i].vecJoint[iFrame].vScale.x);
+								ImGui::InputFloat4("r", &pInfo->vecPose[i].vecJoint[iFrame].vQueternion.x);
+								ImGui::InputFloat3("p", &pInfo->vecPose[i].vecJoint[iFrame].vPos.x);
+							}
+						}
+					}
+
+					float fTime = pAnimation->GetTime();
+
+					if (ImGui::SliderFloat("time", &fTime, 0.f, pSequence->GetMaxTime()))
+					{
+						pAnimation->SetTime(fTime);
+					}
+
+					float fRate = pAnimation->GetRate();
+
+					if (ImGui::SliderFloat("rate", &fRate, 0.f, 2.f))
+					{
+						pAnimation->SetRate(fRate);
+					}
+				}
+
+				ImGui::End();
+			}
+		}
+	}
+}
+
 void ImguiManager::RenderManager_ShowImGuiWindow()
 {
 	if (ImGui::Begin("RenderManager"))
@@ -1455,18 +1530,23 @@ void ImguiManager::RenderManager_ShowImGuiWindow()
 		{
 			Engine::RenderManager::GetInst()->SetFOVValueY(fDOFVAlueY);
 		}
+	}
 
+	ImGui::End();
+
+	if (ImGui::Begin("Debug HDR"))
+	{
 		std::shared_ptr<Engine::Texture> pHDRDownScaleTexture = Engine::RenderManager::GetInst()->GetHDRDownScaleTexture();
 
-		ImGui::Image(*pHDRDownScaleTexture->GetSRV(), ImVec2(512.f, 512.f));
+		ImGui::Image(*pHDRDownScaleTexture->GetSRV(), ImVec2(128.f, 128.f));
 
 		std::shared_ptr<Engine::Texture> pBloomTexture = Engine::RenderManager::GetInst()->GetBloomTexture();
 
-		ImGui::Image(*pBloomTexture->GetSRV(), ImVec2(512.f, 512.f));
+		ImGui::Image(*pBloomTexture->GetSRV(), ImVec2(128.f, 128.f));
 
 		std::shared_ptr<Engine::Texture> pBloomFinalTexture = Engine::RenderManager::GetInst()->GetBloomFinalTexture();
 
-		ImGui::Image(*pBloomFinalTexture->GetSRV(), ImVec2(512.f, 512.f));
+		ImGui::Image(*pBloomFinalTexture->GetSRV(), ImVec2(128.f, 128.f));
 	}
 
 	ImGui::End();

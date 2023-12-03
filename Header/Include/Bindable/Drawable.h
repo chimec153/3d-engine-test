@@ -4,6 +4,7 @@
 #include "../Types.h"
 #include "../Core/Window.h"
 #include "Bindable.h"
+#include "FbxLoader.h"
 
 namespace Engine
 {
@@ -55,6 +56,7 @@ namespace Engine
 		std::shared_ptr<Animation> GetAnimation()	const;
 		void SetRenderLayer(RENDER_LAYER eLayer);
 		RENDER_LAYER GetRenderLayer()	const;
+		void AddSeqeunces(const std::vector<FbxLoader::SEQUENCE>& vecSequences, const std::string& strSeq = "");
 
 	public:
 		virtual bool Init();
@@ -711,6 +713,10 @@ namespace Engine
 				}
 			}
 
+			if (iMaxIndex < 0 || iMaxIndex2 < 0 || iMinIndex < 0 || iMinIndex2 < 0)
+			{
+				return;
+			}
 			max = vecVertex[iMaxIndex][iMaxIndex2].pos;
 			min = vecVertex[iMinIndex][iMinIndex2].pos;
 		}

@@ -20,6 +20,7 @@ namespace Engine
 		, m_fTime(0.f)
 		, m_pIKCBuffer(StaticFindBindable<ConstantBuffer<IKCBUFFER>>("IK"))
 		, m_pOwner(nullptr)
+		, m_fRate(1.f)
 	{
 		SetBindableType(Engine::BINDABLE_TYPE::ANIMATION);
 	}
@@ -42,6 +43,48 @@ namespace Engine
 
 	void Animation::AddSequance(const std::string& strTag, const std::shared_ptr<Sequence>& pSequence)
 	{
+		if (!pSequence)
+		{
+			return;
+		}
+
+		std::shared_ptr<Sequence> pSequance = FindSequence(strTag);
+
+		if (pSequance)
+		{
+#ifdef _DEBUG
+			Sequence::PSEQUENCEINFO pPrevInfo = pSequance->GetSequenceInfo();
+
+			if (!pPrevInfo)
+			{
+				assert(false);
+				return;
+			}
+
+			Sequence::PSEQUENCEINFO pNewInfo = pSequence->GetSequenceInfo();
+
+			if (!pNewInfo)
+			{
+				assert(false);
+				return;
+			}
+
+			for (int i = 0; i < pPrevInfo->vecPose.size(); ++i)
+			{
+				for (int j = 0; j < pPrevInfo->vecPose[i].vecJoint.size(); ++j)
+				{
+					if (pPrevInfo->vecPose[i].vecJoint[j].dTime == pNewInfo->vecPose[i].vecJoint[j].dTime)
+					{
+						assert(pPrevInfo->vecPose[i].vecJoint[j].vPos == pNewInfo->vecPose[i].vecJoint[j].vPos);
+						assert(pPrevInfo->vecPose[i].vecJoint[j].vScale == pNewInfo->vecPose[i].vecJoint[j].vScale);
+						assert(pPrevInfo->vecPose[i].vecJoint[j].vQueternion == pNewInfo->vecPose[i].vecJoint[j].vQueternion);
+					}
+				}
+			}
+#endif
+			return;
+		}
+
 		m_mapSequence.insert(std::make_pair(strTag, pSequence));
 
 		if (!m_pCurrentSequence)
@@ -147,7 +190,7 @@ namespace Engine
 			return;
 		}
 
-		m_fTime += fDeltaTime;
+		m_fTime += fDeltaTime * m_fRate;
 
 		if (m_fTime >= m_pCurrentSequence->GetMaxTime())
 		{
@@ -425,5 +468,17 @@ namespace Engine
 	void Animation::SetOwner(Drawable* pOwner)
 	{
 		m_pOwner = pOwner;
+	}
+	void Animation::SetTime(float fTime)
+	{
+		m_fTime = fTime;
+	}
+	float Animation::GetRate() const
+	{
+		return m_fRate;
+	}
+	void Animation::SetRate(float fRate)
+	{
+		m_fRate = fRate;
 	}
 }

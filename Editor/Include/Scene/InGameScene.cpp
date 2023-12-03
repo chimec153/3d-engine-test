@@ -77,13 +77,11 @@ bool InGameScene::Init()
 	pLight->SetIntensity(0.6f);
 	pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
 
-	//ImguiManager::GetInst()->LoadNavMesh(this, TEXT("navmesh\\nav_test.obj"), MESH_PATH);
+	std::shared_ptr<Engine::Drawable> pChar = CreateDrawable<Engine::Drawable>("test", FindLayer(DEFAULT_LAYER));
+
+	pChar->Load(TEXT("UltimateModularWomenPack\\Medieval\\Medieval.fbx"), MESH_PATH);
 
 	Engine::Scene::CreateProtoType<Player>("Player", Engine::SCENE_TYPE::CURRENT);
-
-	//std::shared_ptr<Engine::Drawable> pSponza = Engine::Scene::CreateDrawable<Engine::Drawable>("sponza", FindLayer(DEFAULT_LAYER));
-
-	//pSponza->Load(TEXT("Sponza\\sponza.obj"));
 
 	std::vector<const TCHAR*> vecTexture =
 	{

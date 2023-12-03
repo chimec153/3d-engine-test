@@ -2,6 +2,7 @@
 #include "TransformBuffer.h"
 #include "Camera.h"
 #include "../Render/RenderManager.h"
+#include "Texture.h"
 
 Engine::SkyBox::SkyBox(const TCHAR* pTexturePath, const std::string& strKey)
 {
@@ -11,7 +12,7 @@ Engine::SkyBox::SkyBox(const TCHAR* pTexturePath, const std::string& strKey)
 	FindAndAddBind<class Topology>(STANDARD_TOPOLOGY);
 	FindAndAddBind<class InputLayout>(STANDARD_INPUT_LAYOUT);
 
-	CreateBindable<Texture>("SkyBoxTexture", pTexturePath, strKey);
+	CreateBindable<Texture>("SkyBoxTexture", pTexturePath, strKey, 5);
 
 	GetTransform()->SetScale(5000.f, 5000.f, 5000.f);
 }

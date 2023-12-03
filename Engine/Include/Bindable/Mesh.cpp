@@ -53,23 +53,20 @@ namespace Engine
 			return;
 		}
 
-		m_vecMeshContainer[iIndex].pMaterial = pMaterial;
-
-		if (m_vecMeshContainer[iIndex].pMaterial)
-		{
-			m_vecMeshContainer[iIndex].pMaterial->SetContainerIndex(iIndex);
-		}
+		m_vecMeshContainer[iIndex].vecMaterial.push_back(pMaterial);
 	}
 
-	std::shared_ptr<Material> Mesh::GetMaterial(int iIndex) const
+	std::shared_ptr<Material> Mesh::GetMaterial(int iIndex, int iSubIndex) const
 	{
 		if (m_vecMeshContainer.size() <= iIndex ||
-			iIndex < 0)
+			iIndex < 0 ||
+			m_vecMeshContainer[iIndex].vecMaterial.size() <= iSubIndex ||
+			iSubIndex < 0)
 		{
 			return nullptr;
 		}
 
-		return m_vecMeshContainer[iIndex].pMaterial;
+		return m_vecMeshContainer[iIndex].vecMaterial[iSubIndex];
 	}
 
 	bool Mesh::SetVertexBuffer(int iIndex, const void* pData, int iSize)
@@ -134,11 +131,6 @@ namespace Engine
 				m_vecMeshContainer[i].vecTexture[j]->Bind();
 			}
 
-			if (m_vecMeshContainer[i].pMaterial)
-			{
-				m_vecMeshContainer[i].pMaterial->Bind();
-			}
-
 			UINT iStride = m_vecMeshContainer[i].m_iSize;
 			UINT iOffset = 0;
 
@@ -146,6 +138,11 @@ namespace Engine
 
 			for (int j = 0; j < m_vecMeshContainer[i].m_vecIndexBuffer.size(); ++j)
 			{
+				if (m_vecMeshContainer[i].vecMaterial.size() > j && m_vecMeshContainer[i].vecMaterial[j])
+				{
+					m_vecMeshContainer[i].vecMaterial[j]->Bind();
+				}
+
 				Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(*m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer, m_vecMeshContainer[i].m_vecIndexBuffer[j].eFormat, 0);
 
 				if (m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer)
@@ -175,11 +172,6 @@ namespace Engine
 				m_vecMeshContainer[i].vecTexture[j]->Bind();
 			}
 
-			if (m_vecMeshContainer[i].pMaterial)
-			{
-				m_vecMeshContainer[i].pMaterial->Bind();
-			}
-
 			UINT iStrides[] = { static_cast<unsigned int>(m_vecMeshContainer[i].m_iSize), static_cast<unsigned int>(iSize) };
 			UINT iOffsets[2] = {};
 
@@ -189,6 +181,11 @@ namespace Engine
 
 			for (size_t j = 0; j < m_vecMeshContainer[i].m_vecIndexBuffer.size(); ++j)
 			{
+				if (m_vecMeshContainer[i].vecMaterial.size() > j)
+				{
+					m_vecMeshContainer[i].vecMaterial[j]->Bind();
+				}
+
 				Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer.Get(), m_vecMeshContainer[i].m_vecIndexBuffer[j].eFormat, 0);
 
 				if (m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer)
@@ -242,9 +239,12 @@ namespace Engine
 				int _iIndexCount = 0;
 				fread(&_iIndexCount, 4, 1, pFile);
 
-				vecIndex[j].resize(_iIndexCount);
+				if (_iIndexCount)
+				{
+					vecIndex[j].resize(_iIndexCount);
 
-				fread(&vecIndex[j][0], 4, _iIndexCount, pFile);
+					fread(&vecIndex[j][0], 4, _iIndexCount, pFile);
+				}
 			}
 
 			CreateMesh(vecVertex, vecIndex);

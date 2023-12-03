@@ -6,6 +6,12 @@ float4 Slerp(float4 p0, float4 p1, float t)
     
     if ((dotp > 0.9999) || (dotp < -0.9999))
     {
+        float4 q = (p0 * (1.f - t) + p1 * t);
+        
+        q /= length(q);
+        
+        return q;
+        
         if(t <= 0.5)
         {
             return p0;

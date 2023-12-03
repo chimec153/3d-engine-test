@@ -100,13 +100,7 @@ float4 PS_ENV(VSOut_Env input)  :   SV_Target
     
     clip(g_DepthTexture0.Sample(g_sPoint, depth_uv).r - 1.f);
     
-    float3 dir = normalize(input.localpos);
-    
-    float2 uv = 0.f;
-    
-    uv.x = atan2(dir.x, dir.z) / 3.141592f / 2.f + 0.5f; // -pi ~ pi
-    
-    uv.y = asin(dir.y) / -3.141592 + 0.5f; // -pi/2 ~ pi/2
+    float2 uv = SphereDirectionToUV(normalize(input.localpos));
 
-    return g_Texture.Sample(g_sAnisotropic, uv);
+    return g_EnvironmentTexture.Sample(g_sAnisotropic, uv);
 }

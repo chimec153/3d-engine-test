@@ -90,10 +90,10 @@ VS_Terrain_Out VS_Terrain(VSStandardIn input)
     downuv.y = 1.f - downuv.y;
     
     pos.y = g_HeightTexture.SampleLevel(g_sPoint, output.blend_uv, 0.f).r * 10.f;
-    leftpos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, leftuv, 0.f).r * 10.f;
-    rightpos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, rightuv, 0.f).r * 10.f;
-    uppos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, upuv, 0.f).r * 10.f;
-    downpos.y = g_HeightTexture.SampleLevel(g_sAnisotropic, downuv, 0.f).r * 10.f;
+    leftpos.y = g_HeightTexture.SampleLevel(g_sPoint, leftuv, 0.f).r * 10.f;
+    rightpos.y = g_HeightTexture.SampleLevel(g_sPoint, rightuv, 0.f).r * 10.f;
+    uppos.y = g_HeightTexture.SampleLevel(g_sPoint, upuv, 0.f).r * 10.f;
+    downpos.y = g_HeightTexture.SampleLevel(g_sPoint, downuv, 0.f).r * 10.f;
     
     float3 v1 = normalize(float3(2.f, rightpos.y - leftpos.y, 0.f));
     float3 v2 = normalize(float3(0.f, downpos.y - uppos.y, -2.f));
@@ -379,7 +379,7 @@ PSOut PS_Terrain(VS_Terrain_Out input)
     
     for (int i = 0; i < g_iTerrainBlendCount;++i)
     {
-        float fRate = g_BlendTerrainTexture.Sample(g_sAnisotropic, float3(input.blend_uv, i)).r;
+        float fRate = g_BlendTerrainTexture.Sample(g_sPoint, float3(input.blend_uv, i)).r;
         
         fTotal += fRate;
         
@@ -571,7 +571,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     float3 albedo = value0.xyz * (1.f - decal0.w) + decal0.xyz * decal0.w;
     
-    float3 normal = ((value1.xyz * (1.f - decal1.w) + decal1.xyz * decal1.w) - 0.5f) * 2.f;
+    float3 normal = normalize(((value1.xyz * (1.f - decal1.w) + decal1.xyz * decal1.w) - 0.5f) * 2.f);
     
     float4 value2 = g_GBufferTexture2.Sample(g_sPoint, input.uv);
     
@@ -618,9 +618,15 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     float NDotV = dot(normal, view);
     
+    float3 reflect = 2.0 * (NDotV) * normal - view;
+    
+    float2 envUV = SphereDirectionToUV(normalize(reflect));
+    
+    float4 envColor = g_EnvironmentTexture.Sample(g_sAnisotropic, envUV);
+    
     float3 P = normalize(hdir - NDotH * normal);
     
-    float4 vFresnel = float4(GetFresnel(LDotH, vSpecColor), 1.f);
+    float4 vFresnel = float4(GetFresnel(LDotH, vSpecColor /** envColor.xyz*/), 1.f);
     
     float4 vMicroFacet = GetMicrofacetDistribution(NDotH, hdir.x * hdir.x / (hdir.x * hdir.x + hdir.y * hdir.y), vMaterialRoughness);
     
