@@ -184,7 +184,7 @@ namespace Engine
 
 		Graphics::GetInst()->GetDeviceContext()->Unmap(m_pReadBuffer.Get(), 0);
 	}
-	void StructuredBuffer::WriteData(void* pData, int iOffset, int iSize)
+	void StructuredBuffer::WriteData(const void* pData, int iOffset, int iSize)
 	{
 		D3D11_MAPPED_SUBRESOURCE tSub = {};
 

@@ -257,16 +257,16 @@ namespace Engine
 		m_pDecalMRT->SetTag("DecalMRT");
 
 #ifdef _DEBUG
-		pVertexShader = StaticFindBindable<VertexShader>("NullVS");
+		pDebugVertexShader = StaticFindBindable<VertexShader>("NullVS");
 
-		if (pVertexShader == nullptr)
+		if (pDebugVertexShader == nullptr)
 		{
 			return false;
 		}
 
-		pPixelShader = StaticFindBindable<PixelShader>("NullPS");
+		pDebugPixelShader = StaticFindBindable<PixelShader>("NullPS");
 
-		if (pPixelShader == nullptr)
+		if (pDebugPixelShader == nullptr)
 		{
 			return false;
 		}
@@ -562,6 +562,10 @@ namespace Engine
 		PostProcessing();
 
 		m_pNoDepthWrite->PostBind();
+
+#ifdef _DEBUG
+		RenderDebug();
+#endif
 
 		Clear();
 	}
@@ -1004,6 +1008,136 @@ namespace Engine
 
 		m_pBloomTexture->ResetUAV(0);
 	}
+#ifdef _DEBUG
+	void RenderManager::RenderDebug()
+	{
+		m_pNoDepthRead->Bind();
+
+		pDebugVertexShader->Bind();
+
+		pDebugPixelShader->Bind();
+
+		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+
+		Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+
+		Vector3 vPos = {100.f, 100.f, 0.f};
+
+		TRANSFORMBUFFER tBuffer = {};
+
+		for (int i = 0; i < 4; ++i)
+		{
+			pMRT->SetSRV(i, 0);
+
+			tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
+				Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+
+			tBuffer.matWorldViewProject.Transpose();
+
+			m_pTransformBuffer->UpdateBuffer(tBuffer);
+
+			m_pTransformBuffer->Bind();
+
+			Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
+
+			vPos.y += 100.f;
+		}
+
+		vPos.x += 100.f;
+		vPos.y = 100.f;
+
+		pMRT->SetDepthSRV(0);
+
+		tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
+			Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+
+		tBuffer.matWorldViewProject.Transpose();
+
+		m_pTransformBuffer->UpdateBuffer(tBuffer);
+
+		m_pTransformBuffer->Bind();
+
+		Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
+
+		vPos.y += 100.f;
+
+		for (int i = 0; i < 3; ++i)
+		{
+			pDepthBuffer[i]->SetDepthSRV(0);
+
+			tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
+				Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+
+			tBuffer.matWorldViewProject.Transpose();
+
+			m_pTransformBuffer->UpdateBuffer(tBuffer);
+
+			m_pTransformBuffer->Bind();
+
+			Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
+
+			vPos.y += 100.f;
+		}
+
+		vPos.x += 100.f;
+		vPos.y = 100.f;
+
+		for (int i = 0; i < 4; ++i)
+		{
+			m_pDecalMRT->SetSRV(i, 0);
+
+			tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
+				Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+
+			tBuffer.matWorldViewProject.Transpose();
+
+			m_pTransformBuffer->UpdateBuffer(tBuffer);
+
+			m_pTransformBuffer->Bind();
+
+			Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
+
+			vPos.y += 100.f;
+		}
+
+		vPos.x += 100.f;
+		vPos.y = 100.f;
+
+		m_pHDRTexture->SetSRV(0, 0);
+
+		tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
+			Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+
+		tBuffer.matWorldViewProject.Transpose();
+
+		m_pTransformBuffer->UpdateBuffer(tBuffer);
+
+		m_pTransformBuffer->Bind();
+
+		Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
+
+		vPos.y += 100.f;
+
+		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(0, 1, m_pBloomFinalTexture->GetSRV().GetAddressof());
+
+		tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
+			Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+
+		tBuffer.matWorldViewProject.Transpose();
+
+		m_pTransformBuffer->UpdateBuffer(tBuffer);
+
+		m_pTransformBuffer->Bind();
+
+		Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
+
+		pMRT->ResetSRV(0);
+
+		m_pNoDepthRead->PostBind();
+	}
+#endif
 
 	void RenderManager::BloomFilter()
 	{

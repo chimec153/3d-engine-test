@@ -34,6 +34,10 @@ namespace Engine
         const Vector3& GetPosition()    const;
         const Vector3& GetRotation()   const;
         std::shared_ptr<class Drawable> GetDrawable()   const;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
     };
 
 }

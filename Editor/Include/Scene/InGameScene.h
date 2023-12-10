@@ -1,14 +1,17 @@
 #pragma once
 #include "Scene\Scene.h"
 
-class InGameScene :
-    public Engine::Scene
+namespace Editor
 {
-public:
-    InGameScene();
-    virtual ~InGameScene() = default;
+    class InGameScene :
+        public Engine::Scene
+    {
+    public:
+        InGameScene();
+        virtual ~InGameScene() = default;
 
-public:
-    virtual bool Init() override;
-};
+    public:
+        virtual bool Init() override;
+    };
 
+}

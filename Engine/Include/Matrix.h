@@ -401,6 +401,11 @@ namespace Engine
 			};
 		}
 
+		static _tagMatrix Scaling(float x, float y, float z)
+		{
+			return Scaling({ x,y,z });
+		}
+
 		static _tagMatrix Scaling(const _tagVector3& v)
 		{
 			return

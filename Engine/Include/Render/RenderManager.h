@@ -47,8 +47,8 @@ namespace Engine
 		std::shared_ptr<class MRT> pMRT;
 		std::shared_ptr<class MRT> m_pDecalMRT;
 #ifdef _DEBUG
-		std::shared_ptr<VertexShader> pVertexShader;
-		std::shared_ptr<PixelShader> pPixelShader;
+		std::shared_ptr<class VertexShader> pDebugVertexShader;
+		std::shared_ptr<class PixelShader> pDebugPixelShader;
 #endif
 		std::shared_ptr<VertexShader> pMultiVertexShader;
 		std::shared_ptr<PixelShader> pMultiPixelShader;
@@ -126,6 +126,9 @@ namespace Engine
 		void RenderSkyBox();
 		void PostProcessing();
 		void Clear();
+#ifdef _DEBUG
+		void RenderDebug();
+#endif
 
 	public:
 		void Bloom();

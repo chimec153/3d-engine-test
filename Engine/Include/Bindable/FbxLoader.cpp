@@ -856,11 +856,11 @@ namespace Engine
 
 		if (iter != m_mapGlobalMatrix.end())
 		{
-			if (iter->second.size() <= iTime)
+			if (static_cast<__int64>(iter->second.size()) <= iTime)
 			{
 				std::unordered_map<fbxsdk::FbxNode*, std::vector<fbxsdk::FbxAMatrix>>::iterator iterP = m_mapGlobalMatrix.find(pNode->GetParent());
 
-				if (iterP == m_mapGlobalMatrix.end() || iterP->second.size() <= iTime)
+				if (iterP == m_mapGlobalMatrix.end() || static_cast<__int64>(iterP->second.size()) <= iTime)
 				{
 					tNodeMatrix = pNode->EvaluateGlobalTransform(tTime);
 				}
@@ -1088,15 +1088,22 @@ namespace Engine
 
 				pCurvePosX->KeyGetTime(k).GetTime(iHour, iMinute, iSecond, iFrame, iField, iResidual, m_vecSequence[iAnimStackIndex].eTimeMode);
 
+				int iFramePerSecond = 0;
+
 				switch (m_vecSequence[iAnimStackIndex].eTimeMode)
 				{
 				case fbxsdk::FbxTime::eFrames24:
-					iFrame += (iSecond + (iMinute + iHour * 60) * 60) * 24;
+					iFramePerSecond = 24;
+					break;
+				case fbxsdk::FbxTime::eFrames30:
+					iFramePerSecond = 30;
 					break;
 				default:
 					assert(false);
 					break;
 				}
+
+				iFrame += (iSecond + (iMinute + iHour * 60) * 60) * iFramePerSecond;
 
 				if (vecPos.size() <= iFrame)
 				{
@@ -1115,7 +1122,10 @@ namespace Engine
 
 						time.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
 
-						m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+						if (m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame.size() > i)
+						{
+							m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+						}
 
 						vecPos[i].x = fX * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
 					}
@@ -1155,15 +1165,22 @@ namespace Engine
 
 				pCurvePosY->KeyGetTime(k).GetTime(iHour, iMinute, iSecond, iFrame, iField, iResidual, m_vecSequence[iAnimStackIndex].eTimeMode);
 
+				int iFramePerSecond = 0;
+
 				switch (m_vecSequence[iAnimStackIndex].eTimeMode)
 				{
 				case fbxsdk::FbxTime::eFrames24:
-					iFrame += (iSecond + (iMinute + iHour * 60) * 60) * 24;
+					iFramePerSecond = 24;
+					break;
+				case fbxsdk::FbxTime::eFrames30:
+					iFramePerSecond = 30;
 					break;
 				default:
 					assert(false);
 					break;
 				}
+
+				iFrame += (iSecond + (iMinute + iHour * 60) * 60) * iFramePerSecond;
 
 				if (vecPos.size() <= iFrame)
 				{
@@ -1182,7 +1199,10 @@ namespace Engine
 
 						time.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
 
-						m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+						if (m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame.size() > i)
+						{
+							m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+						}
 
 						vecPos[i].y = fY * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
 					}
@@ -1222,15 +1242,22 @@ namespace Engine
 
 				pCurvePosZ->KeyGetTime(k).GetTime(iHour, iMinute, iSecond, iFrame, iField, iResidual, m_vecSequence[iAnimStackIndex].eTimeMode);
 
+				int iFramePerSecond = 0;
+
 				switch (m_vecSequence[iAnimStackIndex].eTimeMode)
 				{
 				case fbxsdk::FbxTime::eFrames24:
-					iFrame += (iSecond + (iMinute + iHour * 60) * 60) * 24;
+					iFramePerSecond = 24;
+					break;
+				case fbxsdk::FbxTime::eFrames30:
+					iFramePerSecond = 30;
 					break;
 				default:
 					assert(false);
 					break;
 				}
+
+				iFrame += (iSecond + (iMinute + iHour * 60) * 60) * iFramePerSecond;
 
 				if (vecPos.size() <= iFrame)
 				{
@@ -1249,7 +1276,10 @@ namespace Engine
 
 						time.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
 
-						m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+						if (m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame.size() > i)
+						{
+							m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
+						}
 
 						vecPos[i].z = fZ * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
 					}

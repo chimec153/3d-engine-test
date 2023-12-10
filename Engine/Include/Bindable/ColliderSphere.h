@@ -35,6 +35,10 @@ namespace Engine
         virtual std::shared_ptr<Bindable> Clone() override;
         virtual void PreDraw(float) override;
         virtual void Bind() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
     };
 
 }

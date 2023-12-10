@@ -62,6 +62,36 @@ namespace Engine
 			{
 				return *iter;
 			}
+
+			std::shared_ptr<Bindable> pChild = (*iter)->FindChild(strTag);
+
+			if (pChild)
+			{
+				return pChild;
+			}
+		}
+
+		return std::shared_ptr<Bindable>();
+	}
+
+	std::shared_ptr<Bindable> Layer::FindDrawable(BINDABLE_TYPE eType) const
+	{
+		std::list<std::shared_ptr<Bindable>>::const_iterator iter = m_DrawList.begin();
+		std::list<std::shared_ptr<Bindable>>::const_iterator iterEnd = m_DrawList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			if ((*iter)->GetBindableType() == eType)
+			{
+				return *iter;
+			}
+
+			std::shared_ptr<Bindable> pChild = (*iter)->FindChild(eType);
+
+			if (pChild)
+			{
+				return pChild;
+			}
 		}
 
 		return std::shared_ptr<Bindable>();
@@ -223,6 +253,77 @@ namespace Engine
 			m_pLoadingThread->SetFullPath(pFullPath);
 
 			m_pLoadingThread->Start();
+		}
+	}
+	void Layer::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_iZOrder, 4, 1, pFile);
+
+		int iBindableCount = static_cast<int>(m_DrawList.size());
+
+		fwrite(&iBindableCount, 4, 1, pFile);
+
+		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
+		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			BINDABLE_TYPE eType = (*iter)->GetBindableType();
+
+			fwrite(&eType, 4, 1, pFile);
+
+			(*iter)->Save(pFile);
+		}
+	}
+	void Layer::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_iZOrder, 4, 1, pFile);
+
+		int iBindableCount = 0;
+
+		fread(&iBindableCount, 4, 1, pFile);
+
+		for (int i = 0; i < iBindableCount; ++i)
+		{
+			BINDABLE_TYPE eType = BINDABLE_TYPE::NONE;
+
+			fread(&eType, 4, 1, pFile);
+
+			std::shared_ptr<Bindable> pBindable = Bindable::CreateBindable(eType);
+
+			if (!pBindable)
+			{
+				int iLength = 0;
+
+				fread(&iLength, 4, 1, pFile);
+
+				if (iLength)
+				{
+					std::unique_ptr<char[]> strBind = std::make_unique<char[]>(iLength + 1);
+
+					strBind[iLength] = 0;
+
+					fread(strBind.get(), 1, iLength, pFile);
+
+					pBindable = Bindable::FindBindable(eType, strBind.get());
+				}
+			}
+			else
+			{
+				pBindable->SetScene(m_pScene);
+
+				pBindable->SetLayer(this);
+
+				pBindable->Load(pFile);
+			}
+
+			assert(pBindable);
+
+			AddDrawable(pBindable);
 		}
 	}
 }

@@ -5,6 +5,9 @@
 
 namespace Engine
 {
+	PaperBurn::PaperBurn()
+	{
+	}
 	Engine::PaperBurn::PaperBurn(std::shared_ptr<class Texture> pTexture) :
 		Bindable()
 		, m_pPaperBurnTexture(pTexture)
@@ -100,5 +103,22 @@ namespace Engine
 	std::shared_ptr<Bindable> Engine::PaperBurn::Clone()
 	{
 		return std::make_shared<PaperBurn>(*this);
+	}
+	void PaperBurn::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_tCBuffer, sizeof(PAPERBURNCBUFFER), 1, pFile);
+		fwrite(&m_bStart, 1, 1, pFile);
+	}
+	void PaperBurn::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_tCBuffer, sizeof(PAPERBURNCBUFFER), 1, pFile);
+		fread(&m_bStart, 1, 1, pFile);
+
+		m_pPaperBurnTexture = std::static_pointer_cast<Texture>(FindChild(BINDABLE_TYPE::TEXTURE));
+		m_pCBuffer = StaticFindBindable<ConstantBuffer<PAPERBURNCBUFFER>>("PaperBurn");
 	}
 }

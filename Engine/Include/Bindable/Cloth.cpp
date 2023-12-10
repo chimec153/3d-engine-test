@@ -3,15 +3,16 @@
 #include "BindableManager.h"
 #include "ColliderSphere.h"
 
+Engine::Cloth::Cloth()
+{
+}
+
 Engine::Cloth::Cloth(int iWidth, int iHeight, float fSpring, float fSpringShear, float fSpringDistance, float fDamper, float fDamperShear, float fDamperDistance, float fDistance, float fMass)	:
 	m_iWidth(iWidth)
 	, m_iHeight(iHeight)
 	, m_fSpring(fSpring)
 	, m_fSpringShear(fSpringShear)
 	, m_fSpringDistance(fSpringDistance)
-	/*, m_fDamper(2.f * sqrtf(m_fSpring * fMass))
-	, m_fDamperShear(2.f * sqrtf(m_fSpringShear * fMass))
-	, m_fDamperDistance(2.f * sqrtf(m_fSpringDistance * fMass))*/
 	, m_fDamper(fDamper)
 	, m_fDamperShear(fDamperShear)
 	, m_fDamperDistance(fDamperDistance)
@@ -29,7 +30,6 @@ Engine::Cloth::Cloth(int iWidth, int iHeight, float fSpring, float fSpringShear,
 	m_vecVelocity.resize(m_iWidth * m_iHeight);
 	m_vecForce.resize(m_iWidth * m_iHeight);
 
-	CreateVertexAndIndex();
 	FindAndAddBind<class Topology>("TriangleList");
 	FindAndAddBind<class InputLayout>(STANDARD_INPUT_LAYOUT);
 	FindAndAddBind<VertexShader>("anisotropic_microfacet VSNoSkin");
@@ -39,16 +39,13 @@ Engine::Cloth::Cloth(int iWidth, int iHeight, float fSpring, float fSpringShear,
 
 	AddChild(pMaterial->Clone());
 
-	if (m_pCollider)
-	{
-		m_pCollider->SetCallBack(COLLISION_TYPE::STAY, this, &Cloth::CollisionStay);
-	}
-
 #ifdef _DEBUG
 	FindAndAddBind<RasterizerState>("CullNone");
 #else
 	FindAndAddBind<RasterizerState>("CullNone");
 #endif
+
+	Ready();
 }
 
 void Engine::Cloth::SetWindHeavyness(float fWind)
@@ -75,6 +72,85 @@ void Engine::Cloth::FixedUpdate(float fDeltaTime)
 	UpdatePosition(fDeltaTime);
 
 	m_bSwitch ^= true;
+}
+
+void Engine::Cloth::Save(FILE* pFile)
+{
+	__super::Save(pFile);
+
+	fwrite(&m_iWidth, 4, 1, pFile);
+	fwrite(&m_iHeight, 4, 1, pFile);
+
+	if (m_iWidth * m_iHeight > 0)
+	{
+		fwrite(&m_vecPosition[0], sizeof(VertexStandard), m_iWidth * m_iHeight, pFile);
+		fwrite(&m_vecPrevPosition[0], sizeof(VertexStandard), m_iWidth * m_iHeight, pFile);
+		fwrite(&m_vecVelocity[0], 12, m_iWidth * m_iHeight, pFile);
+		fwrite(&m_vecForce[0], 12, m_iWidth * m_iHeight, pFile);
+
+		if (m_iWidth > 1 && m_iHeight > 1)
+		{
+			fwrite(&m_vecIndex[0], 4, (m_iWidth - 1) * (m_iHeight - 1) * 6, pFile);
+		}
+	}
+
+	fwrite(&m_fSpring, 4, 1, pFile);
+	fwrite(&m_fSpringShear, 4, 1, pFile);
+	fwrite(&m_fSpringDistance, 4, 1, pFile);
+	fwrite(&m_fDamper, 4, 1, pFile);
+	fwrite(&m_fDamperShear, 4, 1, pFile);
+	fwrite(&m_fDamperDistance, 4, 1, pFile);
+	fwrite(&m_fDistance, 4, 1, pFile);
+	fwrite(&m_fMass, 4, 1, pFile);
+	fwrite(&m_bSwitch, 1, 1, pFile);
+	fwrite(&m_fWind, 4, 1, pFile);
+	fwrite(&m_vWind, 12, 1, pFile);
+}
+
+void Engine::Cloth::Load(FILE* pFile)
+{
+	__super::Load(pFile);
+
+	fread(&m_iWidth, 4, 1, pFile);
+	fread(&m_iHeight, 4, 1, pFile);
+
+	if (m_iWidth * m_iHeight > 0)
+	{
+		m_vecPosition.resize(m_iWidth * m_iHeight);
+		m_vecPrevPosition.resize(m_iWidth * m_iHeight);
+		m_vecVelocity.resize(m_iWidth * m_iHeight);
+		m_vecForce.resize(m_iWidth * m_iHeight);
+
+		fread(&m_vecPosition[0], sizeof(VertexStandard), m_iWidth * m_iHeight, pFile);
+		fread(&m_vecPrevPosition[0], sizeof(VertexStandard), m_iWidth * m_iHeight, pFile);
+		fread(&m_vecVelocity[0], sizeof(VertexStandard), m_iWidth * m_iHeight, pFile);
+		fread(&m_vecForce[0], sizeof(VertexStandard), m_iWidth * m_iHeight, pFile);
+
+		if (m_iWidth > 1 && m_iHeight > 1)
+		{
+			m_vecIndex.resize((m_iWidth - 1) * (m_iHeight - 1) * 6);
+
+			fread(&m_vecIndex[0], 4, (m_iWidth - 1) * (m_iHeight - 1) * 6, pFile);
+		}
+	}
+
+	fread(&m_fSpring, 4, 1, pFile);
+	fread(&m_fSpringShear, 4, 1, pFile);
+	fread(&m_fSpringDistance, 4, 1, pFile);
+	fread(&m_fDamper, 4, 1, pFile);
+	fread(&m_fDamperShear, 4, 1, pFile);
+	fread(&m_fDamperDistance, 4, 1, pFile);
+	fread(&m_fDistance, 4, 1, pFile);
+	fread(&m_fMass, 4, 1, pFile);
+	fread(&m_bSwitch, 1, 1, pFile);
+	fread(&m_fWind, 4, 1, pFile);
+	fread(&m_vWind, 12, 1, pFile);
+
+	m_pCollider = std::static_pointer_cast<ColliderSphere>(FindChild("ClothCollider"));
+
+	assert(m_pCollider);
+
+	Ready();
 }
 
 Engine::Vector3 Engine::Cloth::GetSpringForce(int iSrcIndex, int iDestIndex, float fSpring, float fDist) const
@@ -343,5 +419,15 @@ void Engine::Cloth::CollisionStay(Collider* pSrc, Collider* pDest, float fDeltaT
 		break;
 	default:
 		break;
+	}
+}
+
+void Engine::Cloth::Ready()
+{
+	CreateVertexAndIndex();
+
+	if (m_pCollider)
+	{
+		m_pCollider->SetCallBack(COLLISION_TYPE::STAY, this, &Cloth::CollisionStay);
 	}
 }

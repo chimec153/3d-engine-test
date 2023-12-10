@@ -39,6 +39,10 @@ namespace Engine
         virtual void Collision(float fDeltaTime) override;
         virtual bool Collision(class Collider* pDest, float fDeltaTime) = 0;
 
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
+
     };
 
 }

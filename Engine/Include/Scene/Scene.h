@@ -16,6 +16,7 @@ namespace Engine
 
 	public:
 		void AddLayer(const std::string& strTag, int iZOrder = 0);
+		void AddLayer(std::shared_ptr<Layer> pLayer);
 		std::shared_ptr<class Layer> FindLayer(const std::string& strTag)	const;
 
 	public:
@@ -82,6 +83,19 @@ namespace Engine
 		virtual void Collision(float fDeltaTime);
 		virtual void PreDraw(float fDeltaTime);
 		virtual void Draw();
+
+	public:
+		void Save(FILE* pFile);
+		void Load(FILE* pFile);
+		void Save(const char* pFilePath, const std::string& strPath = ROOT_PATH);
+		void Load(const char* pFilePath, const std::string& strPath = ROOT_PATH);
+		void SaveFromFullPath(const char* pFullPath);
+		void LoadFromFullPath(const char* pFullPath);
+		void SaveFromFullPath(const TCHAR* pFullPath);
+		void LoadFromFullPath(const TCHAR* pFullPath);
+
+	public:
+		std::shared_ptr<Bindable> FindBindable(const std::string& strTag)	const;
 	};
 
 }

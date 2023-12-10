@@ -279,7 +279,7 @@
     <ClCompile Include="Bindable\Mouse.cpp">
       <Filter>02. Input</Filter>
     </ClCompile>
-    <ClCompile Include="Math.cpp">
+    <ClCompile Include="EMath.cpp">
       <Filter>01. Core</Filter>
     </ClCompile>
     <ClCompile Include="Bindable\Animation.cpp">
@@ -521,7 +521,7 @@
     <ClInclude Include="Bindable\Mouse.h">
       <Filter>02. Input</Filter>
     </ClInclude>
-    <ClInclude Include="Math.h">
+    <ClInclude Include="EMath.h">
       <Filter>01. Core</Filter>
     </ClInclude>
     <ClInclude Include="Bindable\Animation.h">

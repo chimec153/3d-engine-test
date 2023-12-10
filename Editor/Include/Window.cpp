@@ -40,7 +40,7 @@ int Window::Run()
 
 void Window::Logic()
 {
-	ImguiManager::GetInst()->Update(0.f);
+	Editor::ImguiManager::GetInst()->Update(0.f);
 
 	Engine::Scene* pScene = Engine::SceneManager::GetInst()->GetScene();
 
@@ -50,21 +50,17 @@ void Window::Logic()
 
 		ImGui::InputText("Layer", strLayer, MAX_PATH);
 
-		ImguiManager::GetInst()->Layer_DrawListImgui(pScene->FindLayer(strLayer));
+		Editor::ImguiManager::GetInst()->Layer_DrawListImgui(pScene->FindLayer(strLayer));
 	}
 
-	ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetMRT());
-	ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetDepthBuffer(Engine::LIGHT_TYPE::DIRECTIONAL));
+	Editor::ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetMRT());
+	Editor::ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetDepthBuffer(Engine::LIGHT_TYPE::DIRECTIONAL));
 
-	ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetDecalMRT(), "DecalMRT");
-
-	Engine::Graphics::GetInst()->SetRenderTarget();
+	Editor::ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetDecalMRT(), "DecalMRT");
 
 	Engine::Window::GetInst()->Logic();
 
-	ImguiManager::GetInst()->Render(0.f);
-
-	Engine::Graphics::GetInst()->EndScene();
+	Editor::ImguiManager::GetInst()->Render(0.f);
 }
 
 LRESULT __stdcall Window::WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)

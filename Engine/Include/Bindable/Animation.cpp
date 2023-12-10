@@ -7,6 +7,7 @@
 #include "../Bindable/Drawable.h"
 #include "../Bindable/TransformBuffer.h"
 #include "../Bindable/ConstantBuffer.h"
+#include "../Resource/ResourceManager.h"
 
 namespace Engine
 {
@@ -38,6 +39,7 @@ namespace Engine
 		, m_fTime(0.f)
 		, m_pIKCBuffer(animation.m_pIKCBuffer)
 		, m_pOwner(nullptr)
+		, m_fRate(animation.m_fRate)
 	{
 	}
 
@@ -242,7 +244,176 @@ namespace Engine
 		return std::make_shared<Animation>(*this);
 	}
 
-	void Animation::SetSkeleton(const std::shared_ptr<Skeleton>& pSkeleton)
+	void Animation::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		int iSequenceCount = static_cast<int>(m_mapSequence.size());
+
+		fwrite(&iSequenceCount, 4, 1, pFile);
+
+		std::unordered_map<std::string, std::shared_ptr<Sequence>>::iterator iter = m_mapSequence.begin();
+		std::unordered_map<std::string, std::shared_ptr<Sequence>>::iterator iterEnd = m_mapSequence.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			int iLength = static_cast<int>(iter->second->GetTag().length());
+
+			fwrite(&iLength, 4, 1, pFile);
+
+			assert(iLength);
+
+			fwrite(iter->second->GetTag().c_str(), 1, iLength, pFile);
+		}
+
+		bool bCurrentSequence = static_cast<bool>(m_pCurrentSequence);
+
+		fwrite(&bCurrentSequence, 1, 1, pFile);
+
+		if (bCurrentSequence)
+		{
+			int iLength = static_cast<int>(m_pCurrentSequence->GetTag().length());
+
+			fwrite(&iLength, 4, 1, pFile);
+
+			fwrite(m_pCurrentSequence->GetTag().c_str(), 1, iLength, pFile);
+		}
+
+		int iJointCount = static_cast<int>(m_SocketList.size());
+
+		fwrite(&iJointCount, 4, 1, pFile);
+
+		std::list<std::shared_ptr<JointSocket>>::iterator iterJ = m_SocketList.begin();
+		std::list<std::shared_ptr<JointSocket>>::iterator iterJEnd = m_SocketList.end();
+
+		for(;iterJ!=iterJEnd;++iterJ)
+		{
+			(*iterJ)->Save(pFile);
+		}
+
+		bool bSkeleton = static_cast<bool>(m_pSkeleton);
+
+		fwrite(&bSkeleton, 1, 1, pFile);
+
+		if (bSkeleton)
+		{
+			size_t iLength = m_pSkeleton->GetTag().length();
+
+			fwrite(&iLength, 4, 1, pFile);
+
+			assert(iLength);
+
+			fwrite(m_pSkeleton->GetTag().c_str(), 1, iLength, pFile);
+		}
+
+		fwrite(&m_fTime, 4, 1, pFile);
+
+		int iIkCount = static_cast<int>(m_vecIKInfo.size());
+
+		fwrite(&iIkCount, 4, 1, pFile);
+
+		if (iIkCount)
+		{
+			fwrite(&m_vecIKInfo[0], sizeof(IKINFO), iIkCount, pFile);
+		}
+
+		fwrite(&m_fRate, 4, 1, pFile);
+	}
+
+	void Animation::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		int iSequenceCount = 0;
+
+		fread(&iSequenceCount, 4, 1, pFile);
+
+		for (int i = 0; i < iSequenceCount; ++i)
+		{
+			int iLength = 0;
+
+			fread(&iLength, 4, 1, pFile);
+
+			std::unique_ptr<char[]> strSequence = std::make_unique<char[]>(iLength + 1);
+
+			strSequence[iLength] = 0;
+
+			fread(strSequence.get(), 1, iLength, pFile);
+
+			AddSequance(strSequence.get(), ResourceManager::GetInst()->FindSequence(strSequence.get()));
+		}
+
+		bool bSequence = false;
+
+		fread(&bSequence, 1, 1, pFile);
+
+		if (bSequence)
+		{
+			int iLength = 0;
+
+			fread(&iLength, 4, 1, pFile);
+
+			std::unique_ptr<char[]> strSeq = std::make_unique<char[]>(iLength + 1);
+
+			strSeq[iLength] = 0;
+
+			fread(strSeq.get(), 1, iLength, pFile);
+
+			m_pCurrentSequence = FindSequence(strSeq.get());
+		}
+
+		int iJointCount = 0;
+
+		fread(&iJointCount, 4, 1, pFile);
+
+		for (int i = 0; i < iJointCount; ++i)
+		{
+			std::shared_ptr<JointSocket> pSocket = std::make_shared<JointSocket>();
+
+			pSocket->Load(pFile);
+
+			AddSocket(pSocket->GetParentIndex(), pSocket);
+		}
+
+		bool bSkeleton = false;
+
+		fread(&bSkeleton, 1, 1, pFile);
+
+		if (bSkeleton)
+		{
+			int iLength = 0;
+
+			fread(&iLength, 4, 1, pFile);
+
+			if (iLength)
+			{
+				std::unique_ptr<char[]> strSkeleton = std::make_unique<char[]>(iLength + 1);
+
+				strSkeleton[iLength] = 0;
+
+				fread(strSkeleton.get(), 1, iLength, pFile);
+
+				SetSkeleton(ResourceManager::GetInst()->FindSkeleton(strSkeleton.get()));
+			}
+		}
+
+		fread(&m_fTime, 4, 1, pFile);
+
+		int iIkCount = 0;
+
+		fread(&iIkCount, 4, 1, pFile);
+
+		if (iIkCount)
+		{
+			m_vecIKInfo.resize(iIkCount);
+
+			fread(&m_vecIKInfo[0], sizeof(IKINFO), iIkCount, pFile);
+		}
+
+		fread(&m_fRate, 4, 1, pFile);
+	}
+
+	void Animation::SetSkeleton(std::shared_ptr<Skeleton> pSkeleton)
 	{
 		m_pSkeleton = pSkeleton;
 
@@ -481,4 +652,4 @@ namespace Engine
 	{
 		m_fRate = fRate;
 	}
-}
+};;

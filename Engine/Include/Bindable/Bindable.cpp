@@ -3,6 +3,36 @@
 #include "TransformBuffer.h"
 #include "Agent.h"
 #include "Drawable.h"
+#include "VertexBuffer.h"
+#include "IndexBuffer.h"
+#include "VertexShader.h"
+#include "HullShader.h"
+#include "DomainShader.h"
+#include "GeometryShader.h"
+#include "PixelShader.h"
+#include "Texture.h"
+#include "Material.h"
+#include "InputLayout.h"
+#include "Topology.h"
+#include "Mesh.h"
+#include "Terrain.h"
+#include "ColliderLine.h"
+#include "ColliderSphere.h"
+#include "ColliderMesh.h"
+#include "Animation.h"
+#include "PointLight.h"
+#include "NavMesh.h"
+#include "Particle.h"
+#include "PaperBurn.h"
+#include "Fluid.h"
+#include "SkyBox.h"
+#include "Cloth.h"
+#include "Decal.h"
+#include "BindableManager.h"
+#include "Camera.h"
+#include "BlendState.h"
+#include "DepthStencilState.h"
+#include "Mouse.h"
 
 namespace Engine
 {
@@ -375,13 +405,276 @@ namespace Engine
 	{
 		__super::Save(pFile);
 
-		fwrite(&m_eBindableType, 4, 1, pFile);
+		fwrite(&m_eObjectType, 4, 1, pFile);
+
+		int iChildCount = static_cast<int>(m_ChildList.size());
+
+		fwrite(&iChildCount, 4, 1, pFile);
+
+		std::list<std::shared_ptr<Bindable>>::iterator iter = m_ChildList.begin();
+		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_ChildList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			BINDABLE_TYPE eType = (*iter)->GetBindableType();
+
+			fwrite(&eType, 4, 1, pFile);
+
+			switch (eType)
+			{
+			case Engine::BINDABLE_TYPE::VERTEX_BUFFER:
+			case Engine::BINDABLE_TYPE::INDEX_BUFFER:
+			case Engine::BINDABLE_TYPE::VERTEX_SHADER:
+			case Engine::BINDABLE_TYPE::HULL_SHADER:
+			case Engine::BINDABLE_TYPE::DOMAIN_SHADER:
+			case Engine::BINDABLE_TYPE::GEOMETRY_SHADER:
+			case Engine::BINDABLE_TYPE::PIXEL_SHADER:
+			case Engine::BINDABLE_TYPE::TEXTURE:
+			case Engine::BINDABLE_TYPE::INPUTLAYOUT:
+			case Engine::BINDABLE_TYPE::TOPOLOGY:
+			case Engine::BINDABLE_TYPE::MESH:
+			case Engine::BINDABLE_TYPE::BLEND_STATE:
+			case Engine::BINDABLE_TYPE::DEPTH_STENCIL_STATE:
+			case Engine::BINDABLE_TYPE::RASTERIZER_STATE:
+			{
+				(*iter)->CRef::Save(pFile);
+			}
+				break;
+			case Engine::BINDABLE_TYPE::MATERIAL:
+			case Engine::BINDABLE_TYPE::TRANSFORM:
+			case Engine::BINDABLE_TYPE::TERRAIN:
+			case Engine::BINDABLE_TYPE::COLLIDER_LINE:
+			case Engine::BINDABLE_TYPE::COLLIDER_SPHERE:
+			case Engine::BINDABLE_TYPE::COLLIDER_MESH:
+			case Engine::BINDABLE_TYPE::ANIMATION:
+			case Engine::BINDABLE_TYPE::AGENT:
+			case Engine::BINDABLE_TYPE::NAV_MESH:
+			case Engine::BINDABLE_TYPE::LIGHT:
+			case Engine::BINDABLE_TYPE::PARTICLE:
+			case Engine::BINDABLE_TYPE::DECAL:
+			case Engine::BINDABLE_TYPE::PAPERBURN:
+			case Engine::BINDABLE_TYPE::FLUID:
+			case Engine::BINDABLE_TYPE::SKYBOX:
+			case Engine::BINDABLE_TYPE::CLOTH:
+			case Engine::BINDABLE_TYPE::CAMERA:
+			case Engine::BINDABLE_TYPE::DRAWABLE:
+				(*iter)->Save(pFile);
+				break;
+			default:
+				assert(false);
+			}
+		}
 	}
 
 	void Bindable::Load(FILE* pFile)
 	{
 		__super::Load(pFile);
 
-		fread(&m_eBindableType, 4, 1, pFile);
+		fread(&m_eObjectType, 4, 1, pFile);
+
+		int iChildCount = 0;
+
+		fread(&iChildCount, 4, 1, pFile);
+
+		for (int i = 0; i < iChildCount; ++i)
+		{
+			BINDABLE_TYPE eType = BINDABLE_TYPE::NONE;
+
+			fread(&eType, 4, 1, pFile);
+
+			std::shared_ptr<Bindable> pBindable = CreateBindable(eType);
+
+			if (!pBindable)
+			{
+				int iLength = 0;
+
+				fread(&iLength, 4, 1, pFile);
+
+				if (iLength)
+				{
+					std::unique_ptr<char[]> strBind = std::make_unique<char[]>(iLength + 1);
+
+					strBind[iLength] = 0;
+
+					fread(strBind.get(), 1, iLength, pFile);
+
+					pBindable = FindBindable(eType, strBind.get());
+
+					if (!pBindable)
+					{
+						continue;
+					}
+				}
+				else
+				{
+					assert(false);
+				}
+			}
+			else
+			{
+				pBindable->SetScene(m_pScene);
+
+				pBindable->SetLayer(m_pLayer);
+
+				pBindable->SetParent(this);
+
+				pBindable->Load(pFile);
+			}
+			
+			AddChild(pBindable);
+		}
+	}
+
+	std::shared_ptr<Bindable> Bindable::CreateBindable(BINDABLE_TYPE eType)
+	{
+		switch (eType)
+		{
+		case Engine::BINDABLE_TYPE::VERTEX_BUFFER:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::INDEX_BUFFER:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::VERTEX_SHADER:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::HULL_SHADER:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::DOMAIN_SHADER:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::GEOMETRY_SHADER:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::PIXEL_SHADER:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::TEXTURE:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::MATERIAL:
+			return std::make_shared<Material>();
+		case Engine::BINDABLE_TYPE::TRANSFORM:
+			return std::make_shared<Transform>();
+		case Engine::BINDABLE_TYPE::INPUTLAYOUT:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::TOPOLOGY:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::MESH:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::TERRAIN:
+			return std::make_shared<Terrain>();
+		case Engine::BINDABLE_TYPE::COLLIDER_LINE:
+			return std::make_shared<ColliderLine>();
+		case Engine::BINDABLE_TYPE::COLLIDER_SPHERE:
+			return std::make_shared<ColliderSphere>();
+		case Engine::BINDABLE_TYPE::COLLIDER_MESH:
+			return std::make_shared<ColliderMesh>();
+		case Engine::BINDABLE_TYPE::ANIMATION:
+			return std::make_shared<Animation>();
+		case Engine::BINDABLE_TYPE::AGENT:
+			return std::make_shared<Agent>();
+		case Engine::BINDABLE_TYPE::NAV_MESH:
+			return std::make_shared<NavMesh>();
+		case Engine::BINDABLE_TYPE::LIGHT:
+			return std::make_shared<PointLight>();
+		case Engine::BINDABLE_TYPE::PARTICLE:
+			return std::make_shared<Particle>();
+		case Engine::BINDABLE_TYPE::DECAL:
+			return std::make_shared<Decal>();
+		case Engine::BINDABLE_TYPE::PAPERBURN:
+			return std::make_shared<PaperBurn>();
+		case Engine::BINDABLE_TYPE::FLUID:
+			return std::make_shared<Fluid>();
+		case Engine::BINDABLE_TYPE::SKYBOX:
+			return std::make_shared<SkyBox>();
+		case Engine::BINDABLE_TYPE::CLOTH:
+			return std::make_shared<Cloth>();
+		case Engine::BINDABLE_TYPE::CAMERA:
+			return std::make_shared<Camera>();
+		case Engine::BINDABLE_TYPE::DRAWABLE:
+			return std::make_shared<Drawable>();
+		case Engine::BINDABLE_TYPE::BLEND_STATE:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::DEPTH_STENCIL_STATE:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::RASTERIZER_STATE:
+			return nullptr;
+		case Engine::BINDABLE_TYPE::MOUSE:
+			return std::make_shared<Mouse>();
+		default:
+			assert(false);
+		}
+
+		return std::shared_ptr<Bindable>();
+	}
+	std::shared_ptr<Bindable> Bindable::FindBindable(BINDABLE_TYPE eType, const std::string& strBind)
+	{
+		switch (eType)
+		{
+		case Engine::BINDABLE_TYPE::VERTEX_BUFFER:
+			return StaticFindBindable<VertexBuffer>(strBind);
+		case Engine::BINDABLE_TYPE::INDEX_BUFFER:
+			return StaticFindBindable<IndexBuffer>(strBind);
+		case Engine::BINDABLE_TYPE::VERTEX_SHADER:
+			return StaticFindBindable<VertexShader>(strBind);
+		case Engine::BINDABLE_TYPE::HULL_SHADER:
+			return StaticFindBindable<HullShader>(strBind);
+		case Engine::BINDABLE_TYPE::DOMAIN_SHADER:
+			return StaticFindBindable<DomainShader>(strBind);
+		case Engine::BINDABLE_TYPE::GEOMETRY_SHADER:
+			return StaticFindBindable<GeometryShader>(strBind);
+		case Engine::BINDABLE_TYPE::PIXEL_SHADER:
+			return StaticFindBindable<PixelShader>(strBind);
+		case Engine::BINDABLE_TYPE::TEXTURE:
+			return StaticFindBindable<Texture>(strBind);
+		case Engine::BINDABLE_TYPE::MATERIAL:
+			break;
+		case Engine::BINDABLE_TYPE::TRANSFORM:
+			break;
+		case Engine::BINDABLE_TYPE::INPUTLAYOUT:
+			return StaticFindBindable<InputLayout>(strBind);
+		case Engine::BINDABLE_TYPE::TOPOLOGY:
+			return StaticFindBindable<Topology>(strBind);
+		case Engine::BINDABLE_TYPE::MESH:
+			return StaticFindBindable<Mesh>(strBind);
+		case Engine::BINDABLE_TYPE::TERRAIN:
+			break;
+		case Engine::BINDABLE_TYPE::COLLIDER_LINE:
+			break;
+		case Engine::BINDABLE_TYPE::COLLIDER_SPHERE:
+			break;
+		case Engine::BINDABLE_TYPE::ANIMATION:
+			break;
+		case Engine::BINDABLE_TYPE::AGENT:
+			break;
+		case Engine::BINDABLE_TYPE::NAV_MESH:
+			break;
+		case Engine::BINDABLE_TYPE::LIGHT:
+			break;
+		case Engine::BINDABLE_TYPE::PARTICLE:
+			break;
+		case Engine::BINDABLE_TYPE::DECAL:
+			break;
+		case Engine::BINDABLE_TYPE::PAPERBURN:
+			break;
+		case Engine::BINDABLE_TYPE::FLUID:
+			break;
+		case Engine::BINDABLE_TYPE::SKYBOX:
+			break;
+		case Engine::BINDABLE_TYPE::CLOTH:
+			break;
+		case Engine::BINDABLE_TYPE::CAMERA:
+			break;
+		case Engine::BINDABLE_TYPE::DRAWABLE:
+			break;
+		case Engine::BINDABLE_TYPE::BLEND_STATE:
+			return StaticFindBindable<BlendState>(strBind);
+			break;
+		case Engine::BINDABLE_TYPE::DEPTH_STENCIL_STATE:
+			return StaticFindBindable<DepthStencilState>(strBind);
+			break;
+		case Engine::BINDABLE_TYPE::RASTERIZER_STATE:
+			return StaticFindBindable<RasterizerState>(strBind);
+			break;
+		case Engine::BINDABLE_TYPE::MOUSE:
+			break;
+		default:
+			assert(false);
+		}
+		return std::shared_ptr<Bindable>();
 	}
 }

@@ -57,11 +57,13 @@ namespace Engine
 
 	void Transform::SetParentTransform(Transform* pParent)
 	{
+		assert(this != pParent);
 		m_pParentTrasnform = pParent;
 	}
 
 	void Transform::AddChildTransform(Transform* pChild)
 	{
+		assert(this != pChild);
 		m_ChildTransformList.push_back(pChild);
 	}
 
@@ -162,6 +164,36 @@ namespace Engine
 		{
 			m_pJointSequenceBuffer->ResetSRV(32);
 		}
+	}
+
+	void Transform::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_vPosition, 12, 1, pFile);
+		fwrite(&m_vVelocity, 12, 1, pFile);
+		fwrite(&m_vRotation, 12, 1, pFile);
+		fwrite(&m_vRotationVelocity, 12, 1, pFile);
+		fwrite(&m_vScale, 12, 1, pFile);
+		fwrite(&m_vScaleVelocity, 12, 1, pFile);
+		fwrite(&m_vRelativePosition, 12, 1, pFile);
+		fwrite(&m_vRelativeRotation, 12, 1, pFile);
+		fwrite(&m_vRelativeScale, 12, 1, pFile);
+	}
+
+	void Transform::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_vPosition, 12, 1, pFile);
+		fread(&m_vVelocity, 12, 1, pFile);
+		fread(&m_vRotation, 12, 1, pFile);
+		fread(&m_vRotationVelocity, 12, 1, pFile);
+		fread(&m_vScale, 12, 1, pFile);
+		fread(&m_vScaleVelocity, 12, 1, pFile);
+		fread(&m_vRelativePosition, 12, 1, pFile);
+		fread(&m_vRelativeRotation, 12, 1, pFile);
+		fread(&m_vRelativeScale, 12, 1, pFile);
 	}
 
 	void Transform::UpdatePosition()

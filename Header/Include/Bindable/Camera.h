@@ -36,6 +36,10 @@ namespace Engine
         virtual std::shared_ptr<Bindable> Clone() override;
 
     public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
+
+    public:
         void CameraMoveFront(float fDeltaTime);
         void CameraMoveBack(float fDeltaTime);
         void CameraMoveLeft(float fDeltaTime);

@@ -9,12 +9,20 @@
 #include "../Input/Input.h"
 #include "TransformBuffer.h"
 
+Engine::Fluid::Fluid()	:
+	m_pBuffer()
+	, m_iCurrentBuffer(0)
+	, m_tCBuffer()
+	, m_iHeight()
+{
+}
+
 Engine::Fluid::Fluid(int n, int m, float d, float mu, float c, float t)	:
 	Drawable()
 	, m_pBuffer()
 	, m_iCurrentBuffer(0)
 	, m_pCS(StaticFindBindable<ComputeShader>("FluidCS"))
-	, m_pCBuffer(FindAndAddBind<ConstantBuffer<FLUIDCBUFFER>>("Fluid"))
+	, m_pCBuffer(FindAndAddBind<ConstantBuffer<FLUIDCBUFFER>>("FluidCBuffer"))
 	, m_iHeight(m + 1)
 {
 	assert(c < d / 2 / t * sqrtf(mu * t + 2.f));
@@ -26,12 +34,6 @@ Engine::Fluid::Fluid(int n, int m, float d, float mu, float c, float t)	:
 	m_tCBuffer.iWidth = n + 1;
 	m_tCBuffer.dist = d;
 
-	m_pBuffer[0] = std::make_shared<StructuredBuffer>(m_iHeight * m_tCBuffer.iWidth, 4);
-	m_pBuffer[1] = std::make_shared<StructuredBuffer>(m_iHeight * m_tCBuffer.iWidth, 4);
-	m_pBuffer[2] = std::make_shared<StructuredBuffer>(m_iHeight * m_tCBuffer.iWidth, 4);
-
-	CreateVertexBufferAndIndexBuffer(n, m);
-
 	FindAndAddBind<VertexShader>("FluidVS");
 	FindAndAddBind<PixelShader>("AlphaNoUVPS");
 	FindAndAddBind<InputLayout>(STANDARD_INPUT_LAYOUT);
@@ -42,6 +44,8 @@ Engine::Fluid::Fluid(int n, int m, float d, float mu, float c, float t)	:
 	AddChild(pMaterial->Clone());
 
 	GetTransform()->SetScale(d, GetTransform()->GetScale().y, d);
+
+	Ready();
 }
 
 void Engine::Fluid::CreateVertexBufferAndIndexBuffer(int n, int m)
@@ -150,4 +154,35 @@ void Engine::Fluid::Bind()
 	__super::Bind();
 
 	m_pBuffer[m_iCurrentBuffer]->ResetSRV(39);
+}
+
+void Engine::Fluid::Save(FILE* pFile)
+{
+	__super::Save(pFile);
+
+	fwrite(&m_tCBuffer, sizeof(FLUIDCBUFFER), 1, pFile);
+	fwrite(&m_iHeight, 4, 1, pFile);
+}
+
+void Engine::Fluid::Load(FILE* pFile)
+{
+	__super::Load(pFile);
+
+	fread(&m_tCBuffer, sizeof(FLUIDCBUFFER), 1, pFile);
+	fread(&m_iHeight, 4, 1, pFile);
+
+	m_pCS = std::static_pointer_cast<ComputeShader>(FindChild("FluidCS"));
+	m_pCBuffer = std::static_pointer_cast<ConstantBuffer<FLUIDCBUFFER>>(FindChild("FluidCBuffer"));
+
+	Ready();
+}
+
+void Engine::Fluid::Ready()
+{
+	for (int i = 0; i < FLUID_BUFFER_COUNT; ++i)
+	{
+		m_pBuffer[i] = std::make_shared<StructuredBuffer>(m_iHeight * m_tCBuffer.iWidth, 4);
+	}
+
+	CreateVertexBufferAndIndexBuffer(m_tCBuffer.iWidth - 1, m_iHeight - 1);
 }

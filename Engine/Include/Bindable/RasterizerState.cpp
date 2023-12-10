@@ -5,6 +5,8 @@ namespace Engine
 	RasterizerState::RasterizerState(bool bDepthEnable, D3D11_CULL_MODE eCullMode, D3D11_FILL_MODE eFillmode, float fDepthBias, float fSlopeScaledDepthBias) :
 		Bindable()
 	{
+		SetBindableType(BINDABLE_TYPE::RASTERIZER_STATE);
+
 		D3D11_RASTERIZER_DESC desc = {};
 
 		desc.CullMode = eCullMode;

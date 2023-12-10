@@ -1,4 +1,5 @@
 #include "Player.h"
+#include "Player.h"
 #include "Bindable/NavMesh.h"
 #include "Bindable/Agent.h"
 #include "Core/Window.h"
@@ -16,103 +17,86 @@
 #include "Bindable/BlendState.h"
 #include "Bindable/PaperBurn.h"
 
-Player::Player() :
-	Drawable()
-	, m_pAgent(nullptr)
-	, m_pAnimation(CreateBindable<Engine::Animation>("anim"))
+namespace Editor
+{
+	Player::Player() :
+		Drawable()
 #ifdef _DEBUG
-	, m_pSphere()
+		, m_pSphere()
 #endif
-{
-	std::shared_ptr<Engine::Mesh> pMesh = CreateBindable<Engine::Mesh>("mesh", "Medieval.mesh", MESH_PATH);
-
-	//std::shared_ptr<Engine::Sequence> pSequence = std::make_shared<Engine::Sequence>();
-
-	//if (pSequence)
-	//{
-	//	pSequence->LoadFromPath("MedievalCharacterArmature_Idle_Neutral.seq", MESH_PATH);
-	//}
-
-	//std::shared_ptr<Engine::Sequence> pWalkSequence = std::make_shared<Engine::Sequence>();
-
-	//if (pWalkSequence)
-	//{
-	//	pWalkSequence->LoadFromPath("MedievalCharacterArmature_Walk.seq", MESH_PATH);
-
-	//	pWalkSequence->UseRootMotion();
-	//}
-
-	//std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
-	//
-	//if (pSkeleton)
-	//{
-	//	pSkeleton->LoadFromPath("Medieval.skel", MESH_PATH);
-	//	m_pAnimation->SetSkeleton(pSkeleton);
-	//}
-
-	//m_pAnimation->AddSequance("idle", pSequence);
-	//m_pAnimation->AddSequance("walk", pWalkSequence);
-
-	FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSNoSkin");
-	FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
-	FindAndAddBind<Engine::InputLayout>("Standard");
-	FindAndAddBind<Engine::Topology>("TriangleList");
-
-	GetTransform()->SetRX(Engine::DegToRad(180.f));
-}
-
-Player::Player(const Player& player) :
-	Drawable(player)
-	, m_pAgent(std::static_pointer_cast<Engine::Agent>(FindChild(Engine::BINDABLE_TYPE::AGENT)))
-	, m_pAnimation(std::static_pointer_cast<Engine::Animation>(FindChild(Engine::BINDABLE_TYPE::ANIMATION)))
-	, m_pFootLineCollider()
-#ifdef _DEBUG
-	, m_pSphere()
-#endif
-{
-	if (m_pAgent)
 	{
-		m_pAgent->SetTransform(GetTransform());
-	}
-}
+		CreateBindable<Engine::Animation>("anim");
 
-void Player::CreateAgent(std::shared_ptr<Engine::NavMesh> pNavMesh, const Engine::Vector3& pos)
-{
-	m_pAgent = CreateBindable<Engine::Agent>("agent", GetTransform(), pNavMesh.get(), pos);
-}
+		std::shared_ptr<Engine::Mesh> pMesh = CreateBindable<Engine::Mesh>("Medieval", "Medieval.mesh", MESH_PATH);
 
-void Player::Move(const Engine::Vector3& pos)
-{
-	if (m_pAgent)
-	{
-		m_pAgent->SetTargetPos(pos);
-	}
-}
+		std::shared_ptr<Engine::Sequence> pSequence = std::make_shared<Engine::Sequence>();
 
-void Player::Update(float fDeltaTime)
-{
-	__super::Update(fDeltaTime);
-
-	if (m_pAgent && m_pAnimation)
-	{
-		const Engine::Vector3& vVelocity = m_pAgent->GetAgentVelocity();
-
-		if (vVelocity.Length() < epsilon)
+		if (pSequence)
 		{
-			m_pAnimation->ChangeSequence("idle");
+			pSequence->LoadFromPath("MedievalCharacterArmature_Idle_Neutral.seq", MESH_PATH);
 		}
-		else
+
+		std::shared_ptr<Engine::Sequence> pWalkSequence = std::make_shared<Engine::Sequence>();
+
+		if (pWalkSequence)
 		{
-			m_pAnimation->ChangeSequence("walk");
+			pWalkSequence->LoadFromPath("MedievalCharacterArmature_Walk.seq", MESH_PATH);
+
+			pWalkSequence->UseRootMotion();
+		}
+
+		std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
+
+		if (pSkeleton)
+		{
+			pSkeleton->LoadFromPath("Medieval.skel", MESH_PATH);
+			GetAnimation()->SetSkeleton(pSkeleton);
+		}
+
+		GetAnimation()->AddSequance("idle", pSequence);
+		GetAnimation()->AddSequance("walk", pWalkSequence);
+
+		FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
+		FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
+		FindAndAddBind<Engine::InputLayout>("Standard");
+		FindAndAddBind<Engine::Topology>("TriangleList");
+	}
+
+	Player::Player(const Player& player) :
+		Drawable(player)
+		, m_pFootLineCollider()
+#ifdef _DEBUG
+		, m_pSphere()
+#endif
+	{
+	}
+
+
+	void Player::Update(float fDeltaTime)
+	{
+		__super::Update(fDeltaTime);
+
+		if (GetAgent() && GetAnimation())
+		{
+			const Engine::Vector3& vVelocity = GetAgent()->GetAgentVelocity();
+
+			if (vVelocity.Length() < epsilon)
+			{
+				GetAnimation()->ChangeSequence("idle");
+			}
+			else
+			{
+				GetAnimation()->ChangeSequence("walk");
+			}
 		}
 	}
-}
 
-void Player::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
-{
-}
+	void Player::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
+	{
+	}
 
-std::shared_ptr<Engine::Bindable> Player::Clone()
-{
-	return std::make_shared<Player>(*this);
+	std::shared_ptr<Engine::Bindable> Player::Clone()
+	{
+		return std::make_shared<Player>(*this);
+	}
 }

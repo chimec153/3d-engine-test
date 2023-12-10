@@ -55,6 +55,10 @@ namespace Engine
         PSEQUENCEINFO GetSequenceInfo(int iIndex = 0) const;
         bool IsRootMotion() const;
         int GetFrame()  const;
+        void SetFramePosition(int iBone, int iFrame, const Vector3& vPos);
+        void SetFrameRotation(int iBone, int iFrame, const Vector4& vQuternion);
+        void SetFrameScale(int iBone, int iFrame, const Vector3& vScale);
+        void CreateSequenceBuffer();
 
     public:
         void Update(float fDeltaTime);

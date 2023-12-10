@@ -114,4 +114,24 @@ namespace Engine
 	{
 		return m_pDrawable;
 	}
+	void JointSocket::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_iParentIndex, 4, 1, pFile);
+		fwrite(&m_vScale, 12, 1, pFile);
+		fwrite(&m_vPosition, 12, 1, pFile);
+		fwrite(&m_vRotation, 12, 1, pFile);
+	}
+	void JointSocket::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_iParentIndex, 4, 1, pFile);
+		fread(&m_vScale, 12, 1, pFile);
+		fread(&m_vPosition, 12, 1, pFile);
+		fread(&m_vRotation, 12, 1, pFile);
+
+		UpdateJointMatrix();
+	}
 }

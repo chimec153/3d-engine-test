@@ -12,6 +12,7 @@ namespace Engine
         public Drawable
     {
     public:
+        Particle();
         Particle(int iMaxCount);
         virtual ~Particle() override = default;
 
@@ -23,9 +24,7 @@ namespace Engine
         PARTICLECBUFFER m_tCBuffer;
         std::shared_ptr<class StructuredBuffer> m_pBuffer;
         std::shared_ptr<class StructuredBuffer> m_pSystemBuffer;
-        std::shared_ptr<ConstantBuffer<TRANSFORMBUFFER>>   m_pTransformGSCBuffer;
-        std::shared_ptr<ConstantBuffer<PARTICLECBUFFER>>   m_pParticleGSCBuffer;
-        std::shared_ptr<ConstantBuffer<PARTICLECBUFFER>>   m_pParticleCSCBuffer;
+        std::shared_ptr<ConstantBuffer<PARTICLECBUFFER>>   m_pParticleCBuffer;
         float   m_fElapsedTime;
         float   m_fEmitMaxTime;
         std::shared_ptr<class BlendState>   m_pBlendState;
@@ -49,6 +48,10 @@ namespace Engine
     public:
         virtual void Update(float fDeltaTime) override;
         virtual void Bind() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
 
     };
 }

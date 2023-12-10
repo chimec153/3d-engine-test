@@ -13,6 +13,10 @@ namespace Engine
 	{
 		return static_cast<int>(m_vecMeshContainer.size());
 	}
+	int Mesh::GetMeshSubCount(int iIndex) const
+	{
+		return static_cast<int>(m_vecMeshContainer[iIndex].m_vecIndexBuffer.size());
+	}
 #ifdef _DEBUG
 	bool Mesh::IsMeshEnabled(int iIndex) const
 	{
@@ -21,6 +25,14 @@ namespace Engine
 	void Mesh::ToggleMesh(int iIndex)
 	{
 		m_vecMeshContainer[iIndex].bEnable ^= true;
+	}
+	void Mesh::SetMeshSubOffset(int iIndex, int iSubIndex, int iOffset)
+	{
+		m_vecMeshContainer[iIndex].m_vecIndexBuffer[iSubIndex].iOffset = iOffset;
+	}
+	int Mesh::GetMeshSubOffset(int iIndex, int iSubIndex) const
+	{
+		return m_vecMeshContainer[iIndex].m_vecIndexBuffer[iSubIndex].iOffset;
 	}
 #endif
 
@@ -147,7 +159,11 @@ namespace Engine
 
 				if (m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer)
 				{
+#ifdef _DEBUG
+					Graphics::GetInst()->GetDeviceContext()->DrawIndexed(m_vecMeshContainer[i].m_vecIndexBuffer[j].iCount - m_vecMeshContainer[i].m_vecIndexBuffer[j].iOffset, m_vecMeshContainer[i].m_vecIndexBuffer[j].iOffset, 0);
+#elif
 					Graphics::GetInst()->GetDeviceContext()->DrawIndexed(m_vecMeshContainer[i].m_vecIndexBuffer[j].iCount, 0, 0);
+#endif
 				}
 				else
 				{
@@ -264,13 +280,11 @@ namespace Engine
 				vecTexture.push_back(pTexture);
 			}
 
-			SetTextures(i, vecTexture);
+			int iMaterial = 0;
 
-			bool bMaterial = false;
+			fread(&iMaterial, 1, 4, pFile);
 
-			fread(&bMaterial, 1, 1, pFile);
-
-			if (bMaterial)
+			for (int j = 0; j < iMaterial; ++j)
 			{
 				std::shared_ptr<Material> pMaterial = std::make_shared<Material>();
 
@@ -278,6 +292,8 @@ namespace Engine
 
 				SetMaterial(i, pMaterial);
 			}
+
+			SetTextures(i, vecTexture);
 		}
 
 		m_vBoundingSphereInfo = Drawable::StaticGetBoundingSphere(_vecVertex);

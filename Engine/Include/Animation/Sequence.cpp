@@ -48,13 +48,13 @@ namespace Engine
 		{
 			if (m_iMaxFrame < static_cast<int>(vecPose[i].vecKeyFrame.size()))
 			{
-				m_iMaxFrame = vecPose[i].vecKeyFrame.size();
+				m_iMaxFrame = static_cast<int>(vecPose[i].vecKeyFrame.size());
 			}
 		}
 
 		if (!m_iMaxFrame)
 		{
-			assert(false);
+			//assert(false);
 			return false;
 		}
 
@@ -63,8 +63,6 @@ namespace Engine
 		m_vecInfo.emplace_back(dbg_new SEQUENCEINFO());
 
 		PSEQUENCEINFO pInfo = m_vecInfo.back();
-
-		std::vector<TRANSFORM> vecTransform(m_tCBuffer.iMaxJoint * m_iMaxFrame);
 
 		for (size_t i = 0; i < vecPose.size(); ++i)
 		{
@@ -79,6 +77,16 @@ namespace Engine
 				if (fTotal < static_cast<float>(vecPose[i].vecKeyFrame[j].dTime))
 				{
 					fTotal = static_cast<float>(vecPose[i].vecKeyFrame[j].dTime);
+				}
+
+				if (fTotal > m_tCBuffer.fMaxTime)
+				{
+					m_tCBuffer.fMaxTime = fTotal;
+				}
+
+				if (m_iMaxFrame > static_cast<int>(vecPose[i].vecKeyFrame.size()) && !vecPose[i].vecKeyFrame.empty())
+				{
+					m_iMaxFrame = static_cast<int>(vecPose[i].vecKeyFrame.size());
 				}
 
 				JOINT tJoint;
@@ -103,31 +111,14 @@ namespace Engine
 				tJoint.vQueternion.w = static_cast<float>(vRotate[3]);
 
 				tPose.vecJoint.push_back(tJoint);
-
-				vecTransform[i * m_iMaxFrame + j].vPos = tJoint.vPos;
-				vecTransform[i * m_iMaxFrame + j].vScale = tJoint.vScale;
-				vecTransform[i * m_iMaxFrame + j].vQueternion = tJoint.vQueternion;
-			}
-
-			if (fTotal > m_tCBuffer.fMaxTime)
-			{
-				m_tCBuffer.fMaxTime = fTotal;
-			}
-
-			if (m_iMaxFrame > static_cast<int>(vecPose[i].vecKeyFrame.size()) && !vecPose[i].vecKeyFrame.empty())
-			{
-				m_iMaxFrame = static_cast<int>(vecPose[i].vecKeyFrame.size());
 			}
 		}
+
+		CreateSequenceBuffer();
 
 		m_tCBuffer.iMaxFrame = m_iMaxFrame;
 		fMaxTime = m_tCBuffer.fMaxTime;
 		fTime = 0.f;
-
-		if (vecTransform.size())
-		{
-			m_pBuffer = std::make_shared<StructuredBuffer>(static_cast<int>(vecTransform.size()), static_cast<int>(sizeof(TRANSFORM)), &vecTransform.front());
-		}
 	}
 
 	void Sequence::UseRootMotion()
@@ -164,6 +155,71 @@ namespace Engine
 	int Sequence::GetFrame() const
 	{
 		return m_tCBuffer.iFrame;
+	}
+
+	void Sequence::SetFramePosition(int iBone, int iFrame, const Vector3& vPos)
+	{
+		if (!m_pBuffer)
+		{
+			return;
+		}
+
+		m_vecInfo[0]->vecPose[iBone].vecJoint[iFrame].vPos = vPos;
+
+		//m_pBuffer->WriteData(&vPos.x, 40 * (iBone * m_iMaxFrame + iFrame), 12);
+
+		CreateSequenceBuffer();
+	}
+
+	void Sequence::SetFrameRotation(int iBone, int iFrame, const Vector4& vQuternion)
+	{
+		if (!m_pBuffer)
+		{
+			return;
+		}
+
+		m_vecInfo[0]->vecPose[iBone].vecJoint[iFrame].vQueternion = vQuternion;
+
+		//m_pBuffer->WriteData(&vQuternion.x, 40 * (iBone * m_iMaxFrame + iFrame) + 12, 16);
+
+		CreateSequenceBuffer();
+	}
+
+	void Sequence::SetFrameScale(int iBone, int iFrame, const Vector3& vScale)
+	{
+		if (!m_pBuffer)
+		{
+			return;
+		}
+
+		m_vecInfo[0]->vecPose[iBone].vecJoint[iFrame].vScale = vScale;
+
+		//m_pBuffer->WriteData(&vScale.x, 40 * (iBone * m_iMaxFrame + iFrame) + 28, 12);
+
+		CreateSequenceBuffer();
+	}
+
+	void Sequence::CreateSequenceBuffer()
+	{
+		std::vector<TRANSFORM> vecTransform(m_tCBuffer.iMaxJoint * m_iMaxFrame);
+
+		for (int i = 0; i < m_vecInfo.size(); ++i)
+		{
+			for (int j = 0; j < m_vecInfo[i]->vecPose.size(); ++j)
+			{
+				for (int k = 0; k < m_vecInfo[i]->vecPose[j].vecJoint.size(); ++k)
+				{
+					vecTransform[j * m_iMaxFrame + k].vPos = m_vecInfo[i]->vecPose[j].vecJoint[k].vPos;
+					vecTransform[j * m_iMaxFrame + k].vScale = m_vecInfo[i]->vecPose[j].vecJoint[k].vScale;
+					vecTransform[j * m_iMaxFrame + k].vQueternion = m_vecInfo[i]->vecPose[j].vecJoint[k].vQueternion;
+				}
+			}
+		}
+
+		if (vecTransform.size())
+		{
+			m_pBuffer = std::make_shared<StructuredBuffer>(static_cast<int>(vecTransform.size()), static_cast<int>(sizeof(TRANSFORM)), &vecTransform.front());
+		}
 	}
 
 	void Sequence::Update(float fDeltaTime)

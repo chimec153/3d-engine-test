@@ -39,12 +39,9 @@ namespace Engine
 		, m_pPixelShader(nullptr)
 		, m_pCollider(nullptr)
 		, m_pAnimation(nullptr)
-		, m_bImGui(false)
-		, m_bSelected(false)
 		, m_tSphereInfo()
 		, m_bInLightViewFrustum(false)
 		, m_eBoundingVolumeType()
-		, m_bAddedToOctree(false)
 		, m_bUseInstance(true)
 		, m_bUseShadow(true)
 		, m_pInstancing(nullptr)
@@ -52,8 +49,8 @@ namespace Engine
 		, m_iParentJointCount(0)
 		, m_eRenderLayer(RENDER_LAYER::OPACUE)
 	{
+		SetBindableType(BINDABLE_TYPE::DRAWABLE);
 		SetObjectType(OBJECT_TYPE::DRAW);
-		AddChild(std::make_shared<Transform>());
 	}
 
 	Drawable::Drawable(const Drawable& drawable) :
@@ -66,12 +63,10 @@ namespace Engine
 		, m_pPixelShader(drawable.m_pPixelShader)
 		, m_pCollider(std::static_pointer_cast<Collider>(FindChild(OBJECT_TYPE::COLLIDER)))
 		, m_pAnimation(std::static_pointer_cast<Animation>(FindChild(BINDABLE_TYPE::ANIMATION)))
-		, m_bImGui(drawable.m_bImGui)
-		, m_bSelected(drawable.m_bSelected)
+		, m_pAgent(drawable.m_pAgent ? std::static_pointer_cast<Agent>(drawable.m_pAgent->Clone()) : nullptr)
 		, m_tSphereInfo(drawable.m_tSphereInfo)
 		, m_bInLightViewFrustum(drawable.m_bInLightViewFrustum)
 		, m_eBoundingVolumeType(drawable.m_eBoundingVolumeType)
-		, m_bAddedToOctree(false)
 		, m_bUseInstance(drawable.m_bUseInstance)
 		, m_bUseShadow(drawable.m_bUseShadow)
 		, m_pInstancing(nullptr)
@@ -81,9 +76,14 @@ namespace Engine
 	{
 		SetTransform(m_pTransform);
 
-		if(m_pAnimation)
+		if (m_pAnimation)
 		{
 			m_pAnimation->SetOwner(this);
+		}
+
+		if (m_pAgent)
+		{
+			m_pAgent->SetTransform(GetTransform());
 		}
 	}
 
@@ -99,7 +99,7 @@ namespace Engine
 
 			if (pParentTransform != nullptr)
 			{
-				pParentTransform->AddChildTransform(pParentTransform.get());
+				pParentTransform->AddChildTransform(m_pTransform.get());
 			}
 		}
 
@@ -225,7 +225,7 @@ namespace Engine
 				pMaterial = m_pMesh->GetMaterial();
 			}
 
-			if (!pMaterial) 
+			if (!pMaterial)
 			{
 				return;
 			}
@@ -377,8 +377,33 @@ namespace Engine
 		}
 	}
 
+	void Drawable::SetAgent(std::shared_ptr<Engine::Agent> pAgent)
+	{
+		m_pAgent = pAgent;
+	}
+
+	void Drawable::Move(const Engine::Vector3& pos)
+	{
+		if (m_pAgent)
+		{
+			m_pAgent->SetTargetPos(pos);
+		}
+	}
+
+	std::shared_ptr<Agent> Drawable::GetAgent() const
+	{
+		return m_pAgent;
+	}
+
 	bool Drawable::Init()
 	{
+		if (!__super::Init())
+		{
+			return false;
+		}
+
+		AddChild(std::make_shared<Transform>());
+
 		return true;
 	}
 
@@ -460,6 +485,11 @@ namespace Engine
 		if (m_pMesh)
 		{
 			m_pMesh->Draw();
+		}
+
+		if (m_pAnimation)
+		{
+			m_pAnimation->GetFinalBuffer()->ResetSRV(30);
 		}
 	}
 
@@ -843,6 +873,82 @@ namespace Engine
 		FindAndAddBind<InputLayout>("Standard");
 
 		FindAndAddBind<Topology>("TriangleList");
+	}
+
+	void Drawable::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_eRenderLayer, 4, 1, pFile);
+		fwrite(&m_tSphereInfo, 16, 1, pFile);
+		fwrite(&m_bInViewFrustum, 1, 1, pFile);
+		fwrite(&m_bInLightViewFrustum, 1, 1, pFile);
+		fwrite(&m_eBoundingVolumeType, 4, 1, pFile);
+		fwrite(&m_bUseInstance, 1, 1, pFile);
+		fwrite(&m_bUseShadow, 1, 1, pFile);
+
+		Bindable* pParent = nullptr;
+
+		bool bAgent = static_cast<bool>(m_pAgent);
+
+		fwrite(&bAgent, 1, 1, pFile);
+
+		if (bAgent)
+		{
+			int iLength = m_pAgent->GetTag().length();
+
+			fwrite(&iLength, 4, 1, pFile);
+
+			if (iLength)
+			{
+				fwrite(m_pAgent->GetTag().c_str(), 1, iLength, pFile);
+			}
+		}
+	}
+
+	void Drawable::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_eRenderLayer, 4, 1, pFile);
+		fread(&m_tSphereInfo, 16, 1, pFile);
+		fread(&m_bInViewFrustum, 1, 1, pFile);
+		fread(&m_bInLightViewFrustum, 1, 1, pFile);
+		fread(&m_eBoundingVolumeType, 4, 1, pFile);
+		fread(&m_bUseInstance, 1, 1, pFile);
+		fread(&m_bUseShadow, 1, 1, pFile);
+
+		bool bAgent = false;
+
+		fread(&bAgent, 1, 1, pFile);
+
+		if (bAgent)
+		{
+			int iLength = 0;
+
+			fread(&iLength, 4, 1, pFile);
+
+			if (iLength)
+			{
+				std::unique_ptr<char[]> strTag = std::make_unique<char[]>(iLength + 1);
+
+				strTag[iLength] = 0;
+
+				fread(strTag.get(), 1, iLength, pFile);
+
+				std::shared_ptr<Agent> pAgent = std::static_pointer_cast<Agent>(GetScene()->FindBindable(strTag.get()));
+
+				if (pAgent)
+				{
+					m_pAgent = pAgent;
+				}
+
+				if (m_pAgent)
+				{
+					m_pAgent->SetTransform(GetTransform());
+				}
+			}
+		}
 	}
 
 	void Drawable::Parse(const char* pResult)
@@ -1670,10 +1776,11 @@ namespace Engine
 			FindAndAddBind<VertexShader>("anisotropic_microfacet VSNoSkin");
 			FindAndAddBind<InputLayout>("Standard");
 		}
+		FindAndAddBind<Topology>("TriangleList");
 
 		std::vector<std::vector<std::shared_ptr<Texture>>> _vecTexture;
 
-		std::vector<std::shared_ptr<Material>> _vecMaterial;
+		std::vector<std::vector<std::shared_ptr<Material>>> _vecMaterial(loader.GetLODCount());
 
 		int iTextureCount = 0;
 
@@ -1722,7 +1829,7 @@ namespace Engine
 					vecTexture.push_back(StaticCreateBindable<Texture>(vecTextureInfo[j].strFullPath, strFullPath, 1));
 					break;
 				}
-			}
+		}
 
 			pMesh->SetTextures(i, vecTexture);
 
@@ -1730,7 +1837,7 @@ namespace Engine
 
 			const std::vector<FbxLoader::MATERIALINFO>& vecMaterial = loader.GetMaterials(i);
 
-			for (int k=0;k<vecMaterial.size();++k)
+			for (int k = 0; k < vecMaterial.size(); ++k)
 			{
 				std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>(vecMaterial[k].name);
 
@@ -1757,9 +1864,9 @@ namespace Engine
 					pMesh->SetMaterial(i, pMaterial);
 				}
 
-				_vecMaterial.push_back(pMaterial);
+				_vecMaterial[i].push_back(pMaterial);
 			}
-		}
+	}
 
 		if (iTextureCount > 0)
 		{
@@ -1777,10 +1884,10 @@ namespace Engine
 		strcat_s(strFullPath, ".mesh");
 
 		SaveMesh(vecVertex, vecIndex, _vecTexture, _vecMaterial, strFullPath);
-	}
+}
 
 	void Drawable::SaveMesh(const std::vector<std::vector<VertexStandard>>& vecVertex, const std::vector<std::vector<std::vector<unsigned int>>>& vecIndex,
-		const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture, const std::vector<std::shared_ptr<Material>>& vecMaterial, const char* pFilePath, const std::string& strPathKey)
+		const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture, const std::vector<std::vector<std::shared_ptr<Material>>>& vecMaterial, const char* pFilePath, const std::string& strPathKey)
 	{
 		char strFullPath[MAX_PATH] = {};
 
@@ -1835,13 +1942,20 @@ namespace Engine
 					vecTexture[i][j]->Save(pFile);
 				}
 
-				bool bMaterial = vecMaterial.size() > i;
+				int iMaterial = static_cast<int>(vecMaterial[i].size());
 
-				fwrite(&bMaterial, 1, 1, pFile);
+				fwrite(&iMaterial, 1, 4, pFile);
 
-				if (bMaterial)
+				for (int j = 0; j < iMaterial; ++j)
 				{
-					vecMaterial[i]->Save(pFile);
+					if (vecMaterial[i][j])
+					{
+						vecMaterial[i][j]->Save(pFile);
+					}
+					else
+					{
+						assert(false);
+					}
 				}
 			}
 
@@ -1912,16 +2026,6 @@ namespace Engine
 
 			fclose(pFile);
 		}
-	}
-
-	void Drawable::StartImGui()
-	{
-		m_bImGui = true;
-	}
-
-	void Drawable::ToggleImGui()
-	{
-		m_bImGui ^= true;
 	}
 
 	void Drawable::SetBoundingSphereInfo(const Vector4& vInfo)

@@ -110,7 +110,7 @@ namespace Engine
         const Matrix& GetRotationTranslationMatrix()  const;
         const Matrix& GetWV()  const;
         void SetVelocity(const Vector3& vVelocity);
-        void SetAxis(AXIS_TYPE eType, const Vector3& vAxisZ, const Vector3& vUp = {0.f, -1.f, 0.f});
+        void SetAxis(AXIS_TYPE eType, const Vector3& vAxisZ, const Vector3& vUp = {0.f, 1.f, 0.f});
         void SetParentMatrix(const Matrix& matParent, int iJointIndex, std::shared_ptr<class StructuredBuffer> pBuffer);
         void SetRotationTranslationMatrix(const Matrix& mat);
 
@@ -119,6 +119,10 @@ namespace Engine
         virtual void Bind() override;
         virtual std::shared_ptr<Bindable> Clone() override;
         virtual void PostBind() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
 
     public:
         void UpdateRelativePosition();

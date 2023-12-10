@@ -24,5 +24,9 @@ namespace Engine
         virtual bool Collision(class Collider* pDest, float fDeltaTime);
         virtual void Bind() override;
         virtual std::shared_ptr<Bindable> Clone() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
     };
 }

@@ -10,6 +10,8 @@ namespace Engine
 		, m_vPrevColor()
 		, m_iPrevMask(0)
 	{
+		SetBindableType(BINDABLE_TYPE::BLEND_STATE);
+
 		D3D11_BLEND_DESC desc = {};
 
 		desc.RenderTarget[0].BlendEnable = true;

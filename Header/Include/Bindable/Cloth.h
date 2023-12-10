@@ -6,6 +6,7 @@ namespace Engine
         public Drawable
     {
     public:
+        Cloth();
         Cloth(int iWidth, int iHeight, float fSpring, float fSpringShear, float fSpringDistance, float fDamper, float fDamperShear, float fDamperDistance, float fDistance, float fMass);
         virtual ~Cloth() override = default;
 
@@ -39,6 +40,10 @@ namespace Engine
     public:
         virtual void FixedUpdate(float fDeltaTime) override;
 
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
+
     private:
         Vector3 GetSpringForce(int iSrcIndex, int iDestIndex, float fSpring, float fDist) const;
         void ApplySpringForce(int iSrcIndex, int iDestIndex, float fSpring, float fDist);
@@ -51,5 +56,8 @@ namespace Engine
 
     public:
         void CollisionStay(class Collider* pSrc, Collider* pDest, float fDeltaTime);
+
+    public:
+        void Ready();
     };
 }

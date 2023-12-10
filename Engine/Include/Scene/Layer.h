@@ -30,6 +30,7 @@ namespace Engine
         const std::list<class std::shared_ptr<class Bindable>>& GetDrawList()   const;
         const std::shared_ptr<class LoadingThread>& GetLoadingThread()  const;
         std::shared_ptr<Bindable> FindDrawable(const std::string& strTag)    const;
+        std::shared_ptr<Bindable> FindDrawable(BINDABLE_TYPE eType)    const;
 
     public:
         void Input(float fDeltaTime);
@@ -38,8 +39,11 @@ namespace Engine
         void Collision(float fDeltaTime);
         void PreDraw(float fDeltaTime);
         void Draw();
-        void DrawListImgui();
         void CreateLoadingThread(const TCHAR* pFullPath);
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
     };
 
 }

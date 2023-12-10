@@ -14,35 +14,14 @@ namespace Engine
 	Terrain::Terrain() :
 		Drawable()
 		, m_pMesh(nullptr)
+		, m_pTerrainCBuffer(StaticFindBindable<ConstantBuffer<TERRAINCBUFFER>>("Terrain"))
 		, m_pHeightMap(nullptr)
 		, m_bEditting(false)
 		, m_fEditRange(5.f)
-		, m_pDecal(CreateBindable<Decal>("BrushDecal"))
+		, m_pDecal()
 		, m_bEraseMode(false)
 	{
 		SetBindableType(BINDABLE_TYPE::TERRAIN);
-
-		FindAndAddBind<InputLayout>("Standard");
-		FindAndAddBind<VertexShader>("anisotropic_microfacet VS_Terrain");
-		FindAndAddBind<PixelShader>("anisotropic_microfacet PS_Terrain");
-		FindAndAddBind<Topology>("TriangleList");
-		std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
-
-		if (pMaterial)
-		{
-			pMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
-
-			AddChild(pMaterial);
-		}
-
-		m_pVSTerrainBuffer = StaticFindBindable<ConstantBuffer<TERRAINCBUFFER>>("Terrain");
-		m_pPSTerrainBuffer = StaticFindBindable<ConstantBuffer<TERRAINCBUFFER>>("Terrain");
-
-		AddChild(m_pVSTerrainBuffer);
-		AddChild(m_pPSTerrainBuffer);
-
-		m_pDecal->FindAndAddBind<Mesh>("Box");
-		m_pDecal->FindAndAddBind<Topology>("TriangleList");
 	}
 
 	void Terrain::CreateTerrain(int iWidth, int iHeight)
@@ -56,43 +35,43 @@ namespace Engine
 
 		SetTangent(m_vecVertex, m_vecIndex);
 
-		m_pMesh = CreateBindable<Mesh>("mesh", m_vecVertex, m_vecIndex);
+		m_pMesh = CreateBindable<Mesh>("terrainmesh", m_vecVertex, m_vecIndex);
 
 		GetBoundingSphere(m_vecVertex);
 
 		CreateMeshCollider();
 	}
 
-	void Terrain::CreateTerrainTexture(const std::vector<const TCHAR*>& vecFullPath)
+	void Terrain::CreateTerrainTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
-		m_vecTexture.push_back(CreateBindable<Texture>("TerrainTexture", vecFullPath, TEXTURE_PATH, 20));
+		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 20));
 	}
 
-	void Terrain::CreateTerrainNormalTexture(const std::vector<const TCHAR*>& vecFullPath)
+	void Terrain::CreateTerrainNormalTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
-		m_vecTexture.push_back(CreateBindable<Texture>("TerrainTexture", vecFullPath, TEXTURE_PATH, 21));
+		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 21));
 	}
 
-	void Terrain::CreateTerrainSpecularTexture(const std::vector<const TCHAR*>& vecFullPath)
+	void Terrain::CreateTerrainSpecularTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
-		m_vecTexture.push_back(CreateBindable<Texture>("TerrainTexture", vecFullPath, TEXTURE_PATH, 22));
+		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 22));
 	}
 
-	void Terrain::CreateTerrainEmissiveTexture(const std::vector<const TCHAR*>& vecFullPath)
+	void Terrain::CreateTerrainEmissiveTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
-		m_vecTexture.push_back(CreateBindable<Texture>("TerrainTexture", vecFullPath, TEXTURE_PATH, 23));
+		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 23));
 	}
 
-	void Terrain::CreateBlendTerrainTexture(const std::vector<const TCHAR*>& vecFullPath)
+	void Terrain::CreateBlendTerrainTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
-		m_vecTexture.push_back(CreateBindable<Texture>("TerrainTexture", vecFullPath, TEXTURE_PATH, 24));
+		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 24));
 
 		m_tTerrainBuffer.m_iBlendCount = static_cast<int>(vecFullPath.size());
 	}
 
-	void Terrain::CreateHeightMap(const TCHAR* pFilePath)
+	void Terrain::CreateHeightMap(const std::string& strTag, const TCHAR* pFilePath)
 	{
-		m_pHeightMap = CreateBindable<Texture>("HeightMap", pFilePath, TEXTURE_PATH, 16, D3D11_CPU_ACCESS_WRITE, D3D11_USAGE_DYNAMIC);
+		m_pHeightMap = CreateBindable<Texture>(strTag, pFilePath, TEXTURE_PATH, 16, D3D11_CPU_ACCESS_WRITE, D3D11_USAGE_DYNAMIC);
 
 		DirectX::ScratchImage* pImage = m_pHeightMap->GetImage();
 
@@ -227,12 +206,99 @@ namespace Engine
 		}
 	}
 
+	bool Terrain::Init()
+	{
+		if (!__super::Init())
+		{
+			return false;
+		}
+
+		FindAndAddBind<InputLayout>("Standard");
+		FindAndAddBind<VertexShader>("anisotropic_microfacet VS_Terrain");
+		FindAndAddBind<PixelShader>("anisotropic_microfacet PS_Terrain");
+		FindAndAddBind<Topology>("TriangleList");
+		std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
+
+		if (pMaterial)
+		{
+			pMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
+
+			AddChild(pMaterial);
+		}
+
+		m_pDecal = CreateBindable<Decal>("BrushDecal");
+
+		m_pDecal->FindAndAddBind<Mesh>("Box");
+		m_pDecal->FindAndAddBind<Topology>("TriangleList");
+
+		return true;
+	}
+
 	void Terrain::Bind()
 	{
-		m_pVSTerrainBuffer->UpdateBuffer(m_tTerrainBuffer);
-		m_pPSTerrainBuffer->UpdateBuffer(m_tTerrainBuffer);
+		m_pTerrainCBuffer->UpdateBuffer(m_tTerrainBuffer);
+
+		m_pTerrainCBuffer->Bind();
 
 		__super::Bind();
+	}
+	void Terrain::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_tTerrainBuffer, sizeof(TERRAINCBUFFER), 1, pFile);
+
+		if (m_tTerrainBuffer.m_iWidth >= 0 && m_tTerrainBuffer.m_iHeight >= 0)
+		{
+			fwrite(&m_vecHeight[0], 4, (m_tTerrainBuffer.m_iWidth + 1) * (m_tTerrainBuffer.m_iHeight + 1), pFile);
+		}
+
+		bool bHeightMap = static_cast<bool>(m_pHeightMap);
+
+		fwrite(&bHeightMap, 1, 1, pFile);
+
+		if (bHeightMap)
+		{
+			size_t iLength = m_pHeightMap->GetTag().length();
+
+			fwrite(&iLength, 4, 1, pFile);
+
+			fwrite(m_pHeightMap->GetTag().c_str(), 1, m_pHeightMap->GetTag().length(), pFile);
+		}
+	}
+	void Terrain::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_tTerrainBuffer, sizeof(TERRAINCBUFFER), 1, pFile);
+
+		if (m_tTerrainBuffer.m_iWidth >= 0 && m_tTerrainBuffer.m_iHeight >= 0)
+		{
+			m_vecHeight.resize((m_tTerrainBuffer.m_iWidth + 1)*  (m_tTerrainBuffer.m_iHeight + 1));
+
+			fread(&m_vecHeight[0], 4, (m_tTerrainBuffer.m_iWidth + 1) * (m_tTerrainBuffer.m_iHeight + 1), pFile);
+		}
+
+		bool bHeightMap = false;
+
+		fread(&bHeightMap, 1,1, pFile);
+
+		if (bHeightMap)
+		{
+			int iLength = 0;
+
+			fread(&iLength, 4, 1, pFile);
+			
+			std::unique_ptr<char[]> strTexture = std::make_unique<char[]>(iLength + 1);
+
+			strTexture[iLength] = 0;
+
+			fread(strTexture.get(), 1, iLength, pFile);
+
+			m_pHeightMap = std::static_pointer_cast<Texture>(FindChild(strTexture.get()));
+		}
+
+		CreateTerrain(m_tTerrainBuffer.m_iWidth, m_tTerrainBuffer.m_iHeight);
 	}
 	void Terrain::CollisionStay(Collider* pSrc, Collider* pDest, float fDeltaTime)
 	{
@@ -378,7 +444,7 @@ namespace Engine
 
 		m_pHeightMap->CreateTexture(*pImage);
 
-		m_pHeightMap->CreateShaderResourceView(pImage->GetMetadata().format, pImage->GetMetadata().mipLevels, pImage->GetMetadata().arraySize);
+		m_pHeightMap->CreateShaderResourceView(pImage->GetMetadata().format, static_cast<int>(pImage->GetMetadata().mipLevels), static_cast<int>(pImage->GetMetadata().arraySize));
 
 		CreateMeshCollider();
 	}

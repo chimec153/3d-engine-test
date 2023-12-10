@@ -2,6 +2,7 @@
 #include "Layer.h"
 #include "../Bindable/Drawable.h"
 #include "SceneManager.h"
+#include "../Core/PathManager.h"
 
 namespace Engine
 {
@@ -9,8 +10,6 @@ namespace Engine
 
 	Scene::Scene()
 	{
-		AddLayer(DEFAULT_LAYER);
-		AddLayer(ALPHA_LAYER, 1);
 	}
 
 	Scene::~Scene()
@@ -25,6 +24,11 @@ namespace Engine
 
 		pLayer->SetZOrder(iZOrder);
 
+		AddLayer(pLayer);
+	}
+
+	void Scene::AddLayer(std::shared_ptr<Layer> pLayer)
+	{
 		pLayer->SetScene(this);
 
 		m_LayerList.push_back(pLayer);
@@ -62,6 +66,9 @@ namespace Engine
 
 	bool Scene::Init()
 	{
+		AddLayer(DEFAULT_LAYER);
+		AddLayer(ALPHA_LAYER, 1);
+
 		return true;
 	}
 
@@ -213,6 +220,139 @@ namespace Engine
 			(*iter)->Draw();
 			++iter;
 		}
+	}
+
+	void Scene::Save(FILE* pFile)
+	{
+		int iLayerCount =static_cast<int>(m_LayerList.size());
+
+		fwrite(&iLayerCount, 4, 1, pFile);
+
+		std::list<std::shared_ptr<Layer>>::iterator iter = m_LayerList.begin();
+		std::list<std::shared_ptr<Layer>>::iterator iterEnd = m_LayerList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			(*iter)->Save(pFile);
+		}
+	}
+
+	void Scene::Load(FILE* pFile)
+	{
+		int iLayerCount = 0;
+
+		fread(&iLayerCount, 4, 1, pFile);
+
+		for (int i = 0; i < iLayerCount; ++i)
+		{
+			std::shared_ptr<Layer> pLayer = std::make_shared<Layer>();
+
+			AddLayer(pLayer);
+
+			pLayer->Load(pFile);
+
+			m_LayerList.sort([](const std::shared_ptr<Layer>& src, const std::shared_ptr<Layer>& dest)->bool
+				{
+					return src->GetZOrder() < dest->GetZOrder();
+				}
+			);
+		}
+	}
+
+	void Scene::Save(const char* pFilePath, const std::string& strPath)
+	{
+		char strFullPath[MAX_PATH] = {};
+
+		const char* pPath = CPathManager::GetInst()->FindMultibytePath(strPath);
+
+		if (pPath)
+		{
+			strcpy_s(strFullPath, pPath);
+		}
+
+		strcat_s(strFullPath, pFilePath);
+
+		SaveFromFullPath(strFullPath);
+	}
+
+	void Scene::Load(const char* pFilePath, const std::string& strPath)
+	{
+		char strFullPath[MAX_PATH] = {};
+
+		const char* pPath = CPathManager::GetInst()->FindMultibytePath(strPath);
+
+		if (pPath)
+		{
+			strcpy_s(strFullPath, pPath);
+		}
+
+		strcat_s(strFullPath, pFilePath);
+
+		LoadFromFullPath(strFullPath);
+	}
+
+	void Scene::SaveFromFullPath(const char* pFullPath)
+	{
+		FILE* pFile = nullptr;
+
+		fopen_s(&pFile, pFullPath, "wb");
+
+		if (pFile)
+		{
+			Save(pFile);
+
+			fclose(pFile);
+		}
+	}
+
+	void Scene::LoadFromFullPath(const char* pFullPath)
+	{
+		FILE* pFile = nullptr;
+
+		fopen_s(&pFile, pFullPath, "rb");
+
+		if (pFile)
+		{
+			Load(pFile);
+
+			fclose(pFile);
+		}
+	}
+
+	void Scene::SaveFromFullPath(const TCHAR* pFullPath)
+	{
+		char strFullPath[MAX_PATH] = {};
+
+		WideCharToMultiByte(CP_ACP, 0, pFullPath, -1, strFullPath, MAX_PATH, nullptr, nullptr);
+
+		SaveFromFullPath(strFullPath);
+	}
+
+	void Scene::LoadFromFullPath(const TCHAR* pFullPath)
+	{
+		char strFullPath[MAX_PATH] = {};
+
+		WideCharToMultiByte(CP_ACP, 0, pFullPath, -1, strFullPath, MAX_PATH, nullptr, nullptr);
+
+		LoadFromFullPath(strFullPath);
+	}
+
+	std::shared_ptr<Bindable> Scene::FindBindable(const std::string& strTag) const
+	{
+		std::list<std::shared_ptr<Layer>>::const_iterator iter = m_LayerList.begin();
+		std::list<std::shared_ptr<Layer>>::const_iterator iterEnd = m_LayerList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			std::shared_ptr<Bindable> pBindable = (*iter)->FindDrawable(strTag);
+
+			if (pBindable)
+			{
+				return pBindable;
+			}
+		}
+
+		return std::shared_ptr<Bindable>();
 	}
 
 

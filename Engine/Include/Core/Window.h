@@ -74,8 +74,10 @@ namespace Engine
 		void PreDraw(float fDeltaTime);
 		void Draw(float fDeltaTime);
 
-	private:
+	public:
 		static LRESULT __stdcall WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+	private:
 		static void Pick(class Collider* pSrc, class Collider* pDest, float fDeltaTime);
 	};
 

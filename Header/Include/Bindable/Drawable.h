@@ -32,6 +32,7 @@ namespace Engine
 		std::shared_ptr<class PixelShader> m_pPixelShader;
 		std::shared_ptr<class Collider> m_pCollider;
 		std::shared_ptr<class Animation> m_pAnimation;
+		std::shared_ptr<class Agent>  m_pAgent;
 		RENDER_LAYER m_eRenderLayer;
 
 	public:
@@ -57,6 +58,9 @@ namespace Engine
 		void SetRenderLayer(RENDER_LAYER eLayer);
 		RENDER_LAYER GetRenderLayer()	const;
 		void AddSeqeunces(const std::vector<FbxLoader::SEQUENCE>& vecSequences, const std::string& strSeq = "");
+		void SetAgent(std::shared_ptr<Engine::Agent> pAgent);
+		void Move(const Engine::Vector3& pos);
+		std::shared_ptr<Agent> GetAgent()	const;
 
 	public:
 		virtual bool Init();
@@ -234,6 +238,8 @@ namespace Engine
 	public:
 		void Load(const TCHAR* pFileName, const std::string& strPathKey = MESH_PATH);
 		void Load(const char* pFileName);
+		virtual void Save(FILE* pFile) override;
+		virtual void Load(FILE* pFile) override;
 		void Parse(const char* pResult);
 
 	public:
@@ -250,18 +256,15 @@ namespace Engine
 		std::vector<MATERIALINFO> LoadOBJMaterialFromFullPath(const char* pFullPath);
 		void LoadFBX(const TCHAR* pFileName, const std::string& strPathKey = MESH_PATH);
 		void SaveMesh(const std::vector<std::vector<VertexStandard>>& vecVertex, const std::vector<std::vector<std::vector<unsigned int>>>& vecIndex,
-			const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture, const std::vector<std::shared_ptr<Material>>& vecMaterial,
+			const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture, const std::vector<std::vector<std::shared_ptr<Material>>>& vecMaterial,
 			const char* pFilePath, const std::string& strPathKey = MESH_PATH);
 		void LoadMesh(const char* pFilePath, const std::string& strPathKey = MESH_PATH);
 
 	private:
-		bool m_bImGui;
-		bool m_bSelected;
 		Vector4 m_tSphereInfo;
 		bool m_bInViewFrustum;
 		bool m_bInLightViewFrustum;
 		BOUNDING_VOLUME_TYPE m_eBoundingVolumeType;
-		bool m_bAddedToOctree;
 		bool m_bUseInstance;
 		bool m_bUseShadow;
 		class RenderInstancing* m_pInstancing;
@@ -269,8 +272,6 @@ namespace Engine
 		int m_iParentJointCount;
 
 	public:
-		void StartImGui();
-		void ToggleImGui();
 		void SetBoundingSphereInfo(const Vector4& vInfo);
 		const Vector4& GetSphereInfo()	const;
 		bool UseInstance()	const;

@@ -14,6 +14,8 @@ namespace Engine
 	class ConstantBuffer;
 	class GeometryShader;
 	
+	Engine::BindableManager<class Engine::VertexBuffer>* Engine::BindableManager<class Engine::VertexBuffer>::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::IndexBuffer>* Engine::BindableManager<class Engine::IndexBuffer>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::RasterizerState>* Engine::BindableManager<class Engine::RasterizerState>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::DepthStencilState>* Engine::BindableManager<class Engine::DepthStencilState>::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::BlendState>* Engine::BindableManager<class Engine::BlendState>::m_pInst = nullptr;
@@ -60,11 +62,6 @@ namespace Engine
 	template ENGINE_DLL std::shared_ptr<Texture> StaticFindBindable(const std::string& strTag);
 	template ENGINE_DLL std::shared_ptr<Topology> StaticFindBindable(const std::string& strTag);
 
-	template <typename T, typename ...Args>
-	ENGINE_DLL std::shared_ptr<T> StaticCreateBindable(const std::string& strTag, Args... args)
-	{
-		return BindableManager<T>::GetInst()->BindableManager<T>::CreateBindable<Args...>(strTag, args...);
-	}
 	template<typename T>
 	inline BindableManager<T>::BindableManager()
 	{
@@ -295,6 +292,12 @@ namespace Engine
 	}
 
 	template <>
+	inline BindableManager<class ConstantBuffer<POINTLIGHT>>::BindableManager()
+	{
+		CreateBindable("PointLightCBuffer", 1);
+	}
+
+	template <>
 	inline BindableManager<class Sampler>::BindableManager()
 	{
 		const std::shared_ptr<Sampler>& pPoint = CreateBindable("Point", D3D11_FILTER_MIN_MAG_MIP_POINT);
@@ -432,6 +435,10 @@ namespace Engine
 		const std::shared_ptr<VertexShader>& pVSSkinInst = StaticFindBindable<VertexShader>("anisotropic_microfacet VSSkinInst");
 
 		CreateBindable("Standard_Inst", pVSSkinInst, descSkinInst, static_cast<int>(sizeof(descSkinInst) / sizeof(D3D11_INPUT_ELEMENT_DESC)), 312);
+
+		D3D11_INPUT_ELEMENT_DESC descP = { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 };
+
+		CreateBindable("P", StaticFindBindable<VertexShader>("PointLightVS"), &descP, static_cast<int>(sizeof(descP) / sizeof(D3D11_INPUT_ELEMENT_DESC)));
 	}
 
 	template <>
@@ -487,7 +494,7 @@ namespace Engine
 	}
 
 	template <>
-	inline BindableManager<class Mesh>::BindableManager()
+	inline ENGINE_DLL BindableManager<class Mesh>::BindableManager()
 	{
 #ifdef _DEBUG
 		CreateBindable("Line", std::vector<VertexTexture>	{ {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f}, { 0.f,0.f,0.f,0.f,0.f,0.f,100.f,0.f,0.f,0.f,0.f,0.f }	}, std::vector<unsigned int>{ 0, 1 });

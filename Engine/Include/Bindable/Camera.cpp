@@ -18,9 +18,8 @@ namespace Engine
 #endif
 		, m_bControl(true)
 	{
+		SetBindableType(BINDABLE_TYPE::CAMERA);
 		Reset();
-
-		StartImGui();
 	}
 
 	const Matrix& Camera::GetView() const
@@ -87,37 +86,15 @@ namespace Engine
 
 	bool Camera::Init()
 	{
-		if (!CInput::GetInst()->CreateAction(GetTag() + "_W", DIK_W))
+		if (!__super::Init())
 		{
 			return false;
 		}
 
-		CInput::GetInst()->AddAction(GetTag() + "_W", CInput::KEY_STATE::PRESS, this, &Camera::CameraMoveFront);
-		if (!CInput::GetInst()->CreateAction(GetTag() + "_S", DIK_S))
+		if (!CInput::GetInst()->CreateAction(GetTag() + "_W", DIK_W))
 		{
 			return false;
 		}
-		CInput::GetInst()->AddAction(GetTag() + "_S", CInput::KEY_STATE::PRESS, this, &Camera::CameraMoveBack);
-		if (!CInput::GetInst()->CreateAction(GetTag() + "_A", DIK_A))
-		{
-			return false;
-		}
-		CInput::GetInst()->AddAction(GetTag() + "_A", CInput::KEY_STATE::PRESS, this, &Camera::CameraMoveLeft);
-		if (!CInput::GetInst()->CreateAction(GetTag() + "_D", DIK_D))
-		{
-			return false;
-		}
-		CInput::GetInst()->AddAction(GetTag() + "_D", CInput::KEY_STATE::PRESS, this, &Camera::CameraMoveRight);
-		if (!CInput::GetInst()->CreateAction(GetTag() + "_Q", DIK_Q))
-		{
-			return false;
-		}
-		CInput::GetInst()->AddAction(GetTag() + "_Q", CInput::KEY_STATE::PRESS, this, &Camera::CameraMoveUp);
-		if (!CInput::GetInst()->CreateAction(GetTag() + "_E", DIK_E))
-		{
-			return false;
-		}
-		CInput::GetInst()->AddAction(GetTag() + "_E", CInput::KEY_STATE::PRESS, this, &Camera::CameraMoveDown);
 
 		return true;
 	}
@@ -126,27 +103,6 @@ namespace Engine
 	{
 		if (m_bControl)
 		{
-			if (!Window::GetInst()->IsLockRotation())
-			{
-				const std::shared_ptr<Transform>& pTransform = GetTransform();
-
-				int iDeltaX = CInput::GetInst()->GetMouseDeltaX();
-				int iDeltaY = CInput::GetInst()->GetMouseDeltaY();
-
-				pTransform->AddRY(iDeltaX * fDeltaTime);
-				pTransform->AddRX(iDeltaY * fDeltaTime);
-
-				if (pTransform->GetRX() >= PI)
-				{
-					pTransform->SetRX(PI);
-				}
-
-				else if (pTransform->GetRX() <= -PI)
-				{
-					pTransform->SetRX(-PI);
-				}
-			}
-
 			m_fSpeed += CInput::GetInst()->GetMouseDeltaZ() * !Window::GetInst()->IsCursorEnabled();
 
 			m_fSpeed = m_fSpeed < 0.f ? 0.f : m_fSpeed;
@@ -176,6 +132,29 @@ namespace Engine
 	std::shared_ptr<Bindable> Camera::Clone()
 	{
 		return std::make_shared<Camera>(*this);
+	}
+
+	void Camera::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		bool bMainCamera = Graphics::GetInst()->GetCamera().get() == this;
+
+		fwrite(&bMainCamera, 1, 1, pFile);
+	}
+
+	void Camera::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		bool bMainCamera = false;
+
+		fread(&bMainCamera, 1, 1, pFile);
+
+		if (bMainCamera)
+		{
+			Graphics::GetInst()->SetCamera(std::static_pointer_cast<Camera>(shared_from_this()));
+		}
 	}
 
 	void Camera::CameraMoveFront(float fDeltaTime)

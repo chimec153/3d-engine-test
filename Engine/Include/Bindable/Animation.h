@@ -40,7 +40,7 @@ namespace Engine
         const std::list<std::shared_ptr<class JointSocket>>& GetSocketList()  const;
         void AddSocket(const std::string& strJoint, const std::shared_ptr<JointSocket>& pSocket);
         void AddSocket(int iJoint, const std::shared_ptr<JointSocket>& pSocket);
-        void SetSkeleton(const std::shared_ptr<Skeleton>& pSkeleton);
+        void SetSkeleton(std::shared_ptr<Skeleton> pSkeleton);
         class std::shared_ptr<class Skeleton> GetSkeleton() const;
         void UpdateMatrix();
         void MatrixPostProcess();
@@ -64,6 +64,10 @@ namespace Engine
         virtual void Bind() override;
         virtual void PostBind() override;
         virtual std::shared_ptr<Bindable> Clone() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
     };
 
 }

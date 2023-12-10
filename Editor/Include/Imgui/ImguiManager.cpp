@@ -43,1600 +43,1704 @@
 #include "Bindable/Terrain.h"
 #include "Render/RenderManager.h"
 
-ImguiManager* ImguiManager::m_pInst = nullptr;
-
-ImguiManager::ImguiManager() :
-	m_bDemoWindow(false)
-	, m_pHeightField(nullptr)
-	, m_pCompactHeightField(nullptr)
-	, m_pContourSet(nullptr)
-	, m_pPolyMesh(nullptr)
-	, m_pPolyMeshDetail(nullptr)
-	, m_bMode(true)
+namespace Editor
 {
-	m_fCellSize = 0.3f;
-	m_fCellHeight = 0.2f;
-	m_fAgentHeight = 2.f;
-	m_fAgentRadius = 0.6f;
-	m_fAgentClimb = 1.9f;
-	m_fAgentSlopeAngle = 60.f;
-	m_fMaxEdgeLen = 12.f;
-	m_fMaxEdgeError = 1.3f;
-	m_fRegionMinSize = 8;
-	m_fRegionMergeSize = 20;
-	m_fVertsPerPoly = 6.f;
-	m_fDetailSampleDist = 6.f;
-	m_fDetailSampleMaxError = 1.f;
-}
+	ImguiManager* ImguiManager::m_pInst = nullptr;
 
-ImguiManager::~ImguiManager()
-{
-	if (m_pPolyMesh)
+	ImguiManager::ImguiManager() :
+		m_bDemoWindow(false)
+		, m_pHeightField(nullptr)
+		, m_pCompactHeightField(nullptr)
+		, m_pContourSet(nullptr)
+		, m_pPolyMesh(nullptr)
+		, m_pPolyMeshDetail(nullptr)
+		, m_bMode(true)
 	{
-		rcFreePolyMesh(m_pPolyMesh);
-		m_pPolyMesh = nullptr;
-	}
-	if (m_pPolyMeshDetail)
-	{
-		rcFreePolyMeshDetail(m_pPolyMeshDetail);
-		m_pPolyMeshDetail = nullptr;
-	}
-	if (m_pContourSet)
-	{
-		rcFreeContourSet(m_pContourSet);
-		m_pContourSet = nullptr;
-	}
-	if (m_pCompactHeightField)
-	{
-		rcFreeCompactHeightfield(m_pCompactHeightField);
-		m_pCompactHeightField = nullptr;
-	}
-	if (m_pHeightField)
-	{
-		rcFreeHeightField(m_pHeightField);
-		m_pHeightField = nullptr;
+		m_fCellSize = 0.3f;
+		m_fCellHeight = 0.2f;
+		m_fAgentHeight = 2.f;
+		m_fAgentRadius = 0.6f;
+		m_fAgentClimb = 1.9f;
+		m_fAgentSlopeAngle = 60.f;
+		m_fMaxEdgeLen = 12.f;
+		m_fMaxEdgeError = 1.3f;
+		m_fRegionMinSize = 8;
+		m_fRegionMergeSize = 20;
+		m_fVertsPerPoly = 6.f;
+		m_fDetailSampleDist = 6.f;
+		m_fDetailSampleMaxError = 1.f;
 	}
 
-	ImGui_ImplDX11_Shutdown();
-	ImGui_ImplWin32_Shutdown();
-	ImGui::DestroyContext();
-}
-
-bool ImguiManager::Init(HWND hwnd)
-{
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
-
-	ImGui::StyleColorsDark();
-
-	ImGuiStyle& style = ImGui::GetStyle();
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	ImguiManager::~ImguiManager()
 	{
-		style.WindowRounding = 0.0f;
-		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
-	}
-
-	if (!ImGui_ImplWin32_Init(hwnd))
-	{
-		assert(false);
-		return false;
-	}
-
-	if (!ImGui_ImplDX11_Init(Engine::Graphics::GetInst()->GetDevice(), Engine::Graphics::GetInst()->GetDeviceContext()))
-	{
-		assert(false);
-		return false;
-	}
-
-	m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush1", TEXT("brush\\circle.png"), TEXTURE_PATH));
-	m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush2", TEXT("brush\\star.png"), TEXTURE_PATH));
-	m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush3", TEXT("brush\\brush.png"), TEXTURE_PATH));
-
-	return true;
-}
-
-void ImguiManager::Update(float fDeltaTime)
-{
-	ImGui_ImplDX11_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
-
-	if (Engine::CInput::GetInst()->IsKey(Engine::CInput::KEY_STATE::UP, DIK_SPACE))
-	{
-		m_bDemoWindow ^= true;
-	}
-
-	ImGui::Begin("Timer");
-
-	float fScale = Engine::Window::GetInst()->GetTimer()->GetScale();
-
-	if (ImGui::SliderFloat("Scale", &fScale, 0.f, 5.f))
-	{
-		Engine::Window::GetInst()->GetTimer()->SetScale(fScale);
-	}
-
-	ImGui::SameLine();
-
-	if (ImGui::Button("stop"))
-	{
-		Engine::Window::GetInst()->Stop();
-	}
-
-	ImGui::SameLine();
-
-	if (ImGui::Button("resume"))
-	{
-		Engine::Window::GetInst()->Resume();
-	}
-
-	ImGui::End();
-
-	RenderManager_ShowImGuiWindow();
-}
-
-void ImguiManager::Render(float fDeltaTime)
-{
-	if (m_bDemoWindow)
-	{
-		ImGui::ShowDemoWindow();
-	}
-
-	ImGui::Render();
-	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault();
-	}
-}
-
-void ImguiManager::DisableMouse()
-{
-	ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse;
-}
-
-void ImguiManager::EnableMouse()
-{
-	ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
-}
-
-void ImguiManager::CRef_ImGuiWindow(std::shared_ptr<Engine::CRef> pRef)
-{
-	ImGui::Text("Name: %s", pRef->GetTag().c_str());
-
-	ImGui::SameLine();
-
-	bool bEnable = pRef->IsEnable();
-
-	if (ImGui::Checkbox("Enable", &bEnable))
-	{
-		if (bEnable)
+		if (m_pPolyMesh)
 		{
-			pRef->Enable();
+			rcFreePolyMesh(m_pPolyMesh);
+			m_pPolyMesh = nullptr;
 		}
-		else
+		if (m_pPolyMeshDetail)
 		{
-			pRef->Disable();
+			rcFreePolyMeshDetail(m_pPolyMeshDetail);
+			m_pPolyMeshDetail = nullptr;
 		}
-	}
-
-	ImGui::SameLine();
-
-	bool bActive = pRef->IsActive();
-
-	if (ImGui::Checkbox("Active", &bActive))
-	{
-		if (!bActive)
+		if (m_pContourSet)
 		{
-			pRef->InActivate();
+			rcFreeContourSet(m_pContourSet);
+			m_pContourSet = nullptr;
 		}
-	}
-}
-
-void ImguiManager::JointSocket_ImGuiWindow(std::shared_ptr<Engine::JointSocket> pRef, int _iIndex)
-{
-	CRef_ImGuiWindow(pRef);
-
-	char pText[TEXT_LEN] = {};
-
-	sprintf_s(pText, "%d parent index", _iIndex);
-
-	int iIndex = pRef->GetParentIndex();
-
-	if (ImGui::InputInt(pText, &iIndex))
-	{
-		pRef->SetParentIndex(iIndex);
-	}
-
-	Engine::Vector3 vScale = pRef->GetScale();
-	Engine::Vector3 vPos = pRef->GetPosition();
-	Engine::Vector3 vQuternion = pRef->GetRotation();
-
-	sprintf_s(pText, "%d Joint Scale", _iIndex);
-
-	if (ImGui::InputFloat3(pText, &vScale.x))
-	{
-		pRef->SetScale(vScale);
-		pRef->UpdateJointMatrix();
-	}
-
-	sprintf_s(pText, "%d Joint Position", _iIndex);
-
-	if (ImGui::InputFloat3(pText, &vPos.x))
-	{
-		pRef->SetPosition(vPos);
-		pRef->UpdateJointMatrix();
-	}
-
-	sprintf_s(pText, "%d Joint Rotation", _iIndex);
-
-	if (ImGui::InputFloat3(pText, &vQuternion.x))
-	{
-		pRef->SetRotation(vQuternion);
-		pRef->UpdateJointMatrix();
-	}
-}
-void ImguiManager::SceneWindow(Engine::Scene* pScene)
-{
-
-
-	//Layer_DrawListImgui();
-}
-//
-//	void Skeleton::ImGuiWindow()
-//	{
-//		__super::ImGuiWindow();
-//
-//		static int iIndex = -1;
-//
-//		std::vector<const char*> vecSocket;
-//		std::vector<std::shared_ptr<JointSocket>> _vecSocket;
-//
-//		SocketList::iterator iter = m_SocketList.begin();
-//		SocketList::iterator iterEnd = m_SocketList.end();
-//
-//		for (; iter != iterEnd; ++iter)
-//		{
-//			vecSocket.push_back((*iter)->GetTag().c_str());
-//			_vecSocket.push_back(*iter);
-//		}
-//
-//		if (vecSocket.size())
-//		{
-//			ImGui::ListBox("sockek list", &iIndex, &vecSocket[0], static_cast<int>(vecSocket.size()));
-//		}
-//
-//		if (iIndex >= 0 && iIndex < _vecSocket.size())
-//		{
-//			_vecSocket[iIndex]->ImGuiWindow();
-//		}
-//	}
-//
-//	void Camera::ImGuiWindow()
-//	{
-//		__super::ImGuiWindow();
-//
-//		ImGui::SliderFloat("Camera Speed", &m_fSpeed, 0.f, 500000.f);
-//
-//		ImGui::Checkbox("Control", &m_bControl);
-//	}
-//
-//
-void ImguiManager::Drawable_ShowImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawable)
-{
-	static std::shared_ptr<Engine::Bindable> pSelect = nullptr;
-
-	bool bSelect = false;
-
-	if (ImGui::Begin("Node View"))
-	{
-		std::shared_ptr<Engine::Bindable> pResult = Drawable_ShowImGuiTree(pDrawable, bSelect);
-
-		if (pResult)
+		if (m_pCompactHeightField)
 		{
-			pSelect = pResult;
+			rcFreeCompactHeightfield(m_pCompactHeightField);
+			m_pCompactHeightField = nullptr;
 		}
+		if (m_pHeightField)
+		{
+			rcFreeHeightField(m_pHeightField);
+			m_pHeightField = nullptr;
+		}
+
+		ImGui_ImplDX11_Shutdown();
+		ImGui_ImplWin32_Shutdown();
+		ImGui::DestroyContext();
 	}
 
-	ImGui::End();
-
-	if (pSelect != nullptr)
+	bool ImguiManager::Init(HWND hwnd)
 	{
-		if (ImGui::Begin("Drawable", &bSelect))
+		IMGUI_CHECKVERSION();
+		ImGui::CreateContext();
+		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
+		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
+
+		ImGui::StyleColorsDark();
+
+		ImGuiStyle& style = ImGui::GetStyle();
+		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 		{
-			Drawable_ImGuiWindow(pSelect);
+			style.WindowRounding = 0.0f;
+			style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 		}
+
+		if (!ImGui_ImplWin32_Init(hwnd))
+		{
+			assert(false);
+			return false;
+		}
+
+		if (!ImGui_ImplDX11_Init(Engine::Graphics::GetInst()->GetDevice(), Engine::Graphics::GetInst()->GetDeviceContext()))
+		{
+			assert(false);
+			return false;
+		}
+
+		m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush1", TEXT("brush\\circle.png"), TEXTURE_PATH));
+		m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush2", TEXT("brush\\star.png"), TEXTURE_PATH));
+		m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush3", TEXT("brush\\brush.png"), TEXTURE_PATH));
+
+		return true;
+	}
+
+	void ImguiManager::Update(float fDeltaTime)
+	{
+		ImGui_ImplDX11_NewFrame();
+		ImGui_ImplWin32_NewFrame();
+		ImGui::NewFrame();
+
+		if (Engine::CInput::GetInst()->IsKey(Engine::CInput::KEY_STATE::UP, DIK_SPACE))
+		{
+			m_bDemoWindow ^= true;
+		}
+
+		ImGui::Begin("Timer");
+
+		float fScale = Engine::Window::GetInst()->GetTimer()->GetScale();
+
+		if (ImGui::SliderFloat("Scale", &fScale, 0.f, 5.f))
+		{
+			Engine::Window::GetInst()->GetTimer()->SetScale(fScale);
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("stop"))
+		{
+			Engine::Window::GetInst()->Stop();
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("resume"))
+		{
+			Engine::Window::GetInst()->Resume();
+		}
+
 		ImGui::End();
+
+		RenderManager_ShowImGuiWindow();
+		Scene_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
 	}
-}
 
-std::shared_ptr<Engine::Bindable> ImguiManager::Drawable_ShowImGuiTree(std::shared_ptr<Engine::Bindable> pDrawable, bool& bSelect)
-{
-	std::string strNode = "Node";
-
-	strNode += pDrawable->GetTag();
-
-	std::shared_ptr<Engine::Bindable> _pSelect = nullptr;
-
-	if (ImGui::TreeNode(strNode.c_str()))
+	void ImguiManager::Render(float fDeltaTime)
 	{
-		strNode += "_s";
-
-		if (bSelect)
+		if (m_bDemoWindow)
 		{
+			ImGui::ShowDemoWindow();
 		}
 
-		if (ImGui::Selectable(strNode.c_str()))
+		ImGui::Render();
+		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+		ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 		{
-			_pSelect = pDrawable;
-			bSelect = true;
+			ImGui::UpdatePlatformWindows();
+			ImGui::RenderPlatformWindowsDefault();
 		}
-		const std::list<std::shared_ptr<Engine::Bindable>>& ChildList = pDrawable->GetChildList();
-#ifdef _DEBUG
-		static int iChildOffset = 0;
+	}
 
+	void ImguiManager::DisableMouse()
+	{
+		ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse;
+	}
 
-		if (ImGui::InputInt("child", &iChildOffset, 0, static_cast<int>(ChildList.size())))
+	void ImguiManager::EnableMouse()
+	{
+		ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+	}
+
+	void ImguiManager::CRef_ImGuiWindow(std::shared_ptr<Engine::CRef> pRef)
+	{
+		ImGui::Text("Name: %s", pRef->GetTag().c_str());
+
+		ImGui::SameLine();
+
+		bool bEnable = pRef->IsEnable();
+
+		if (ImGui::Checkbox("Enable", &bEnable))
 		{
-			std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = ChildList.begin();
-			std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iterEnd = ChildList.end();
-
-			for (int i = 0; iter != iterEnd; ++iter, ++i)
+			if (bEnable)
 			{
-				if (i >= iChildOffset)
-				{
-					(*iter)->Enable();
-				}
-				else
-				{
-					(*iter)->Disable();
-				}
-			}
-		}
-#endif
-
-		std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = ChildList.begin();
-		std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iterEnd = ChildList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			bool _bSelect = bSelect;
-
-			std::shared_ptr<Engine::Bindable> pSelect = Drawable_ShowImGuiTree(*iter, bSelect);
-
-			if (pSelect != nullptr)
-			{
-				_pSelect = pSelect;
-			}
-		}
-
-		ImGui::TreePop();
-	}
-
-	if (false)
-	{
-		return std::static_pointer_cast<Engine::Drawable>(pDrawable->shared_from_this());
-	}
-
-	return _pSelect;
-}
-
-void ImguiManager::LoadNavMesh(const TCHAR* pFullPath, class Engine::Scene* pScene)
-{
-	if (!pScene)
-	{
-		return;
-	}
-
-	Engine::FbxLoader loader;
-
-	TCHAR strExt[_MAX_EXT] = {};
-
-	_tsplitpath_s(pFullPath, nullptr, 0, nullptr, 0, nullptr, 0, strExt, _MAX_EXT);
-
-	_tcsupr_s(strExt);
-
-	if (!_tcscmp(strExt, TEXT(".OBJ")))
-	{
-		loader.LoadOBJ(pFullPath, "");
-	}
-	else if (!_tcscmp(strExt, TEXT(".FBX")))
-	{
-		loader.Init();
-
-		loader.LoadFile(pFullPath, "");
-	}
-
-	int iCount = loader.GetLODCount();
-
-	std::vector<float> vecPoint;
-	std::vector<int> vecTris;
-	Engine::Vector3 vMax = { FLT_MIN, FLT_MIN, FLT_MIN };
-	Engine::Vector3 vMin = { FLT_MAX, FLT_MAX, FLT_MAX };
-
-	std::vector<std::vector<Engine::VertexStandard>> vecVertexAll;
-	std::vector<std::vector<std::vector<unsigned int>>> vecIndexAll;
-
-	int iVertex = 0;
-
-	for (int i = 0; i < iCount; ++i)
-	{
-		std::vector<Engine::VertexStandard> vecVertex = loader.GetVertexData(i);
-		std::vector<std::vector<unsigned int>> vecIndex = loader.GetIndexData(i);
-
-		for (size_t j = 0; j < vecVertex.size(); ++j)
-		{
-			vecPoint.push_back(vecVertex[j].pos.x);
-			vecPoint.push_back(vecVertex[j].pos.y);
-			vecPoint.push_back(vecVertex[j].pos.z);
-
-			vMax.x = vecVertex[j].pos.x < vMax.x ? vMax.x : vecVertex[j].pos.x;
-			vMax.y = vecVertex[j].pos.y < vMax.y ? vMax.y : vecVertex[j].pos.y;
-			vMax.z = vecVertex[j].pos.z < vMax.z ? vMax.z : vecVertex[j].pos.z;
-
-			vMin.x = vecVertex[j].pos.x > vMin.x ? vMin.x : vecVertex[j].pos.x;
-			vMin.y = vecVertex[j].pos.y > vMin.y ? vMin.y : vecVertex[j].pos.y;
-			vMin.z = vecVertex[j].pos.z > vMin.z ? vMin.z : vecVertex[j].pos.z;
-
-			vecVertex[j].normal.x = 0.f;
-			vecVertex[j].normal.y = 1.f;
-			vecVertex[j].normal.z = 0.f;
-
-			vecVertex[j].tangent.x = 1.f;
-			vecVertex[j].tangent.y = 0.f;
-			vecVertex[j].tangent.z = 0.f;
-		}
-
-		for (size_t j = 0; j < vecIndex.size(); ++j)
-		{
-			for (size_t k = 0; k < vecIndex[j].size(); ++k)
-			{
-				vecTris.push_back(static_cast<int>(vecIndex[j][k]) + iVertex);
-			}
-		}
-
-		iVertex += static_cast<int>(vecVertex.size());
-
-		vecVertexAll.push_back(vecVertex);
-		vecIndexAll.push_back(vecIndex);
-	}
-
-	std::shared_ptr<Engine::Drawable> pNavigation = pScene->CreateDrawable<Engine::Drawable>("Navigation", pScene->FindLayer(DEFAULT_LAYER));
-
-	if (!pNavigation)
-	{
-		return;
-	}
-
-	std::shared_ptr<Engine::ColliderMesh> pColliderMesh = pNavigation->CreateBindable<Engine::ColliderMesh>("ColliderMesh");
-
-	pColliderMesh->SetInfo(vecPoint, vecTris);
-
-	pNavigation->CreateBindable<Engine::Mesh>("NavMesh", vecVertexAll, vecIndexAll);
-
-	pNavigation->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSNoSkin");
-	pNavigation->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoTexture");
-	pNavigation->FindAndAddBind<Engine::InputLayout>("Standard");
-	pNavigation->FindAndAddBind<Engine::Topology>("TriangleList");
-
-	std::shared_ptr<Engine::Material> pMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
-
-	pNavigation->AddChild(pMaterial->Clone());
-
-	m_pNavMesh = CreateNavMesh(vecPoint, vecTris, vMax, vMin);
-
-	m_pNavMesh->SetTag("NavigationMesh");
-
-	pNavigation->AddChild(m_pNavMesh);
-
-	pColliderMesh->SetCallBack(Engine::COLLISION_TYPE::STAY, this, &ImguiManager::CollisionStay);
-}
-
-void ImguiManager::LoadNavMesh(Engine::Scene* pScene, const TCHAR* pFilePath, const std::string& strPathKey)
-{
-	TCHAR strFullPath[MAX_PATH] = {};
-
-	const TCHAR* pPath = Engine::CPathManager::GetInst()->FindPath(strPathKey);
-
-	if (pPath)
-	{
-		_tcscpy_s(strFullPath, pPath);
-	}
-
-	_tcscat_s(strFullPath, pFilePath);
-
-	LoadNavMesh(strFullPath, pScene);
-}
-
-std::shared_ptr<Engine::NavMesh> ImguiManager::CreateNavMesh(const std::vector<float>& vecPoint, const std::vector<int>& vecTris, const Engine::Vector3& vMax, const Engine::Vector3& vMin)
-{
-	rcConfig config = {};
-
-	memcpy_s(config.bmax, 12, &vMax.x, 12);
-	memcpy_s(config.bmin, 12, &vMin.x, 12);
-
-	config.cs = m_fCellSize;
-	config.ch = m_fCellHeight;
-	config.walkableSlopeAngle = m_fAgentSlopeAngle;
-	config.walkableHeight = static_cast<int>(ceilf(m_fAgentHeight / config.ch));
-	config.walkableRadius = static_cast<int>(ceilf(m_fAgentRadius / config.cs));
-	config.walkableClimb = static_cast<int>(floorf(m_fAgentClimb / config.ch));
-	config.maxEdgeLen = static_cast<int>(m_fMaxEdgeLen / m_fCellSize);
-	config.maxSimplificationError = m_fMaxEdgeError;
-	config.minRegionArea = static_cast<int>(m_fRegionMinSize * m_fRegionMinSize);
-	config.mergeRegionArea = static_cast<int>(m_fRegionMergeSize * m_fRegionMergeSize);
-	config.maxVertsPerPoly = static_cast<int>(m_fVertsPerPoly);
-	config.borderSize = config.walkableRadius + 3;
-	rcCalcGridSize(config.bmin, config.bmax, config.cs, &config.width, &config.height);
-	config.detailSampleDist = m_fDetailSampleDist < 0.9f ? 0 : m_fCellSize * m_fDetailSampleDist;
-	config.detailSampleMaxError = m_fCellHeight * m_fDetailSampleMaxError;
-
-	config.bmin[0] -= config.borderSize * config.cs;
-	config.bmin[2] -= config.borderSize * config.cs;
-	config.bmax[0] += config.borderSize * config.cs;
-	config.bmax[2] += config.borderSize * config.cs;
-
-	m_pHeightField = rcAllocHeightfield();
-
-	if (!m_pHeightField)
-	{
-		return nullptr;
-	}
-
-	if (!rcCreateHeightfield(&m_tContext, *m_pHeightField, config.width, config.height, config.bmin, config.bmax, config.cs, config.ch))
-	{
-		return nullptr;
-	}
-
-	m_pTriAreas = std::make_unique<unsigned char[]>(vecTris.size() / 3);
-
-	if (!m_pTriAreas)
-	{
-		return nullptr;
-	}
-
-	memset(m_pTriAreas.get(), 0, vecTris.size() / 3);
-
-	rcMarkWalkableTriangles(&m_tContext, m_fAgentSlopeAngle, &vecPoint[0], static_cast<int>(vecPoint.size()), &vecTris[0], static_cast<int>(vecTris.size() / 3), m_pTriAreas.get());
-
-	if (!rcRasterizeTriangles(&m_tContext, &vecPoint[0], static_cast<int>(vecPoint.size()), &vecTris[0], m_pTriAreas.get(), static_cast<int>(vecTris.size() / 3), *m_pHeightField, config.walkableClimb))
-	{
-		return nullptr;
-	}
-
-	m_pCompactHeightField = rcAllocCompactHeightfield();
-
-	if (!m_pCompactHeightField)
-	{
-		return nullptr;
-	}
-
-	if (!rcBuildCompactHeightfield(&m_tContext, config.walkableHeight, config.walkableClimb, *m_pHeightField, *m_pCompactHeightField))
-	{
-		return nullptr;
-	}
-
-	if (!rcErodeWalkableArea(&m_tContext, config.walkableRadius, *m_pCompactHeightField))
-	{
-		return nullptr;
-	}
-
-	if (!rcBuildDistanceField(&m_tContext, *m_pCompactHeightField))
-	{
-		return nullptr;
-	}
-
-	if (!rcBuildRegions(&m_tContext, *m_pCompactHeightField, 0, config.minRegionArea, config.mergeRegionArea))
-	{
-		return nullptr;
-	}
-
-	m_pContourSet = rcAllocContourSet();
-
-	if (!m_pContourSet)
-	{
-		return nullptr;
-	}
-
-	if (!rcBuildContours(&m_tContext, *m_pCompactHeightField, config.maxSimplificationError, config.maxEdgeLen, *m_pContourSet))
-	{
-		return nullptr;
-	}
-
-	m_pPolyMesh = rcAllocPolyMesh();
-
-	if (!m_pPolyMesh)
-	{
-		return nullptr;
-	}
-
-	if (!rcBuildPolyMesh(&m_tContext, *m_pContourSet, config.maxVertsPerPoly, *m_pPolyMesh))
-	{
-		return nullptr;
-	}
-
-	m_pPolyMeshDetail = rcAllocPolyMeshDetail();
-
-	if (!m_pPolyMeshDetail)
-	{
-		return nullptr;
-	}
-
-	if (!rcBuildPolyMeshDetail(&m_tContext, *m_pPolyMesh, *m_pCompactHeightField, config.detailSampleDist, config.detailSampleMaxError, *m_pPolyMeshDetail))
-	{
-		return nullptr;
-	}
-
-	for (int i = 0; i < m_pPolyMesh->npolys; ++i)
-	{
-		if (m_pPolyMesh->areas[i] == RC_WALKABLE_AREA)
-		{
-			m_pPolyMesh->areas[i] = 0;
-		}
-
-		if (m_pPolyMesh->areas[i] == 0)
-		{
-			m_pPolyMesh->flags[i] = 1;
-		}
-	}
-
-	dtNavMeshCreateParams tParams = {};
-
-	tParams.verts = m_pPolyMesh->verts;
-	tParams.vertCount = m_pPolyMesh->nverts;
-	tParams.polys = m_pPolyMesh->polys;
-	tParams.polyAreas = m_pPolyMesh->areas;
-	tParams.polyFlags = m_pPolyMesh->flags;
-	tParams.polyCount = m_pPolyMesh->npolys;
-	tParams.nvp = m_pPolyMesh->nvp;
-	tParams.detailMeshes = m_pPolyMeshDetail->meshes;
-	tParams.detailVerts = m_pPolyMeshDetail->verts;
-	tParams.detailVertsCount = m_pPolyMeshDetail->nverts;
-	tParams.detailTris = m_pPolyMeshDetail->tris;
-	tParams.detailTriCount = m_pPolyMeshDetail->ntris;
-	tParams.walkableHeight = m_fAgentHeight;
-	tParams.walkableRadius = m_fAgentRadius;
-	tParams.walkableClimb = m_fAgentClimb;
-	memcpy_s(tParams.bmin, 12, m_pPolyMesh->bmin, 12);
-	memcpy_s(tParams.bmax, 12, m_pPolyMesh->bmax, 12);
-	tParams.cs = config.cs;
-	tParams.ch = config.ch;
-	tParams.buildBvTree = true;
-
-	return std::make_shared<Engine::NavMesh>(tParams, m_fAgentRadius, m_fAgentHeight);
-}
-
-void ImguiManager::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
-{
-	if (Engine::CInput::GetInst()->IsMouseButtonUp(Engine::CInput::MOUSE_TYPE::LEFT))
-	{
-		Engine::Collider* pNavOwner = nullptr;
-
-		if ((pSrc->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pSrc->GetTag() == "MouseLine"))
-		{
-			pNavOwner = pDest;
-		}
-
-		else if (pDest->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pDest->GetTag() == "MouseLine")
-		{
-			pNavOwner = pSrc;
-		}
-
-		if(pNavOwner)
-		{
-			if (m_bMode)
-			{
-				Engine::Scene* pScene = Engine::SceneManager::GetInst()->GetScene();
-
-				std::shared_ptr<Engine::Layer> pLayer = pScene->FindLayer(DEFAULT_LAYER);
-
-				char strPlayer[TEXT_LEN] = {};
-
-				sprintf_s(strPlayer, "Player_%d", static_cast<int>(m_PlayerList.size()));
-
-				std::shared_ptr<Player> pPlayer = std::static_pointer_cast<Player>(pScene->CreateCloneDrawable(strPlayer, "Player", pLayer, Engine::SCENE_TYPE::CURRENT));
-
-				if (pPlayer)
-				{
-					Engine::Bindable* pParent = pNavOwner->GetParent();
-
-					if (pParent)
-					{
-						std::shared_ptr<Engine::NavMesh> pNavMesh = std::static_pointer_cast<Engine::NavMesh>(pParent->FindChild(Engine::BINDABLE_TYPE::NAV_MESH));
-
-						pPlayer->CreateAgent(pNavMesh, pSrc->GetCross());
-					}
-				}
-
-				m_PlayerList.push_back(pPlayer);
+				pRef->Enable();
 			}
 			else
 			{
-				std::list<std::shared_ptr<Player>>::const_iterator iter = m_PlayerList.begin();
-				std::list<std::shared_ptr<Player>>::const_iterator iterEnd = m_PlayerList.end();
+				pRef->Disable();
+			}
+		}
 
-				for (; iter != iterEnd; ++iter)
+		ImGui::SameLine();
+
+		bool bActive = pRef->IsActive();
+
+		if (ImGui::Checkbox("Active", &bActive))
+		{
+			if (!bActive)
+			{
+				pRef->InActivate();
+			}
+		}
+	}
+
+	void ImguiManager::JointSocket_ImGuiWindow(std::shared_ptr<Engine::JointSocket> pRef, int _iIndex)
+	{
+		CRef_ImGuiWindow(pRef);
+
+		char pText[TEXT_LEN] = {};
+
+		sprintf_s(pText, "%d parent index", _iIndex);
+
+		int iIndex = pRef->GetParentIndex();
+
+		if (ImGui::InputInt(pText, &iIndex))
+		{
+			pRef->SetParentIndex(iIndex);
+		}
+
+		Engine::Vector3 vScale = pRef->GetScale();
+		Engine::Vector3 vPos = pRef->GetPosition();
+		Engine::Vector3 vQuternion = pRef->GetRotation();
+
+		sprintf_s(pText, "%d Joint Scale", _iIndex);
+
+		if (ImGui::InputFloat3(pText, &vScale.x))
+		{
+			pRef->SetScale(vScale);
+			pRef->UpdateJointMatrix();
+		}
+
+		sprintf_s(pText, "%d Joint Position", _iIndex);
+
+		if (ImGui::InputFloat3(pText, &vPos.x))
+		{
+			pRef->SetPosition(vPos);
+			pRef->UpdateJointMatrix();
+		}
+
+		sprintf_s(pText, "%d Joint Rotation", _iIndex);
+
+		if (ImGui::InputFloat3(pText, &vQuternion.x))
+		{
+			pRef->SetRotation(vQuternion);
+			pRef->UpdateJointMatrix();
+		}
+	}
+	void ImguiManager::SceneWindow(Engine::Scene* pScene)
+	{
+
+
+		//Layer_DrawListImgui();
+	}
+	//
+	//	void Skeleton::ImGuiWindow()
+	//	{
+	//		__super::ImGuiWindow();
+	//
+	//		static int iIndex = -1;
+	//
+	//		std::vector<const char*> vecSocket;
+	//		std::vector<std::shared_ptr<JointSocket>> _vecSocket;
+	//
+	//		SocketList::iterator iter = m_SocketList.begin();
+	//		SocketList::iterator iterEnd = m_SocketList.end();
+	//
+	//		for (; iter != iterEnd; ++iter)
+	//		{
+	//			vecSocket.push_back((*iter)->GetTag().c_str());
+	//			_vecSocket.push_back(*iter);
+	//		}
+	//
+	//		if (vecSocket.size())
+	//		{
+	//			ImGui::ListBox("sockek list", &iIndex, &vecSocket[0], static_cast<int>(vecSocket.size()));
+	//		}
+	//
+	//		if (iIndex >= 0 && iIndex < _vecSocket.size())
+	//		{
+	//			_vecSocket[iIndex]->ImGuiWindow();
+	//		}
+	//	}
+	//
+	//	void Camera::ImGuiWindow()
+	//	{
+	//		__super::ImGuiWindow();
+	//
+	//		ImGui::SliderFloat("Camera Speed", &m_fSpeed, 0.f, 500000.f);
+	//
+	//		ImGui::Checkbox("Control", &m_bControl);
+	//	}
+	//
+	//
+	void ImguiManager::Drawable_ShowImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawable)
+	{
+		static std::shared_ptr<Engine::Bindable> pSelect = nullptr;
+
+		bool bSelect = false;
+
+		if (ImGui::Begin("Node View"))
+		{
+			std::shared_ptr<Engine::Bindable> pResult = Drawable_ShowImGuiTree(pDrawable, bSelect);
+
+			if (pResult)
+			{
+				pSelect = pResult;
+			}
+		}
+
+		ImGui::End();
+
+		if (pSelect != nullptr)
+		{
+			if (ImGui::Begin("Drawable", &bSelect))
+			{
+				Drawable_ImGuiWindow(pSelect);
+			}
+			ImGui::End();
+		}
+	}
+
+	std::shared_ptr<Engine::Bindable> ImguiManager::Drawable_ShowImGuiTree(std::shared_ptr<Engine::Bindable> pDrawable, bool& bSelect)
+	{
+		std::string strNode = "Node";
+
+		strNode += pDrawable->GetTag();
+
+		std::shared_ptr<Engine::Bindable> _pSelect = nullptr;
+
+		if (ImGui::TreeNode(strNode.c_str()))
+		{
+			strNode += "_s";
+
+			if (bSelect)
+			{
+			}
+
+			if (ImGui::Selectable(strNode.c_str()))
+			{
+				_pSelect = pDrawable;
+				bSelect = true;
+			}
+			const std::list<std::shared_ptr<Engine::Bindable>>& ChildList = pDrawable->GetChildList();
+#ifdef _DEBUG
+			static int iChildOffset = 0;
+
+
+			if (ImGui::InputInt("child", &iChildOffset, 0, static_cast<int>(ChildList.size())))
+			{
+				std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = ChildList.begin();
+				std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iterEnd = ChildList.end();
+
+				for (int i = 0; iter != iterEnd; ++iter, ++i)
 				{
-					(*iter)->Move(pSrc->GetCross());
+					if (i >= iChildOffset)
+					{
+						(*iter)->Enable();
+					}
+					else
+					{
+						(*iter)->Disable();
+					}
+				}
+			}
+#endif
+
+			std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = ChildList.begin();
+			std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iterEnd = ChildList.end();
+
+			for (; iter != iterEnd; ++iter)
+			{
+				bool _bSelect = bSelect;
+
+				std::shared_ptr<Engine::Bindable> pSelect = Drawable_ShowImGuiTree(*iter, bSelect);
+
+				if (pSelect != nullptr)
+				{
+					_pSelect = pSelect;
+				}
+			}
+
+			ImGui::TreePop();
+		}
+
+		if (false)
+		{
+			return std::static_pointer_cast<Engine::Drawable>(pDrawable->shared_from_this());
+		}
+
+		return _pSelect;
+	}
+
+	void ImguiManager::LoadNavMesh(const TCHAR* pFullPath, class Engine::Scene* pScene)
+	{
+		if (!pScene)
+		{
+			return;
+		}
+
+		Engine::FbxLoader loader;
+
+		TCHAR strExt[_MAX_EXT] = {};
+
+		_tsplitpath_s(pFullPath, nullptr, 0, nullptr, 0, nullptr, 0, strExt, _MAX_EXT);
+
+		_tcsupr_s(strExt);
+
+		if (!_tcscmp(strExt, TEXT(".OBJ")))
+		{
+			loader.LoadOBJ(pFullPath, "");
+		}
+		else if (!_tcscmp(strExt, TEXT(".FBX")))
+		{
+			loader.Init();
+
+			loader.LoadFile(pFullPath, "");
+		}
+
+		int iCount = loader.GetLODCount();
+
+		std::vector<float> vecPoint;
+		std::vector<int> vecTris;
+		Engine::Vector3 vMax = { FLT_MIN, FLT_MIN, FLT_MIN };
+		Engine::Vector3 vMin = { FLT_MAX, FLT_MAX, FLT_MAX };
+
+		std::vector<std::vector<Engine::VertexStandard>> vecVertexAll;
+		std::vector<std::vector<std::vector<unsigned int>>> vecIndexAll;
+
+		int iVertex = 0;
+
+		for (int i = 0; i < iCount; ++i)
+		{
+			std::vector<Engine::VertexStandard> vecVertex = loader.GetVertexData(i);
+			std::vector<std::vector<unsigned int>> vecIndex = loader.GetIndexData(i);
+
+			for (size_t j = 0; j < vecVertex.size(); ++j)
+			{
+				vecPoint.push_back(vecVertex[j].pos.x);
+				vecPoint.push_back(vecVertex[j].pos.y);
+				vecPoint.push_back(vecVertex[j].pos.z);
+
+				vMax.x = vecVertex[j].pos.x < vMax.x ? vMax.x : vecVertex[j].pos.x;
+				vMax.y = vecVertex[j].pos.y < vMax.y ? vMax.y : vecVertex[j].pos.y;
+				vMax.z = vecVertex[j].pos.z < vMax.z ? vMax.z : vecVertex[j].pos.z;
+
+				vMin.x = vecVertex[j].pos.x > vMin.x ? vMin.x : vecVertex[j].pos.x;
+				vMin.y = vecVertex[j].pos.y > vMin.y ? vMin.y : vecVertex[j].pos.y;
+				vMin.z = vecVertex[j].pos.z > vMin.z ? vMin.z : vecVertex[j].pos.z;
+
+				vecVertex[j].normal.x = 0.f;
+				vecVertex[j].normal.y = 1.f;
+				vecVertex[j].normal.z = 0.f;
+
+				vecVertex[j].tangent.x = 1.f;
+				vecVertex[j].tangent.y = 0.f;
+				vecVertex[j].tangent.z = 0.f;
+			}
+
+			for (size_t j = 0; j < vecIndex.size(); ++j)
+			{
+				for (size_t k = 0; k < vecIndex[j].size(); ++k)
+				{
+					vecTris.push_back(static_cast<int>(vecIndex[j][k]) + iVertex);
+				}
+			}
+
+			iVertex += static_cast<int>(vecVertex.size());
+
+			vecVertexAll.push_back(vecVertex);
+			vecIndexAll.push_back(vecIndex);
+		}
+
+		std::shared_ptr<Engine::Drawable> pNavigation = pScene->CreateDrawable<Engine::Drawable>("Navigation", pScene->FindLayer(DEFAULT_LAYER));
+
+		if (!pNavigation)
+		{
+			return;
+		}
+
+		std::shared_ptr<Engine::ColliderMesh> pColliderMesh = pNavigation->CreateBindable<Engine::ColliderMesh>("ColliderMesh");
+
+		pColliderMesh->SetInfo(vecPoint, vecTris);
+
+		pNavigation->CreateBindable<Engine::Mesh>("NavMesh", vecVertexAll, vecIndexAll);
+
+		pNavigation->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSNoSkin");
+		pNavigation->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoTexture");
+		pNavigation->FindAndAddBind<Engine::InputLayout>("Standard");
+		pNavigation->FindAndAddBind<Engine::Topology>("TriangleList");
+
+		std::shared_ptr<Engine::Material> pMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
+
+		pNavigation->AddChild(pMaterial->Clone());
+
+		m_pNavMesh = CreateNavMesh(vecPoint, vecTris, vMax, vMin);
+
+		m_pNavMesh->SetTag("NavigationMesh");
+
+		pNavigation->AddChild(m_pNavMesh);
+
+		pColliderMesh->SetCallBack(Engine::COLLISION_TYPE::STAY, this, &ImguiManager::CollisionStay);
+	}
+
+	void ImguiManager::LoadNavMesh(Engine::Scene* pScene, const TCHAR* pFilePath, const std::string& strPathKey)
+	{
+		TCHAR strFullPath[MAX_PATH] = {};
+
+		const TCHAR* pPath = Engine::CPathManager::GetInst()->FindPath(strPathKey);
+
+		if (pPath)
+		{
+			_tcscpy_s(strFullPath, pPath);
+		}
+
+		_tcscat_s(strFullPath, pFilePath);
+
+		LoadNavMesh(strFullPath, pScene);
+	}
+
+	std::shared_ptr<Engine::NavMesh> ImguiManager::CreateNavMesh(const std::vector<float>& vecPoint, const std::vector<int>& vecTris, const Engine::Vector3& vMax, const Engine::Vector3& vMin)
+	{
+		rcConfig config = {};
+
+		memcpy_s(config.bmax, 12, &vMax.x, 12);
+		memcpy_s(config.bmin, 12, &vMin.x, 12);
+
+		config.cs = m_fCellSize;
+		config.ch = m_fCellHeight;
+		config.walkableSlopeAngle = m_fAgentSlopeAngle;
+		config.walkableHeight = static_cast<int>(ceilf(m_fAgentHeight / config.ch));
+		config.walkableRadius = static_cast<int>(ceilf(m_fAgentRadius / config.cs));
+		config.walkableClimb = static_cast<int>(floorf(m_fAgentClimb / config.ch));
+		config.maxEdgeLen = static_cast<int>(m_fMaxEdgeLen / m_fCellSize);
+		config.maxSimplificationError = m_fMaxEdgeError;
+		config.minRegionArea = static_cast<int>(m_fRegionMinSize * m_fRegionMinSize);
+		config.mergeRegionArea = static_cast<int>(m_fRegionMergeSize * m_fRegionMergeSize);
+		config.maxVertsPerPoly = static_cast<int>(m_fVertsPerPoly);
+		config.borderSize = config.walkableRadius + 3;
+		rcCalcGridSize(config.bmin, config.bmax, config.cs, &config.width, &config.height);
+		config.detailSampleDist = m_fDetailSampleDist < 0.9f ? 0 : m_fCellSize * m_fDetailSampleDist;
+		config.detailSampleMaxError = m_fCellHeight * m_fDetailSampleMaxError;
+
+		config.bmin[0] -= config.borderSize * config.cs;
+		config.bmin[2] -= config.borderSize * config.cs;
+		config.bmax[0] += config.borderSize * config.cs;
+		config.bmax[2] += config.borderSize * config.cs;
+
+		m_pHeightField = rcAllocHeightfield();
+
+		if (!m_pHeightField)
+		{
+			return nullptr;
+		}
+
+		if (!rcCreateHeightfield(&m_tContext, *m_pHeightField, config.width, config.height, config.bmin, config.bmax, config.cs, config.ch))
+		{
+			return nullptr;
+		}
+
+		m_pTriAreas = std::make_unique<unsigned char[]>(vecTris.size() / 3);
+
+		if (!m_pTriAreas)
+		{
+			return nullptr;
+		}
+
+		memset(m_pTriAreas.get(), 0, vecTris.size() / 3);
+
+		rcMarkWalkableTriangles(&m_tContext, m_fAgentSlopeAngle, &vecPoint[0], static_cast<int>(vecPoint.size()), &vecTris[0], static_cast<int>(vecTris.size() / 3), m_pTriAreas.get());
+
+		if (!rcRasterizeTriangles(&m_tContext, &vecPoint[0], static_cast<int>(vecPoint.size()), &vecTris[0], m_pTriAreas.get(), static_cast<int>(vecTris.size() / 3), *m_pHeightField, config.walkableClimb))
+		{
+			return nullptr;
+		}
+
+		m_pCompactHeightField = rcAllocCompactHeightfield();
+
+		if (!m_pCompactHeightField)
+		{
+			return nullptr;
+		}
+
+		if (!rcBuildCompactHeightfield(&m_tContext, config.walkableHeight, config.walkableClimb, *m_pHeightField, *m_pCompactHeightField))
+		{
+			return nullptr;
+		}
+
+		if (!rcErodeWalkableArea(&m_tContext, config.walkableRadius, *m_pCompactHeightField))
+		{
+			return nullptr;
+		}
+
+		if (!rcBuildDistanceField(&m_tContext, *m_pCompactHeightField))
+		{
+			return nullptr;
+		}
+
+		if (!rcBuildRegions(&m_tContext, *m_pCompactHeightField, 0, config.minRegionArea, config.mergeRegionArea))
+		{
+			return nullptr;
+		}
+
+		m_pContourSet = rcAllocContourSet();
+
+		if (!m_pContourSet)
+		{
+			return nullptr;
+		}
+
+		if (!rcBuildContours(&m_tContext, *m_pCompactHeightField, config.maxSimplificationError, config.maxEdgeLen, *m_pContourSet))
+		{
+			return nullptr;
+		}
+
+		m_pPolyMesh = rcAllocPolyMesh();
+
+		if (!m_pPolyMesh)
+		{
+			return nullptr;
+		}
+
+		if (!rcBuildPolyMesh(&m_tContext, *m_pContourSet, config.maxVertsPerPoly, *m_pPolyMesh))
+		{
+			return nullptr;
+		}
+
+		m_pPolyMeshDetail = rcAllocPolyMeshDetail();
+
+		if (!m_pPolyMeshDetail)
+		{
+			return nullptr;
+		}
+
+		if (!rcBuildPolyMeshDetail(&m_tContext, *m_pPolyMesh, *m_pCompactHeightField, config.detailSampleDist, config.detailSampleMaxError, *m_pPolyMeshDetail))
+		{
+			return nullptr;
+		}
+
+		for (int i = 0; i < m_pPolyMesh->npolys; ++i)
+		{
+			if (m_pPolyMesh->areas[i] == RC_WALKABLE_AREA)
+			{
+				m_pPolyMesh->areas[i] = 0;
+			}
+
+			if (m_pPolyMesh->areas[i] == 0)
+			{
+				m_pPolyMesh->flags[i] = 1;
+			}
+		}
+
+		dtNavMeshCreateParams tParams = {};
+
+		tParams.verts = m_pPolyMesh->verts;
+		tParams.vertCount = m_pPolyMesh->nverts;
+		tParams.polys = m_pPolyMesh->polys;
+		tParams.polyAreas = m_pPolyMesh->areas;
+		tParams.polyFlags = m_pPolyMesh->flags;
+		tParams.polyCount = m_pPolyMesh->npolys;
+		tParams.nvp = m_pPolyMesh->nvp;
+		tParams.detailMeshes = m_pPolyMeshDetail->meshes;
+		tParams.detailVerts = m_pPolyMeshDetail->verts;
+		tParams.detailVertsCount = m_pPolyMeshDetail->nverts;
+		tParams.detailTris = m_pPolyMeshDetail->tris;
+		tParams.detailTriCount = m_pPolyMeshDetail->ntris;
+		tParams.walkableHeight = m_fAgentHeight;
+		tParams.walkableRadius = m_fAgentRadius;
+		tParams.walkableClimb = m_fAgentClimb;
+		memcpy_s(tParams.bmin, 12, m_pPolyMesh->bmin, 12);
+		memcpy_s(tParams.bmax, 12, m_pPolyMesh->bmax, 12);
+		tParams.cs = config.cs;
+		tParams.ch = config.ch;
+		tParams.buildBvTree = true;
+
+		return std::make_shared<Engine::NavMesh>(tParams, m_fAgentRadius, m_fAgentHeight);
+	}
+
+	void ImguiManager::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
+	{
+		if (Engine::CInput::GetInst()->IsMouseButtonUp(Engine::CInput::MOUSE_TYPE::LEFT))
+		{
+			Engine::Collider* pNavOwner = nullptr;
+
+			if ((pSrc->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pSrc->GetTag() == "MouseLine"))
+			{
+				pNavOwner = pDest;
+			}
+
+			else if (pDest->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pDest->GetTag() == "MouseLine")
+			{
+				pNavOwner = pSrc;
+			}
+
+			if (pNavOwner)
+			{
+				if (m_bMode)
+				{
+					Engine::Scene* pScene = Engine::SceneManager::GetInst()->GetScene();
+
+					std::shared_ptr<Engine::Layer> pLayer = pScene->FindLayer(DEFAULT_LAYER);
+
+					char strPlayer[TEXT_LEN] = {};
+
+					sprintf_s(strPlayer, "Player_%d", static_cast<int>(m_PlayerList.size()));
+
+					std::shared_ptr<Player> pPlayer = std::static_pointer_cast<Player>(pScene->CreateCloneDrawable(strPlayer, "Player", pLayer, Engine::SCENE_TYPE::CURRENT));
+
+					if (pPlayer)
+					{
+						Engine::Bindable* pParent = pNavOwner->GetParent();
+
+						if (pParent)
+						{
+							std::shared_ptr<Engine::NavMesh> pNavMesh = std::static_pointer_cast<Engine::NavMesh>(pParent->FindChild(Engine::BINDABLE_TYPE::NAV_MESH));
+
+							pPlayer->SetAgent(pNavMesh->CreateAgent(strPlayer, pPlayer->GetTransform(), pSrc->GetCross()));
+						}
+					}
+
+					m_PlayerList.push_back(pPlayer);
+				}
+				else
+				{
+					std::list<std::shared_ptr<Player>>::const_iterator iter = m_PlayerList.begin();
+					std::list<std::shared_ptr<Player>>::const_iterator iterEnd = m_PlayerList.end();
+
+					for (; iter != iterEnd; ++iter)
+					{
+						(*iter)->Move(pSrc->GetCross());
+					}
 				}
 			}
 		}
 	}
-}
 
-std::vector<const char*> vecTypes = {
-	"VERTEX_BUFFER",
-	"INDEX_BUFFER",
-	"VERTEX_SHADER",
-	"HULL_SHADER",
-	"DOMAIN_SHADER",
-	"GEOMETRY_SHADER",
-	"PIXEL_SHADER",
-	"TEXTURE",
-	"MATERIAL",
-	"TRANSFORM",
-	"INPUTLAYOUT",
-	"TOPOLOGY",
-	"MESH"
-};
+	std::vector<const char*> vecTypes = {
+		"VERTEX_BUFFER",
+		"INDEX_BUFFER",
+		"VERTEX_SHADER",
+		"HULL_SHADER",
+		"DOMAIN_SHADER",
+		"GEOMETRY_SHADER",
+		"PIXEL_SHADER",
+		"TEXTURE",
+		"MATERIAL",
+		"TRANSFORM",
+		"INPUTLAYOUT",
+		"TOPOLOGY",
+		"MESH"
+	};
 
-void ImguiManager::Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawable)
-{
-	if (ImGui::Button("reset"))
+	void ImguiManager::Drawable_ImGuiWindow(std::shared_ptr<Engine::Bindable> pDrawable)
 	{
-		pDrawable->Reset();
-	}
-
-	ImGui::SameLine();
-
-	Engine::BINDABLE_TYPE eDrawableType = pDrawable->GetBindableType();
-
-	switch (eDrawableType)
-	{
-	case Engine::BINDABLE_TYPE::TRANSFORM:
-		TransformBuffer_ImGuiWindow(std::static_pointer_cast<Engine::Transform>(pDrawable));
-		break;
-	case Engine::BINDABLE_TYPE::MESH:
-		Mesh_ImGuiWindow(std::static_pointer_cast<Engine::Mesh>(pDrawable));
-		break;
-	case Engine::BINDABLE_TYPE::TERRAIN:
-		Terrain_ShowImguiWindow(std::static_pointer_cast<Engine::Terrain>(pDrawable));
-		break;
-	case Engine::BINDABLE_TYPE::MATERIAL:
-		Material_ImGuiWindow(std::static_pointer_cast<Engine::Material>(pDrawable));
-		break;
-	case Engine::BINDABLE_TYPE::LIGHT:
-		PointLight_ImGuiWindow(std::static_pointer_cast<Engine::PointLight>(pDrawable));
-		break;
-	case Engine::BINDABLE_TYPE::ANIMATION:
-	{
-		Animation_ImGuiWindow(std::static_pointer_cast<Engine::Animation>(pDrawable));
-		break;
-	}
-	case Engine::BINDABLE_TYPE::PARTICLE:
-		Particle_ShowImGuiImage(std::static_pointer_cast<Engine::Particle>(pDrawable));
-		break;
-	case Engine::BINDABLE_TYPE::CLOTH:
-		Cloth_ShowImguiWindow(std::static_pointer_cast<Engine::Cloth>(pDrawable));
-		break;
-	default:
-		CRef_ImGuiWindow(pDrawable);
-		break;
-	}
-
-	/*const Engine::Vector4& vSphereInfo = pDrawable->GetSphereInfo();
-
-	ImGui::Text("%.f, %.f, %.f, %.f", vSphereInfo.x, vSphereInfo.y, vSphereInfo.z, vSphereInfo.w);*/
-
-	const std::list<std::shared_ptr<Engine::Bindable>>& BindList = pDrawable->GetChildList();
-
-	std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = BindList.begin();
-	std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iterEnd = BindList.end();
-
-	for (; iter != iterEnd; ++iter)
-	{
-		Drawable_ImGuiWindow(*iter);
-	}
-
-	static bool bOpen = false;
-	static Engine::BINDABLE_TYPE eType = Engine::BINDABLE_TYPE::END;
-
-	if (ImGui::Button("Add Bindable"))
-	{
-		bOpen = true;
-	}
-
-	static int iCurrent = 0;
-
-	if (bOpen)
-	{
-		if (ImGui::ListBox("select type", &iCurrent, &vecTypes[0], static_cast<int>(vecTypes.size())))
+		if (ImGui::Button("reset"))
 		{
-			bOpen = false;
-
-			eType = static_cast<Engine::BINDABLE_TYPE>(iCurrent);
+			pDrawable->Reset();
 		}
-	}
 
-	if (eType != Engine::BINDABLE_TYPE::END)
-	{
-		static char strBindable[TEXT_LEN] = {};
+		ImGui::SameLine();
 
-		ImGui::InputText("bindable name", strBindable, TEXT_LEN);
+		Engine::BINDABLE_TYPE eDrawableType = pDrawable->GetBindableType();
 
-		if (ImGui::Button("Create"))
+		switch (eDrawableType)
 		{
-			switch (eType)
+		case Engine::BINDABLE_TYPE::TRANSFORM:
+			TransformBuffer_ImGuiWindow(std::static_pointer_cast<Engine::Transform>(pDrawable));
+			break;
+		case Engine::BINDABLE_TYPE::MESH:
+			Mesh_ImGuiWindow(std::static_pointer_cast<Engine::Mesh>(pDrawable));
+			break;
+		case Engine::BINDABLE_TYPE::TERRAIN:
+			Terrain_ShowImguiWindow(std::static_pointer_cast<Engine::Terrain>(pDrawable));
+			break;
+		case Engine::BINDABLE_TYPE::MATERIAL:
+			Material_ImGuiWindow(std::static_pointer_cast<Engine::Material>(pDrawable));
+			break;
+		case Engine::BINDABLE_TYPE::LIGHT:
+			PointLight_ImGuiWindow(std::static_pointer_cast<Engine::PointLight>(pDrawable));
+			break;
+		case Engine::BINDABLE_TYPE::ANIMATION:
+		{
+			Animation_ImGuiWindow(std::static_pointer_cast<Engine::Animation>(pDrawable));
+			break;
+		}
+		case Engine::BINDABLE_TYPE::PARTICLE:
+			Particle_ShowImGuiImage(std::static_pointer_cast<Engine::Particle>(pDrawable));
+			break;
+		case Engine::BINDABLE_TYPE::CLOTH:
+			Cloth_ShowImguiWindow(std::static_pointer_cast<Engine::Cloth>(pDrawable));
+			break;
+		default:
+			CRef_ImGuiWindow(pDrawable);
+			break;
+		}
+
+		/*const Engine::Vector4& vSphereInfo = pDrawable->GetSphereInfo();
+
+		ImGui::Text("%.f, %.f, %.f, %.f", vSphereInfo.x, vSphereInfo.y, vSphereInfo.z, vSphereInfo.w);*/
+
+		const std::list<std::shared_ptr<Engine::Bindable>>& BindList = pDrawable->GetChildList();
+
+		std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = BindList.begin();
+		std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iterEnd = BindList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			Drawable_ImGuiWindow(*iter);
+		}
+
+		static bool bOpen = false;
+		static Engine::BINDABLE_TYPE eType = Engine::BINDABLE_TYPE::END;
+
+		if (ImGui::Button("Add Bindable"))
+		{
+			bOpen = true;
+		}
+
+		static int iCurrent = 0;
+
+		if (bOpen)
+		{
+			if (ImGui::ListBox("select type", &iCurrent, &vecTypes[0], static_cast<int>(vecTypes.size())))
 			{
-			case Engine::BINDABLE_TYPE::VERTEX_BUFFER:
-				//pDrawable->FindAndAddBind<Engine::VertexBuffer>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::INDEX_BUFFER:
-				//pDrawable->FindAndAddBind<Engine::IndexBuffer>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::VERTEX_SHADER:
-				pDrawable->FindAndAddBind<Engine::VertexShader>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::HULL_SHADER:
-				pDrawable->FindAndAddBind<Engine::HullShader>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::DOMAIN_SHADER:
-				pDrawable->FindAndAddBind<Engine::DomainShader>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::GEOMETRY_SHADER:
-				break;
-			case Engine::BINDABLE_TYPE::PIXEL_SHADER:
-				pDrawable->FindAndAddBind<Engine::PixelShader>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::TEXTURE:
-				pDrawable->FindAndAddBind<Engine::Texture>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::MATERIAL:
-				pDrawable->FindAndAddBind<Engine::Material>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::TRANSFORM:
-				pDrawable->FindAndAddBind<Engine::Transform>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::INPUTLAYOUT:
-				pDrawable->FindAndAddBind<Engine::InputLayout>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::TOPOLOGY:
-				pDrawable->FindAndAddBind<Engine::Topology>(strBindable);
-				break;
-			case Engine::BINDABLE_TYPE::MESH:
-				pDrawable->FindAndAddBind<Engine::Mesh>(strBindable);
-				break;
-			}
+				bOpen = false;
 
-			eType = Engine::BINDABLE_TYPE::END;
+				eType = static_cast<Engine::BINDABLE_TYPE>(iCurrent);
+			}
+		}
+
+		if (eType != Engine::BINDABLE_TYPE::END)
+		{
+			static char strBindable[TEXT_LEN] = {};
+
+			ImGui::InputText("bindable name", strBindable, TEXT_LEN);
+
+			if (ImGui::Button("Create"))
+			{
+				switch (eType)
+				{
+				case Engine::BINDABLE_TYPE::VERTEX_BUFFER:
+					//pDrawable->FindAndAddBind<Engine::VertexBuffer>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::INDEX_BUFFER:
+					//pDrawable->FindAndAddBind<Engine::IndexBuffer>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::VERTEX_SHADER:
+					pDrawable->FindAndAddBind<Engine::VertexShader>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::HULL_SHADER:
+					pDrawable->FindAndAddBind<Engine::HullShader>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::DOMAIN_SHADER:
+					pDrawable->FindAndAddBind<Engine::DomainShader>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::GEOMETRY_SHADER:
+					break;
+				case Engine::BINDABLE_TYPE::PIXEL_SHADER:
+					pDrawable->FindAndAddBind<Engine::PixelShader>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::TEXTURE:
+					pDrawable->FindAndAddBind<Engine::Texture>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::MATERIAL:
+					pDrawable->FindAndAddBind<Engine::Material>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::TRANSFORM:
+					pDrawable->FindAndAddBind<Engine::Transform>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::INPUTLAYOUT:
+					pDrawable->FindAndAddBind<Engine::InputLayout>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::TOPOLOGY:
+					pDrawable->FindAndAddBind<Engine::Topology>(strBindable);
+					break;
+				case Engine::BINDABLE_TYPE::MESH:
+					pDrawable->FindAndAddBind<Engine::Mesh>(strBindable);
+					break;
+				}
+
+				eType = Engine::BINDABLE_TYPE::END;
+			}
 		}
 	}
-}
 
-void ImguiManager::Material_ImGuiWindow(std::shared_ptr<Engine::Material> pMaterial)
-{
-	CRef_ImGuiWindow(pMaterial);
-
-	const Engine::MATERIAL& tMaterial = pMaterial->GetMaterial();
-
-	Engine::Vector4 vDiffuse = tMaterial.diffuseColor;
-
-	ImGui::Text("Material");
-	if (ImGui::ColorEdit4("diffuse", &vDiffuse.x))
+	void ImguiManager::Material_ImGuiWindow(std::shared_ptr<Engine::Material> pMaterial)
 	{
-		pMaterial->SetDiffuseColor(vDiffuse);
+		CRef_ImGuiWindow(pMaterial);
+
+		const Engine::MATERIAL& tMaterial = pMaterial->GetMaterial();
+
+		Engine::Vector4 vDiffuse = tMaterial.diffuseColor;
+
+		ImGui::Text("Material");
+		if (ImGui::ColorEdit4("diffuse", &vDiffuse.x))
+		{
+			pMaterial->SetDiffuseColor(vDiffuse);
+		}
+
+		Engine::Vector4 vAmbient = tMaterial.ambientColor;
+
+		if (ImGui::ColorEdit4("ambient", &vAmbient.x))
+		{
+			pMaterial->SetAmbientColor(vAmbient);
+		}
+
+		Engine::Vector4 vSpecular = tMaterial.specularColor;
+
+		if (ImGui::ColorEdit4("specular", &vSpecular.x))
+		{
+			pMaterial->SetSpecularColor(vSpecular);
+		}
+
+		Engine::Vector4 vEmissive = tMaterial.emissiveColor;
+
+		if (ImGui::ColorEdit4("emissive", &vEmissive.x))
+		{
+			pMaterial->SetEmissiveColor(vEmissive);
+		}
+
+		float fSpecPower = tMaterial.fSpecPower;
+
+		if (ImGui::SliderFloat("SpecularExponent", &fSpecPower, 0.f, 250.f))
+		{
+			pMaterial->SetShininess(fSpecPower);
+		}
+
+		float fFraction = tMaterial.fFraction;
+
+		if (ImGui::SliderFloat("Fraction", &fFraction, 0.f, 1.f))
+		{
+			pMaterial->SetReflectivity(fFraction);
+		}
+
+		float fRoughnessX = tMaterial.vRoughness.x;
+
+		if (ImGui::SliderFloat("RoughnessX", &fRoughnessX, 0.f, 1.f))
+		{
+			pMaterial->SetRoughnessX(fRoughnessX);
+		}
+
+		float fRoughnessY = tMaterial.vRoughness.y;
+
+		if (ImGui::SliderFloat("RoughnessY", &fRoughnessY, 0.f, 1.f))
+		{
+			pMaterial->SetRoughnessY(fRoughnessY);
+		}
 	}
 
-	Engine::Vector4 vAmbient = tMaterial.ambientColor;
-
-	if (ImGui::ColorEdit4("ambient", &vAmbient.x))
+	void ImguiManager::Mesh_ImGuiWindow(std::shared_ptr<Engine::Mesh> pMesh)
 	{
-		pMaterial->SetAmbientColor(vAmbient);
-	}
+		CRef_ImGuiWindow(pMesh);
 
-	Engine::Vector4 vSpecular = tMaterial.specularColor;
-
-	if (ImGui::ColorEdit4("specular", &vSpecular.x))
-	{
-		pMaterial->SetSpecularColor(vSpecular);
-	}
-
-	Engine::Vector4 vEmissive = tMaterial.emissiveColor;
-
-	if (ImGui::ColorEdit4("emissive", &vEmissive.x))
-	{
-		pMaterial->SetEmissiveColor(vEmissive);
-	}
-
-	float fSpecPower = tMaterial.fSpecPower;
-
-	if (ImGui::SliderFloat("SpecularExponent", &fSpecPower, 0.f, 250.f))
-	{
-		pMaterial->SetShininess(fSpecPower);
-	}
-
-	float fFraction = tMaterial.fFraction;
-
-	if (ImGui::SliderFloat("Fraction", &fFraction, 0.f, 1.f))
-	{
-		pMaterial->SetReflectivity(fFraction);
-	}
-
-	float fRoughnessX = tMaterial.vRoughness.x;
-
-	if (ImGui::SliderFloat("RoughnessX", &fRoughnessX, 0.f, 1.f))
-	{
-		pMaterial->SetRoughnessX(fRoughnessX);
-	}
-
-	float fRoughnessY = tMaterial.vRoughness.y;
-
-	if (ImGui::SliderFloat("RoughnessY", &fRoughnessY, 0.f, 1.f))
-	{
-		pMaterial->SetRoughnessY(fRoughnessY);
-	}
-}
-
-void ImguiManager::Mesh_ImGuiWindow(std::shared_ptr<Engine::Mesh> pMesh)
-{
-	CRef_ImGuiWindow(pMesh);
-
-	ImGui::Text("Mesh Count %d", pMesh->GetMeshCount());
+		ImGui::Text("Mesh Count %d", pMesh->GetMeshCount());
 
 #ifdef _DEBUG
-	for (int i = 0; i < pMesh->GetMeshCount(); ++i)
-	{
-		char strLabel[TEXT_LEN] = {};
-
-		sprintf_s(strLabel, "Enable Mesh %d", i + 1);
-
-		bool bEnable = pMesh->IsMeshEnabled(i);
-
-		if (ImGui::Checkbox(strLabel, &bEnable))
+		for (int i = 0; i < pMesh->GetMeshCount(); ++i)
 		{
-			pMesh->ToggleMesh(i);
+			char strLabel[TEXT_LEN] = {};
+
+			sprintf_s(strLabel, "Enable Mesh %d", i + 1);
+
+			bool bEnable = pMesh->IsMeshEnabled(i);
+
+			if (ImGui::Checkbox(strLabel, &bEnable))
+			{
+				pMesh->ToggleMesh(i);
+			}
+
+			if (bEnable)
+			{
+				int iSub = pMesh->GetMeshSubCount(i);
+
+				for (int j = 0; j < iSub; ++j)
+				{
+					char strSub[MAX_PATH] = {};
+
+					sprintf_s(strSub, "Mesh: %d, Sub: %d Offset", i, j);
+
+					int iOffset = pMesh->GetMeshSubOffset(i, j);
+
+					if (ImGui::InputInt(strSub, &iOffset))
+					{
+						pMesh->SetMeshSubOffset(i, j, iOffset);
+					}
+				}
+			}
+		}
+#endif
+
+		int iContainerCount = pMesh->GetMeshCount();
+
+		for (int i = 0; i < iContainerCount; ++i)
+		{
+			int iSubCount = pMesh->GetMeshSubCount(i);
+
+			for (int j = 0; j < iSubCount; ++j)
+			{
+				ImGui::Text("Container: %d, Sub: %d Material", i, j);
+
+				std::shared_ptr<Engine::Material> pMaterial = pMesh->GetMaterial(i, j);
+
+				if (pMaterial)
+				{
+					Material_ImGuiWindow(pMaterial);
+				}
+			}
 		}
 	}
-#endif
-}
 
-void ImguiManager::PointLight_ImGuiWindow(std::shared_ptr<Engine::PointLight> pLight)
-{
-	CRef_ImGuiWindow(pLight);
-
-	float fIntencity = pLight->GetIntensity();
-
-	if (ImGui::InputFloat("Light Intensity", &fIntencity, 0.f, 5000.f))
+	void ImguiManager::PointLight_ImGuiWindow(std::shared_ptr<Engine::PointLight> pLight)
 	{
-		pLight->SetIntensity(fIntencity);
-	}
+		CRef_ImGuiWindow(pLight);
 
-	Engine::Vector4 vColor = pLight->GetLightColor();
+		float fIntencity = pLight->GetIntensity();
 
-	if (ImGui::ColorEdit4("color", &vColor.x))
-	{
-		pLight->SetLightColor(vColor);
-	}
-
-	Engine::Vector4 vAmbientColor = pLight->GetAmbientColor();
-
-	if (ImGui::ColorEdit4("ambient", &vAmbientColor.x))
-	{
-		pLight->SetAmbientColor(vAmbientColor);
-	}
-
-	ImGui::Text("Attenutaion");
-
-	float fConstant = pLight->GetConstantAttenuation();
-
-	if (ImGui::SliderFloat("Constant", &fConstant, 0.f, 1.f))
-	{
-		pLight->SetConstantAttenuation(fConstant);
-	}
-
-	float fLinear = pLight->GetLinearAttenuation();
-
-	if (ImGui::SliderFloat("Linear", &fLinear, 0.f, 1.f))
-	{
-		pLight->SetLinearAttenuation(fLinear);
-	}
-
-	float fQuadratic = pLight->GetQuadraticAttenuation();
-
-	if (ImGui::SliderFloat("Quadratic", &fQuadratic, 0.f, 1.f))
-	{
-		pLight->SetQuadraticAttenuation(fQuadratic);
-	}
-
-	Engine::LIGHT_TYPE eLightType = pLight->GetLightType();
-
-	if (ImGui::RadioButton("POINT", reinterpret_cast<int*>(&eLightType), static_cast<int>(Engine::LIGHT_TYPE::POINT)))
-	{
-		pLight->SetLightType(eLightType);
-	}
-	ImGui::SameLine();
-	if (ImGui::RadioButton("SPOT", reinterpret_cast<int*>(&eLightType), static_cast<int>(Engine::LIGHT_TYPE::SPOT)))
-	{
-		pLight->SetLightType(eLightType);
-	}
-	ImGui::SameLine();
-	if (ImGui::RadioButton("DIRECTIONAL", reinterpret_cast<int*>(&eLightType), static_cast<int>(Engine::LIGHT_TYPE::DIRECTIONAL)))
-	{
-		pLight->SetLightType(eLightType);
-	}
-
-	Engine::ORTHOINFO tOrthoInfo = pLight->GetOrthoInfo();
-
-	if (ImGui::InputFloat("OrthoLeft", &tOrthoInfo.fLeft) ||
-		ImGui::InputFloat("OrthoRight", &tOrthoInfo.fRight) ||
-		ImGui::InputFloat("OrthoTop", &tOrthoInfo.fTop) ||
-		ImGui::InputFloat("OrthoBottom", &tOrthoInfo.fBottom) ||
-		ImGui::InputFloat("OrthoNear", &tOrthoInfo.fNear) ||
-		ImGui::InputFloat("OrthoFar", &tOrthoInfo.fFar))
-	{
-		pLight->SetOrthoInfo(tOrthoInfo);
-	}
-}
-
-void ImguiManager::Shader_ImGuiWindow(std::shared_ptr<Engine::Shader> pShader)
-{
-	CRef_ImGuiWindow(pShader);
-
-	char strTitle[MAX_PATH];
-
-	sprintf_s(strTitle, "Shader %s", pShader->GetTag().c_str());
-
-	ImGui::Text(strTitle);
-
-	ImGui::SameLine();
-
-	if (ImGui::Button("ReLoad Shader"))
-	{
-		pShader->LoadShader();
-	}
-
-	ImGui::SameLine();
-
-	ImGui::Text(pShader->GetEntry().get());
-}
-
-void ImguiManager::Sphere_ImGuiWindow(std::shared_ptr<Engine::Sphere> pSphere)
-{
-	CRef_ImGuiWindow(pSphere);
-
-	Engine::Vector3 vDir = pSphere->GetDir();
-
-	if (ImGui::InputFloat3("Dir", &vDir.x))
-	{
-		pSphere->SetDir(vDir);
-	}
-
-	float fSpeed = pSphere->GetSpeed();
-
-	if (ImGui::InputFloat("Speed", &fSpeed))
-	{
-		pSphere->SetSpeed(fSpeed);
-	}
-}
-
-//void Sequence_ImGuiWindow()
-//{
-//	__super::ImGuiWindow();
-
-//	if (m_pSkeleton)
-//	{
-//		m_pSkeleton->ImGuiWindow();
-//	}
-//}
-
-//void Texture_ImGuiWindow()
-//{
-//	__super::ImGuiWindow();
-
-//	ImGui::Text("Texture Slot: %d", m_iSlot);
-//}
-
-void ImguiManager::TransformBuffer_ImGuiWindow(std::shared_ptr<Engine::Transform> pTransform)
-{
-	ImGui::Text("Transform");
-
-	float x = pTransform->GetX();
-
-	if (ImGui::InputFloat("x", &x))
-	{
-		pTransform->SetX(x);
-	}
-
-	float y = pTransform->GetY();
-
-	if (ImGui::InputFloat("y", &y))
-	{
-		pTransform->SetY(y);
-	}
-
-	float z = pTransform->GetZ();
-
-	if (ImGui::InputFloat("z", &z))
-	{
-		pTransform->SetZ(z);
-	}
-
-	float rx = pTransform->GetRX();
-
-	if (ImGui::SliderFloat("rx", &rx, -PI, PI))
-	{
-		pTransform->SetRX(rx);
-	}
-
-	float ry = pTransform->GetRY();
-
-	if (ImGui::SliderFloat("ry", &ry, -PI, PI))
-	{
-		pTransform->SetRY(ry);
-	}
-
-	float rz = pTransform->GetRZ();
-
-	if (ImGui::SliderFloat("rz", &rz, -PI, PI))
-	{
-		pTransform->SetRZ(rz);
-	}
-
-	Engine::Vector3 vScale = pTransform->GetScale();
-
-	if (ImGui::InputFloat("sx", &vScale.x))
-	{
-		pTransform->SetScale(vScale);
-	}
-
-	if (ImGui::InputFloat("sy", &vScale.y))
-	{
-		pTransform->SetScale(vScale);
-	}
-
-	if (ImGui::InputFloat("sz", &vScale.z))
-	{
-		pTransform->SetScale(vScale);
-	}
-}
-
-//void Animation_ImGuiWindow()
-//{
-//	__super::ImGuiWindow();
-
-//	if (m_pCurrentSequence)
-//	{
-//		m_pCurrentSequence->ImGuiWindow();
-//	}
-//}
-
-//void CInput_ShowImGuiWindow()
-//{
-//	if (ImGui::Begin("Input"))
-//	{
-//		ImGui::Text("X: %d, Y: %d", m_tMousePos.x, m_tMousePos.y);
-//	}
-
-//	ImGui::End();
-//}
-
-void ImguiManager::MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT, const std::string& _name)
-{
-	std::string name = _name;
-
-	name += pMRT->GetTag();
-
-	if (ImGui::Begin(name.c_str()))
-	{
-		const std::vector<Engine::CPtr<ID3D11ShaderResourceView>>& vecSRV = pMRT->GetSRVs();
-
-		int iCol = static_cast<int>(sqrtf(static_cast<float>(vecSRV.size())));
-
-		for (size_t i = 0; i < vecSRV.size(); ++i)
+		if (ImGui::InputFloat("Light Intensity", &fIntencity, 0.f, 5000.f))
 		{
-			ImGui::Image((void*)(*vecSRV[i]), { 640, 360 });
+			pLight->SetIntensity(fIntencity);
+		}
 
-			if ((i + 1) % iCol)
+		Engine::Vector4 vColor = pLight->GetLightColor();
+
+		if (ImGui::ColorEdit4("color", &vColor.x))
+		{
+			pLight->SetLightColor(vColor);
+		}
+
+		Engine::Vector4 vAmbientColor = pLight->GetAmbientColor();
+
+		if (ImGui::ColorEdit4("ambient", &vAmbientColor.x))
+		{
+			pLight->SetAmbientColor(vAmbientColor);
+		}
+
+		ImGui::Text("Attenutaion");
+
+		float fConstant = pLight->GetConstantAttenuation();
+
+		if (ImGui::SliderFloat("Constant", &fConstant, 0.f, 1.f))
+		{
+			pLight->SetConstantAttenuation(fConstant);
+		}
+
+		float fLinear = pLight->GetLinearAttenuation();
+
+		if (ImGui::SliderFloat("Linear", &fLinear, 0.f, 1.f))
+		{
+			pLight->SetLinearAttenuation(fLinear);
+		}
+
+		float fQuadratic = pLight->GetQuadraticAttenuation();
+
+		if (ImGui::SliderFloat("Quadratic", &fQuadratic, 0.f, 1.f))
+		{
+			pLight->SetQuadraticAttenuation(fQuadratic);
+		}
+
+		Engine::LIGHT_TYPE eLightType = pLight->GetLightType();
+
+		if (ImGui::RadioButton("POINT", reinterpret_cast<int*>(&eLightType), static_cast<int>(Engine::LIGHT_TYPE::POINT)))
+		{
+			pLight->SetLightType(eLightType);
+		}
+		ImGui::SameLine();
+		if (ImGui::RadioButton("SPOT", reinterpret_cast<int*>(&eLightType), static_cast<int>(Engine::LIGHT_TYPE::SPOT)))
+		{
+			pLight->SetLightType(eLightType);
+		}
+		ImGui::SameLine();
+		if (ImGui::RadioButton("DIRECTIONAL", reinterpret_cast<int*>(&eLightType), static_cast<int>(Engine::LIGHT_TYPE::DIRECTIONAL)))
+		{
+			pLight->SetLightType(eLightType);
+		}
+
+		Engine::ORTHOINFO tOrthoInfo = pLight->GetOrthoInfo();
+
+		if (ImGui::InputFloat("OrthoLeft", &tOrthoInfo.fLeft) ||
+			ImGui::InputFloat("OrthoRight", &tOrthoInfo.fRight) ||
+			ImGui::InputFloat("OrthoTop", &tOrthoInfo.fTop) ||
+			ImGui::InputFloat("OrthoBottom", &tOrthoInfo.fBottom) ||
+			ImGui::InputFloat("OrthoNear", &tOrthoInfo.fNear) ||
+			ImGui::InputFloat("OrthoFar", &tOrthoInfo.fFar))
+		{
+			pLight->SetOrthoInfo(tOrthoInfo);
+		}
+	}
+
+	void ImguiManager::Shader_ImGuiWindow(std::shared_ptr<Engine::Shader> pShader)
+	{
+		CRef_ImGuiWindow(pShader);
+
+		char strTitle[MAX_PATH];
+
+		sprintf_s(strTitle, "Shader %s", pShader->GetTag().c_str());
+
+		ImGui::Text(strTitle);
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("ReLoad Shader"))
+		{
+			pShader->LoadShader();
+		}
+
+		ImGui::SameLine();
+
+		ImGui::Text(pShader->GetEntry().get());
+	}
+
+	void ImguiManager::Sphere_ImGuiWindow(std::shared_ptr<Engine::Sphere> pSphere)
+	{
+		CRef_ImGuiWindow(pSphere);
+
+		Engine::Vector3 vDir = pSphere->GetDir();
+
+		if (ImGui::InputFloat3("Dir", &vDir.x))
+		{
+			pSphere->SetDir(vDir);
+		}
+
+		float fSpeed = pSphere->GetSpeed();
+
+		if (ImGui::InputFloat("Speed", &fSpeed))
+		{
+			pSphere->SetSpeed(fSpeed);
+		}
+	}
+
+	//void Sequence_ImGuiWindow()
+	//{
+	//	__super::ImGuiWindow();
+
+	//	if (m_pSkeleton)
+	//	{
+	//		m_pSkeleton->ImGuiWindow();
+	//	}
+	//}
+
+	//void Texture_ImGuiWindow()
+	//{
+	//	__super::ImGuiWindow();
+
+	//	ImGui::Text("Texture Slot: %d", m_iSlot);
+	//}
+
+	void ImguiManager::TransformBuffer_ImGuiWindow(std::shared_ptr<Engine::Transform> pTransform)
+	{
+		ImGui::Text("Transform");
+
+		float x = pTransform->GetX();
+
+		if (ImGui::InputFloat("x", &x))
+		{
+			pTransform->SetX(x);
+		}
+
+		float y = pTransform->GetY();
+
+		if (ImGui::InputFloat("y", &y))
+		{
+			pTransform->SetY(y);
+		}
+
+		float z = pTransform->GetZ();
+
+		if (ImGui::InputFloat("z", &z))
+		{
+			pTransform->SetZ(z);
+		}
+
+		float rx = pTransform->GetRX();
+
+		if (ImGui::SliderFloat("rx", &rx, -PI, PI))
+		{
+			pTransform->SetRX(rx);
+		}
+
+		float ry = pTransform->GetRY();
+
+		if (ImGui::SliderFloat("ry", &ry, -PI, PI))
+		{
+			pTransform->SetRY(ry);
+		}
+
+		float rz = pTransform->GetRZ();
+
+		if (ImGui::SliderFloat("rz", &rz, -PI, PI))
+		{
+			pTransform->SetRZ(rz);
+		}
+
+		Engine::Vector3 vScale = pTransform->GetScale();
+
+		if (ImGui::InputFloat("sx", &vScale.x))
+		{
+			pTransform->SetScale(vScale);
+		}
+
+		if (ImGui::InputFloat("sy", &vScale.y))
+		{
+			pTransform->SetScale(vScale);
+		}
+
+		if (ImGui::InputFloat("sz", &vScale.z))
+		{
+			pTransform->SetScale(vScale);
+		}
+	}
+
+	//void Animation_ImGuiWindow()
+	//{
+	//	__super::ImGuiWindow();
+
+	//	if (m_pCurrentSequence)
+	//	{
+	//		m_pCurrentSequence->ImGuiWindow();
+	//	}
+	//}
+
+	//void CInput_ShowImGuiWindow()
+	//{
+	//	if (ImGui::Begin("Input"))
+	//	{
+	//		ImGui::Text("X: %d, Y: %d", m_tMousePos.x, m_tMousePos.y);
+	//	}
+
+	//	ImGui::End();
+	//}
+
+	void ImguiManager::MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT, const std::string& _name)
+	{
+		std::string name = _name;
+
+		name += pMRT->GetTag();
+
+		if (ImGui::Begin(name.c_str()))
+		{
+			const std::vector<Engine::CPtr<ID3D11ShaderResourceView>>& vecSRV = pMRT->GetSRVs();
+
+			int iCol = static_cast<int>(sqrtf(static_cast<float>(vecSRV.size())));
+
+			for (size_t i = 0; i < vecSRV.size(); ++i)
 			{
+				ImGui::Image((void*)(*vecSRV[i]), { 640, 360 });
+
+				if ((i + 1) % iCol)
+				{
+					ImGui::SameLine();
+				}
+			}
+
+			ImGui::Image((void*)*pMRT->GetDepthSRV(), { 640, 360 });
+		}
+
+		ImGui::End();
+	}
+
+	void ImguiManager::Particle_ShowImGuiImage(std::shared_ptr<Engine::Particle> pParticle)
+	{
+		static float fEmit = 0.f;
+
+		if (ImGui::InputFloat("emit frequency", &fEmit))
+		{
+			pParticle->SetEmitTime(fEmit);
+		}
+
+		static Engine::Vector4 vStartColor = {};
+
+		if (ImGui::ColorPicker4("Start Color", &vStartColor.x))
+		{
+			pParticle->SetStartColor(vStartColor);
+		}
+
+		static Engine::Vector4 vEndColor = {};
+
+		if (ImGui::ColorPicker4("End Color", &vEndColor.x))
+		{
+			pParticle->SetEndColor(vEndColor);
+		}
+
+		static Engine::Vector3 vSpeed = {};
+
+		if (ImGui::InputFloat3("speed", &vSpeed.x))
+		{
+			pParticle->SetVelocity(vSpeed);
+		}
+
+		static Engine::Vector3 vAccel = {};
+
+		if (ImGui::InputFloat3("accel", &vAccel.x))
+		{
+			pParticle->SetAccelaration(vAccel);
+		}
+	}
+
+	void ImguiManager::Cloth_ShowImguiWindow(std::shared_ptr<Engine::Cloth> pCloth)
+	{
+		float fWind = pCloth->GetWindHeavyness();
+
+		if (ImGui::SliderFloat("Wind Heavyness", &fWind, 0.f, 50.f))
+		{
+			pCloth->SetWindHeavyness(fWind);
+		}
+	}
+
+	void ImguiManager::Terrain_ShowImguiWindow(std::shared_ptr<Engine::Terrain> pTerrain)
+	{
+		CRef_ImGuiWindow(pTerrain);
+
+		ImGui::Text("=======Terrain======");
+
+		for (int i = 0; i < m_vecBrushTexture.size(); ++i)
+		{
+			if (ImGui::ImageButton(*m_vecBrushTexture[i]->GetSRV(), ImVec2(32.f, 32.f)))
+			{
+				pTerrain->SetBrushTexture(m_vecBrushTexture[i]);
+			}
+
+			if (i + 1 != m_vecBrushTexture.size()) {
 				ImGui::SameLine();
 			}
 		}
 
-		ImGui::Image((void*)*pMRT->GetDepthSRV(), { 640, 360 });
-	}
+		bool bEraseMode = pTerrain->IsEraseMode();
 
-	ImGui::End();
-}
-
-void ImguiManager::Particle_ShowImGuiImage(std::shared_ptr<Engine::Particle> pParticle)
-{
-	static float fEmit = 0.f;
-
-	if (ImGui::InputFloat("emit frequency", &fEmit))
-	{
-		pParticle->SetEmitTime(fEmit);
-	}
-
-	static Engine::Vector4 vStartColor = {};
-
-	if (ImGui::ColorPicker4("Start Color", &vStartColor.x))
-	{
-		pParticle->SetStartColor(vStartColor);
-	}
-
-	static Engine::Vector4 vEndColor = {};
-
-	if (ImGui::ColorPicker4("End Color", &vEndColor.x))
-	{
-		pParticle->SetEndColor(vEndColor);
-	}
-
-	static Engine::Vector3 vSpeed = {};
-
-	if (ImGui::InputFloat3("speed", &vSpeed.x))
-	{
-		pParticle->SetVelocity(vSpeed);
-	}
-
-	static Engine::Vector3 vAccel = {};
-
-	if (ImGui::InputFloat3("accel", &vAccel.x))
-	{
-		pParticle->SetAccelaration(vAccel);
-	}
-}
-
-void ImguiManager::Cloth_ShowImguiWindow(std::shared_ptr<Engine::Cloth> pCloth)
-{
-	float fWind = pCloth->GetWindHeavyness();
-
-	if (ImGui::SliderFloat("Wind Heavyness", &fWind, 0.f, 50.f))
-	{
-		pCloth->SetWindHeavyness(fWind);
-	}
-}
-
-void ImguiManager::Terrain_ShowImguiWindow(std::shared_ptr<Engine::Terrain> pTerrain)
-{
-	ImGui::Text("=======Terrain======");
-
-	for (int i = 0; i < m_vecBrushTexture.size(); ++i)
-	{
-		if (ImGui::ImageButton(*m_vecBrushTexture[i]->GetSRV(), ImVec2(32.f, 32.f)))
+		if (ImGui::Checkbox("EraseMode", &bEraseMode))
 		{
-			pTerrain->SetBrushTexture(m_vecBrushTexture[i]);
-		}
-
-		if (i + 1 != m_vecBrushTexture.size()) {
-			ImGui::SameLine();
-		}
-	}
-
-	bool bEraseMode = pTerrain->IsEraseMode();
-
-	if (ImGui::Checkbox("EraseMode", &bEraseMode))
-	{
-		if (bEraseMode)
-		{
-			pTerrain->SetEraseMode();
-		}
-		else
-		{
-			pTerrain->SetAddMode();
-		}
-		
-	}
-}
-
-void ImguiManager::Animation_ImGuiWindow(std::shared_ptr<Engine::Animation> pAnimation)
-{
-	ImGui::Text("==============Animation============");
-
-	std::shared_ptr<Engine::Skeleton> pSkeleton = pAnimation->GetSkeleton();
-
-	if (pSkeleton)
-	{
-		const std::vector<Engine::PBONE>& vecJoint = pSkeleton->GetJoints();
-		std::vector<int> vecDepth;
-
-		for (size_t i = 0; i < vecJoint.size(); ++i)
-		{
-			if (vecJoint[i]->iParent != -1)
+			if (bEraseMode)
 			{
-				while (!vecDepth.empty())
+				pTerrain->SetEraseMode();
+			}
+			else
+			{
+				pTerrain->SetAddMode();
+			}
+
+		}
+	}
+
+	void ImguiManager::Animation_ImGuiWindow(std::shared_ptr<Engine::Animation> pAnimation)
+	{
+		ImGui::Text("==============Animation============");
+
+		std::shared_ptr<Engine::Skeleton> pSkeleton = pAnimation->GetSkeleton();
+
+		if (pSkeleton)
+		{
+			const std::vector<Engine::PBONE>& vecJoint = pSkeleton->GetJoints();
+			std::vector<int> vecDepth;
+
+			for (size_t i = 0; i < vecJoint.size(); ++i)
+			{
+				if (vecJoint[i]->iParent != -1)
 				{
-					if (vecDepth.back() == vecJoint[i]->iParent)
+					while (!vecDepth.empty())
 					{
-						break;
-					}
-
-					vecDepth.pop_back();
-				}
-			}
-
-			char strName[TEXT_LEN] = {};
-
-			for (int j = 0; j < vecDepth.size(); ++j)
-			{
-				strcat_s(strName, "  ");
-			}
-
-			vecDepth.push_back(static_cast<int>(i));
-
-			strcat_s(strName, vecJoint[i]->strName.c_str());
-
-			char strIndex[TEXT_LEN] = {};
-
-			sprintf_s(strIndex, " (index:%d)", static_cast<int>(i));
-
-			strcat_s(strName, strIndex);
-
-			ImGui::Text(strName);
-		}
-
-		const std::list<std::shared_ptr<Engine::JointSocket>>& socketList = pAnimation->GetSocketList();
-
-		std::list<std::shared_ptr<Engine::JointSocket>>::const_iterator iter = socketList.begin();
-		std::list<std::shared_ptr<Engine::JointSocket>>::const_iterator iterEnd = socketList.end();
-
-		for (int i = 0; iter != iterEnd; ++iter, ++i)
-		{
-			JointSocket_ImGuiWindow(*iter, i);
-		}
-
-		const std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>& mapSequence = pAnimation->GetSequences();
-
-		std::vector<const char*> vecSequenceName;
-
-		std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>::const_iterator iterS = mapSequence.begin();
-		std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>::const_iterator iterSEnd = mapSequence.end();
-
-		for (; iterS != iterSEnd; ++iterS)
-		{
-			vecSequenceName.push_back(iterS->second->GetTag().c_str());
-		}
-
-		if (vecSequenceName.size())
-		{
-			static int iSequence = -1;
-
-			ImGui::ListBox("Sequences", &iSequence, &vecSequenceName[0], vecSequenceName.size());
-
-			if (ImGui::Button("Change Sequence"))
-			{
-				if (vecSequenceName.size() > iSequence && iSequence >= 0)
-				{
-					pAnimation->ChangeSequence(vecSequenceName[iSequence]);
-				}
-			}
-
-			std::shared_ptr<Engine::Sequence> pSequence = pAnimation->GetCurrentSequence();
-
-			if (pSequence)
-			{
-				if (ImGui::Begin("CurrentSequence"))
-				{
-					int iFrame = pSequence->GetFrame();
-
-					Engine::Sequence::PSEQUENCEINFO pInfo = pSequence->GetSequenceInfo();
-
-					if (pInfo)
-					{
-						for (int i = 0; i < static_cast<int>(pInfo->vecPose.size()); ++i)
+						if (vecDepth.back() == vecJoint[i]->iParent)
 						{
-							if (pInfo->vecPose[i].vecJoint.size() > iFrame)
+							break;
+						}
+
+						vecDepth.pop_back();
+					}
+				}
+
+				char strName[TEXT_LEN] = {};
+
+				for (int j = 0; j < vecDepth.size(); ++j)
+				{
+					strcat_s(strName, "  ");
+				}
+
+				vecDepth.push_back(static_cast<int>(i));
+
+				strcat_s(strName, vecJoint[i]->strName.c_str());
+
+				char strIndex[TEXT_LEN] = {};
+
+				sprintf_s(strIndex, " (index:%d)", static_cast<int>(i));
+
+				strcat_s(strName, strIndex);
+
+				ImGui::Text(strName);
+			}
+
+			const std::list<std::shared_ptr<Engine::JointSocket>>& socketList = pAnimation->GetSocketList();
+
+			std::list<std::shared_ptr<Engine::JointSocket>>::const_iterator iter = socketList.begin();
+			std::list<std::shared_ptr<Engine::JointSocket>>::const_iterator iterEnd = socketList.end();
+
+			for (int i = 0; iter != iterEnd; ++iter, ++i)
+			{
+				JointSocket_ImGuiWindow(*iter, i);
+			}
+
+			const std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>& mapSequence = pAnimation->GetSequences();
+
+			std::vector<const char*> vecSequenceName;
+
+			std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>::const_iterator iterS = mapSequence.begin();
+			std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>::const_iterator iterSEnd = mapSequence.end();
+
+			for (; iterS != iterSEnd; ++iterS)
+			{
+				vecSequenceName.push_back(iterS->second->GetTag().c_str());
+			}
+
+			if (vecSequenceName.size())
+			{
+				static int iSequence = -1;
+
+				ImGui::ListBox("Sequences", &iSequence, &vecSequenceName[0], vecSequenceName.size());
+
+				if (ImGui::Button("Change Sequence"))
+				{
+					if (vecSequenceName.size() > iSequence && iSequence >= 0)
+					{
+						pAnimation->ChangeSequence(vecSequenceName[iSequence]);
+					}
+				}
+
+				std::shared_ptr<Engine::Sequence> pSequence = pAnimation->GetCurrentSequence();
+
+				if (pSequence)
+				{
+					if (ImGui::Begin("CurrentSequence"))
+					{
+						int iFrame = pSequence->GetFrame();
+
+						Engine::Sequence::PSEQUENCEINFO pInfo = pSequence->GetSequenceInfo();
+
+						if (pInfo)
+						{
+							std::string s = "s";
+							std::string r = "r";
+							std::string t = "t";
+
+							for (int i = 0; i < static_cast<int>(pInfo->vecPose.size()); ++i)
 							{
-								ImGui::Text("bone: %d", i);
-								ImGui::SameLine();
-								ImGui::InputFloat3("s", &pInfo->vecPose[i].vecJoint[iFrame].vScale.x);
-								ImGui::InputFloat4("r", &pInfo->vecPose[i].vecJoint[iFrame].vQueternion.x);
-								ImGui::InputFloat3("p", &pInfo->vecPose[i].vecJoint[iFrame].vPos.x);
+								if (pInfo->vecPose[i].vecJoint.size() > iFrame)
+								{
+									std::string bone = std::to_string(i);
+									ImGui::Text("bone: %d", i);
+									ImGui::SameLine();
+									Engine::Vector3 vScale = pInfo->vecPose[i].vecJoint[iFrame].vScale;
+									if (ImGui::InputFloat3((s + bone).c_str(), &vScale.x))
+									{
+										pSequence->SetFrameScale(i, iFrame, vScale);
+									}
+									Engine::Vector4 vQuternion = pInfo->vecPose[i].vecJoint[iFrame].vQueternion;
+									if (ImGui::InputFloat4((r + bone).c_str(), &vQuternion.x))
+									{
+										pSequence->SetFrameRotation(i, iFrame, vQuternion);
+									}
+									Engine::Vector3 vPos = pInfo->vecPose[i].vecJoint[iFrame].vPos;
+									if (ImGui::InputFloat3((t + bone).c_str(), &vPos.x))
+									{
+										pSequence->SetFramePosition(i, iFrame, vPos);
+									}
+								}
 							}
+						}
+
+						float fTime = pAnimation->GetTime();
+
+						if (ImGui::SliderFloat("time", &fTime, 0.f, pSequence->GetMaxTime()))
+						{
+							pAnimation->SetTime(fTime);
+						}
+
+						float fRate = pAnimation->GetRate();
+
+						if (ImGui::SliderFloat("rate", &fRate, 0.f, 2.f))
+						{
+							pAnimation->SetRate(fRate);
 						}
 					}
 
-					float fTime = pAnimation->GetTime();
-
-					if (ImGui::SliderFloat("time", &fTime, 0.f, pSequence->GetMaxTime()))
-					{
-						pAnimation->SetTime(fTime);
-					}
-
-					float fRate = pAnimation->GetRate();
-
-					if (ImGui::SliderFloat("rate", &fRate, 0.f, 2.f))
-					{
-						pAnimation->SetRate(fRate);
-					}
+					ImGui::End();
 				}
-
-				ImGui::End();
 			}
 		}
 	}
-}
 
-void ImguiManager::RenderManager_ShowImGuiWindow()
-{
-	if (ImGui::Begin("RenderManager"))
+	void ImguiManager::Scene_ImGuiWindow(Engine::Scene* pScene)
 	{
-		/*ImGui::Text("RenderList Size: %d", m_RenderList[0].size());
-		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
+		if (ImGui::Begin("scene"))
 		{
-			ImGui::Text("LightList Type: %d, Size: %d", i, m_LightList[i].size());
+			if (ImGui::Button("Save Scene"))
+			{
+				TCHAR pFilePath[MAX_PATH] = {};
+
+				OPENFILENAME tOFN = {};
+
+				tOFN.lStructSize = sizeof(OPENFILENAME);
+				tOFN.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
+				tOFN.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath();
+				tOFN.nMaxFile = MAX_PATH;
+				tOFN.lpstrFilter = TEXT(".scn");
+				tOFN.lpstrFile = pFilePath;
+
+				if (GetOpenFileName(&tOFN))
+				{
+					if (_tcsstr(tOFN.lpstrFile, TEXT(".")))
+					{
+						if (_tcsstr(tOFN.lpstrFile, TEXT(".scn")))
+						{
+							pScene->SaveFromFullPath(pFilePath);
+						}
+						else
+						{
+							MessageBox(0, TEXT("확장자 명이 올바르지 않습니다."), TEXT("오류"), MB_OK);
+						}
+					}
+					else
+					{
+						_tcscat_s(pFilePath, tOFN.lpstrFilter);
+
+						pScene->SaveFromFullPath(pFilePath);
+					}
+				}
+			}
 		}
 
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[0].begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[0].end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			ImGui::Text("Instance: %s, Size: %d", iter->second->GetTag().c_str(), iter->second->GetCount());
-		}
-
-		if (ImGui::Button("Reload Multi Shader"))
-		{
-			pMultiVertexShader->LoadShader();
-
-			pMultiPixelShader->LoadShader();
-		}*/
-
-		float fMidGray = Engine::RenderManager::GetInst()->GetHDRMidGray();
-
-		if (ImGui::SliderFloat("Middle Gray", &fMidGray, 0.f, 1.f))
-		{
-			Engine::RenderManager::GetInst()->SetHDRMidGray(fMidGray);
-		}
-
-		float fWhite = sqrtf(Engine::RenderManager::GetInst()->GetHDRWhiteSqr());
-
-		if (ImGui::SliderFloat("White", &fWhite, 0.f, 1.f))
-		{
-			Engine::RenderManager::GetInst()->SetHDRWhiteSqr(fWhite * fWhite);
-		}
-
-		float fBloomScale = Engine::RenderManager::GetInst()->GetBloomScale();
-
-		if (ImGui::SliderFloat("Bloom Scale", &fBloomScale, 0.f, 5.f))
-		{
-			Engine::RenderManager::GetInst()->SetBloomScale(fBloomScale);
-		}
-
-		float fThreshold = Engine::RenderManager::GetInst()->GetBloomThreshold();
-
-		if (ImGui::SliderFloat("Bloom Threshold", &fThreshold, 0.f, 100.f))
-		{
-			Engine::RenderManager::GetInst()->SetBloomThreshold(fThreshold);
-		}
-
-		float fDOFVAlueX = Engine::RenderManager::GetInst()->GetFOVValueX();
-
-		if (ImGui::SliderFloat("FOV Value X", &fDOFVAlueX, 0.f, 1000.f))
-		{
-			Engine::RenderManager::GetInst()->SetFOVValueX(fDOFVAlueX);
-		}
-
-		float fDOFVAlueY = Engine::RenderManager::GetInst()->GetFOVValueY();
-
-		if (ImGui::SliderFloat("FOV Value Y", &fDOFVAlueY, 0.f, 5.f))
-		{
-			Engine::RenderManager::GetInst()->SetFOVValueY(fDOFVAlueY);
-		}
+		ImGui::End();
 	}
 
-	ImGui::End();
-
-	if (ImGui::Begin("Debug HDR"))
+	void ImguiManager::RenderManager_ShowImGuiWindow()
 	{
-		std::shared_ptr<Engine::Texture> pHDRDownScaleTexture = Engine::RenderManager::GetInst()->GetHDRDownScaleTexture();
+		if (ImGui::Begin("RenderManager"))
+		{
+			/*ImGui::Text("RenderList Size: %d", m_RenderList[0].size());
+			for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
+			{
+				ImGui::Text("LightList Type: %d, Size: %d", i, m_LightList[i].size());
+			}
 
-		ImGui::Image(*pHDRDownScaleTexture->GetSRV(), ImVec2(128.f, 128.f));
+			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[0].begin();
+			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[0].end();
 
-		std::shared_ptr<Engine::Texture> pBloomTexture = Engine::RenderManager::GetInst()->GetBloomTexture();
+			for (; iter != iterEnd; ++iter)
+			{
+				ImGui::Text("Instance: %s, Size: %d", iter->second->GetTag().c_str(), iter->second->GetCount());
+			}
 
-		ImGui::Image(*pBloomTexture->GetSRV(), ImVec2(128.f, 128.f));
+			if (ImGui::Button("Reload Multi Shader"))
+			{
+				pMultiVertexShader->LoadShader();
 
-		std::shared_ptr<Engine::Texture> pBloomFinalTexture = Engine::RenderManager::GetInst()->GetBloomFinalTexture();
+				pMultiPixelShader->LoadShader();
+			}*/
 
-		ImGui::Image(*pBloomFinalTexture->GetSRV(), ImVec2(128.f, 128.f));
+			float fMidGray = Engine::RenderManager::GetInst()->GetHDRMidGray();
+
+			if (ImGui::SliderFloat("Middle Gray", &fMidGray, 0.f, 1.f))
+			{
+				Engine::RenderManager::GetInst()->SetHDRMidGray(fMidGray);
+			}
+
+			float fWhite = sqrtf(Engine::RenderManager::GetInst()->GetHDRWhiteSqr());
+
+			if (ImGui::SliderFloat("White", &fWhite, 0.f, 1.f))
+			{
+				Engine::RenderManager::GetInst()->SetHDRWhiteSqr(fWhite * fWhite);
+			}
+
+			float fBloomScale = Engine::RenderManager::GetInst()->GetBloomScale();
+
+			if (ImGui::SliderFloat("Bloom Scale", &fBloomScale, 0.f, 5.f))
+			{
+				Engine::RenderManager::GetInst()->SetBloomScale(fBloomScale);
+			}
+
+			float fThreshold = Engine::RenderManager::GetInst()->GetBloomThreshold();
+
+			if (ImGui::SliderFloat("Bloom Threshold", &fThreshold, 0.f, 100.f))
+			{
+				Engine::RenderManager::GetInst()->SetBloomThreshold(fThreshold);
+			}
+
+			float fDOFVAlueX = Engine::RenderManager::GetInst()->GetFOVValueX();
+
+			if (ImGui::SliderFloat("FOV Value X", &fDOFVAlueX, 0.f, 1000.f))
+			{
+				Engine::RenderManager::GetInst()->SetFOVValueX(fDOFVAlueX);
+			}
+
+			float fDOFVAlueY = Engine::RenderManager::GetInst()->GetFOVValueY();
+
+			if (ImGui::SliderFloat("FOV Value Y", &fDOFVAlueY, 0.f, 5.f))
+			{
+				Engine::RenderManager::GetInst()->SetFOVValueY(fDOFVAlueY);
+			}
+		}
+
+		ImGui::End();
+
+		if (ImGui::Begin("Debug HDR"))
+		{
+			std::shared_ptr<Engine::Texture> pHDRDownScaleTexture = Engine::RenderManager::GetInst()->GetHDRDownScaleTexture();
+
+			ImGui::Image(*pHDRDownScaleTexture->GetSRV(), ImVec2(128.f, 128.f));
+
+			std::shared_ptr<Engine::Texture> pBloomTexture = Engine::RenderManager::GetInst()->GetBloomTexture();
+
+			ImGui::Image(*pBloomTexture->GetSRV(), ImVec2(128.f, 128.f));
+
+			std::shared_ptr<Engine::Texture> pBloomFinalTexture = Engine::RenderManager::GetInst()->GetBloomFinalTexture();
+
+			ImGui::Image(*pBloomFinalTexture->GetSRV(), ImVec2(128.f, 128.f));
+		}
+
+		ImGui::End();
 	}
 
-	ImGui::End();
-}
-
-void ImguiManager::Layer_DrawListImgui(std::shared_ptr<Engine::Layer> pLayer)
-{
-	if(!pLayer || !ImGui::Begin(pLayer->GetTag().c_str()))
+	void ImguiManager::Layer_DrawListImgui(std::shared_ptr<Engine::Layer> pLayer)
 	{
-		return;
-	}
+		if (!pLayer || !ImGui::Begin(pLayer->GetTag().c_str()))
+		{
+			return;
+		}
 
-	static int iCurrent = -1;
+		static int iCurrent = -1;
 
-	const std::list<std::shared_ptr<Engine::Bindable>>& DrawList = pLayer->GetDrawList();
+		const std::list<std::shared_ptr<Engine::Bindable>>& DrawList = pLayer->GetDrawList();
 
-	std::vector<const char*> vecName(DrawList.size());
+		std::vector<const char*> vecName(DrawList.size());
 
-	std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = DrawList.begin();
-	std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iterEnd = DrawList.end();
-
-	for (int i = 0; iter != iterEnd; ++iter, ++i)
-	{
-		vecName[i] = (*iter)->GetTag().c_str();
-	}
-
-	if (vecName.size())
-	{
-		ImGui::ListBox("Draw List", &iCurrent, &vecName[0], static_cast<int>(vecName.size()));
-	}
-
-	if (iCurrent >= 0 && iCurrent < DrawList.size())
-	{
 		std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = DrawList.begin();
+		std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iterEnd = DrawList.end();
 
-		std::advance(iter, iCurrent);
-
-		Drawable_ShowImGuiWindow(*iter);
-	}
-
-	static char strName[MAX_PATH] = {};
-
-	ImGui::InputText("name", strName, MAX_PATH);
-
-	ImGui::SameLine();
-
-	if (ImGui::Button("Load Drawable"))
-	{
-		TCHAR strFile[MAX_PATH] = {};
-		OPENFILENAME tName = {};
-		tName.lStructSize = sizeof(OPENFILENAME);
-		tName.hwndOwner = nullptr;
-		tName.lpstrFilter = TEXT(".FBX;.OBJ;*.*");
-		tName.nMaxFile = 2048;
-		tName.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath();
-		tName.Flags = 0;
-		tName.lpstrFile = strFile;
-
-		if (GetOpenFileName(&tName))
+		for (int i = 0; iter != iterEnd; ++iter, ++i)
 		{
-			pLayer->CreateLoadingThread(tName.lpstrFile);
-
-			memset(strName, 0, MAX_PATH);
+			vecName[i] = (*iter)->GetTag().c_str();
 		}
-	}
 
-	if (ImGui::Button("Load And Build Nav Mesh"))
-	{
-		TCHAR strFullPath[MAX_PATH] = {};
-
-		OPENFILENAME tOFN = {};
-
-		tOFN.lStructSize = sizeof(OPENFILENAME);
-		tOFN.lpstrFilter = TEXT(".FBX;.OBJ;*.*");
-		tOFN.lpstrFile = strFullPath;
-		tOFN.nMaxFile = MAX_PATH;
-		tOFN.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath(MESH_PATH);
-
-		if (GetOpenFileName(&tOFN))
+		if (vecName.size())
 		{
-			LoadNavMesh(tOFN.lpstrFile, Engine::SceneManager::GetInst()->GetScene());
+			ImGui::ListBox("Draw List", &iCurrent, &vecName[0], static_cast<int>(vecName.size()));
 		}
+
+		if (iCurrent >= 0 && iCurrent < DrawList.size())
+		{
+			std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = DrawList.begin();
+
+			std::advance(iter, iCurrent);
+
+			Drawable_ShowImGuiWindow(*iter);
+		}
+
+		static char strName[MAX_PATH] = {};
+
+		ImGui::InputText("name", strName, MAX_PATH);
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Load Drawable"))
+		{
+			TCHAR strFile[MAX_PATH] = {};
+			OPENFILENAME tName = {};
+			tName.lStructSize = sizeof(OPENFILENAME);
+			tName.hwndOwner = nullptr;
+			tName.lpstrFilter = TEXT(".FBX;.OBJ;*.*");
+			tName.nMaxFile = 2048;
+			tName.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath();
+			tName.Flags = 0;
+			tName.lpstrFile = strFile;
+
+			if (GetOpenFileName(&tName))
+			{
+				pLayer->CreateLoadingThread(tName.lpstrFile);
+
+				memset(strName, 0, MAX_PATH);
+			}
+		}
+
+		if (ImGui::Button("Load And Build Nav Mesh"))
+		{
+			TCHAR strFullPath[MAX_PATH] = {};
+
+			OPENFILENAME tOFN = {};
+
+			tOFN.lStructSize = sizeof(OPENFILENAME);
+			tOFN.lpstrFilter = TEXT(".FBX;.OBJ;*.*");
+			tOFN.lpstrFile = strFullPath;
+			tOFN.nMaxFile = MAX_PATH;
+			tOFN.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath(MESH_PATH);
+
+			if (GetOpenFileName(&tOFN))
+			{
+				LoadNavMesh(tOFN.lpstrFile, Engine::SceneManager::GetInst()->GetScene());
+			}
+		}
+
+		ImGui::Checkbox("CreateAgentMode", &m_bMode);
+
+		if (pLayer->GetLoadingThread())
+		{
+			ImGui::Text("Loading ...");
+		}
+
+		ImGui::End();
 	}
-
-	ImGui::Checkbox("CreateAgentMode", &m_bMode);
-
-	if (pLayer->GetLoadingThread())
-	{
-		ImGui::Text("Loading ...");
-	}
-
-	ImGui::End();
 }

@@ -249,7 +249,7 @@
     <ClCompile Include="Core\TimerManager.cpp" />
     <ClCompile Include="Core\Window.cpp" />
     <ClCompile Include="Input\Input.cpp" />
-    <ClCompile Include="Math.cpp" />
+    <ClCompile Include="EMath.cpp" />
     <ClCompile Include="Matrix.cpp" />
     <ClCompile Include="Render\MRT.cpp" />
     <ClCompile Include="Render\RenderInstancing.cpp" />
@@ -328,7 +328,7 @@
     <ClInclude Include="Core\Window.h" />
     <ClInclude Include="Flag.h" />
     <ClInclude Include="Input\Input.h" />
-    <ClInclude Include="Math.h" />
+    <ClInclude Include="EMath.h" />
     <ClInclude Include="Matrix.h" />
     <ClInclude Include="Navigation\Detour\DetourAlloc.h" />
     <ClInclude Include="Navigation\Detour\DetourAssert.h" />

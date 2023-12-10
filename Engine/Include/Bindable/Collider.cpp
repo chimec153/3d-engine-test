@@ -107,4 +107,16 @@ namespace Engine
 	{
 		return false;
 	}
+	void Collider::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_eColliderType, 4, 1, pFile);
+	}
+	void Collider::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_eColliderType, 4, 1, pFile);
+	}
 }

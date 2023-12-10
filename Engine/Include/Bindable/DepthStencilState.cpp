@@ -9,6 +9,8 @@ namespace Engine
 		, m_iStencil(0)
 		, m_iPrevStencil(0)
 	{
+		SetBindableType(BINDABLE_TYPE::DEPTH_STENCIL_STATE);
+
 		D3D11_DEPTH_STENCIL_DESC desc = {};
 
 		desc.StencilEnable = false;

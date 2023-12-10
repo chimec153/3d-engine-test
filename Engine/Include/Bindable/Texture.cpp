@@ -203,7 +203,7 @@ namespace Engine
 			return false;
 		}
 
-		if (!CreateShaderResourceView(m_pImage->GetMetadata().format, m_pImage->GetMetadata().mipLevels, m_pImage->GetMetadata().arraySize, D3D11_SRV_DIMENSION_TEXTURE2D))
+		if (!CreateShaderResourceView(m_pImage->GetMetadata().format, static_cast<int>(m_pImage->GetMetadata().mipLevels), static_cast<int>(m_pImage->GetMetadata().arraySize), D3D11_SRV_DIMENSION_TEXTURE2D))
 		{
 			return false;
 		}
@@ -234,7 +234,7 @@ namespace Engine
 			return false;
 		}
 
-		if (!CreateShaderResourceView(vecSratchImage[0]->GetMetadata().format, vecSratchImage[0]->GetMetadata().mipLevels, vecSratchImage.size(), D3D11_SRV_DIMENSION_TEXTURE2DARRAY))
+		if (!CreateShaderResourceView(vecSratchImage[0]->GetMetadata().format, static_cast<int>(vecSratchImage[0]->GetMetadata().mipLevels), static_cast<int>(vecSratchImage.size()), D3D11_SRV_DIMENSION_TEXTURE2DARRAY))
 		{
 			Safe_Delete_VecList(vecSratchImage);
 			return false;
@@ -260,7 +260,7 @@ namespace Engine
 			}
 		}
 
-		return CreateTexture(image[0]->GetMetadata().width, image[0]->GetMetadata().height, image[0]->GetMetadata().format, image[0]->GetMetadata().mipLevels, image.size(), &vecSub[0]);
+		return CreateTexture(image[0]->GetMetadata().width, image[0]->GetMetadata().height, image[0]->GetMetadata().format, image[0]->GetMetadata().mipLevels, static_cast<int>(image.size()), &vecSub[0]);
 	}
 
 	bool Texture::CreateTexture(const DirectX::ScratchImage& image, D3D11_CPU_ACCESS_FLAG eCpuFlag, D3D11_USAGE eUsage)

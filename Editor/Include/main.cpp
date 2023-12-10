@@ -21,20 +21,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     // Imgui ÃÊ±âÈ­
-    if (!ImguiManager::GetInst()->Init(Engine::Window::GetInst()->GetWinHandle()))
+    if (!Editor::ImguiManager::GetInst()->Init(Engine::Window::GetInst()->GetWinHandle()))
     {
-        ImguiManager::DestroyInst();
+        Editor::ImguiManager::DestroyInst();
         Engine::Window::DestroyInst();
         return -1;
     }
 
-    Engine::SceneManager::GetInst()->CreateScene<InGameScene>();
+    Engine::SceneManager::GetInst()->CreateScene<Editor::InGameScene>();
 
     Window w;
 
     int iRetVal = w.Run();
 
-    ImguiManager::DestroyInst();
+    Editor::ImguiManager::DestroyInst();
 
     Engine::Window::DestroyInst();
 

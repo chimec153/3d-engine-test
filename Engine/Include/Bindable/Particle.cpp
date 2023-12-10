@@ -13,6 +13,10 @@
 
 namespace Engine
 {
+	Particle::Particle()	:
+		m_tCBuffer(0)
+	{
+	}
 	Particle::Particle(int iMaxCount)	:
 		Drawable()
 		, m_pVS(StaticFindBindable<VertexShader>("ParticleVS"))
@@ -22,9 +26,7 @@ namespace Engine
 		, m_tCBuffer(iMaxCount)
 		, m_pBuffer(std::make_shared<StructuredBuffer>(iMaxCount, static_cast<int>(sizeof(PARTICLE))))
 		, m_pSystemBuffer(std::make_shared<StructuredBuffer>(1, 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS))
-		, m_pTransformGSCBuffer(StaticFindBindable<ConstantBuffer<TRANSFORMBUFFER>>("Transform"))
-		, m_pParticleGSCBuffer(StaticFindBindable<ConstantBuffer<PARTICLECBUFFER>>("Particle"))
-		, m_pParticleCSCBuffer(StaticFindBindable<ConstantBuffer<PARTICLECBUFFER>>("Particle"))
+		, m_pParticleCBuffer(StaticFindBindable<ConstantBuffer<PARTICLECBUFFER>>("Particle"))
 		, m_fElapsedTime(0.f)
 		, m_fEmitMaxTime(1.f)
 		, m_pBlendState(StaticFindBindable<BlendState>("AlphaBlend"))
@@ -46,7 +48,7 @@ namespace Engine
 
 		m_tCBuffer.iCreateCount = iCreateCount;
 
-		m_pParticleCSCBuffer->UpdateBuffer(m_tCBuffer);
+		m_pParticleCBuffer->UpdateBuffer(m_tCBuffer);
 
 		m_pBuffer->SetUAV(2);
 
@@ -56,7 +58,7 @@ namespace Engine
 
 		m_pCS->Bind();
 
-		m_pParticleCSCBuffer->Bind();
+		m_pParticleCBuffer->Bind();
 
 		m_pCS->Dispatch(m_tCBuffer.iMaxParticleCount / 64 + static_cast<bool>(m_tCBuffer.iMaxParticleCount % 64));
 
@@ -87,8 +89,6 @@ namespace Engine
 
 		m_pPS->Bind();
 
-		m_pTransformGSCBuffer->Bind();
-
 		m_pBlendState->Bind();
 
 		Graphics::GetInst()->GetDeviceContext()->DrawInstanced(1, m_tCBuffer.iMaxParticleCount, 0, 0);
@@ -102,6 +102,27 @@ namespace Engine
 		m_pPS->PostBind();
 
 		m_pBuffer->ResetSRV(40);
+	}
+
+	void Particle::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_tCBuffer, sizeof(PARTICLECBUFFER), 1, pFile);
+		fwrite(&m_fElapsedTime, 4, 1, pFile);
+		fwrite(&m_fEmitMaxTime, 4, 1, pFile);
+	}
+
+	void Particle::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_tCBuffer, sizeof(PARTICLECBUFFER), 1, pFile);
+		fread(&m_fElapsedTime, 4, 1, pFile);
+		fread(&m_fEmitMaxTime, 4, 1, pFile);
+
+		m_pBuffer = std::make_shared<StructuredBuffer>(m_tCBuffer.iMaxParticleCount, static_cast<int>(sizeof(PARTICLE)));
+		m_pSystemBuffer = std::make_shared<StructuredBuffer>(1, 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS);
 	}
 
 	void Particle::SetStartColor(const Vector4& vColor)

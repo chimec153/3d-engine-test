@@ -9,6 +9,7 @@ namespace Engine
         public Bindable
     {
     public:
+        PaperBurn();
         PaperBurn(std::shared_ptr<class Texture> pTexture);
         PaperBurn(const PaperBurn& paper);
         virtual ~PaperBurn() override = default;
@@ -35,5 +36,9 @@ namespace Engine
         virtual void Update(float fDeltaTime) override;
         virtual void Bind() override;
         virtual std::shared_ptr<Bindable> Clone() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
     };
 }

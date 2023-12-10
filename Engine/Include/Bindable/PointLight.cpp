@@ -15,103 +15,11 @@ namespace Engine
 {
 	PointLight::PointLight() :
 		Drawable()
-		, pPointCBuffer(StaticFindBindable<ConstantBuffer<POINTLIGHT>>("PointLight"))
-		, pVSPointCBuffer(StaticFindBindable<ConstantBuffer<POINTLIGHT>>("PointLight"))
+		, pPointCBuffer(StaticFindBindable<ConstantBuffer<POINTLIGHT>>("PointLightCBuffer"))
+		, matView(Matrix::matIdentity)
+		, matViewProject(Matrix::matIdentity)
 	{
-		m_tOrthoInfo.fLeft = -2500.f;
-		m_tOrthoInfo.fRight = 2500.f;
-		m_tOrthoInfo.fTop = 2500.f;
-		m_tOrthoInfo.fBottom = -2500.f;
-		m_tOrthoInfo.fNear = 0.1f;
-		m_tOrthoInfo.fFar = 5000.f;
-
 		SetBindableType(Engine::BINDABLE_TYPE::LIGHT);
-
-		Reset();
-
-		AddChild(pVSPointCBuffer);
-
-		AddChild(pPointCBuffer);
-
-		const std::shared_ptr<Drawable>& pChild = CreateBindable<Drawable>("sphere");
-
-		if (pChild != nullptr)
-		{
-			std::string name = "Sphere";
-
-			name += std::to_string(8);
-
-			name += "_";
-
-			name += std::to_string(8);
-
-			//std::shared_ptr<VertexBuffer<VERTEX>> pVertexBuffer = StaticFindBindable<VertexBuffer<VERTEX>>(name);
-
-			//if (pVertexBuffer == nullptr)
-			//{
-			//	std::vector<VERTEX> vecVertex;
-
-			//	Sphere::CreateSphereVertex<VERTEX>(8, 8, vecVertex);
-
-			//	pVertexBuffer = StaticCreateBindable<VertexBuffer<VERTEX>>(name, &vecVertex[0], static_cast<int>(vecVertex.size()));
-			//}
-
-			//pChild->AddBind(pVertexBuffer);
-
-			//std::shared_ptr<IndexBuffer> pIndexBuffer = StaticFindBindable<IndexBuffer>(name);
-
-			//if (pIndexBuffer == nullptr)
-			//{
-			//	std::vector<unsigned int> vecIndex;
-
-			//	Sphere::CreateSphereIndex(8, 8, vecIndex);
-
-			//	pIndexBuffer = StaticCreateBindable<IndexBuffer>(name, vecIndex);
-			//}
-
-			//pChild->AddBind(pIndexBuffer);
-
-			//pChild->SetIndexBuffer(pIndexBuffer);
-
-			std::shared_ptr<VertexShader> pVertexShader = StaticFindBindable<VertexShader>("PointLightVS");
-
-			if (pVertexShader == nullptr)
-			{
-				pVertexShader = StaticCreateBindable<VertexShader>("VertexShader VS", TEXT("VertexShader.hlsl"), "VS");
-			}
-
-			pChild->AddChild(pVertexShader);
-
-			std::shared_ptr<PixelShader> pPixelShader = StaticFindBindable<PixelShader>("MultiPS");
-
-			if (pPixelShader == nullptr)
-			{
-				pPixelShader = StaticCreateBindable<PixelShader>("PixelShader PS_White", TEXT("PixelShader.hlsl"), "PS_White");
-			}
-
-			pChild->AddChild(pPixelShader);
-
-			pChild->FindAndAddBind<HullShader>("PointLightHS");
-
-			pChild->FindAndAddBind<DomainShader>("PointLightDS");
-
-			std::shared_ptr<InputLayout> pInputLayout = StaticFindBindable<InputLayout>("P");
-
-			if (pInputLayout == nullptr)
-			{
-				D3D11_INPUT_ELEMENT_DESC desc = { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 };
-
-				pInputLayout = StaticCreateBindable<InputLayout>("P", pVertexShader, &desc, static_cast<int>(sizeof(desc) / sizeof(D3D11_INPUT_ELEMENT_DESC)));
-			}
-
-			pChild->AddChild(pInputLayout);
-
-			pChild->AddChild(StaticFindBindable<Topology>("1ControlPointPatch"));
-		}
-
-		StartImGui();
-
-		NotUseShadow();
 	}
 
 	void PointLight::SetLightType(LIGHT_TYPE eType)
@@ -236,6 +144,103 @@ namespace Engine
 		matView[3][3] = 1.f;
 	}
 
+	bool PointLight::Init()
+	{
+		if (!__super::Init())
+		{
+			return false;
+		}
+
+		m_tOrthoInfo.fLeft = -2500.f;
+		m_tOrthoInfo.fRight = 2500.f;
+		m_tOrthoInfo.fTop = 2500.f;
+		m_tOrthoInfo.fBottom = -2500.f;
+		m_tOrthoInfo.fNear = 0.1f;
+		m_tOrthoInfo.fFar = 5000.f;
+
+		Reset();
+
+		const std::shared_ptr<Drawable>& pChild = CreateBindable<Drawable>("sphere");
+
+		if (pChild != nullptr)
+		{
+			std::string name = "Sphere";
+
+			name += std::to_string(8);
+
+			name += "_";
+
+			name += std::to_string(8);
+
+			//std::shared_ptr<VertexBuffer<VERTEX>> pVertexBuffer = StaticFindBindable<VertexBuffer<VERTEX>>(name);
+
+			//if (pVertexBuffer == nullptr)
+			//{
+			//	std::vector<VERTEX> vecVertex;
+
+			//	Sphere::CreateSphereVertex<VERTEX>(8, 8, vecVertex);
+
+			//	pVertexBuffer = StaticCreateBindable<VertexBuffer<VERTEX>>(name, &vecVertex[0], static_cast<int>(vecVertex.size()));
+			//}
+
+			//pChild->AddBind(pVertexBuffer);
+
+			//std::shared_ptr<IndexBuffer> pIndexBuffer = StaticFindBindable<IndexBuffer>(name);
+
+			//if (pIndexBuffer == nullptr)
+			//{
+			//	std::vector<unsigned int> vecIndex;
+
+			//	Sphere::CreateSphereIndex(8, 8, vecIndex);
+
+			//	pIndexBuffer = StaticCreateBindable<IndexBuffer>(name, vecIndex);
+			//}
+
+			//pChild->AddBind(pIndexBuffer);
+
+			//pChild->SetIndexBuffer(pIndexBuffer);
+
+			std::shared_ptr<VertexShader> pVertexShader = StaticFindBindable<VertexShader>("PointLightVS");
+
+			if (pVertexShader == nullptr)
+			{
+				pVertexShader = StaticCreateBindable<VertexShader>("VertexShader VS", TEXT("VertexShader.hlsl"), "VS");
+			}
+
+			pChild->AddChild(pVertexShader);
+
+			std::shared_ptr<PixelShader> pPixelShader = StaticFindBindable<PixelShader>("MultiPS");
+
+			if (pPixelShader == nullptr)
+			{
+				pPixelShader = StaticCreateBindable<PixelShader>("PixelShader PS_White", TEXT("PixelShader.hlsl"), "PS_White");
+			}
+
+			pChild->AddChild(pPixelShader);
+
+			pChild->FindAndAddBind<HullShader>("PointLightHS");
+
+			pChild->FindAndAddBind<DomainShader>("PointLightDS");
+
+			std::shared_ptr<InputLayout> pInputLayout = StaticFindBindable<InputLayout>("P");
+
+			if (pInputLayout == nullptr)
+			{
+				D3D11_INPUT_ELEMENT_DESC desc = { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 };
+
+				pInputLayout = StaticCreateBindable<InputLayout>("P", pVertexShader, &desc, static_cast<int>(sizeof(desc) / sizeof(D3D11_INPUT_ELEMENT_DESC)));
+			}
+
+			pChild->AddChild(pInputLayout);
+
+			pChild->AddChild(StaticFindBindable<Topology>("1ControlPointPatch"));
+		}
+
+		NotUseShadow();
+
+		return true;
+	}
+
 	void PointLight::Update(float fDeltaTime)
 	{
 		__super::Update(fDeltaTime);
@@ -285,7 +290,9 @@ namespace Engine
 
 	void PointLight::Bind()
 	{
-		pVSPointCBuffer->UpdateBuffer(tPointLight);
+		pPointCBuffer->UpdateBuffer(tPointLight);
+
+		pPointCBuffer->Bind();
 
 		__super::Bind();
 	}
@@ -293,5 +300,32 @@ namespace Engine
 	std::shared_ptr<Bindable> PointLight::Clone()
 	{
 		return std::make_shared<PointLight>(*this);
+	}
+	void PointLight::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&tPointLight, sizeof(POINTLIGHT), 1, pFile);
+		fwrite(&m_tOrthoInfo, sizeof(ORTHOINFO), 1, pFile);
+
+		bool bMainLight = Graphics::GetInst()->GetLight().get() == this;
+
+		fwrite(&bMainLight, 1, 1, pFile);
+	}
+	void PointLight::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&tPointLight, sizeof(POINTLIGHT), 1, pFile);
+		fread(&m_tOrthoInfo, sizeof(ORTHOINFO), 1, pFile);
+
+		bool bMainLight = false;
+
+		fread(&bMainLight, 1, 1, pFile);
+
+		if (bMainLight)
+		{
+			Graphics::GetInst()->SetLight(std::static_pointer_cast<PointLight>(shared_from_this()));
+		}
 	}
 }

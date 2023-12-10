@@ -27,7 +27,6 @@ namespace Engine
 
     private:
         std::shared_ptr<ConstantBuffer<POINTLIGHT>> pPointCBuffer;
-        std::shared_ptr<ConstantBuffer<POINTLIGHT>> pVSPointCBuffer;
         POINTLIGHT  tPointLight;
         Matrix  matView;
         Matrix  matViewProject;
@@ -58,10 +57,15 @@ namespace Engine
         virtual void Reset() override;
 
     public:
+        virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
         virtual void PreDraw(float fDeltaTime) override;
         virtual void Bind() override;
         virtual std::shared_ptr<Bindable> Clone() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
     };
 
 }

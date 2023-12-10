@@ -10,11 +10,17 @@ namespace Engine
         class CPtr<ID3D11Buffer> pBuffer;
         int iCount;
         DXGI_FORMAT eFormat;
+#ifdef _DEBUG
+        int iOffset;
+#endif
 
         _tagIndexBuffer(const CPtr<ID3D11Buffer>& pBuffer, int iCount, DXGI_FORMAT eFormat) :
             pBuffer(pBuffer)
             , iCount(iCount)
             , eFormat(eFormat)
+#ifdef _DEBUG
+            , iOffset(0)
+#endif
         {
         }
     }INDEXBUFFER, * PINDEXBUFFER;
@@ -85,9 +91,12 @@ namespace Engine
     public:
         const Vector4& GetBoundingSphereInfo()  const;
         int GetMeshCount()  const;
+        int GetMeshSubCount(int iIndex)   const;
 #ifdef _DEBUG
         bool IsMeshEnabled(int iIndex)    const;
         void ToggleMesh(int iIndex);
+        void SetMeshSubOffset(int iIndex, int iSubIndex, int iOffset);
+        int GetMeshSubOffset(int iIndex, int iSubIndex) const;
 #endif
 
     public:

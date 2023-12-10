@@ -109,6 +109,11 @@ namespace Engine
 
 			pBindable->SetTag(strTag);
 
+			if (!pBindable->Init())
+			{
+				return nullptr;
+			}
+
 			AddChild(pBindable);
 
 			return pBindable;
@@ -129,6 +134,10 @@ namespace Engine
 	public:
 		virtual void Save(FILE* pFile) override;
 		virtual void Load(FILE* pFile) override;
+
+	public:
+		static std::shared_ptr<Bindable> CreateBindable(BINDABLE_TYPE eType);
+		static std::shared_ptr<Bindable> FindBindable(BINDABLE_TYPE eType, const std::string& strBind);
 	};
 
 }

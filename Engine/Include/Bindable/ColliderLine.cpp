@@ -141,4 +141,18 @@ namespace Engine
 	{
 		return std::make_shared<ColliderLine>(*this);
 	}
+	void ColliderLine::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_vStartOffset, 12, 1, pFile);
+		fwrite(&m_vEndOffset, 12, 1, pFile);
+	}
+	void ColliderLine::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_vStartOffset, 12, 1, pFile);
+		fread(&m_vEndOffset, 12, 1, pFile);
+	}
 }

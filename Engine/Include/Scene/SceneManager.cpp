@@ -11,7 +11,6 @@ namespace Engine
 		m_pScene(nullptr)
 		, m_pNextScene(nullptr)
 	{
-		CreateScene<Scene>(SCENE_TYPE::CURRENT);
 	}
 
 	SceneManager::~SceneManager()

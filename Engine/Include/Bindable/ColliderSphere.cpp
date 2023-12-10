@@ -140,4 +140,18 @@ namespace Engine
 		__super::Bind();
 #endif
 	}
+	void ColliderSphere::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_vOffset, 12, 1, pFile);
+		fwrite(&m_tInfo, sizeof(SPHERECOLLIDERINFO), 1, pFile);
+	}
+	void ColliderSphere::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_vOffset, 12, 1, pFile);
+		fread(&m_tInfo, sizeof(SPHERECOLLIDERINFO), 1, pFile);
+	}
 }

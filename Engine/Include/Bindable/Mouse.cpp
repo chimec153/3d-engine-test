@@ -13,8 +13,21 @@ namespace Engine
 {
 	Mouse::Mouse() :
 		Drawable()
-		, m_pLineCollider(CreateBindable<class ColliderLine>("MouseLine"))
+		, m_pLineCollider()
 	{
+		SetBindableType(BINDABLE_TYPE::MOUSE);
+	}
+
+	bool Mouse::Init()
+	{
+		if (!__super::Init())
+		{
+			return false;
+		}
+
+		m_pLineCollider = CreateBindable<class ColliderLine>("MouseLine");
+
+		return true;
 	}
 
 	void Mouse::Update(float fDeltaTime)
@@ -47,5 +60,15 @@ namespace Engine
 		m_pLineCollider->SetStartOffset(vWorldPos);
 
 		m_pLineCollider->SetEndOffset(vWorldPos + vWorldPos - vPos);
+	}
+	void Mouse::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+	}
+	void Mouse::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		m_pLineCollider = std::static_pointer_cast<ColliderLine>(FindChild("MouseLine"));
 	}
 }

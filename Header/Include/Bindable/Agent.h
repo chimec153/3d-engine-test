@@ -1,5 +1,6 @@
 #pragma once
 #include "Bindable.h"
+#include "../Navigation/Detour/DetourCrowd.h"
 
 namespace Engine
 {
@@ -7,6 +8,7 @@ namespace Engine
         public Bindable
     {
     public:
+        Agent();
         Agent(std::shared_ptr<class Transform> pTransform, class NavMesh* pNavMesh, const Vector3& pos);
         Agent(const Agent& agent);
         virtual ~Agent() override = default;
@@ -15,16 +17,22 @@ namespace Engine
         std::shared_ptr<class Transform> m_pTransform;
         class NavMesh* m_pNavMesh;
         int m_iAgentIndex;
+        std::unique_ptr<dtCrowdAgentParams> m_pCrowdParams;
 
     public:
         void SetTargetPos(const Vector3& pos);
         const Vector3 GetAgentVelocity()  const;
         int CreateAgent(const Vector3& pos);
         void SetTransform(std::shared_ptr<Transform> pTransform);
+        void SetNavMesh(NavMesh* pNavMesh);
 
     public:
         virtual void Update(float fDeltaTime) override;
         virtual void Bind() override;
         virtual std::shared_ptr<Bindable> Clone() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
     };
 }

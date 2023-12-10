@@ -8,6 +8,8 @@
 
 #define NOMINMAX
 
+#include <cmath>
+#include <corecrt_math.h>
 #include <list>
 #include <d3d11.h>
 #include <DirectXMath.h>

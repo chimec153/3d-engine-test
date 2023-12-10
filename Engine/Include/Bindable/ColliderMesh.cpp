@@ -9,7 +9,7 @@ Engine::ColliderMesh::ColliderMesh(const std::vector<float>& vecPoint, const std
     , m_pInfo()
 {
     SetInfo(vecPoint, vecIndex);
-
+    SetBindableType(BINDABLE_TYPE::COLLIDER_MESH);
     SetColliderType(Engine::COLLIDER_TYPE::MESH);
 }
 
@@ -17,6 +17,7 @@ Engine::ColliderMesh::ColliderMesh() :
     Collider()
 {
     SetColliderType(Engine::COLLIDER_TYPE::MESH);
+    SetBindableType(BINDABLE_TYPE::COLLIDER_MESH);
 }
 
 Engine::ColliderMesh::ColliderMesh(const ColliderMesh& mesh)    :
@@ -123,4 +124,56 @@ void Engine::ColliderMesh::Bind()
 std::shared_ptr<Engine::Bindable> Engine::ColliderMesh::Clone()
 {
     return std::make_shared<ColliderMesh>(*this);
+}
+
+void Engine::ColliderMesh::Save(FILE* pFile)
+{
+    __super::Save(pFile);
+
+    int iPointCount = static_cast<int>(m_pInfo->vecPoint.size());
+
+    fwrite(&iPointCount, 4, 1, pFile);
+
+    if (iPointCount)
+    {
+        fwrite(&m_pInfo->vecPoint[0], 4, iPointCount, pFile);
+    }
+
+    int iIndexCount = static_cast<int>(m_pInfo->vecIndex.size());
+
+    fwrite(&iIndexCount, 4, 1, pFile);
+
+    if (iIndexCount)
+    {
+        fwrite(&m_pInfo->vecIndex[0], 4, iIndexCount, pFile);
+    }
+}
+
+void Engine::ColliderMesh::Load(FILE* pFile)
+{
+    __super::Load(pFile);
+
+    m_pInfo = std::make_shared<MESHCOLLIDERINFO>();
+
+    int iPointCount = 0;
+
+    fread(&iPointCount, 4, 1, pFile);
+
+    if (iPointCount)
+    {
+        m_pInfo->vecPoint.resize(iPointCount);
+
+        fread(&m_pInfo->vecPoint[0], 4, iPointCount, pFile);
+    }
+
+    int iIndexCount = 0;
+
+    fread(&iIndexCount, 4, 1, pFile);
+
+    if (iIndexCount)
+    {
+        m_pInfo->vecIndex.resize(iIndexCount);
+
+        fread(&m_pInfo->vecIndex[0], 4, iIndexCount, pFile);
+    }
 }

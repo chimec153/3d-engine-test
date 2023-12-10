@@ -28,6 +28,6 @@ namespace Engine
         void WriteData(void* pData, int iCount);
         int GetCount()  const;
         void ReadBuffer(void* pData, int iOffset, int iSize);
-        void WriteData(void* pData, int iOffset, int iSize);
+        void WriteData(const void* pData, int iOffset, int iSize);
     };
 }

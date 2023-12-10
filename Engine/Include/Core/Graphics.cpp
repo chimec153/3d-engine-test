@@ -149,7 +149,7 @@ namespace Engine
 
 		pCamera->UpdateView();
 
-		pLight->Update(0.f);
+		//pLight->Update(0.f);
 
 		m_matView = pCamera->GetView();
 
@@ -230,5 +230,4 @@ namespace Engine
 	{
 		return m_fNear;
 	}
-
 }

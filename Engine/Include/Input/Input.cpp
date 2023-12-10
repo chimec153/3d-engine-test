@@ -350,7 +350,20 @@ namespace Engine
 	{
 		Scene* pScene = SceneManager::GetInst()->GetScene();
 
-		m_pMouse = pScene->CreateDrawable<Mouse>("Mouse", SceneManager::GetInst()->GetScene()->FindLayer(DEFAULT_LAYER));
+		if (pScene)
+		{
+			std::shared_ptr<Engine::Layer> pLayer = pScene->FindLayer(DEFAULT_LAYER);
+
+			if (pLayer)
+			{
+				m_pMouse = std::static_pointer_cast<Mouse>(pLayer->FindDrawable("Mouse"));
+			}
+
+			if (!m_pMouse)
+			{
+				m_pMouse = pScene->CreateDrawable<Mouse>("Mouse", SceneManager::GetInst()->GetScene()->FindLayer(DEFAULT_LAYER));
+			}
+		}
 	}
 
 	CInput::PACTIONINFO CInput::FindAction(const std::string& strAction) const

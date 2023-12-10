@@ -7,6 +7,7 @@ namespace Engine
         public Drawable
     {
     public:
+        Fluid();
         Fluid(int n, int m, float d, float mu, float c, float t = FIXED_UPDATE_TIME);//c^2 = T / rho
         virtual ~Fluid() override = default;
     private:
@@ -24,5 +25,12 @@ namespace Engine
         virtual void Input(float fDeltaTime) override;
         virtual void FixedUpdate(float fDeltaTime) override;
         virtual void Bind() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
+
+    public:
+        void Ready();
     };
 }

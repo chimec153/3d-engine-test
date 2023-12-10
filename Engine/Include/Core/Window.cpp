@@ -69,6 +69,8 @@ namespace Engine
 
 	Window::~Window()
 	{
+		Engine::BindableManager<class Engine::VertexBuffer>::DestroyInst();
+		Engine::BindableManager<class Engine::IndexBuffer>::DestroyInst();
 		Engine::BindableManager<class Engine::RasterizerState>::DestroyInst();
 		Engine::BindableManager<class Engine::DepthStencilState>::DestroyInst();
 		Engine::BindableManager<class Engine::BlendState>::DestroyInst();
@@ -250,10 +252,6 @@ namespace Engine
 			return false;
 		}
 
-		StaticCreateBindable<ConstantBuffer<POINTLIGHT>>("PointLight", 1);
-
-		StaticCreateBindable<ConstantBuffer<POINTLIGHT>>("PointLight", 1);
-
 		CInput::GetInst()->AddKey(DIK_ESCAPE);
 
 		Scene* pCurrentScene = SceneManager::GetInst()->GetScene(SCENE_TYPE::CURRENT);
@@ -380,11 +378,15 @@ namespace Engine
 
 	void Window::Draw(float fDeltaTime)
 	{
+		Graphics::GetInst()->SetRenderTarget();
+
 		Graphics::GetInst()->Clear(0.f, 0.f, 0.f);
 
 		RenderManager::GetInst()->Render();
 
 		SceneManager::GetInst()->Draw();
+
+		Graphics::GetInst()->EndScene();
 	}
 
 	int Window::Run()

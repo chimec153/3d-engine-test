@@ -8,19 +8,11 @@
 #include "TransformBuffer.h"
 
 Engine::Decal::Decal()	:
-	m_pCBuffer(FindAndAddBind<ConstantBuffer<DECALCBUFFER>>("Decal"))
+	m_pCBuffer(StaticFindBindable<ConstantBuffer<DECALCBUFFER>>("Decal"))
 	, m_bFadeStart(false)
 {
 	SetBindableType(BINDABLE_TYPE::DECAL);
 	SetRenderLayer(RENDER_LAYER::DECAL);
-
-	FindAndAddBind<VertexShader>("DecalVS");
-	FindAndAddBind<PixelShader>("DecalPS");
-	FindAndAddBind<InputLayout>("Standard");
-
-	std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
-
-	AddChild(pMaterial->Clone());
 }
 
 void Engine::Decal::SetMaxFadeTime(float fMax)
@@ -36,6 +28,24 @@ void Engine::Decal::SetFadeStartTime(float fStart)
 void Engine::Decal::StartFade()
 {
 	m_bFadeStart = true;
+}
+
+bool Engine::Decal::Init()
+{
+	if (!__super::Init())
+	{
+		return false;
+	}
+
+	FindAndAddBind<VertexShader>("DecalVS");
+	FindAndAddBind<PixelShader>("DecalPS");
+	FindAndAddBind<InputLayout>("Standard");
+
+	std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
+
+	AddChild(pMaterial->Clone());
+
+	return true;
 }
 
 void Engine::Decal::Update(float fDeltaTime)
@@ -63,5 +73,27 @@ void Engine::Decal::Bind()
 {
 	m_pCBuffer->UpdateBuffer(m_tCBuffer);
 
+	m_pCBuffer->Bind();
+
 	__super::Bind();
+}
+
+void Engine::Decal::Save(FILE* pFile)
+{
+	__super::Save(pFile);
+
+	fwrite(&m_tCBuffer.fFadeTime, 4, 1, pFile);
+	fwrite(&m_tCBuffer.fMaxFadeTime, 4, 1, pFile);
+	fwrite(&m_tCBuffer.fFadeStartTime, 4, 1, pFile);
+	fwrite(&m_bFadeStart, 1, 1, pFile);
+}
+
+void Engine::Decal::Load(FILE* pFile)
+{
+	__super::Load(pFile);
+
+	fread(&m_tCBuffer.fFadeTime, 4, 1, pFile);
+	fread(&m_tCBuffer.fMaxFadeTime, 4, 1, pFile);
+	fread(&m_tCBuffer.fFadeStartTime, 4, 1, pFile);
+	fread(&m_bFadeStart, 1, 1, pFile);
 }

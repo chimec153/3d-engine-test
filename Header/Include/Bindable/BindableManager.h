@@ -81,4 +81,10 @@ namespace Engine
 	template <typename T, typename ...Args>
 	ENGINE_DLL std::shared_ptr<T> StaticCreateBindable(const std::string& strTag, Args... args);
 
+	template <typename T, typename ...Args>
+	std::shared_ptr<T> StaticCreateBindable(const std::string& strTag, Args... args)
+	{
+		return BindableManager<T>::GetInst()->BindableManager<T>::CreateBindable<Args...>(strTag, args...);
+	}
+
 }

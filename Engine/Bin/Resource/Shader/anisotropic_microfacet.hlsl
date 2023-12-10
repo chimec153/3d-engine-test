@@ -634,6 +634,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     return (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
     + (1.f - materialFraction) * saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
+    //+ (1.f - materialFraction) * saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV));
 }
 
 float4 VS_PointLight()  :   SV_Position

@@ -19,7 +19,12 @@ namespace Engine
         void StartFade();
 
     public:
+        virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
         virtual void Bind() override;
+
+    public:
+        virtual void Save(FILE* pFile) override;
+        virtual void Load(FILE* pFile) override;
     };
 }
