@@ -12,6 +12,7 @@ namespace Editor
 
     public:
         virtual bool Init() override;
+        virtual void Update(float fDeltaTime) override;
     };
 
 }

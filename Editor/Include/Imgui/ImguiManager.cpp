@@ -1435,16 +1435,16 @@ namespace Editor
 				JointSocket_ImGuiWindow(*iter, i);
 			}
 
-			const std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>& mapSequence = pAnimation->GetSequences();
+			const std::unordered_map<std::string, Engine::Animation::PSEQUENCEINFO>& mapSequence = pAnimation->GetSequences();
 
 			std::vector<const char*> vecSequenceName;
 
-			std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>::const_iterator iterS = mapSequence.begin();
-			std::unordered_map<std::string, std::shared_ptr<Engine::Sequence>>::const_iterator iterSEnd = mapSequence.end();
+			std::unordered_map<std::string, Engine::Animation::PSEQUENCEINFO>::const_iterator iterS = mapSequence.begin();
+			std::unordered_map<std::string, Engine::Animation::PSEQUENCEINFO>::const_iterator iterSEnd = mapSequence.end();
 
 			for (; iterS != iterSEnd; ++iterS)
 			{
-				vecSequenceName.push_back(iterS->second->GetTag().c_str());
+				vecSequenceName.push_back(iterS->first.c_str());
 			}
 
 			if (vecSequenceName.size())
@@ -1452,6 +1452,13 @@ namespace Editor
 				static int iSequence = -1;
 
 				ImGui::ListBox("Sequences", &iSequence, &vecSequenceName[0], vecSequenceName.size());
+				
+				if (iSequence >= 0 && iSequence < vecSequenceName.size())
+				{
+					const Engine::Animation::PSEQUENCEINFO pInfo = pAnimation->FindSeuqence(vecSequenceName[iSequence]);
+
+					Sequence_ImGuiWindow(pInfo->pSequence);
+				}
 
 				if (ImGui::Button("Change Sequence"))
 				{
@@ -1461,64 +1468,33 @@ namespace Editor
 					}
 				}
 
+				if (ImGui::Button("Add Sequence"))
+				{
+					if (vecSequenceName.size() > iSequence && iSequence >= 0)
+					{
+						pAnimation->SetAdditiveSequence(vecSequenceName[iSequence]);
+					}
+				}
+
 				std::shared_ptr<Engine::Sequence> pSequence = pAnimation->GetCurrentSequence();
 
 				if (pSequence)
 				{
-					if (ImGui::Begin("CurrentSequence"))
-					{
-						int iFrame = pSequence->GetFrame();
+					Sequence_ImGuiWindow(pSequence);
+				}
 
-						Engine::Sequence::PSEQUENCEINFO pInfo = pSequence->GetSequenceInfo();
+				float fTime = pAnimation->GetTime();
 
-						if (pInfo)
-						{
-							std::string s = "s";
-							std::string r = "r";
-							std::string t = "t";
+				if (ImGui::SliderFloat("time", &fTime, 0.f, pSequence->GetMaxTime()))
+				{
+					pAnimation->SetTime(fTime);
+				}
 
-							for (int i = 0; i < static_cast<int>(pInfo->vecPose.size()); ++i)
-							{
-								if (pInfo->vecPose[i].vecJoint.size() > iFrame)
-								{
-									std::string bone = std::to_string(i);
-									ImGui::Text("bone: %d", i);
-									ImGui::SameLine();
-									Engine::Vector3 vScale = pInfo->vecPose[i].vecJoint[iFrame].vScale;
-									if (ImGui::InputFloat3((s + bone).c_str(), &vScale.x))
-									{
-										pSequence->SetFrameScale(i, iFrame, vScale);
-									}
-									Engine::Vector4 vQuternion = pInfo->vecPose[i].vecJoint[iFrame].vQueternion;
-									if (ImGui::InputFloat4((r + bone).c_str(), &vQuternion.x))
-									{
-										pSequence->SetFrameRotation(i, iFrame, vQuternion);
-									}
-									Engine::Vector3 vPos = pInfo->vecPose[i].vecJoint[iFrame].vPos;
-									if (ImGui::InputFloat3((t + bone).c_str(), &vPos.x))
-									{
-										pSequence->SetFramePosition(i, iFrame, vPos);
-									}
-								}
-							}
-						}
+				float fRate = pAnimation->GetRate();
 
-						float fTime = pAnimation->GetTime();
-
-						if (ImGui::SliderFloat("time", &fTime, 0.f, pSequence->GetMaxTime()))
-						{
-							pAnimation->SetTime(fTime);
-						}
-
-						float fRate = pAnimation->GetRate();
-
-						if (ImGui::SliderFloat("rate", &fRate, 0.f, 2.f))
-						{
-							pAnimation->SetRate(fRate);
-						}
-					}
-
-					ImGui::End();
+				if (ImGui::SliderFloat("rate", &fRate, 0.f, 2.f))
+				{
+					pAnimation->SetRate(fRate);
 				}
 			}
 		}
@@ -1560,6 +1536,99 @@ namespace Editor
 
 						pScene->SaveFromFullPath(pFilePath);
 					}
+				}
+			}
+		}
+
+		ImGui::End();
+	}
+
+	void ImguiManager::Sequence_ImGuiWindow(std::shared_ptr<Engine::Sequence> pSequence)
+	{
+		std::string strTitle = "Sequence";
+
+		strTitle += pSequence->GetTag();
+
+		if (ImGui::Begin(strTitle.c_str()))
+		{
+			int iFrame = pSequence->GetFrame();
+
+			Engine::Sequence::PSEQUENCEINFO pInfo = pSequence->GetSequenceInfo();
+
+			if (pInfo)
+			{
+				std::string s = "s";
+				std::string r = "r";
+				std::string t = "t";
+
+				for (int i = 0; i < static_cast<int>(pInfo->vecJoint.size()); ++i)
+				{
+					if (pInfo->vecJoint[i].vecFrame.size() > iFrame)
+					{
+						std::string bone = std::to_string(i);
+						ImGui::Text("bone: %d", i);
+						ImGui::SameLine();
+						Engine::Vector3 vScale = pInfo->vecJoint[i].vecFrame[iFrame].vScale;
+						if (ImGui::InputFloat3((s + bone).c_str(), &vScale.x))
+						{
+							pSequence->SetFrameScale(i, iFrame, vScale);
+						}
+						Engine::Vector4 vQuternion = pInfo->vecJoint[i].vecFrame[iFrame].vQueternion;
+						if (ImGui::InputFloat4((r + bone).c_str(), &vQuternion.x))
+						{
+							pSequence->SetFrameRotation(i, iFrame, vQuternion);
+						}
+						Engine::Vector3 vPos = pInfo->vecJoint[i].vecFrame[iFrame].vPos;
+						if (ImGui::InputFloat3((t + bone).c_str(), &vPos.x))
+						{
+							pSequence->SetFramePosition(i, iFrame, vPos);
+						}
+					}
+				}
+			}
+
+			const std::vector<float>& vecBlendPalette = pSequence->GetBlendPalette();
+
+			for (int i = 0; i < vecBlendPalette.size(); ++i)
+			{
+				std::string strBlend = "joint_blend";
+
+				strBlend += std::to_string(i);
+
+				float fBlendFactor = vecBlendPalette[i];
+
+				if (ImGui::SliderFloat(strBlend.c_str(), &fBlendFactor, 0.f, 1.f))
+				{
+					pSequence->SetBlendFactor(i, fBlendFactor);
+				}
+			}
+
+			float fBlend = 0.f;
+
+			if (ImGui::SliderFloat("joint_blend_all", &fBlend, 0.f, 1.f))
+			{
+				for (int i = 0; i < vecBlendPalette.size(); ++i)
+				{
+					pSequence->SetBlendFactor(i, fBlend);
+				}
+			}
+
+			if (ImGui::Button("Save Sequence"))
+			{
+				TCHAR strFullPath[MAX_PATH] = {};
+
+				OPENFILENAME tOFN = {};
+
+				tOFN.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath(MESH_PATH);
+				tOFN.lpstrFile = strFullPath;
+				tOFN.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
+				tOFN.lStructSize = sizeof(OPENFILENAME);
+				tOFN.nMaxFile = MAX_PATH;
+				tOFN.lpstrFilter = TEXT("*.SEQ");
+
+				if (GetOpenFileName(&tOFN))
+				{
+					pSequence->SaveFromFullPath(strFullPath);
 				}
 			}
 		}

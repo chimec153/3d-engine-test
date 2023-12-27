@@ -33,6 +33,7 @@
 #include "BlendState.h"
 #include "DepthStencilState.h"
 #include "Mouse.h"
+#include "ColliderOBB.h"
 
 namespace Engine
 {
@@ -339,6 +340,31 @@ namespace Engine
 		}
 	}
 
+	void Bindable::PostUpdate(float fDeltaTime)
+	{
+		std::list<std::shared_ptr<Bindable>>::iterator iterC = m_ChildList.begin();
+		std::list<std::shared_ptr<Bindable>>::iterator iterCEnd = m_ChildList.end();
+
+		for (; iterC != iterCEnd;)
+		{
+			if (!(*iterC)->IsActive())
+			{
+				iterC = m_ChildList.erase(iterC);
+				iterCEnd = m_ChildList.end();
+				continue;
+			}
+
+			else if (!(*iterC)->IsEnable())
+			{
+				++iterC;
+				continue;
+			}
+
+			(*iterC)->PostUpdate(fDeltaTime);
+			++iterC;
+		}
+	}
+
 	void Bindable::PreDraw(float fDeltaTime)
 	{
 		std::list<std::shared_ptr<Bindable>>::iterator iter = m_ChildList.begin();
@@ -563,6 +589,8 @@ namespace Engine
 			return std::make_shared<ColliderSphere>();
 		case Engine::BINDABLE_TYPE::COLLIDER_MESH:
 			return std::make_shared<ColliderMesh>();
+		case Engine::BINDABLE_TYPE::COLLIDER_OBB:
+			return std::make_shared<ColliderOBB>();
 		case Engine::BINDABLE_TYPE::ANIMATION:
 			return std::make_shared<Animation>();
 		case Engine::BINDABLE_TYPE::AGENT:
@@ -636,6 +664,10 @@ namespace Engine
 		case Engine::BINDABLE_TYPE::COLLIDER_LINE:
 			break;
 		case Engine::BINDABLE_TYPE::COLLIDER_SPHERE:
+			break;
+		case Engine::BINDABLE_TYPE::COLLIDER_MESH:
+			break;
+		case Engine::BINDABLE_TYPE::COLLIDER_OBB:
 			break;
 		case Engine::BINDABLE_TYPE::ANIMATION:
 			break;

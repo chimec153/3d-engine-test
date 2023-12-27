@@ -36,6 +36,12 @@
     <ClCompile Include="Object\Monster.cpp">
       <Filter>02. Object</Filter>
     </ClCompile>
+    <ClCompile Include="Object\Trail.cpp">
+      <Filter>02. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Attackable.cpp">
+      <Filter>02. Object</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Scene\StartScene.h">
@@ -51,6 +57,12 @@
       <Filter>02. Object</Filter>
     </ClInclude>
     <ClInclude Include="Object\Monster.h">
+      <Filter>02. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Trail.h">
+      <Filter>02. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Attackable.h">
       <Filter>02. Object</Filter>
     </ClInclude>
   </ItemGroup>

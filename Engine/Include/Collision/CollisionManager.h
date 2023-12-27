@@ -28,7 +28,7 @@ namespace Engine
 		float	fSize;
 		std::unique_ptr<_tagSpace> pChild[static_cast<int>(SPACE_DIR::END)];
 		_tagSpace* pParent;
-		std::list<std::shared_ptr<class Drawable>>	DrawableList;
+		std::list<class Drawable*>	DrawableList;
 		std::list<struct _tagPortal>	PortalList;
 		bool bDelete;
 #ifdef _DEBUG
@@ -110,7 +110,7 @@ namespace Engine
 		int GetTotalDrawableCountSub(int iPrevCount)	const
 		{
 			return pChild[T] ? 
-				pChild[T]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) :
+				(pChild[T]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) + GetTotalDrawableCountSub<T - 1>(iPrevCount)) :
 				GetTotalDrawableCountSub<T - 1>(iPrevCount);
 		}
 
@@ -210,19 +210,20 @@ namespace Engine
 		std::unordered_map<class Drawable*, SPACE*>	m_mapDrawable;
 		float fAcutenessThreshold;
 	public:
-		void AddDrawable(const std::shared_ptr<class Drawable>& pDrawable);
+		void AddDrawable(class Drawable* pDrawable);
 		void AddCollider(class Collider* pCollider);
 		void VisibleTest();
 		PSPACE CreateChildSpace(SPACE* pParent, int iIndex)	const;
 		void VisibleTest(PSPACE pSpace, const std::vector<Vector4>& vecPlanes, const std::vector<Vector4>* vecLocalPlanes = nullptr);
 		void PortalVisibleTest(PSPACE pSpace, const std::vector<Vector4>& vecPlanes);
 		bool VisibleTestNoRecursive(PSPACE pSpace, const std::vector<Vector4>& vecPlanes, const std::vector<Vector4>* vecLocalPlanes = nullptr);
+		void DeleteDrawable(class Drawable* pDrawable);
 
 	public:
 		void Collision(float fDeltaTime);
 
 	private:
-		SPACE* FindSpaceAndErase(const std::shared_ptr<class Drawable>& pDrawable);
+		SPACE* FindSpaceAndErase(class Drawable* pDrawable);
 	};
 
 }

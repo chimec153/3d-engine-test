@@ -49,6 +49,7 @@ namespace Engine
         public Bindable
     {
     public:
+        Mesh(int iCount);
         template <typename T, typename P>
         Mesh(const std::vector<T>& vecVertex, const std::vector<P>& vecIndex, D3D11_USAGE eUsage = D3D11_USAGE_IMMUTABLE) :
             Bindable()
@@ -80,7 +81,7 @@ namespace Engine
 
             LoadFromPath(pFileName, strPathKey);
         }
-        Mesh(const Mesh& mesh) = delete;
+        Mesh(const Mesh& mesh);
         virtual ~Mesh() override = default;
 
     private:
@@ -98,12 +99,14 @@ namespace Engine
         void SetMeshSubOffset(int iIndex, int iSubIndex, int iOffset);
         int GetMeshSubOffset(int iIndex, int iSubIndex) const;
 #endif
+        void SetVertexCount(int iIndex, int iCount);
 
     public:
         void SetTextures(const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture);
         void SetTextures(int iIndex, const std::vector<std::shared_ptr<Texture>>& vecTexture);
-        void SetMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial);
+        void AddMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial);
         std::shared_ptr<Material> GetMaterial(int iIndex = 0, int iSubIndex = 0)   const;
+        void SetMaterial(int iIndex, int iSubIndex, std::shared_ptr<Material> pMaterial);
 
         template <typename T, typename P>
         void CreateMesh(const std::vector<std::vector<T>>& vecVertex, const std::vector<std::vector<std::vector<P>>>& vecIndex, D3D11_USAGE eUsage = D3D11_USAGE_IMMUTABLE)
@@ -208,6 +211,7 @@ namespace Engine
     public:
         bool SetVertexBuffer(int iIndex, const void* pData, int iSize);
         bool SetIndexBuffer(int iIndex, int iSubIndex, const void* pData, int iSize);
+        void UsePaperBurn();
 
     public:
         virtual void Bind() override;

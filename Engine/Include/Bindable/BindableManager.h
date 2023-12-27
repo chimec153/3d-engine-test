@@ -72,6 +72,12 @@ namespace Engine
 
 			return iter->second;
 		}
+
+	public:
+		bool Init()
+		{
+			return false;
+		}
 	};
 
 

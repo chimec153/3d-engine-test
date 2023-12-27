@@ -3,6 +3,7 @@
 #include "../Bindable/ColliderSphere.h"
 #include "../Bindable/TransformBuffer.h"
 #include "../Bindable/ColliderMesh.h"
+#include "../Bindable/ColliderOBB.h"
 
 namespace Engine
 {
@@ -263,35 +264,49 @@ namespace Engine
 		float& fMainPos = bMainAxisZ ? s.z : s.x;
 		float& fSubPos = bMainAxisZ ? s.x : s.z;
 
-		float diff = bMainAxisZ ? d.x / d.z : d.z / d.x;
+		float diff = bMainAxisZ ? (d.z == 0.f ? 0.f : d.x / d.z) : (d.x == 0.f ? 0.f : d.z / d.x);
+
+		float fMinDist = FLT_MAX;
+		Vector3 vMinCross = {};
+
+		if (!diff)
+		{
+			return false;
+		}
 
 		while (true)
 		{
 			if (s.x < 0.f && d.x < 0.f)
 			{
-				return false;
+				break;
 			}
 
 			if (s.x > width && d.x > 0.f)
 			{
-				return false;
+				break;
 			}
 
 			if (s.z < 0.f && d.z < 0.f)
 			{
-				return false;
+				break;
 			}
 
 			if (s.z > height && d.z > 0.f)
 			{
-				return false;
+				break;
 			}
 			
 			if (s.x >= 0.f && s.z >= 0.f && s.x < width && s.z < height)
 			{
 				if (CollisionLineToQuad(tSrc, tDest, static_cast<int>(s.x) + static_cast<int>((height - static_cast<int>(s.z) - 1.f) * width), vCross))
 				{
-					return true;
+					float fDist = (vCross - tSrc.vStart).Length();
+
+					if (fDist < fMinDist) 
+					{
+						fMinDist = fDist;
+						vMinCross = vCross;
+					}
 				}
 			}
 
@@ -303,7 +318,13 @@ namespace Engine
 				{
 					if (CollisionLineToQuad(tSrc, tDest, static_cast<int>(s.x) + static_cast<int>((height - static_cast<int>(s.z) - 1.f) * width), vCross))
 					{
-						return true;
+						float fDist = (vCross - tSrc.vStart).Length();
+
+						if (fDist < fMinDist)
+						{
+							fMinDist = fDist;
+							vMinCross = vCross;
+						}
 					}
 				}
 
@@ -316,7 +337,149 @@ namespace Engine
 			}
 		}
 
-		return false;
+		vCross = vMinCross;
+
+		return fMinDist != FLT_MAX;
+	}
+
+	bool Collision::CollisionOBBToSphere(const OBBINFO& tSrc, const SPHERECOLLIDERINFO tDest, Vector3& vCross)
+	{
+		float fLengthX = tSrc.vAxis[0].Length();
+		float fLengthY = tSrc.vAxis[1].Length();
+		float fLengthZ = tSrc.vAxis[2].Length();
+
+		const Vector3& vAxisX = tSrc.vAxis[0] / fLengthX;
+		const Vector3& vAxisY = tSrc.vAxis[1] / fLengthY;
+		const Vector3& vAxisZ = tSrc.vAxis[2] / fLengthZ;
+
+		Matrix matRot = {};
+
+		matRot[0] = vAxisX;
+		matRot[1] = vAxisY;
+		matRot[2] = vAxisZ;
+		matRot[3][3] = 1.f;
+
+		matRot.Transpose();
+
+		const Vector3& vSphereCenter = matRot.TransformCoord(tDest.vCenter - tSrc.vCenter);
+
+		Vector3 e = Vector3(std::max(-fLengthX / 2.f - vSphereCenter.x, 0.f), std::max(-fLengthY / 2.f - vSphereCenter.y, 0.f), std::max(-fLengthZ / 2.f - vSphereCenter.z, 0.f));
+
+		e += Vector3(std::max(vSphereCenter.x - fLengthX / 2.f, 0.f), std::max(vSphereCenter.y - fLengthY / 2.f, 0.f), std::max(vSphereCenter.z - fLengthZ / 2.f, 0.f));
+
+		return e.Dot(e) <= tDest.fRadius * tDest.fRadius;
+	}
+
+	bool Collision::CollisionOBBToOBB(const OBBINFO& tSrc, const OBBINFO& tDest, Vector3& vCross)
+	{
+		const Vector3& vDist = tSrc.vCenter - tDest.vCenter;
+
+		float fSrcAxisXLength = tSrc.vAxis[0].Length();
+
+		const Vector3& vSrcAxisX = tSrc.vAxis[0] / fSrcAxisXLength;
+
+		float fSrcAxisXDist = vSrcAxisX.Dot(vDist);
+
+		float fDotXX = abs(vSrcAxisX.Dot(tDest.vAxis[0]));
+
+		float fDotXY = abs(vSrcAxisX.Dot(tDest.vAxis[1]));
+
+		float fDotXZ = abs(vSrcAxisX.Dot(tDest.vAxis[2]));
+
+		if (fDotXX + fDotXY + fDotXZ + fSrcAxisXLength < fSrcAxisXDist * 2.f)
+		{
+			return false;
+		}
+
+		float fSrcAxisYLength = tSrc.vAxis[1].Length();
+
+		const Vector3& vSrcAxisY = tSrc.vAxis[1] / fSrcAxisYLength;
+
+		float fSrcAxisYDist = vSrcAxisY.Dot(vDist);
+
+		float fDotYX = abs(vSrcAxisY.Dot(tDest.vAxis[0]));
+
+		float fDotYY = abs(vSrcAxisY.Dot(tDest.vAxis[1]));
+
+		float fDotYZ = abs(vSrcAxisY.Dot(tDest.vAxis[2]));
+
+		if (fDotYX + fDotYY + fDotYZ + fSrcAxisYLength < fSrcAxisYDist * 2.f)
+		{
+			return false;
+		}
+
+		float fSrcAxisZLength = tSrc.vAxis[2].Length();
+
+		const Vector3& vSrcAxisZ = tSrc.vAxis[2] / fSrcAxisZLength;
+
+		float fSrcAxisZDist = vSrcAxisZ.Dot(vDist);
+
+		float fDotZX = abs(vSrcAxisZ.Dot(tDest.vAxis[0]));
+
+		float fDotZY = abs(vSrcAxisZ.Dot(tDest.vAxis[1]));
+
+		float fDotZZ = abs(vSrcAxisZ.Dot(tDest.vAxis[2]));
+
+		if (fDotZX + fDotZY + fDotZZ + fSrcAxisZLength < fSrcAxisZDist * 2.f)
+		{
+			return false;
+		}
+
+		float fDestAxisXLength = tDest.vAxis[0].Length();
+
+		const Vector3& vDestAxisX = tDest.vAxis[0] / fDestAxisXLength;
+
+		float fDestAxisXDist = vDestAxisX.Dot(vDist);
+
+		if (abs(vDestAxisX.Dot(tSrc.vAxis[0])) + abs(vDestAxisX.Dot(tSrc.vAxis[1])) + abs(vDestAxisX.Dot(tSrc.vAxis[2])) + fDestAxisXLength < fDestAxisXDist * 2.f)
+		{
+			return false;
+		}
+
+		float fDestAxisYLength = tDest.vAxis[1].Length();
+
+		const Vector3& vDestAxisY = tDest.vAxis[1] / fDestAxisYLength;
+
+		float fDestAxisYDist = vDestAxisY.Dot(vDist);
+
+		if (abs(vDestAxisY.Dot(tSrc.vAxis[0])) + abs(vDestAxisY.Dot(tSrc.vAxis[1])) + abs(vDestAxisY.Dot(tSrc.vAxis[2])) + fDestAxisYLength < fDestAxisYDist * 2.f)
+		{
+			return false;
+		}
+
+		float fDestAxisZLength = tDest.vAxis[2].Length();
+
+		const Vector3& vDestAxisZ = tDest.vAxis[2] / fDestAxisZLength;
+
+		float fDestAxisZDist = vDestAxisZ.Dot(vDist);
+
+		if (abs(vDestAxisZ.Dot(tSrc.vAxis[0])) + abs(vDestAxisZ.Dot(tSrc.vAxis[1])) + abs(vDestAxisZ.Dot(tSrc.vAxis[2])) + fDestAxisZLength < fDestAxisZDist * 2.f)
+		{
+			return false;
+		}
+
+		for (int i = 0; i < 3; ++i)
+		{
+			for (int j = 0; j < 3; ++j)
+			{
+				Vector3 vAxis = tSrc.vAxis[i].Cross(tDest.vAxis[j]);
+
+				float fLength = vAxis.Length();
+
+				if (fLength)
+				{
+					vAxis /= fLength;
+
+					if (abs(vAxis.Dot(tSrc.vAxis[0])) + abs(vAxis.Dot(tSrc.vAxis[1])) + abs(vAxis.Dot(tSrc.vAxis[2]))
+						+ abs(vAxis.Dot(tDest.vAxis[0])) + abs(vAxis.Dot(tDest.vAxis[1])) + abs(vAxis.Dot(tDest.vAxis[2])) < vAxis.Dot(vDist) * 2.f)
+					{
+						return false;
+					}
+				}
+			}
+		}
+
+		return true;
 	}
 
 	bool Collision::CollisionLineToSphere(ColliderLine* pSrc, ColliderSphere* pDest)
@@ -370,6 +533,32 @@ namespace Engine
 			pSrc->SetCross(vCross);
 			pDest->SetCross(vCross);
 
+			return true;
+		}
+
+		return false;
+	}
+	bool Collision::CollisionOBBToSphere(ColliderOBB* pSrc, ColliderSphere* pDest)
+	{
+		Vector3 vCross = {};
+
+		if (CollisionOBBToSphere(pSrc->GetInfo(), pDest->GetInfo(), vCross))
+		{
+			pSrc->SetCross(vCross);
+			pDest->SetCross(vCross);
+			return true;
+		}
+
+		return false;
+	}
+	bool Collision::CollisionOBBToOBB(ColliderOBB* pSrc, ColliderOBB* pDest)
+	{
+		Vector3 vCross = {};
+
+		if (CollisionOBBToOBB(pSrc->GetInfo(), pDest->GetInfo(), vCross))
+		{
+			pSrc->SetCross(vCross);
+			pDest->SetCross(vCross);
 			return true;
 		}
 

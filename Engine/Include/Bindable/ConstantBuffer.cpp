@@ -84,13 +84,15 @@ namespace Engine
 	}
 
 	template<typename T>
-	inline void ConstantBuffer<T>::UpdateBuffer(const T& pData)
+	void ConstantBuffer<T>::UpdateBuffer(const void* pData, int iSize, int iOffset)
 	{
 		D3D11_MAPPED_SUBRESOURCE tSub = {};
 
 		Graphics::GetInst()->GetDeviceContext()->Map(*pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &tSub);
 
-		memcpy_s(tSub.pData, sizeof(T), &pData, sizeof(T));
+		void* pDest = static_cast<char*>(tSub.pData) + iOffset;
+
+		memcpy_s(pDest, sizeof(T) - iOffset, pData, iSize);
 
 		Graphics::GetInst()->GetDeviceContext()->Unmap(*pConstantBuffer, 0);
 	}

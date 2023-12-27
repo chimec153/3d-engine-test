@@ -16,7 +16,9 @@ namespace Engine
 		, fTime(0.f)
 		, fMaxTime(0.f)
 		, m_tCBuffer()
+		, m_bLoop(false)
 	{
+		m_tCBuffer.fBlendMaxTime = 0.5f;
 	}
 
 	Sequence::Sequence(const Sequence& seq)	:
@@ -40,15 +42,17 @@ namespace Engine
 		Safe_Delete_VecList(m_vecInfo);
 	}
 
-	bool Sequence::SetSequance(const std::vector<FbxLoader::FBXBONEKEYFRAME>& vecPose)
+	bool Sequence::SetSequance(const std::vector<FbxLoader::FBXBONEKEYFRAME>& vecJoint)
 	{
+		m_vecBlendPalette.clear();
+
 		m_iMaxFrame = INT_MIN;
 
-		for (int i = 0; i < static_cast<int>(vecPose.size()); ++i)
+		for (int i = 0; i < static_cast<int>(vecJoint.size()); ++i)
 		{
-			if (m_iMaxFrame < static_cast<int>(vecPose[i].vecKeyFrame.size()))
+			if (m_iMaxFrame < static_cast<int>(vecJoint[i].vecKeyFrame.size()))
 			{
-				m_iMaxFrame = static_cast<int>(vecPose[i].vecKeyFrame.size());
+				m_iMaxFrame = static_cast<int>(vecJoint[i].vecKeyFrame.size());
 			}
 		}
 
@@ -58,25 +62,25 @@ namespace Engine
 			return false;
 		}
 
-		m_tCBuffer.iMaxJoint = static_cast<int>(vecPose.size());
+		m_tCBuffer.iMaxJoint = static_cast<int>(vecJoint.size());
 
 		m_vecInfo.emplace_back(dbg_new SEQUENCEINFO());
 
 		PSEQUENCEINFO pInfo = m_vecInfo.back();
 
-		for (size_t i = 0; i < vecPose.size(); ++i)
+		for (size_t i = 0; i < vecJoint.size(); ++i)
 		{
-			pInfo->vecPose.emplace_back();
+			pInfo->vecJoint.emplace_back();
 
-			POSE& tPose = pInfo->vecPose.back();
+			JOINT& tJoint = pInfo->vecJoint.back();
 
 			float fTotal = 0.f;
 
-			for (size_t j = 0; j < vecPose[i].vecKeyFrame.size(); ++j)
+			for (size_t j = 0; j < vecJoint[i].vecKeyFrame.size(); ++j)
 			{
-				if (fTotal < static_cast<float>(vecPose[i].vecKeyFrame[j].dTime))
+				if (fTotal < static_cast<float>(vecJoint[i].vecKeyFrame[j].dTime))
 				{
-					fTotal = static_cast<float>(vecPose[i].vecKeyFrame[j].dTime);
+					fTotal = static_cast<float>(vecJoint[i].vecKeyFrame[j].dTime);
 				}
 
 				if (fTotal > m_tCBuffer.fMaxTime)
@@ -84,34 +88,36 @@ namespace Engine
 					m_tCBuffer.fMaxTime = fTotal;
 				}
 
-				if (m_iMaxFrame > static_cast<int>(vecPose[i].vecKeyFrame.size()) && !vecPose[i].vecKeyFrame.empty())
+				if (m_iMaxFrame > static_cast<int>(vecJoint[i].vecKeyFrame.size()) && !vecJoint[i].vecKeyFrame.empty())
 				{
-					m_iMaxFrame = static_cast<int>(vecPose[i].vecKeyFrame.size());
+					m_iMaxFrame = static_cast<int>(vecJoint[i].vecKeyFrame.size());
 				}
 
-				JOINT tJoint;
+				JOINTFRAME tFrame;
 
-				fbxsdk::FbxVector4 vTranslate = vecPose[i].vecKeyFrame[j].matTransform.GetT();
+				fbxsdk::FbxVector4 vTranslate = vecJoint[i].vecKeyFrame[j].matTransform.GetT();
 
-				tJoint.vPos.x = static_cast<float>(vTranslate[0]);
-				tJoint.vPos.y = static_cast<float>(vTranslate[1]);
-				tJoint.vPos.z = static_cast<float>(vTranslate[2]);
+				tFrame.vPos.x = static_cast<float>(vTranslate[0]);
+				tFrame.vPos.y = static_cast<float>(vTranslate[1]);
+				tFrame.vPos.z = static_cast<float>(vTranslate[2]);
 
-				fbxsdk::FbxVector4 vScale = vecPose[i].vecKeyFrame[j].matTransform.GetS();
+				fbxsdk::FbxVector4 vScale = vecJoint[i].vecKeyFrame[j].matTransform.GetS();
 
-				tJoint.vScale.x = static_cast<float>(vScale[0]);
-				tJoint.vScale.y = static_cast<float>(vScale[1]);
-				tJoint.vScale.z = static_cast<float>(vScale[2]);
+				tFrame.vScale.x = static_cast<float>(vScale[0]);
+				tFrame.vScale.y = static_cast<float>(vScale[1]);
+				tFrame.vScale.z = static_cast<float>(vScale[2]);
 
-				fbxsdk::FbxQuaternion vRotate = vecPose[i].vecKeyFrame[j].matTransform.GetQ();
+				fbxsdk::FbxQuaternion vRotate = vecJoint[i].vecKeyFrame[j].matTransform.GetQ();
 
-				tJoint.vQueternion.x = static_cast<float>(vRotate[0]);
-				tJoint.vQueternion.y = static_cast<float>(vRotate[1]);
-				tJoint.vQueternion.z = static_cast<float>(vRotate[2]);
-				tJoint.vQueternion.w = static_cast<float>(vRotate[3]);
+				tFrame.vQueternion.x = static_cast<float>(vRotate[0]);
+				tFrame.vQueternion.y = static_cast<float>(vRotate[1]);
+				tFrame.vQueternion.z = static_cast<float>(vRotate[2]);
+				tFrame.vQueternion.w = static_cast<float>(vRotate[3]);
 
-				tPose.vecJoint.push_back(tJoint);
+				tJoint.vecFrame.push_back(tFrame);
 			}
+
+			m_vecBlendPalette.push_back(0.f);
 		}
 
 		CreateSequenceBuffer();
@@ -119,6 +125,8 @@ namespace Engine
 		m_tCBuffer.iMaxFrame = m_iMaxFrame;
 		fMaxTime = m_tCBuffer.fMaxTime;
 		fTime = 0.f;
+
+		return true;
 	}
 
 	void Sequence::UseRootMotion()
@@ -164,7 +172,7 @@ namespace Engine
 			return;
 		}
 
-		m_vecInfo[0]->vecPose[iBone].vecJoint[iFrame].vPos = vPos;
+		m_vecInfo[0]->vecJoint[iBone].vecFrame[iFrame].vPos = vPos;
 
 		//m_pBuffer->WriteData(&vPos.x, 40 * (iBone * m_iMaxFrame + iFrame), 12);
 
@@ -178,7 +186,7 @@ namespace Engine
 			return;
 		}
 
-		m_vecInfo[0]->vecPose[iBone].vecJoint[iFrame].vQueternion = vQuternion;
+		m_vecInfo[0]->vecJoint[iBone].vecFrame[iFrame].vQueternion = vQuternion;
 
 		//m_pBuffer->WriteData(&vQuternion.x, 40 * (iBone * m_iMaxFrame + iFrame) + 12, 16);
 
@@ -192,7 +200,7 @@ namespace Engine
 			return;
 		}
 
-		m_vecInfo[0]->vecPose[iBone].vecJoint[iFrame].vScale = vScale;
+		m_vecInfo[0]->vecJoint[iBone].vecFrame[iFrame].vScale = vScale;
 
 		//m_pBuffer->WriteData(&vScale.x, 40 * (iBone * m_iMaxFrame + iFrame) + 28, 12);
 
@@ -205,13 +213,13 @@ namespace Engine
 
 		for (int i = 0; i < m_vecInfo.size(); ++i)
 		{
-			for (int j = 0; j < m_vecInfo[i]->vecPose.size(); ++j)
+			for (int j = 0; j < m_vecInfo[i]->vecJoint.size(); ++j)
 			{
-				for (int k = 0; k < m_vecInfo[i]->vecPose[j].vecJoint.size(); ++k)
+				for (int k = 0; k < m_vecInfo[i]->vecJoint[j].vecFrame.size(); ++k)
 				{
-					vecTransform[j * m_iMaxFrame + k].vPos = m_vecInfo[i]->vecPose[j].vecJoint[k].vPos;
-					vecTransform[j * m_iMaxFrame + k].vScale = m_vecInfo[i]->vecPose[j].vecJoint[k].vScale;
-					vecTransform[j * m_iMaxFrame + k].vQueternion = m_vecInfo[i]->vecPose[j].vecJoint[k].vQueternion;
+					vecTransform[j * m_iMaxFrame + k].vPos = m_vecInfo[i]->vecJoint[j].vecFrame[k].vPos;
+					vecTransform[j * m_iMaxFrame + k].vScale = m_vecInfo[i]->vecJoint[j].vecFrame[k].vScale;
+					vecTransform[j * m_iMaxFrame + k].vQueternion = m_vecInfo[i]->vecJoint[j].vecFrame[k].vQueternion;
 				}
 			}
 		}
@@ -222,7 +230,48 @@ namespace Engine
 		}
 	}
 
-	void Sequence::Update(float fDeltaTime)
+	void Sequence::Loop()
+	{
+		m_bLoop = true;
+	}
+
+	bool Sequence::IsLoop() const
+	{
+		return m_bLoop;
+	}
+
+	void Sequence::SetNextSequence(const std::string& strSeq)
+	{
+		m_strNextSequence = strSeq;
+	}
+
+	const std::string& Sequence::GetNextSequence() const
+	{
+		return m_strNextSequence;
+	}
+
+	const std::vector<float>& Sequence::GetBlendPalette() const
+	{
+		return m_vecBlendPalette;
+	}
+
+	void Sequence::SetBlendFactor(int iJoint, float fBlendFactor)
+	{
+		if (iJoint < 0 || iJoint >= static_cast<int>(m_vecBlendPalette.size()))
+		{
+			assert(false);
+			return;
+		}
+
+		m_vecBlendPalette[iJoint] = fBlendFactor;
+	}
+
+	const BONEINFO& Sequence::GetBoneInfo() const
+	{
+		return m_tCBuffer;
+	}
+
+	void Sequence::Update(float fDeltaTime, int iSlot, int iIndex)
 	{
 		Vector3 vRootPos = {};
 
@@ -236,17 +285,17 @@ namespace Engine
 
 		m_tCBuffer.iNextFrame = (m_tCBuffer.iFrame + 1) % m_tCBuffer.iMaxFrame;
 
-		m_tCBuffer.iInfoCount = static_cast<int>(m_vecInfo.size());
+		m_tCBuffer.fSequenceTime = fDeltaTime;
 
 		for (size_t i = 0; i < m_vecInfo.size(); ++i)
 		{
 			if (m_bRootMotion)
 			{
-				if (m_vecInfo[i]->vecPose.size())
+				if (m_vecInfo[i]->vecJoint.size())
 				{
-					if (m_vecInfo[i]->vecPose[0].vecJoint.size() > m_tCBuffer.iFrame)
+					if (m_vecInfo[i]->vecJoint[0].vecFrame.size() > m_tCBuffer.iFrame)
 					{
-						Vector3 vInterpolatedPos = m_vecInfo[i]->vecPose[0].vecJoint[m_tCBuffer.iFrame].vPos * (1.f - m_tCBuffer.fTime) + m_vecInfo[i]->vecPose[0].vecJoint[m_tCBuffer.iNextFrame].vPos * m_tCBuffer.fTime;
+						Vector3 vInterpolatedPos = m_vecInfo[i]->vecJoint[0].vecFrame[m_tCBuffer.iFrame].vPos * (1.f - m_tCBuffer.fTime) + m_vecInfo[i]->vecJoint[0].vecFrame[m_tCBuffer.iNextFrame].vPos * m_tCBuffer.fTime;
 
 						vRootPos = { vInterpolatedPos.x, vInterpolatedPos.y, vInterpolatedPos.z };
 
@@ -258,17 +307,13 @@ namespace Engine
 
 		m_tCBuffer.vRootPos = vRootPos;
 
-		m_pBoneConstantBuffer->UpdateBuffer(m_tCBuffer);
-
-		m_pBoneConstantBuffer->Bind();
-
 #ifdef _DEBUG
 		/*std::vector<TRANSFORM> vecSrc(m_pBuffer->GetCount());
 		m_pBuffer->DebugBuffer(&vecSrc.front(), 0, sizeof(TRANSFORM));*/
 #endif
 		if (m_pBuffer)
 		{
-			m_pBuffer->SetSRV(31);
+			m_pBuffer->SetSRV(iSlot);
 		}
 	}
 
@@ -295,23 +340,32 @@ namespace Engine
 			fwrite(&fMaxTime, 4, 1, pFile);
 			fwrite(&m_iMaxFrame, 4, 1, pFile);
 
-			unsigned char iSize = static_cast<unsigned char>(m_vecInfo[i]->vecPose.size());
+			unsigned char iSize = static_cast<unsigned char>(m_vecInfo[i]->vecJoint.size());
 
 			fwrite(&iSize, 1, 1, pFile);
 
 			for (unsigned char j = 0; j < iSize; ++j)
 			{
-				unsigned int iJointCount = static_cast<unsigned int>(m_vecInfo[i]->vecPose[j].vecJoint.size());
+				unsigned int iJointCount = static_cast<unsigned int>(m_vecInfo[i]->vecJoint[j].vecFrame.size());
 
 				fwrite(&iJointCount, 4, 1, pFile);
 
 				for (unsigned int k = 0; k < iJointCount; ++k)
 				{
-					fwrite(&m_vecInfo[i]->vecPose[j].vecJoint[k].vPos, sizeof(Vector3), 1, pFile);
-					fwrite(&m_vecInfo[i]->vecPose[j].vecJoint[k].vQueternion, sizeof(Vector4), 1, pFile);
-					fwrite(&m_vecInfo[i]->vecPose[j].vecJoint[k].vScale, sizeof(Vector3), 1, pFile);
+					fwrite(&m_vecInfo[i]->vecJoint[j].vecFrame[k].vPos, sizeof(Vector3), 1, pFile);
+					fwrite(&m_vecInfo[i]->vecJoint[j].vecFrame[k].vQueternion, sizeof(Vector4), 1, pFile);
+					fwrite(&m_vecInfo[i]->vecJoint[j].vecFrame[k].vScale, sizeof(Vector3), 1, pFile);
 				}
 			}
+		}
+
+		int iBlendCount = static_cast<int>(m_vecBlendPalette.size());
+
+		fwrite(&iBlendCount, 4, 1, pFile);
+
+		if (iBlendCount > 0)
+		{
+			fwrite(&m_vecBlendPalette[0], 4, iBlendCount, pFile);
 		}
 	}
 
@@ -355,7 +409,7 @@ namespace Engine
 				m_tCBuffer.iMaxJoint = iJointCount;
 			}
 
-			pInfo->vecPose.resize(iJointCount);
+			pInfo->vecJoint.resize(iJointCount);
 
 			for (unsigned char j = 0; j < iJointCount; ++j)
 			{
@@ -363,19 +417,19 @@ namespace Engine
 
 				fread(&iPoseCount, 4, 1, pFile);
 
-				pInfo->vecPose[j].vecJoint.resize(iPoseCount);
+				pInfo->vecJoint[j].vecFrame.resize(iPoseCount);
 
 				for (unsigned int k = 0; k < iPoseCount; ++k)
 				{
-					fread(&pInfo->vecPose[j].vecJoint[k].vPos, sizeof(Vector3), 1, pFile);
-					fread(&pInfo->vecPose[j].vecJoint[k].vQueternion, sizeof(Vector4), 1, pFile);
-					fread(&pInfo->vecPose[j].vecJoint[k].vScale, sizeof(Vector3), 1, pFile);
+					fread(&pInfo->vecJoint[j].vecFrame[k].vPos, sizeof(Vector3), 1, pFile);
+					fread(&pInfo->vecJoint[j].vecFrame[k].vQueternion, sizeof(Vector4), 1, pFile);
+					fread(&pInfo->vecJoint[j].vecFrame[k].vScale, sizeof(Vector3), 1, pFile);
 
 					if (static_cast<int>(k) < m_iMaxFrame)
 					{
-						vecTransform[k + j * m_iMaxFrame].vPos = pInfo->vecPose[j].vecJoint[k].vPos;
-						vecTransform[k + j * m_iMaxFrame].vQueternion = pInfo->vecPose[j].vecJoint[k].vQueternion;
-						vecTransform[k + j * m_iMaxFrame].vScale = pInfo->vecPose[j].vecJoint[k].vScale;
+						vecTransform[k + j * m_iMaxFrame].vPos = pInfo->vecJoint[j].vecFrame[k].vPos;
+						vecTransform[k + j * m_iMaxFrame].vQueternion = pInfo->vecJoint[j].vecFrame[k].vQueternion;
+						vecTransform[k + j * m_iMaxFrame].vScale = pInfo->vecJoint[j].vecFrame[k].vScale;
 					}
 				}
 			}
@@ -384,6 +438,17 @@ namespace Engine
 			{
 				m_pBuffer = std::make_shared<StructuredBuffer>(static_cast<int>(vecTransform.size()), static_cast<int>(sizeof(TRANSFORM)), &vecTransform.front());
 			}
+		}
+
+		int iBlendCount = 0;
+
+		fread(&iBlendCount, 4, 1, pFile);
+
+		if (iBlendCount)
+		{
+			m_vecBlendPalette.resize(iBlendCount);
+
+			fread(&m_vecBlendPalette[0], 4, iBlendCount, pFile);
 		}
 	}
 	std::shared_ptr<Sequence> Sequence::Clone()

@@ -103,6 +103,7 @@ namespace Engine
 		std::vector<SEQUENCE> m_vecSequence;
 		SKELETON m_tSkeleton;
 		std::unordered_map<fbxsdk::FbxNode*, std::vector<fbxsdk::FbxAMatrix>> m_mapGlobalMatrix;
+		std::vector<fbxsdk::FbxMatrix> m_vecBindPose;
 
 	public:
 		bool Init();
@@ -145,6 +146,7 @@ namespace Engine
 		void LoadAnimation();
 		void LoadAnimation(fbxsdk::FbxNode* pNode, FbxAnimLayer* pAnimLayer, int iAnimStackIndex);
 		void LoadAnimationPosition(fbxsdk::FbxPropertyT<fbxsdk::FbxDouble3>& tProp, FbxAnimLayer* pAnimLayer, int iAnimStackIndex, int iBone, std::vector<Vector3>& vecPos, float fDefaultValue);
+		void LoadBindPose();
 	};
 
 }

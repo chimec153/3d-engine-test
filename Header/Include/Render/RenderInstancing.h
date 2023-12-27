@@ -35,7 +35,7 @@ namespace Engine
         std::shared_ptr<class StructuredBuffer> m_pAnimPaletteBuffer;
         std::shared_ptr<class StructuredBuffer> m_pBoneDataBuffer;
         std::shared_ptr<class StructuredBuffer> m_pFinalBuffer;
-        BONECBUFFER m_tBoneCBuffer;
+        BONEINFO m_tBoneCBuffer;
         std::shared_ptr<class ConstantBuffer<BONECBUFFER>> m_pBoneConstBuffer;
         std::shared_ptr<class ConstantBuffer<BONECBUFFER>> m_pBoneVertexBuffer;
         std::shared_ptr<class Skeleton> m_pSkeleton;
@@ -46,7 +46,7 @@ namespace Engine
         int GetCount()  const;
         void Clear();
         const std::list<class std::shared_ptr<class Drawable>>& GetRenderList()    const;
-        void CreateBoneBuffer(const std::unordered_map<std::string, std::shared_ptr<class Sequence>>& mapSequence);
+        void CreateBoneBuffer(const std::unordered_map<std::string, Animation::PSEQUENCEINFO>& mapSequence);
         void SetSkeleton(std::shared_ptr<class Skeleton> pBuffer);
         void SetJointSocketBuffer(std::shared_ptr<StructuredBuffer> pBuffer);
 

@@ -76,7 +76,24 @@ namespace Engine
 	{
 		__super::Update(fDeltaTime);
 
-		m_tInfo.vDir = (m_vEndOffset - m_vStartOffset).Normalize();
+		float fLength = (m_vEndOffset - m_vStartOffset).Length();
+
+		if (fLength)
+		{
+			m_tInfo.vDir = (m_vEndOffset - m_vStartOffset) / fLength;
+
+#ifdef _DEBUG
+			std::shared_ptr<Drawable> pDebug = std::static_pointer_cast<Drawable>(FindChild("Debug"));
+
+			pDebug->GetTransform()->SetRelativePosition(m_tInfo.vStart);
+			Vector3 vUp = Vector3(0.f, 0.5f, 0.5f).Normalize();
+			pDebug->GetTransform()->SetAxis(AXIS_TYPE::Z, m_tInfo.vDir, vUp);
+#endif
+		}
+		else
+		{
+			m_tInfo.vDir = 0.f;
+		}
 
 		Bindable* pParent = GetParent();
 
@@ -89,14 +106,6 @@ namespace Engine
 				m_tInfo.vStart = pTransform->GetPosition();
 			}
 		}
-
-#ifdef _DEBUG
-		std::shared_ptr<Drawable> pDebug = std::static_pointer_cast<Drawable>(FindChild("Debug"));
-
-		pDebug->GetTransform()->SetRelativePosition(m_tInfo.vStart);
-		Vector3 vUp = Vector3(0.f, 0.5f, 0.5f).Normalize();
-		pDebug->GetTransform()->SetAxis(AXIS_TYPE::Z, m_tInfo.vDir, vUp);
-#endif
 	}
 
 	bool ColliderLine::Collision(Collider* pDest, float fDeltaTime)
@@ -112,7 +121,7 @@ namespace Engine
 		case COLLIDER_TYPE::MESH:
 			return Collision::CollisionLineToMesh(this, static_cast<ColliderMesh*>(pDest));
 		case COLLIDER_TYPE::TERRAIN:
-			return Collision::CollisionLineToMesh(this, static_cast<ColliderMesh*>(pDest));
+			return Collision::CollisionLineToTerrain(this, static_cast<ColliderMesh*>(pDest));
 		}
 
 		return false;

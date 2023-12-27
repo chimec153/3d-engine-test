@@ -214,7 +214,7 @@ namespace Engine
 		{
 			if (tKeyData[(*iter)->iKey] && m_bEnable)
 			{
-				if (!(*iter)->bDown)
+				if (!(*iter)->bDown && !(*iter)->bPressed)
 				{
 					(*iter)->bDown = true;
 					(*iter)->bPressed = false;

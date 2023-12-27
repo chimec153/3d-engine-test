@@ -47,8 +47,8 @@ namespace Engine
 		std::shared_ptr<class MRT> pMRT;
 		std::shared_ptr<class MRT> m_pDecalMRT;
 #ifdef _DEBUG
-		std::shared_ptr<class VertexShader> pDebugVertexShader;
-		std::shared_ptr<class PixelShader> pDebugPixelShader;
+		std::shared_ptr<class VertexShader> pNullVertexShader;
+		std::shared_ptr<class PixelShader> pNullPixelShader;
 #endif
 		std::shared_ptr<VertexShader> pMultiVertexShader;
 		std::shared_ptr<PixelShader> pMultiPixelShader;
@@ -86,6 +86,12 @@ namespace Engine
 		std::shared_ptr<class PixelShader> m_pHDRPS; 
 		HDRCBUFFER m_tHDRCBuffer;
 		DOWNSCALECBUFFER m_tDownScaleCBuffer;
+		std::shared_ptr<class MRT> m_pBlurTarget;
+		std::shared_ptr<class ComputeShader> m_pBlurCS;
+		std::shared_ptr<class Texture> m_pBlurTexture;
+		std::shared_ptr<class VertexShader> pBlurNullVertexShader;
+		std::shared_ptr<class PixelShader> pBlurNullPixelShader;
+		std::shared_ptr<class BlendState> m_pDestAlpha;
 
 	public:
 		void SetSkyBox(std::shared_ptr<SkyBox> pSkyBox);
@@ -124,6 +130,7 @@ namespace Engine
 		void RenderShadow();
 		void RenderDecal();
 		void RenderSkyBox();
+		void RenderBlur();
 		void PostProcessing();
 		void Clear();
 #ifdef _DEBUG

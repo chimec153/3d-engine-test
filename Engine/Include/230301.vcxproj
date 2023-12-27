@@ -192,6 +192,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Animation\JointSocket.cpp" />
+    <ClCompile Include="Animation\Notify.cpp" />
     <ClCompile Include="Animation\Sequence.cpp" />
     <ClCompile Include="Animation\Skeleton.cpp" />
     <ClCompile Include="Bindable\Agent.cpp" />
@@ -205,6 +206,7 @@
     <ClCompile Include="Bindable\Collider.cpp" />
     <ClCompile Include="Bindable\ColliderLine.cpp" />
     <ClCompile Include="Bindable\ColliderMesh.cpp" />
+    <ClCompile Include="Bindable\ColliderOBB.cpp" />
     <ClCompile Include="Bindable\ColliderSphere.cpp" />
     <ClCompile Include="Bindable\ComputeShader.cpp" />
     <ClCompile Include="Bindable\Cone.cpp" />
@@ -263,10 +265,15 @@
     <ClCompile Include="Thread\LoadingThread.cpp" />
     <ClCompile Include="Thread\Thread.cpp" />
     <ClCompile Include="Thread\ThreadManager.cpp" />
+    <ClCompile Include="UI\Frame.cpp" />
+    <ClCompile Include="UI\Gauge.cpp" />
+    <ClCompile Include="UI\Image.cpp" />
+    <ClCompile Include="UI\UIControl.cpp" />
     <ClCompile Include="Vector3.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Animation\JointSocket.h" />
+    <ClInclude Include="Animation\Notify.h" />
     <ClInclude Include="Animation\Sequence.h" />
     <ClInclude Include="Animation\Skeleton.h" />
     <ClInclude Include="Bindable\Agent.h" />
@@ -280,6 +287,7 @@
     <ClInclude Include="Bindable\Collider.h" />
     <ClInclude Include="Bindable\ColliderLine.h" />
     <ClInclude Include="Bindable\ColliderMesh.h" />
+    <ClInclude Include="Bindable\ColliderOBB.h" />
     <ClInclude Include="Bindable\ColliderSphere.h" />
     <ClInclude Include="Bindable\ComputeShader.h" />
     <ClInclude Include="Bindable\Cone.h" />
@@ -361,6 +369,10 @@
     <ClInclude Include="Thread\Thread.h" />
     <ClInclude Include="Thread\ThreadManager.h" />
     <ClInclude Include="Types.h" />
+    <ClInclude Include="UI\Frame.h" />
+    <ClInclude Include="UI\Gauge.h" />
+    <ClInclude Include="UI\Image.h" />
+    <ClInclude Include="UI\UIControl.h" />
     <ClInclude Include="Vector2.h" />
     <ClInclude Include="Vector3.h" />
     <ClInclude Include="Vector4.h" />

@@ -105,8 +105,6 @@ namespace Engine
 
 		ResourceManager::DestroyInst();
 
-		CollisionManager::DestroyInst();
-
 		Scene::Clear();
 
 		SceneManager::DestroyInst();
@@ -118,6 +116,8 @@ namespace Engine
 		CInput::DestroyInst();
 
 		Graphics::DestroyInst();
+
+		CollisionManager::DestroyInst();
 
 		CPathManager::DestoryInst();
 
@@ -245,6 +245,11 @@ namespace Engine
 			return false;
 		}
 
+		if (!BindableManager<VertexShader>::GetInst()->Init())
+		{
+			return false;
+		}
+
 		BindableManager<Sampler>::GetInst();
 
 		if (!RenderManager::GetInst()->Init())
@@ -274,7 +279,7 @@ namespace Engine
 	bool Window::Create(const TCHAR* pTitle, const TCHAR* pClass, HINSTANCE hInst, int iWidth, int iHeight)
 	{
 		RECT rc = { 0,0,iWidth,iHeight };
-		DWORD iStyle = WS_OVERLAPPEDWINDOW;
+		DWORD iStyle = WS_OVERLAPPED | WS_MINIMIZEBOX | WS_CAPTION | WS_SYSMENU;
 
 		m_hWnd = CreateWindowW(pClass, pTitle, iStyle,
 			rc.left, rc.top, rc.right, rc.bottom, nullptr, nullptr, hInst, nullptr);
@@ -346,8 +351,6 @@ namespace Engine
 
 		CInput::GetInst()->Update(fDeltaTime * !bStop);
 
-		Graphics::GetInst()->Update(fDeltaTime);
-
 		ShaderManager::GetInst()->Update(fDeltaTime, fTime);
 
 		return SceneManager::GetInst()->Update(fDeltaTime * !bStop);
@@ -356,6 +359,11 @@ namespace Engine
 	void Window::FixedUpdate(float fDeltaTime)
 	{
 		SceneManager::GetInst()->FixedUpdate(fDeltaTime);
+	}
+
+	bool Window::PostUpdate(float fDeltaTime)
+	{
+		return SceneManager::GetInst()->PostUpdate(fDeltaTime);
 	}
 
 	void Window::Collision(float fDeltaTime)
@@ -435,6 +443,11 @@ namespace Engine
 		}
 
 		Collision(fDeltaTime);
+
+		if (!PostUpdate(fDeltaTime))
+		{
+			return;
+		}
 
 		PreDraw(fDeltaTime);
 

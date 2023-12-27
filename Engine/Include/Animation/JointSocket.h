@@ -29,6 +29,9 @@ namespace Engine
         void SetScale(float x, float y, float z);
         void SetPosition(const Vector3& vPos);
         void SetRotation(const Vector3& vQuter);
+        void AddRX(float x);
+        void AddRY(float y);
+        void AddRZ(float z);
         void Update(std::shared_ptr<class StructuredBuffer> pBuffer, const Matrix& matParent);
         const Vector3& GetScale()  const;
         const Vector3& GetPosition()    const;

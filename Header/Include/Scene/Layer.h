@@ -37,6 +37,7 @@ namespace Engine
         void Update(float fDeltaTime);
         void FixedUpdate(float fDeltaTime);
         void Collision(float fDeltaTime);
+        void PostUpdate(float fDeltaTime);
         void PreDraw(float fDeltaTime);
         void Draw();
         void CreateLoadingThread(const TCHAR* pFullPath);

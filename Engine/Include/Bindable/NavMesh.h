@@ -28,6 +28,7 @@ namespace Engine
         float m_fAgentHeight;
         class dtCrowd* m_pCrowd;
         std::unique_ptr<dtNavMeshCreateParams> m_pMeshCreateParams;
+        std::list<std::shared_ptr<Agent>> m_AgentList;
 
     public:
         class dtNavMesh* GetNavMesh() const;

@@ -66,6 +66,27 @@ namespace Engine
 		UpdateJointMatrix();
 	}
 
+	void JointSocket::AddRX(float x)
+	{
+		m_vRotation.x += x;
+
+		UpdateJointMatrix();
+	}
+
+	void JointSocket::AddRY(float y)
+	{
+		m_vRotation.y += y;
+
+		UpdateJointMatrix();
+	}
+
+	void JointSocket::AddRZ(float z)
+	{
+		m_vRotation.z += z;
+
+		UpdateJointMatrix();
+	}
+
 	void JointSocket::Update(std::shared_ptr<class StructuredBuffer> pBuffer, const Matrix& matParent)
 	{
 		if (m_pDrawable)

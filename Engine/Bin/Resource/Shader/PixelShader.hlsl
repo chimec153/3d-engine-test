@@ -100,7 +100,12 @@ float4 PS_ENV(VSOut_Env input)  :   SV_Target
     
     clip(g_DepthTexture0.Sample(g_sPoint, depth_uv).r - 1.f);
     
-    float2 uv = SphereDirectionToUV(normalize(input.localpos));
+    float2 uv = SphereMapping(normalize(input.localpos));
 
     return g_EnvironmentTexture.Sample(g_sAnisotropic, uv);
+}
+
+float4 PS_SOLID(VSOut input)    :   SV_TARGET
+{
+    return g_vDiffuseColor;
 }

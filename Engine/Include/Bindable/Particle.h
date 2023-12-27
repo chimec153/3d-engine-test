@@ -28,6 +28,12 @@ namespace Engine
         float   m_fElapsedTime;
         float   m_fEmitMaxTime;
         std::shared_ptr<class BlendState>   m_pBlendState;
+        bool m_bStopEmit;
+        int m_iPrevCreateGroupOffset;
+        int m_iEmitCount;
+#ifdef _DEBUG
+        std::vector<bool> m_vecPrevAlive;
+#endif
 
     public:
         void SetStartColor(const Vector4& vColor);
@@ -44,6 +50,10 @@ namespace Engine
         void SetMaxFrame(int iFrame);
         void SetFrameWidth(int iWidth);
         void SetFrameHeight(int iHeight);
+        void SetMaxVelocity(const Vector3& vMaxVelocity);
+        void StopEmit();
+        void ResumeEmit();
+        void AddEmitCount(int iCount);
 
     public:
         virtual void Update(float fDeltaTime) override;

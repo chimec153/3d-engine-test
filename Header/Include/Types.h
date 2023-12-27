@@ -164,6 +164,19 @@ namespace Engine
 		float fSpecPower;
 		float fFraction;
 		DirectX::XMFLOAT2 vRoughness;
+		bool bUsePaperBurn;
+
+		_tagMaterial() :
+			diffuseColor()
+			, ambientColor()
+			, specularColor()
+			, emissiveColor()
+			, fSpecPower()
+			, fFraction()
+			, vRoughness()
+			, bUsePaperBurn()
+		{
+		}
 	}MATERIAL, * PMATERIAL;
 
 	ENGINE_DLL typedef struct _tagPerspectiveBuffer
@@ -218,7 +231,7 @@ namespace Engine
 		Vector3 vEnd;
 	}CYLINDERINFO, * PCYLINDERINFO;
 
-	ENGINE_DLL typedef struct alignas(16) _tagBoneCBuffer
+	ENGINE_DLL typedef struct alignas(16) _tagBoneInfo
 	{
 		float fTime;
 		float fMaxTime;
@@ -227,9 +240,10 @@ namespace Engine
 		Vector3 vRootPos;
 		int iFrame;
 		int iNextFrame;
-		int iInfoCount;
+		float fBlendMaxTime;
+		float fSequenceTime;
 
-		_tagBoneCBuffer()	:
+		_tagBoneInfo() :
 			fTime(0.f)
 			, fMaxTime(0.f)
 			, iMaxFrame(0)
@@ -237,7 +251,21 @@ namespace Engine
 			, vRootPos()
 			, iFrame(0)
 			, iNextFrame(0)
-			, iInfoCount(0)
+			, fBlendMaxTime(0.f)
+			, fSequenceTime(0.f)
+		{
+		}
+	}BONEINFO, *PBONEINFO;
+
+	ENGINE_DLL typedef struct alignas(16) _tagBoneCBuffer
+	{
+		BONEINFO pInfo[2];
+		int iSequenceCount;
+		float pBlendPallete[256];
+		_tagBoneCBuffer() :
+			pInfo()
+			, iSequenceCount()
+			, pBlendPallete()
 		{
 		}
 	}BONECBUFFER, * PBONECBUFFER;
@@ -263,7 +291,7 @@ namespace Engine
 		}
 	}BONE, * PBONE;
 
-	ENGINE_DLL typedef struct _tagJoint
+	ENGINE_DLL typedef struct _tagJointFrame
 	{
 		std::string strJoint;
 		int iParentIndex;
@@ -271,12 +299,12 @@ namespace Engine
 		Vector3 vPos;
 		Vector4 vQueternion;
 		Vector3 vScale;
-	}JOINT, * PJOINT;
+	}JOINTFRAME, * PJOINTFRAME;
 
-	ENGINE_DLL typedef struct _tagPose
+	ENGINE_DLL typedef struct _tagJoint
 	{
-		std::vector<JOINT> vecJoint;
-	}POSE, * PPOSE;
+		std::vector<JOINTFRAME> vecFrame;
+	}JOINT, * PJOINT;
 
 	ENGINE_DLL typedef struct _tagTransform
 	{
@@ -349,6 +377,7 @@ namespace Engine
 		Vector2 vEndSize;
 		Vector3 vMaximumPosition;
 		int		iMaxFrame;
+		Vector3 vMaxVelocity;
 		int		iFrameWidth;
 		int		iFrameHeight;
 
@@ -365,6 +394,7 @@ namespace Engine
 			, vEndSize()
 			, vMaximumPosition()
 			, iMaxFrame(1)
+			, vMaxVelocity()
 			, iFrameWidth(1)
 			, iFrameHeight(1)
 		{

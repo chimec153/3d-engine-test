@@ -16,6 +16,7 @@
 #include "Scene/SceneManager.h"
 #include "Bindable/BlendState.h"
 #include "Bindable/PaperBurn.h"
+#include "Scene/Scene.h"
 
 namespace Editor
 {
@@ -40,9 +41,16 @@ namespace Editor
 
 		if (pWalkSequence)
 		{
-			pWalkSequence->LoadFromPath("MedievalCharacterArmature_Walk.seq", MESH_PATH);
+			pWalkSequence->LoadFromPath("MedievalCharacterArmature_Sword_Slash.seq", MESH_PATH);
 
 			pWalkSequence->UseRootMotion();
+
+			pWalkSequence->Loop();
+
+			for (int i = 0; i < 65; ++i)
+			{
+				pWalkSequence->SetBlendFactor(i, 1.f);
+			}
 		}
 
 		std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
@@ -54,7 +62,9 @@ namespace Editor
 		}
 
 		GetAnimation()->AddSequance("idle", pSequence);
-		GetAnimation()->AddSequance("walk", pWalkSequence);
+		GetAnimation()->AddSequance("attack", pWalkSequence);
+
+		GetAnimation()->SetAdditiveSequence("attack");
 
 		FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
 		FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
@@ -69,8 +79,32 @@ namespace Editor
 		, m_pSphere()
 #endif
 	{
+		Engine::Scene* pScene = Engine::SceneManager::GetInst()->GetScene();
+
+		std::shared_ptr<Engine::Drawable> pSword = pScene->CreateDrawable<Engine::Drawable>("sword", pScene->FindLayer(DEFAULT_LAYER));
+
+		pSword->Load(TEXT("UltimateRPGItemsBundle\\Sword\\Sword.fbx"), MESH_PATH);
+		pSword->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSNoSkin");
+		pSword->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
+		pSword->FindAndAddBind<Engine::Topology>("TriangleList");
+		pSword->FindAndAddBind<Engine::InputLayout>("Standard");
+
+		std::shared_ptr<Engine::Material> pSrcMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
+
+		pSword->AddChild(pSrcMaterial->Clone());
+
+		GetAnimation()->AddSocket(40, pSword);
 	}
 
+	bool Player::Init()
+	{
+		if (!__super::Init())
+		{
+			return false;
+		}
+
+		return true;
+	}
 
 	void Player::Update(float fDeltaTime)
 	{
@@ -82,11 +116,11 @@ namespace Editor
 
 			if (vVelocity.Length() < epsilon)
 			{
-				GetAnimation()->ChangeSequence("idle");
+				//ChangeSequence("idle");
 			}
 			else
 			{
-				GetAnimation()->ChangeSequence("walk");
+				//ChangeSequence("walk");
 			}
 		}
 	}

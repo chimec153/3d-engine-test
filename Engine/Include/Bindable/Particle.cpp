@@ -10,11 +10,14 @@
 #include "Topology.h"
 #include "BlendState.h"
 #include "DepthStencilState.h"
+#include "TransformBuffer.h"
 
 namespace Engine
 {
 	Particle::Particle()	:
 		m_tCBuffer(0)
+		, m_bStopEmit(false)
+		, m_iEmitCount(-1)
 	{
 	}
 	Particle::Particle(int iMaxCount)	:
@@ -25,15 +28,21 @@ namespace Engine
 		, m_pCS(StaticFindBindable<ComputeShader>("ParticleCS"))
 		, m_tCBuffer(iMaxCount)
 		, m_pBuffer(std::make_shared<StructuredBuffer>(iMaxCount, static_cast<int>(sizeof(PARTICLE))))
-		, m_pSystemBuffer(std::make_shared<StructuredBuffer>(1, 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS))
+		, m_pSystemBuffer(std::make_shared<StructuredBuffer>(ceil(iMaxCount / 64), 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS))
 		, m_pParticleCBuffer(StaticFindBindable<ConstantBuffer<PARTICLECBUFFER>>("Particle"))
 		, m_fElapsedTime(0.f)
 		, m_fEmitMaxTime(1.f)
 		, m_pBlendState(StaticFindBindable<BlendState>("AlphaBlend"))
+		, m_bStopEmit(false)
+		, m_iPrevCreateGroupOffset(0)
+		, m_iEmitCount(-1)
 	{
 		SetRenderLayer(RENDER_LAYER::ALPHA);
 		SetBindableType(BINDABLE_TYPE::PARTICLE);
 		FindAndAddBind<Topology>("PointList");
+#ifdef _DEBUG
+		m_vecPrevAlive.resize(m_tCBuffer.iMaxParticleCount);
+#endif
 	}
 
 	void Particle::Update(float fDeltaTime)
@@ -46,13 +55,43 @@ namespace Engine
 
 		m_fElapsedTime -= iCreateCount * m_fEmitMaxTime;
 
-		m_tCBuffer.iCreateCount = iCreateCount;
+		if (m_bStopEmit)
+		{
+			iCreateCount = 0;
+		}
+		else if(m_iEmitCount != -1)
+		{
+			if (iCreateCount > m_iEmitCount)
+			{
+				iCreateCount = m_iEmitCount;
+			}
+
+			m_iEmitCount -= iCreateCount;
+		}
+
+		GetTransform()->Bind();
 
 		m_pParticleCBuffer->UpdateBuffer(m_tCBuffer);
 
 		m_pBuffer->SetUAV(2);
 
-		m_pSystemBuffer->WriteData(&iCreateCount, 0, 1);
+		int iGroupCount = ceil(m_tCBuffer.iMaxParticleCount / 64);
+
+		std::vector<int> vecCreateCount(iGroupCount);
+
+		for (int i = 0; i < iGroupCount; ++i)
+		{
+			vecCreateCount[i] = iCreateCount / iGroupCount;
+		}
+
+		for (int i = m_iPrevCreateGroupOffset; i < m_iPrevCreateGroupOffset + iCreateCount % iGroupCount; ++i)
+		{
+			++vecCreateCount[i % iGroupCount];
+		}
+
+		m_iPrevCreateGroupOffset = (m_iPrevCreateGroupOffset + iCreateCount % iGroupCount) % iGroupCount;
+
+		m_pSystemBuffer->WriteData(&vecCreateCount[0], 0, 4 * iGroupCount);
 
 		m_pSystemBuffer->SetUAV(3);
 
@@ -60,7 +99,7 @@ namespace Engine
 
 		m_pParticleCBuffer->Bind();
 
-		m_pCS->Dispatch(m_tCBuffer.iMaxParticleCount / 64 + static_cast<bool>(m_tCBuffer.iMaxParticleCount % 64));
+		m_pCS->Dispatch(iGroupCount);
 
 		m_pCS->PostBind();
 
@@ -69,11 +108,59 @@ namespace Engine
 		m_pBuffer->ResetUAV(2);
 
 #ifdef _DEBUG
-		std::vector<PARTICLE> vecParticle(m_tCBuffer.iMaxParticleCount);
+		/*std::vector<PARTICLE> vecParticle(m_tCBuffer.iMaxParticleCount);
 
 		m_pBuffer->ReadBuffer(&vecParticle[0], 0, sizeof(PARTICLE) * m_tCBuffer.iMaxParticleCount);
 
-		m_pSystemBuffer->ReadBuffer(&iCreateCount, 0, 4);
+		std::vector<int> vecPostCreateCount(iGroupCount);
+
+		int iBirthCount = 0;
+
+		int iLiveCount = 0;
+
+		int iDeathCount = 0;
+
+		int iDeadCount = 0;
+
+		m_pSystemBuffer->ReadBuffer(&vecPostCreateCount[0], 0, 4 * iGroupCount);
+
+		int iPostCreateCount = 0;
+
+		for (int i = 0; i < iGroupCount; ++i)
+		{
+			iPostCreateCount += vecPostCreateCount[i];
+		}
+
+		for (int i = 0; i < m_tCBuffer.iMaxParticleCount; ++i)
+		{
+			if (vecParticle[i].alive)
+			{
+				if (!m_vecPrevAlive[i])
+				{
+					++iBirthCount;
+					m_vecPrevAlive[i] = true;
+				}
+
+				++iLiveCount;
+			}
+			else if(m_vecPrevAlive[i])
+			{
+				++iDeathCount;
+				++iDeadCount;
+				m_vecPrevAlive[i] = false;
+			}
+			else
+			{
+				++iDeadCount;
+			}
+		}
+
+		TCHAR strDebug[MAX_PATH] = {};
+
+		_stprintf_s(strDebug, TEXT("Create Count: %d, birth count: %d, death count: %d, live: %d, dead: %d, total: %d\n"), 
+			iCreateCount - iPostCreateCount, iBirthCount, iDeathCount, iLiveCount, iDeadCount, iLiveCount + iDeadCount);
+
+		OutputDebugString(strDebug);*/
 #endif
 	}
 
@@ -90,6 +177,14 @@ namespace Engine
 		m_pPS->Bind();
 
 		m_pBlendState->Bind();
+
+		Graphics::GetInst()->GetDeviceContext()->IASetInputLayout(nullptr);
+
+		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+
+		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+
+		Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 
 		Graphics::GetInst()->GetDeviceContext()->DrawInstanced(1, m_tCBuffer.iMaxParticleCount, 0, 0);
 
@@ -187,5 +282,21 @@ namespace Engine
 	void Particle::SetFrameHeight(int iHeight)
 	{
 		m_tCBuffer.iFrameHeight = iHeight;
+	}
+	void Particle::SetMaxVelocity(const Vector3& vMaxVelocity)
+	{
+		m_tCBuffer.vMaxVelocity = vMaxVelocity;
+	}
+	void Particle::StopEmit()
+	{
+		m_bStopEmit = true;
+	}
+	void Particle::ResumeEmit()
+	{
+		m_bStopEmit = false;
+	}
+	void Particle::AddEmitCount(int iCount)
+	{
+		m_iEmitCount += iCount;
 	}
 }

@@ -34,7 +34,12 @@ namespace Engine
 		virtual std::shared_ptr<Bindable> Clone() override;
 
 	public:
-		void UpdateBuffer(const T& pData);
+		template <typename P>
+		void UpdateBuffer(const P& pData, int iOffset = 0)
+		{
+			UpdateBuffer(static_cast<const void*>(&pData), sizeof(P), iOffset);
+		}
+		void UpdateBuffer(const void* pData, int iSize, int iOffset);
 		void CreateBuffer(const T* pData = nullptr);
 		void GetAndBind();
 		void BindEnd();

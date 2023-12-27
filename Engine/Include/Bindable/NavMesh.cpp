@@ -241,7 +241,11 @@ void Engine::NavMesh::CreateNavMesh(dtNavMeshCreateParams& tParams)
 
 std::shared_ptr<Engine::Agent> Engine::NavMesh::CreateAgent(const std::string& strTag, std::shared_ptr<Engine::Transform> pTransform, const Vector3& vPos)
 {
-	return CreateBindable<Agent>(strTag, pTransform, this, vPos);
+	std::shared_ptr<Engine::Agent> pAgent = CreateBindable<Agent>(strTag, pTransform, std::static_pointer_cast<NavMesh>(std::shared_ptr<CRef>(weak_from_this())), vPos);
+
+	m_AgentList.push_back(pAgent);
+
+	return pAgent;
 }
 
 std::shared_ptr < Engine::Bindable > Engine::NavMesh::Clone()
@@ -335,7 +339,7 @@ void Engine::NavMesh::Load(FILE* pFile)
 
 	for (size_t i = 0; i < vecAgent.size(); ++i)
 	{
-		std::static_pointer_cast<Agent>(vecAgent[i])->SetNavMesh(this);
+		std::static_pointer_cast<Agent>(vecAgent[i])->SetNavMesh(std::static_pointer_cast<NavMesh>(std::shared_ptr<CRef>(weak_from_this())));
 	}
 }
 

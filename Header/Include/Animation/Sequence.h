@@ -19,14 +19,14 @@ namespace Engine
     public:
         typedef struct _tagSequenceInfo
         {
-            std::vector<POSE>   vecPose;
+            std::vector<JOINT>   vecJoint;
 
             _tagSequenceInfo()
             {
             }
 
             _tagSequenceInfo(const _tagSequenceInfo& info)  :
-                vecPose(info.vecPose)
+                vecJoint(info.vecJoint)
             {
             }
         }SEQUENCEINFO, * PSEQUENCEINFO;
@@ -44,7 +44,10 @@ namespace Engine
         int m_iMaxFrame;
         float               fTime;
         float               fMaxTime;
-        BONECBUFFER m_tCBuffer;
+        BONEINFO m_tCBuffer;
+        bool m_bLoop;
+        std::string m_strNextSequence;
+        std::vector<float> m_vecBlendPalette;
 
     public:
         bool SetSequance(const std::vector<FbxLoader::FBXBONEKEYFRAME>& vecPose);
@@ -59,9 +62,16 @@ namespace Engine
         void SetFrameRotation(int iBone, int iFrame, const Vector4& vQuternion);
         void SetFrameScale(int iBone, int iFrame, const Vector3& vScale);
         void CreateSequenceBuffer();
+        void Loop();
+        bool IsLoop()   const;
+        void SetNextSequence(const std::string& strSeq);
+        const std::string& GetNextSequence()    const;
+        const std::vector<float>& GetBlendPalette() const;
+        void SetBlendFactor(int iJoint, float fBlendFactor);
+        const BONEINFO& GetBoneInfo()   const;
 
     public:
-        void Update(float fDeltaTime);
+        void Update(float fDeltaTime, int iSlot = 31, int iIndex = 0);
         void ResetResource();
 
     public:

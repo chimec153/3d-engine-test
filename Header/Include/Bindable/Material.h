@@ -36,6 +36,7 @@ namespace Engine
         void SetMaterial(const MATERIAL& mtrl);
         void SetRoughnessX(float x);
         void SetRoughnessY(float y);
+        void UsePaperBurn();
 
     public:
         virtual void Update(float fDeltaTime) override;

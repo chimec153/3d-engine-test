@@ -152,6 +152,11 @@ namespace Engine
 		m_tMaterial.vRoughness.y = y;
 	}
 
+	void Material::UsePaperBurn()
+	{
+		m_tMaterial.bUsePaperBurn = true;
+	}
+
 	void Material::Update(float fDeltaTime)
 	{
 	}

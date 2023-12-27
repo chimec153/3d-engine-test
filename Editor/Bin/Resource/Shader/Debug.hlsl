@@ -29,16 +29,9 @@ float4 NullPS(VSOutDebug input) : SV_TARGET
     return g_Texture.Sample(g_sPoint, input.pos2);
 }
 
-PSOut CollideDebugPS(VSMultiOut input)
-{
-    PSOut output;
-    
-    output.value0 = g_vColor[0];
-    output.value1 = float4(normalize(input.pos.xyz) * 0.5f + 0.5f, 1.f);
-    output.value2 = 1.f;
-    output.value3 = 1.f;
-    
-    return output;
+float4 CollideDebugPS(VSMultiOut input) :   SV_TARGET
+{    
+    return g_vDiffuseColor;
 }
 
 PSOut DebugPS(VSOut input)
@@ -51,4 +44,9 @@ PSOut DebugPS(VSOut input)
     output.value3 = 1.f;
     
     return output;
+}
+
+float4 DebugAlphaPS(VSOut input)    :   SV_Target
+{    
+    return g_vDiffuseColor;
 }

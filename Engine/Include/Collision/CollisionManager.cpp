@@ -73,7 +73,7 @@ namespace Engine
 		SAFE_DELETE(m_pSpace);
 	}
 
-	void CollisionManager::AddDrawable(const std::shared_ptr<class Drawable>& pDrawable)
+	void CollisionManager::AddDrawable(class Drawable* pDrawable)
 	{
 		const std::shared_ptr<class Transform>& pTransform = pDrawable->GetTransform();
 
@@ -86,8 +86,8 @@ namespace Engine
 
 		if (pPrevSpace)
 		{
-			std::list<std::shared_ptr<Drawable>>::iterator iter = pPrevSpace->DrawableList.begin();
-			std::list<std::shared_ptr<Drawable>>::iterator iterEnd = pPrevSpace->DrawableList.end();
+			std::list<Drawable*>::iterator iter = pPrevSpace->DrawableList.begin();
+			std::list<Drawable*>::iterator iterEnd = pPrevSpace->DrawableList.end();
 
 			for (; iter != iterEnd; ++iter)
 			{
@@ -154,7 +154,7 @@ namespace Engine
 		}
 
 		_pSpace->DrawableList.push_back(pDrawable);
-		m_mapDrawable.insert(std::make_pair(pDrawable.get(), _pSpace));
+		m_mapDrawable.insert(std::make_pair(pDrawable, _pSpace));
 	}
 
 	void CollisionManager::AddCollider(Collider* pCollider)
@@ -553,8 +553,8 @@ namespace Engine
 			}
 		}
 
-		std::list<std::shared_ptr<Drawable>>::iterator iter = pSpace->DrawableList.begin();
-		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = pSpace->DrawableList.end();
+		std::list<Drawable*>::iterator iter = pSpace->DrawableList.begin();
+		std::list<Drawable*>::iterator iterEnd = pSpace->DrawableList.end();
 
 		for (; iter != iterEnd;)
 		{
@@ -568,6 +568,28 @@ namespace Engine
 		}
 
 		return true;
+	}
+
+	void CollisionManager::DeleteDrawable(Drawable* pDrawable)
+	{
+		PSPACE pSpace = FindSpaceAndErase(pDrawable);
+
+		if (!pSpace)
+		{
+			return;
+		}
+
+		std::list<Drawable*>::iterator iter = pSpace->DrawableList.begin();
+		std::list<Drawable*>::iterator iterEnd = pSpace->DrawableList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			if ((*iter) == pDrawable)
+			{
+				pSpace->DrawableList.erase(iter);
+				return;
+			}
+		}
 	}
 
 	void CollisionManager::Collision(float fDeltaTime)
@@ -622,9 +644,9 @@ namespace Engine
 		m_ColliderList.clear();
 	}
 
-	SPACE* CollisionManager::FindSpaceAndErase(const std::shared_ptr<class Drawable>& pDrawable)
+	SPACE* CollisionManager::FindSpaceAndErase(class Drawable* pDrawable)
 	{
-		std::unordered_map<Drawable*, PSPACE>::const_iterator iter = m_mapDrawable.find(pDrawable.get());
+		std::unordered_map<Drawable*, PSPACE>::const_iterator iter = m_mapDrawable.find(pDrawable);
 
 		if (iter == m_mapDrawable.end())
 		{

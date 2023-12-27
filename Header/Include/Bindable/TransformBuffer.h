@@ -87,6 +87,7 @@ namespace Engine
         float GetDRX() const;
         float GetDRY() const;
         float GetDRZ() const;
+        float GetRelativeRY()   const;
         void SetRandomPosAndRotation();
         const Vector3& GetAxis(AXIS_TYPE type)    const;
         const Vector3& GetPosition()  const;
@@ -98,6 +99,9 @@ namespace Engine
         void SetRelativeScale(float x, float y, float z);
         void SetRelativeRotation(float x, float y, float z);
         void SetRelativeRotation(const Vector3& vRotation);
+        void AddRelativeRX(float fX);
+        void AddRelativeRY(float fY);
+        void AddRelativeRZ(float fZ);
         const Matrix& GetTransformMatrix()  const;
         void SetScale(const Vector3& scale);
         void SetScale(float x, float y, float z);
@@ -116,6 +120,7 @@ namespace Engine
 
     public:
         virtual void Update(float fDeltaTime) override;
+        virtual void PostUpdate(float fDeltaTime) override;
         virtual void Bind() override;
         virtual std::shared_ptr<Bindable> Clone() override;
         virtual void PostBind() override;

@@ -2,42 +2,74 @@
 
 float4 Slerp(float4 p0, float4 p1, float t)
 {
-    float dotp = dot(p0, p1);
+    float Dot = dot(p0, p1);
     
-    if ((dotp > 0.9999) || (dotp < -0.9999))
+    if (Dot < 0.f)
     {
-        float4 q = (p0 * (1.f - t) + p1 * t);
-        
-        q /= length(q);
-        
-        return q;
-        
-        if(t <= 0.5)
-        {
-            return p0;
-        }
-        
-        return p1;
+        p1 = -p1;
+        Dot = dot(p0, p1);
     }
-
-    float theta = acos(dotp);
     
-    return (p0 * sin((1.f - t) * theta) + p1 * sin(t * theta)) / sin(theta);
+    float theta = acos(Dot);
+    
+    float sin_theta = sqrt(1.f - Dot * Dot);
+    
+    float sin_theta_1_t = sin(theta * (1.f - t));
+    
+    float sin_theta_t = sin(theta * t);
+    
+    if (abs(sin_theta) <= 0.00001f)
+    {
+        return p0;
+    }
+    
+    return (sin_theta_1_t * p0 + sin_theta_t * p1) / sin_theta;
+
 }
 
 [numthreads(32, 1, 1)]
 void Sequence(uint3 DTid : SV_DispatchThreadID)
 {
-    float fRate = g_fBoneTime;
+    float fRate = g_pBone[0].g_fBoneTime;
     
-    uint iIndex = DTid.x * g_iBoneMaxFrame + g_iBoneFrame;
-    uint iNextIndex = DTid.x * g_iBoneMaxFrame + g_iBoneNextFrame;
+    uint iIndex = DTid.x * g_pBone[0].g_iBoneMaxFrame + g_pBone[0].g_iBoneFrame;
+    uint iNextIndex = DTid.x * g_pBone[0].g_iBoneMaxFrame + g_pBone[0].g_iBoneNextFrame;
     
-    float3 pos = (g_vecTransforms[iIndex].pos - g_vBoneRootPos) * (1.f - fRate) + (g_vecTransforms[iNextIndex].pos - g_vBoneRootPos) * fRate;
+    float3 pos = (g_vecTransforms[iIndex].pos - g_pBone[0].g_vBoneRootPos) * (1.f - fRate) + (g_vecTransforms[iNextIndex].pos - g_pBone[0].g_vBoneRootPos) * fRate;
     float3 scale = g_vecTransforms[iIndex].scale * (1.f - fRate) + g_vecTransforms[iNextIndex].scale * fRate;
     float4 quaternion = Slerp(g_vecTransforms[iIndex].queternion, g_vecTransforms[iNextIndex].queternion, fRate);
     
-    matrix matPos = { 
+    if (g_iBoneSequenceCount > 1)
+    {
+        float fRate2 = g_pBone[1].g_fBoneTime;
+    
+        uint iIndex2 = DTid.x * g_pBone[1].g_iBoneMaxFrame + g_pBone[1].g_iBoneFrame;
+        uint iNextIndex2 = DTid.x * g_pBone[1].g_iBoneMaxFrame + g_pBone[1].g_iBoneNextFrame;
+    
+        float3 pos2 = (g_vecAdditiveTransforms[iIndex2].pos - g_pBone[1].g_vBoneRootPos) * (1.f - fRate2) + (g_vecAdditiveTransforms[iNextIndex2].pos - g_pBone[1].g_vBoneRootPos) * fRate2;
+        float3 scale2 = g_vecAdditiveTransforms[iIndex2].scale * (1.f - fRate2) + g_vecAdditiveTransforms[iNextIndex2].scale * fRate2;
+        float4 quaternion2 = Slerp(g_vecAdditiveTransforms[iIndex2].queternion, g_vecAdditiveTransforms[iNextIndex2].queternion, fRate2);
+        
+        float fBlend = 0.f;
+        
+        if (g_pBone[1].g_fBoneMaxTime - g_pBone[1].g_fBoneBlendMaxTime < g_pBone[1].fSequenceTime)
+        {
+            fBlend = (g_pBone[1].g_fBoneMaxTime - g_pBone[1].fSequenceTime) / g_pBone[1].g_fBoneBlendMaxTime;
+            
+            fBlend = g_pBoneAdditiveBlend[DTid.x / 4][DTid.x % 4] * clamp(fBlend, 0.f, 1.f);
+        }
+        else
+        {
+            fBlend = g_pBoneAdditiveBlend[DTid.x / 4][DTid.x % 4] * clamp(g_pBone[1].fSequenceTime / g_pBone[1].g_fBoneBlendMaxTime, 0.f, 1.f);
+        }
+        
+        pos = pos * (1.f - fBlend) + pos2 * fBlend;
+        scale = scale * (1.f - fBlend) + scale2 * fBlend;
+        quaternion = Slerp(quaternion, quaternion2, fBlend);
+    }
+    
+    matrix matPos =
+    {
         1.f, 0.f, 0.f, 0.f,
         0.f, 1.f, 0.f, 0.f,
         0.f, 0.f, 1.f, 0.f,
@@ -76,18 +108,18 @@ void Sequence(uint3 DTid : SV_DispatchThreadID)
 [numthreads(32, 32, 1)]
 void SequenceInst(uint3 DTid : SV_DispatchThreadID)
 {
-    if (DTid.x >= g_iBoneMaxJoint)
+    if (DTid.x >= g_pBone[0].g_iBoneMaxJoint)
     {
         return;
     }
     
     float fRate = g_vecBoneBuffer[DTid.y].time;
     
-    uint iRootIndex = g_vecBoneBuffer[DTid.y].frame + g_iBoneMaxFrame * g_iBoneMaxJoint * g_vecBoneBuffer[DTid.y].animationID;
-    uint iRootNextIndex = g_vecBoneBuffer[DTid.y].nextframe + g_iBoneMaxFrame * g_iBoneMaxJoint * g_vecBoneBuffer[DTid.y].animationID;
+    uint iRootIndex = g_vecBoneBuffer[DTid.y].frame + g_pBone[0].g_iBoneMaxFrame * g_pBone[0].g_iBoneMaxJoint * g_vecBoneBuffer[DTid.y].animationID;
+    uint iRootNextIndex = g_vecBoneBuffer[DTid.y].nextframe + g_pBone[0].g_iBoneMaxFrame * g_pBone[0].g_iBoneMaxJoint * g_vecBoneBuffer[DTid.y].animationID;
     
-    uint iIndex = DTid.x * g_iBoneMaxFrame + iRootIndex;
-    uint iNextIndex = DTid.x * g_iBoneMaxFrame + iRootNextIndex;
+    uint iIndex = DTid.x * g_pBone[0].g_iBoneMaxFrame + iRootIndex;
+    uint iNextIndex = DTid.x * g_pBone[0].g_iBoneMaxFrame + iRootNextIndex;
     
     float3 pos = g_vecBonePalette[iIndex].pos * (1.f - fRate) + g_vecBonePalette[iNextIndex].pos * fRate;
     float3 scale = g_vecBonePalette[iIndex].scale * (1.f - fRate) + g_vecBonePalette[iNextIndex].scale * fRate;
@@ -122,7 +154,7 @@ void SequenceInst(uint3 DTid : SV_DispatchThreadID)
         0.f, 0.f, 0.f, 1.f
     };
     
-    g_vecFinalBuffer[DTid.x + g_iBoneMaxJoint * DTid.y] = mul(g_vecBones[DTid.x], mul(matScale, mul(matRot, matPos)));
+    g_vecFinalBuffer[DTid.x + g_pBone[0].g_iBoneMaxJoint * DTid.y] = mul(g_vecBones[DTid.x], mul(matScale, mul(matRot, matPos)));
 }
 
 [numthreads(32, 1, 1)]

@@ -127,6 +127,9 @@
     <Filter Include="05. Drawable\11. Cloth">
       <UniqueIdentifier>{a559edb2-79fc-49d9-90e2-82e432390285}</UniqueIdentifier>
     </Filter>
+    <Filter Include="14. UI">
+      <UniqueIdentifier>{51c0909d-09cf-4888-ace4-8e0fa33501c2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\Window.cpp">
@@ -347,6 +350,24 @@
     </ClCompile>
     <ClCompile Include="Bindable\Cloth.cpp">
       <Filter>05. Drawable\11. Cloth</Filter>
+    </ClCompile>
+    <ClCompile Include="Animation\Notify.cpp">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\ColliderOBB.cpp">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Frame.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Image.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\UIControl.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Gauge.cpp">
+      <Filter>14. UI</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -643,6 +664,24 @@
     </ClInclude>
     <ClInclude Include="Bindable\Cloth.h">
       <Filter>05. Drawable\11. Cloth</Filter>
+    </ClInclude>
+    <ClInclude Include="Animation\Notify.h">
+      <Filter>04. Bindable\09. Animation</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\ColliderOBB.h">
+      <Filter>04. Bindable\08. Collider</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\UIControl.h">
+      <Filter>14. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\Frame.h">
+      <Filter>14. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\Image.h">
+      <Filter>14. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\Gauge.h">
+      <Filter>14. UI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

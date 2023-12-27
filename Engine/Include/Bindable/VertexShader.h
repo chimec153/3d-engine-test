@@ -6,12 +6,18 @@ namespace Engine
         public Shader
     {
     public:
-        VertexShader(const TCHAR* pFilePath, const char* pEntry);
+        VertexShader(const TCHAR* pFilePath, const char* pEntry, std::shared_ptr<class InputLayout> pInputLayout = nullptr, std::shared_ptr<class InputLayout> pInputLayoutInst = nullptr);
         virtual ~VertexShader() noexcept override;
 
     private:
         CPtr<ID3D11VertexShader> pVertexShader;
         CPtr<ID3D11VertexShader> pPrevVertexShader;
+        std::shared_ptr<class InputLayout> m_pInputLayout;
+        std::shared_ptr<class InputLayout> m_pInputLayoutInst;
+
+    public:
+        std::shared_ptr<class InputLayout> GetInputLayout()   const;
+        std::shared_ptr<class InputLayout> GetInstInputLayout()   const;
 
     public:
         virtual void LoadShader() override;

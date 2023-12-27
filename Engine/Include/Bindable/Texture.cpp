@@ -165,6 +165,7 @@ namespace Engine
 		{
 			if (FAILED(DirectX::LoadFromDDSFile(strFullPath, DirectX::DDS_FLAGS_NONE, nullptr, image)))
 			{
+				assert(false);
 				return false;
 			}
 		}
@@ -173,6 +174,7 @@ namespace Engine
 		{
 			if (FAILED(DirectX::LoadFromTGAFile(strFullPath, nullptr, image)))
 			{
+				assert(false);
 				return false;
 			}
 		}
@@ -181,6 +183,7 @@ namespace Engine
 		{
 			if (FAILED(DirectX::LoadFromWICFile(strFullPath, DirectX::WIC_FLAGS_NONE, nullptr, image)))
 			{
+				assert(false);
 				return false;
 			}
 		}
@@ -207,6 +210,8 @@ namespace Engine
 		{
 			return false;
 		}
+
+		m_pImage = nullptr;
 
 		return true;
 	}

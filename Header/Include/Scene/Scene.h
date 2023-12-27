@@ -27,14 +27,14 @@ namespace Engine
 
 			pDrawable->SetTag(strTag);
 
+			pDrawable->SetScene(this);
+
 			if (!pDrawable->Init())
 			{
 				return nullptr;
 			}
 
 			pLayer->AddDrawable(pDrawable);
-
-			pDrawable->SetScene(this);
 
 			return pDrawable;
 		}
@@ -80,6 +80,7 @@ namespace Engine
 		virtual void Input(float fDeltaTime);
 		virtual void Update(float fDeltaTime);
 		virtual void FixedUpdate(float fDelatTime);
+		virtual void PostUpdate(float fDeltaTime);
 		virtual void Collision(float fDeltaTime);
 		virtual void PreDraw(float fDeltaTime);
 		virtual void Draw();

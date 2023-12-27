@@ -55,6 +55,7 @@ namespace Engine
 		COLLIDER_LINE,
 		COLLIDER_SPHERE,
 		COLLIDER_MESH,
+		COLLIDER_OBB,
 		ANIMATION,
 		AGENT,
 		NAV_MESH,
@@ -71,6 +72,9 @@ namespace Engine
 		DEPTH_STENCIL_STATE,
 		RASTERIZER_STATE,
 		MOUSE,
+		UI_FRAME,
+		UI_IMAGE,
+		UI_GAUGE,
 		END
 	};
 
@@ -81,6 +85,7 @@ namespace Engine
 		SPHERE,
 		MESH,
 		TERRAIN,
+		OBB,
 		END
 	};
 
@@ -116,6 +121,7 @@ namespace Engine
 		OPACUE,
 		DECAL,
 		ALPHA,
+		BLUR,
 		END
 	};
 }

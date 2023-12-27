@@ -8,6 +8,7 @@
 #include "../Input/Input.h"
 #include "TransformBuffer.h"
 #include "Decal.h"
+#include "../Shader/StructuredBuffer.h"
 
 namespace Engine
 {
@@ -29,6 +30,8 @@ namespace Engine
 		m_tTerrainBuffer.m_iWidth = iWidth;
 		m_tTerrainBuffer.m_iHeight = iHeight;
 
+		CreateTileTypeBuffer(iWidth, iHeight);
+
 		CreateVertexAndIndex(m_vecVertex, m_vecIndex, iWidth, iHeight);
 
 		SetNormals(m_vecVertex, m_vecIndex);
@@ -40,6 +43,13 @@ namespace Engine
 		GetBoundingSphere(m_vecVertex);
 
 		CreateMeshCollider();
+	}
+
+	void Terrain::CreateTileTypeBuffer(int iWidth, int iHeight)
+	{
+		m_pTileTypeBuffer = std::make_shared<StructuredBuffer>(iWidth * iHeight, 4);
+
+		m_vecTileType.resize(iWidth * iHeight);
 	}
 
 	void Terrain::CreateTerrainTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
@@ -60,13 +70,6 @@ namespace Engine
 	void Terrain::CreateTerrainEmissiveTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
 		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 23));
-	}
-
-	void Terrain::CreateBlendTerrainTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
-	{
-		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 24));
-
-		m_tTerrainBuffer.m_iBlendCount = static_cast<int>(vecFullPath.size());
 	}
 
 	void Terrain::CreateHeightMap(const std::string& strTag, const TCHAR* pFilePath)
@@ -144,7 +147,7 @@ namespace Engine
 		for (int i = 0; i < static_cast<int>(m_vecVertex.size()); ++i)
 		{
 			vecPoint.push_back(m_vecVertex[i].pos.x);
-			vecPoint.push_back(m_vecHeight[i] / 25.5f);
+			vecPoint.push_back(m_vecHeight[i]);
 			vecPoint.push_back(m_vecVertex[i].pos.z);
 		}
 	}
@@ -171,6 +174,159 @@ namespace Engine
 		return m_bEraseMode;
 	}
 
+	float Terrain::GetTerrainHeight(const Vector3& vPos)
+	{
+		const Vector3& vLocalPos = GetTerrainLocalPos(vPos);
+
+		int iLeftTopIndex = GetTerrainIndex(vLocalPos);
+
+		if (iLeftTopIndex == -1)
+		{
+			return 0.f;
+		}
+
+		int iRightTopIndex = iLeftTopIndex + 1;
+		int iLeftBottomIndex = iLeftTopIndex + m_tTerrainBuffer.m_iWidth + 1;
+		int iRightBottomIndex = iLeftBottomIndex + 1;
+
+		if (iLeftTopIndex >= m_vecVertex.size() ||
+			iRightTopIndex >= m_vecVertex.size() ||
+			iLeftBottomIndex >= m_vecVertex.size() ||
+			iRightBottomIndex >= m_vecVertex.size())
+		{
+			return 0.f;
+		}
+
+		if (vLocalPos.x - static_cast<int>(vLocalPos.x) < vLocalPos.z - static_cast<int>(vLocalPos.z))
+		{
+			float s = 1.f - vLocalPos.z + static_cast<int>(vLocalPos.z);
+			float t = vLocalPos.x - static_cast<int>(vLocalPos.x);
+
+			Vector3 u = Vector3(m_vecVertex[iLeftBottomIndex].pos.x, m_vecHeight[iLeftBottomIndex], m_vecVertex[iLeftBottomIndex].pos.z) -
+			Vector3(m_vecVertex[iLeftTopIndex].pos.x, m_vecHeight[iLeftTopIndex], m_vecVertex[iLeftTopIndex].pos.z);
+
+			Vector3 v = Vector3(m_vecVertex[iRightTopIndex].pos.x, m_vecHeight[iRightTopIndex], m_vecVertex[iRightTopIndex].pos.z) -
+				Vector3(m_vecVertex[iLeftTopIndex].pos.x, m_vecHeight[iLeftTopIndex], m_vecVertex[iLeftTopIndex].pos.z);
+
+			Vector3 vResult = (u * s + v * t) + Vector3(m_vecVertex[iLeftTopIndex].pos.x, m_vecHeight[iLeftTopIndex], m_vecVertex[iLeftTopIndex].pos.z);
+
+			return GetTransform()->GetTransformMatrix().TransformCoord(vResult).y;
+		}
+		else
+		{
+			float s = vLocalPos.z - static_cast<int>(vLocalPos.z);
+			float t = 1.f - vLocalPos.x + static_cast<int>(vLocalPos.x);
+			Vector3 u = Vector3(m_vecVertex[iRightTopIndex].pos.x, m_vecHeight[iRightTopIndex], m_vecVertex[iRightTopIndex].pos.z) -
+			Vector3(m_vecVertex[iRightBottomIndex].pos.x, m_vecHeight[iRightBottomIndex], m_vecVertex[iRightBottomIndex].pos.z);
+
+			Vector3 v = Vector3(m_vecVertex[iLeftBottomIndex].pos.x, m_vecHeight[iLeftBottomIndex], m_vecVertex[iLeftBottomIndex].pos.z) -
+				Vector3(m_vecVertex[iRightBottomIndex].pos.x, m_vecHeight[iRightBottomIndex], m_vecVertex[iRightBottomIndex].pos.z);
+
+			Vector3 vResult = (u * s + v * t) + Vector3(m_vecVertex[iRightBottomIndex].pos.x, m_vecHeight[iRightBottomIndex], m_vecVertex[iRightBottomIndex].pos.z);
+
+			return GetTransform()->GetTransformMatrix().TransformCoord(vResult).y;
+		}
+
+		return 0.0f;
+	}
+
+	void Terrain::AddTerrainHeight(const Vector3& vPos, float fHeight)
+	{
+		int iLeftTopIndex = GetTerrainIndex(GetTerrainLocalPos(vPos));
+		
+		if (iLeftTopIndex == -1)
+		{
+			return;
+		}
+
+		int iRightTopIndex = iLeftTopIndex + 1;
+		int iLeftBottonIndex = iLeftTopIndex + m_tTerrainBuffer.m_iWidth + 1;
+		int iRightBottomIndex = iLeftBottonIndex + 1;
+
+		float fMin = std::min(std::min(m_vecHeight[iLeftTopIndex], m_vecHeight[iRightTopIndex]), std::min(m_vecHeight[iLeftBottonIndex], m_vecHeight[iRightBottomIndex]));
+
+		if (fMin == m_vecHeight[iLeftTopIndex])
+		{
+			m_vecHeight[iLeftTopIndex] += fHeight;
+		}
+		if (fMin == m_vecHeight[iRightTopIndex])
+		{
+			m_vecHeight[iRightTopIndex] += fHeight;
+		}
+		if (fMin == m_vecHeight[iLeftBottonIndex])
+		{
+			m_vecHeight[iLeftBottonIndex] += fHeight;
+		}
+		if (fMin == m_vecHeight[iRightBottomIndex])
+		{
+			m_vecHeight[iRightBottomIndex] += fHeight;
+		}
+
+		DirectX::ScratchImage* pImage = m_pHeightMap->GetImage();
+
+		if (!pImage)
+		{
+			assert(false);
+			return;
+		}
+
+		uint8_t* pPixels = pImage->GetPixels();
+
+		if (!pPixels)
+		{
+			assert(false);
+			return;
+		}
+
+		memset(&pPixels[iLeftTopIndex * 4], m_vecHeight[iLeftTopIndex], 4);
+		memset(&pPixels[iRightTopIndex * 4], m_vecHeight[iRightTopIndex], 4);
+		memset(&pPixels[iLeftBottonIndex * 4], m_vecHeight[iLeftBottonIndex], 4);
+		memset(&pPixels[iRightBottomIndex * 4], m_vecHeight[iRightBottomIndex], 4);
+
+		m_pHeightMap->CreateTexture(*pImage);
+
+		m_pHeightMap->CreateShaderResourceView(pImage->GetMetadata().format, pImage->GetMetadata().mipLevels, pImage->GetMetadata().arraySize);
+
+		CreateMeshCollider();
+	}
+
+	int Terrain::GetTerrainIndex(const Vector3& vLocalPos) const
+	{
+		if (vLocalPos.x < 0.f || vLocalPos.z < 0.f ||
+			vLocalPos.x >= m_tTerrainBuffer.m_iWidth ||
+			vLocalPos.z >= m_tTerrainBuffer.m_iHeight)
+		{
+			return -1;
+		}
+
+		return static_cast<int>(floorf(vLocalPos.x)) + (m_tTerrainBuffer.m_iHeight - static_cast<int>(ceilf(vLocalPos.z))) * (m_tTerrainBuffer.m_iWidth + 1);
+	}
+
+	Vector3 Terrain::GetTerrainLocalPos(const Vector3& vPos)
+	{
+		std::shared_ptr<Transform> pTransform = GetTransform();
+
+		return (Matrix::TranslateFromVector(-pTransform->GetPosition()) * pTransform->GetRotationMatrix().Transpose() * Matrix::Scaling(1.f / pTransform->GetScale())).TransformCoord(vPos);
+	}
+
+	void Terrain::SetTileType(const Vector3& vWorldPos, int iTileType)
+	{
+		const Vector3& vLocalPos = GetTerrainLocalPos(vWorldPos);
+
+		if (vLocalPos.x >= m_tTerrainBuffer.m_iWidth ||
+			vLocalPos.z >= m_tTerrainBuffer.m_iHeight ||
+			vLocalPos.x < 0.f || vLocalPos.z < 0.f)
+		{
+			return;
+		}
+
+		int iIndex = static_cast<int>(vLocalPos.x) + static_cast<int>(m_tTerrainBuffer.m_iHeight - vLocalPos.z) * m_tTerrainBuffer.m_iWidth;
+
+		m_vecTileType[iIndex] = iTileType;
+
+		m_pTileTypeBuffer->WriteData(&m_vecTileType[0], 0, 4 * static_cast<int>(m_vecTileType.size()));
+	}
+
 	void Terrain::CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight)
 	{
 		for (int j = iHeight; j >= 0; --j)
@@ -195,10 +351,12 @@ namespace Engine
 		{
 			for (int i = 0; i < iWidth; ++i)
 			{
+				// 0 1 129
 				vecIndex.push_back(i + j * (iWidth + 1));
 				vecIndex.push_back(i + 1 + j * (iWidth + 1));
 				vecIndex.push_back(i + (j + 1) * (iWidth + 1));
 
+				// 129 1 130
 				vecIndex.push_back(i + (j + 1) * (iWidth + 1));
 				vecIndex.push_back(i + 1 + j * (iWidth + 1));
 				vecIndex.push_back(i + 1 + (j + 1) * (iWidth + 1));
@@ -236,11 +394,15 @@ namespace Engine
 
 	void Terrain::Bind()
 	{
+		m_pTileTypeBuffer->SetSRV(24);
+
 		m_pTerrainCBuffer->UpdateBuffer(m_tTerrainBuffer);
 
 		m_pTerrainCBuffer->Bind();
 
 		__super::Bind();
+
+		m_pTileTypeBuffer->ResetSRV(24);
 	}
 	void Terrain::Save(FILE* pFile)
 	{
@@ -251,6 +413,7 @@ namespace Engine
 		if (m_tTerrainBuffer.m_iWidth >= 0 && m_tTerrainBuffer.m_iHeight >= 0)
 		{
 			fwrite(&m_vecHeight[0], 4, (m_tTerrainBuffer.m_iWidth + 1) * (m_tTerrainBuffer.m_iHeight + 1), pFile);
+			fwrite(&m_vecTileType[0], 4, m_tTerrainBuffer.m_iWidth * m_tTerrainBuffer.m_iHeight, pFile);
 		}
 
 		bool bHeightMap = static_cast<bool>(m_pHeightMap);
@@ -277,6 +440,10 @@ namespace Engine
 			m_vecHeight.resize((m_tTerrainBuffer.m_iWidth + 1)*  (m_tTerrainBuffer.m_iHeight + 1));
 
 			fread(&m_vecHeight[0], 4, (m_tTerrainBuffer.m_iWidth + 1) * (m_tTerrainBuffer.m_iHeight + 1), pFile);
+
+			m_vecTileType.resize(m_tTerrainBuffer.m_iWidth * m_tTerrainBuffer.m_iHeight);
+
+			fread(&m_vecTileType[0], 4, m_tTerrainBuffer.m_iWidth * m_tTerrainBuffer.m_iHeight, pFile);
 		}
 
 		bool bHeightMap = false;

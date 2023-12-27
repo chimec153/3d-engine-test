@@ -1337,3 +1337,5 @@ Client/Bin/Resource/Mesh/nano_textured/LICENSE.txt
 *.exe
 *.dll
 Client/Bin/Client_Debug.exe
+*.iobj
+*.ipdb

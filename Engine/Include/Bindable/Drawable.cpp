@@ -48,6 +48,7 @@ namespace Engine
 		, m_iInstID(-1)
 		, m_iParentJointCount(0)
 		, m_eRenderLayer(RENDER_LAYER::OPACUE)
+		, m_iInstanceKey()
 	{
 		SetBindableType(BINDABLE_TYPE::DRAWABLE);
 		SetObjectType(OBJECT_TYPE::DRAW);
@@ -58,7 +59,7 @@ namespace Engine
 		, m_pTransform(std::static_pointer_cast<Transform>(FindChild(BINDABLE_TYPE::TRANSFORM)))
 		, m_pMaterial(std::static_pointer_cast<Material>(FindChild(BINDABLE_TYPE::MATERIAL)))
 		, m_vecTexture(drawable.m_vecTexture)
-		, m_pMesh(drawable.m_pMesh)
+		, m_pMesh(std::static_pointer_cast<Mesh>(FindChild(BINDABLE_TYPE::MESH)))
 		, m_pVertexShader(drawable.m_pVertexShader)
 		, m_pPixelShader(drawable.m_pPixelShader)
 		, m_pCollider(std::static_pointer_cast<Collider>(FindChild(OBJECT_TYPE::COLLIDER)))
@@ -73,6 +74,7 @@ namespace Engine
 		, m_iInstID(-1)
 		, m_iParentJointCount(0)
 		, m_eRenderLayer(drawable.m_eRenderLayer)
+		, m_iInstanceKey(drawable.m_iInstanceKey)
 	{
 		SetTransform(m_pTransform);
 
@@ -85,6 +87,11 @@ namespace Engine
 		{
 			m_pAgent->SetTransform(GetTransform());
 		}
+	}
+
+	Drawable::~Drawable()
+	{
+		CollisionManager::GetInst()->DeleteDrawable(this);
 	}
 
 	void Drawable::SetTransform(const std::shared_ptr<class Transform>& pTransform)
@@ -143,6 +150,8 @@ namespace Engine
 	void Drawable::SetMaterial(const std::shared_ptr<Material>& pMaterial)
 	{
 		m_pMaterial = pMaterial;
+
+		UpdateInstanceKey();
 	}
 
 	void Drawable::AddChild(const std::shared_ptr<class Bindable>& bind)
@@ -273,6 +282,8 @@ namespace Engine
 	void Drawable::AddTexture(const std::shared_ptr<Texture>& pTexture)
 	{
 		m_vecTexture.push_back(pTexture);
+
+		UpdateInstanceKey();
 	}
 
 	const std::vector<std::shared_ptr<Texture>>& Drawable::GetTextures() const
@@ -288,6 +299,8 @@ namespace Engine
 	void Drawable::SetMesh(const std::shared_ptr<Mesh>& pBuffer)
 	{
 		m_pMesh = pBuffer;
+
+		UpdateInstanceKey();
 	}
 
 	const std::shared_ptr<VertexShader>& Drawable::GetVertexShader() const
@@ -298,6 +311,8 @@ namespace Engine
 	void Drawable::SetVertexShader(const std::shared_ptr<VertexShader>& pShader)
 	{
 		m_pVertexShader = pShader;
+
+		UpdateInstanceKey();
 	}
 
 	const std::shared_ptr<PixelShader>& Drawable::GetPixelShader() const
@@ -308,6 +323,8 @@ namespace Engine
 	void Drawable::SetPixelShader(const std::shared_ptr<PixelShader>& pShader)
 	{
 		m_pPixelShader = pShader;
+
+		UpdateInstanceKey();
 	}
 
 	void Drawable::SetCollider(const std::shared_ptr<Collider>& pCollider)
@@ -323,6 +340,8 @@ namespace Engine
 		{
 			m_pAnimation->SetOwner(this);
 		}
+
+		UpdateInstanceKey();
 	}
 
 	std::shared_ptr<Animation> Drawable::GetAnimation() const
@@ -395,6 +414,33 @@ namespace Engine
 		return m_pAgent;
 	}
 
+	size_t Drawable::GetInstanceKey() const
+	{
+		return m_iInstanceKey;
+	}
+
+	void Drawable::UpdateInstanceKey()
+	{
+		std::hash<std::string> hs;
+
+		m_iInstanceKey = 1;
+
+		m_iInstanceKey *= m_pMesh ? hs(m_pMesh->GetTag()) : 1;
+
+		m_iInstanceKey *= m_pMaterial ? hs(m_pMaterial->GetTag()) : 1;
+
+		m_iInstanceKey *= m_pVertexShader ? hs(m_pVertexShader->GetTag()) : 1;
+
+		m_iInstanceKey *= m_pPixelShader ? hs(m_pPixelShader->GetTag()) : 1;
+
+		m_iInstanceKey *= m_pAnimation ? hs(m_pAnimation->GetTag()) : 1;
+
+		for (int i = 0; i < static_cast<int>(m_vecTexture.size()); ++i)
+		{
+			m_iInstanceKey *= hs(m_vecTexture[i]->GetTag());
+		}
+	}
+
 	bool Drawable::Init()
 	{
 		if (!__super::Init())
@@ -409,7 +455,7 @@ namespace Engine
 
 	void Drawable::Start()
 	{
-		CollisionManager::GetInst()->AddDrawable(std::static_pointer_cast<Drawable>(shared_from_this()));
+		CollisionManager::GetInst()->AddDrawable(this);
 	}
 
 	void Drawable::Input(float fDeltaTime)
@@ -428,7 +474,7 @@ namespace Engine
 
 		if (m_pTransform && m_pTransform->GetVelocity() != 0.f)
 		{
-			CollisionManager::GetInst()->AddDrawable(std::static_pointer_cast<Drawable>(shared_from_this()));
+			CollisionManager::GetInst()->AddDrawable(this);
 		}
 
 		__super::Collision(fDeltaTime);
@@ -1718,6 +1764,17 @@ namespace Engine
 			vecIndex.push_back(loader.GetIndexData(i));
 		}
 
+		for (int i = 0; i< vecIndex.size(); ++i)
+		{
+			for (int j = 0; j < vecIndex[i].size(); ++j)
+			{
+				for (int k = 0; k < vecVertex.size(); ++k)
+				{
+					SetTangent(vecVertex[k], vecIndex[i][j]);
+				}
+			}
+		}
+
 		std::shared_ptr<Mesh> pMesh = StaticCreateBindable<Mesh>(strFileName, vecVertex, vecIndex);
 
 		AddChild(pMesh);
@@ -1728,14 +1785,19 @@ namespace Engine
 		{
 			CreateBindable<class Animation>("Animation");
 
-			const std::vector<FbxLoader::SEQUENCE>& vecSequance = loader.GetSequences();
+			//int iLodCount = loader.GetLODCount();
 
-			AddSeqeunces(vecSequance);
+			//for (int i = 0; i < iLodCount; ++i)
+			//{
+				const std::vector<FbxLoader::SEQUENCE>& vecSequance = loader.GetSequences();
 
-			const std::unordered_map<std::string, std::shared_ptr<Sequence>>& mapSequence = m_pAnimation->GetSequences();
+				AddSeqeunces(vecSequance);
+			//}
 
-			std::unordered_map<std::string, std::shared_ptr<Sequence>>::const_iterator iter = mapSequence.begin();
-			std::unordered_map<std::string, std::shared_ptr<Sequence>>::const_iterator iterEnd = mapSequence.end();
+			const std::unordered_map<std::string, Animation::PSEQUENCEINFO>& mapSequence = m_pAnimation->GetSequences();
+
+			std::unordered_map<std::string, Animation::PSEQUENCEINFO>::const_iterator iter = mapSequence.begin();
+			std::unordered_map<std::string, Animation::PSEQUENCEINFO>::const_iterator iterEnd = mapSequence.end();
 
 			for (; iter != iterEnd; ++iter)
 			{
@@ -1743,7 +1805,7 @@ namespace Engine
 
 				strcat_s(strSeqPath, strFileName);
 
-				strcat_s(strSeqPath, iter->second->GetTag().c_str());
+				strcat_s(strSeqPath, iter->second->pSequence->GetTag().c_str());
 
 				strcat_s(strSeqPath, ".seq");
 
@@ -1754,7 +1816,7 @@ namespace Engine
 					*pPos = '_';
 				}
 
-				iter->second->SaveFromPath(strSeqPath, MESH_PATH);
+				iter->second->pSequence->SaveFromPath(strSeqPath, MESH_PATH);
 			}
 
 			//for (int i = 0; i < loader.GetLODCount(); ++i)
@@ -1766,10 +1828,6 @@ namespace Engine
 
 			FindAndAddBind<VertexShader>("anisotropic_microfacet VSSkin");
 			FindAndAddBind<InputLayout>("Standard");
-
-			NotUseInstance();
-
-			NotUseShadow();
 		}
 		else
 		{
@@ -1828,6 +1886,8 @@ namespace Engine
 				case fbxsdk::FbxLayerElement::EType::eTextureBump:
 					vecTexture.push_back(StaticCreateBindable<Texture>(vecTextureInfo[j].strFullPath, strFullPath, 1));
 					break;
+				default:
+					break;
 				}
 		}
 
@@ -1855,13 +1915,13 @@ namespace Engine
 
 					pMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
 
-					pMesh->SetMaterial(i, pMaterial);
+					pMesh->AddMaterial(i, pMaterial);
 				}
 				else
 				{
 					pMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
 
-					pMesh->SetMaterial(i, pMaterial);
+					pMesh->AddMaterial(i, pMaterial);
 				}
 
 				_vecMaterial[i].push_back(pMaterial);

@@ -39,7 +39,7 @@ float4 VS_SkinInstShadow(VSStandardInstIn input, uint iInstID : SV_InstanceID) :
     [unroll]
     for (int i = 0; i < 4;++i)
     {
-        pos += vWeight[i] * mul(float4(input.pos, 1.f), g_vecBones[input.blendIndex[i] + iInstID * g_iBoneMaxJoint]).xyz;
+        pos += vWeight[i] * mul(float4(input.pos, 1.f), g_vecBones[input.blendIndex[i] + iInstID * g_pBone[0].g_iBoneMaxJoint]).xyz;
     }
     
     if (input.parentJoint != -1)

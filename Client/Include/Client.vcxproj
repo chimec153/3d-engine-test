@@ -172,15 +172,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Object\Attackable.cpp" />
     <ClCompile Include="Object\Monster.cpp" />
     <ClCompile Include="Object\Player.cpp" />
+    <ClCompile Include="Object\Trail.cpp" />
     <ClCompile Include="Scene\GameScene.cpp" />
     <ClCompile Include="Scene\StartScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Client.h" />
+    <ClInclude Include="Object\Attackable.h" />
     <ClInclude Include="Object\Monster.h" />
     <ClInclude Include="Object\Player.h" />
+    <ClInclude Include="Object\Trail.h" />
     <ClInclude Include="Scene\GameScene.h" />
     <ClInclude Include="Scene\StartScene.h" />
   </ItemGroup>

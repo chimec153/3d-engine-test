@@ -22,6 +22,7 @@ namespace Editor
         std::shared_ptr<Engine::Sphere> m_pSphere[2];
 #endif
     public:
+        virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
 
     public:

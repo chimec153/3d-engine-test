@@ -56,6 +56,26 @@ struct VSInstIn
     float fMaterialFraction : MaterialFraction;
 };
 
+struct VSDecalInstIn
+{
+    float4 tangent : Tangent;
+    float3 pos : Position;
+    float3 normal : Normal;
+    float3 blendWeight : BLENDWEIGHT;
+    float2 uv : Texcoord;
+    float4 blendIndex : BLENDINDICES;
+    matrix WVP : World;
+    matrix matInvWorldView : InvWorldView;
+    float4 vDiffuseColor : Diffuse;
+    float4 vSpecularColor : Specular;
+    float4 vEmissiveColor : Emissive;
+    float2 vMaterialRoughness : Roughness;
+    float fMaterialFraction : MaterialFraction;
+    float fDecalFadeStart : DECAL;
+    float fDecalFadeMax : DECAL1;
+    float fDecalFadeTime : DECAL2;
+};
+
 struct VSOut
 {
     float4 pos : SV_Position;
@@ -124,6 +144,23 @@ struct VS_DECAL_OUT
     float2 uv : TEXCOORD;
 };
 
+struct VS_DECAL_INST_OUT
+{
+    float4 pos : SV_Position;
+    float4 screenpos : POSITION;
+    float3 localpos : POSITION2;
+    float2 uv : TEXCOORD;
+    matrix invWV : INVWORLDVIEW;
+    float4 diffuse : DIFFUSE;
+    float4 specular : SPECULAR;
+    float4 emissive : EMISSIVE;
+    float2 roughness : ROUGHNESS;
+    float fraction : FRACTION;
+    float fadestart : DECAL0;
+    float fademax : DECAL1;
+    float fadetime : DECAL2;
+};
+
 cbuffer transform : register(b0)
 {
     float4x4 g_matTransform;
@@ -173,6 +210,7 @@ cbuffer material : register(b2)
     float g_fMaterialSpecPower;
     float g_fMaterialFraction;
     float2 g_vMaterialRoughness;
+    bool g_bMaterialUsePaperBurn;
 };
 
 cbuffer GBufferProject : register(b3)
@@ -181,7 +219,7 @@ cbuffer GBufferProject : register(b3)
     matrix g_matCameraViewToLightClip;
 };
 
-cbuffer Bone : register(b4)
+struct BoneInfo
 {
     float g_fBoneTime;
     float g_fBoneMaxTime;
@@ -190,7 +228,16 @@ cbuffer Bone : register(b4)
     float3 g_vBoneRootPos;
     int g_iBoneFrame;
     int g_iBoneNextFrame;
-    int g_iBoneInfoCount;
+    float g_fBoneBlendMaxTime;
+    float fSequenceTime;
+    int g_iPad2;
+};
+
+cbuffer Bone : register(b4)
+{
+    BoneInfo g_pBone[2];
+    int g_iBoneSequenceCount;
+    float4 g_pBoneAdditiveBlend[64];
 }
 
 cbuffer Terrain : register(b5)
@@ -226,6 +273,7 @@ cbuffer Particle : register(b7)
     float2 g_vParticleEndSize;
     float3 g_vParticleMaximumPosition;
     int g_iParticleMaxFrame;
+    float3 g_vParticleMaxVelocity;
     int g_iParticleFrameWidth;
     int g_iParticleFrameHeight;
 }
@@ -325,7 +373,7 @@ Texture2DArray g_TerrainTexture : register(t20);
 Texture2DArray g_TerrainNormalTexture : register(t21);
 Texture2DArray g_TerrainSpecularTexture : register(t22);
 Texture2DArray g_TerrainEmissiveTexture : register(t23);
-Texture2DArray g_BlendTerrainTexture : register(t24);
+StructuredBuffer<int> g_BlendTerrainTexture : register(t24);
 
 Texture2D g_DecalTexture0 : register(t25);
 Texture2D g_DecalTexture1 : register(t26);
@@ -338,6 +386,7 @@ StructuredBuffer<matrix> g_vecJointSockets : register(t32);
 StructuredBuffer<Transform> g_vecBonePalette : register(t33);
 StructuredBuffer<Bone> g_vecBoneBuffer : register(t34);
 StructuredBuffer<int> g_vecJointHierarchyBuffer : register(t35);
+StructuredBuffer<Transform> g_vecAdditiveTransforms : register(t36);
 
 StructuredBuffer<float> g_vecPrevHeightField : register(t38);
 StructuredBuffer<float> g_vecCurrentHeightField : register(t39);
@@ -419,6 +468,13 @@ float3 BumpMapping(float3 n, float4 t, float3 bump)
 
 float4 GetPaperBurnColor(float4 color, float2 uv)
 {
+    return color;
+    
+    if(!g_bMaterialUsePaperBurn)
+    {
+        return color;
+    }
+    
     float fRate = g_fPaperTime / g_fPaperMaxTime * 3.0 - 1.f + g_PaperBurnTexture.Sample(g_sAnisotropic, uv).r; //  0.0 ~ 3.0
     
     if (fRate < g_fPaperStartRate)
@@ -468,4 +524,104 @@ float2 SphereDirectionToUV(float3 dir)
     uv.y = asin(dir.y) / -3.141592 + 0.5f; // -pi/2 ~ pi/2
     
     return uv;
+}
+
+float2 SphereMapping(float3 r)
+{
+    float m = sqrt(r.x * r.x + r.y * r.y + pow(r.z + 1, 2));
+
+    return float2(r.x / (2 * m) + 0.5, 1.0 - (r.y / (2 * m) + 0.5));
+}
+
+float4 GetFresnel(float LDotH, float4 vSpecColor)
+{
+    float4 rt = sqrt(vSpecColor);
+    
+    float4 etha = (1.f + rt) / (1.f - rt);
+    
+    float4 g = sqrt(etha * etha - 1.f + LDotH * LDotH);
+    
+    return (g - LDotH) * (g - LDotH) / (g + LDotH) / (g + LDotH) *
+    ((LDotH * (g + LDotH) - 1.f) * (LDotH * (g + LDotH) - 1.f) / (LDotH * (g - LDotH) + 1.f) / (LDotH * (g - LDotH) + 1.f) + 1.f) / 2.f;
+}
+
+float3 GetF(float VDotH, float3 F0)
+{
+    return F0 + (1.0 - F0) * pow(1 - max(VDotH, 0.0), 5.0);
+}
+
+float3 GetFresnel(float LDotH, float3 vSpecColor)
+{
+    
+    float3 rt = sqrt(vSpecColor);
+    
+    float3 etha = (1.f + rt) / (1.f - rt);
+    
+    float3 g = sqrt(etha * etha - 1.f + LDotH * LDotH);
+    
+    return pow(g - LDotH, 2.0) / max(pow(g + LDotH, 2.0), 0.000001) *
+    (pow(LDotH * (g + LDotH) - 1.f, 2.0) / max(pow(LDotH * (g - LDotH) + 1.f, 2.0), 0.000001) + 1.f) / 2.f;
+}
+
+float4 GetMicrofacetDistribution(float NDotH, float2 vMaterialRoughness)
+{
+    return 1.f / 4.f / vMaterialRoughness.x / vMaterialRoughness.x * exp((NDotH * NDotH - 1.f) / (vMaterialRoughness.x * vMaterialRoughness.x * NDotH * NDotH));
+}
+
+float4 GetMicrofacetDistribution(float NDotH, float TDotPPow2, float2 vMaterialRoughness)
+{
+    float NDotHDenominator = max(pow(NDotH, 2.0), 0.000001);
+    
+    return 1.f / 4.f / max(vMaterialRoughness.x, 0.000001) / max(vMaterialRoughness.y, 0.000001) * exp((TDotPPow2 / max(pow(vMaterialRoughness.x, 2.0), 0.000001) + (1.f - TDotPPow2) / max(vMaterialRoughness.y, 2.0)) *
+    (NDotH * NDotH - 1.f) / NDotHDenominator);
+}
+
+float4 GetGeometricAttenuation(float NDotH, float NDotV, float NDotL, float LDotH)
+{
+    return min(min(1.f, 2.f * NDotH * NDotV / max(LDotH, 0.000001)), 2.f * NDotH * NDotL / max(LDotH, 0.000001));
+}
+
+float4 BRDF(float3 view, float3 hdir, float3 normal, float3 light, float4 albedo, float4 vSpecColor, float4 C, float2 vMaterialRoughness, float materialFraction, float fShadowAttr)
+{
+    float NDotH = dot(normal, hdir);
+    
+    float NDotL = dot(normal, light);
+    
+    float LDotH = dot(light, hdir);
+    
+    float NDotV = dot(normal, view);
+    
+    float3 P = normalize(hdir - NDotH * normal);
+    
+    float4 vFresnel = float4(GetFresnel(LDotH, vSpecColor.xyz), 1.f);
+    
+    float4 vMicroFacet = GetMicrofacetDistribution(NDotH, hdir.x * hdir.x / (hdir.x * hdir.x + hdir.y * hdir.y), vMaterialRoughness);
+    
+    float4 vGeometry = GetGeometricAttenuation(NDotH, NDotV, NDotL, LDotH);
+    
+    return (materialFraction * C * albedo * max(NDotL, 0.f)
+    + (1.f - materialFraction) * saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
+}
+
+
+void GetLightDirAndColor(in float3 view, out float4 C, out float3 light)
+{
+    if (g_iLightType == POINT_LIGHT)
+    {
+        C = GetLightAtt(g_vLightPos - view) * g_fLightIntensity;
+        
+        light = normalize(g_vLightPos - view);
+    }
+    else if (g_iLightType == SPOT_LIGHT)
+    {
+        light = normalize(g_vLightPos - view);
+        
+        C = GetLightAtt(g_vLightPos - view) * pow(max(dot(g_vLightDir, light), 0.f), g_fLightIntensity);
+    }
+    else if (g_iLightType == DIRECTIONAL_LIGHT)
+    {
+        light = normalize(-g_vLightDir);
+        
+        C = g_vLightColor * g_fLightIntensity;
+    }
 }

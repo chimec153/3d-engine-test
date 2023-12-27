@@ -83,10 +83,14 @@
 #define STANDARD_VS "anisotropic_microfacet VSNoSkin"
 #define STANDARD_ANIM_VS "anisotropic_microfacet VSSkin"
 #define STANDARD_PS "anisotropic_microfacet PS"
-#define STANDARD_SOLID_PS "anisotropic_microfacet PS_NoTexture"
+#define STANDARD_SOLID_PS "anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal"
 #define STANDARD_INPUT_LAYOUT "Standard"
 #define STANDARD_TOPOLOGY "TriangleList"
 #define WIREFRAME "WireFrame"
+#define CULL_NONE "CullNone"
+#define DECAL_VS	"DecalVS"
+#define DECAL_PS	"DecalPS"
+#define DECAL_PS_PBR	"DecalPSPBR"
 
 template <typename T>
 void Safe_Delete_VecList_Array(T& p)

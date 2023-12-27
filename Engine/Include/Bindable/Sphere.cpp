@@ -53,11 +53,23 @@ namespace Engine
 
 			for (size_t i = 0; i < vecVertex.size(); ++i)
 			{
+				vecVertex[i].normal = vecVertex[i].pos / vecVertex[i].pos.Length();
+
+				const Vector3& vCross = vecVertex[i].normal.Cross(Engine::Vector3::Axis[static_cast<int>(AXIS_TYPE::Y)]);
+
+				float fCrossLength = vCross.Length();
+
+				if (!fCrossLength)
+				{
+					vecVertex[i].tangent = vecVertex[i].normal.Cross(Engine::Vector3::Axis[static_cast<int>(AXIS_TYPE::X)]).Normalize();
+				}
+				else
+				{
+					vecVertex[i].tangent = vCross / fCrossLength;
+				}
 				vecVertex[i].uv.x = atan2(vecVertex[i].normal.x, vecVertex[i].normal.z) / (2.f * PI) + 0.5f;
 				vecVertex[i].uv.y = vecVertex[i].normal.y * 0.5f + 0.5f;
 			}
-
-			SetTangent(vecVertex, vecIndex);
 
 			SetBoundingSphereInfo(GetBoundingSphere(vecVertex));
 

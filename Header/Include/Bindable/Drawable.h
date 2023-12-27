@@ -21,7 +21,7 @@ namespace Engine
 	public:
 		Drawable();
 		Drawable(const Drawable& drawable);
-		virtual ~Drawable() override = default;
+		virtual ~Drawable() override;
 
 	private:
 		std::shared_ptr<class Transform> m_pTransform;
@@ -34,6 +34,7 @@ namespace Engine
 		std::shared_ptr<class Animation> m_pAnimation;
 		std::shared_ptr<class Agent>  m_pAgent;
 		RENDER_LAYER m_eRenderLayer;
+		size_t m_iInstanceKey;
 
 	public:
 		void SetTransform(const std::shared_ptr<class Transform>& pTransform);
@@ -43,7 +44,7 @@ namespace Engine
 		void SetMaterial(const std::shared_ptr<Material>& pMaterial);
 		virtual void AddChild(const class std::shared_ptr<class Bindable>& pChild) override;
 		void AddDrawable(const class std::shared_ptr<class Bindable>& pChild);
-		void GetInstData(char* pData, int iSize) const;
+		virtual void GetInstData(char* pData, int iSize) const;
 		void AddTexture(const std::shared_ptr<Texture>& pTexture);
 		const std::vector<std::shared_ptr<Texture>>& GetTextures() const;
 		const std::shared_ptr<Mesh>& GetMesh() const;
@@ -61,6 +62,8 @@ namespace Engine
 		void SetAgent(std::shared_ptr<Engine::Agent> pAgent);
 		void Move(const Engine::Vector3& pos);
 		std::shared_ptr<Agent> GetAgent()	const;
+		size_t GetInstanceKey()	const;
+		void UpdateInstanceKey();
 
 	public:
 		virtual bool Init();

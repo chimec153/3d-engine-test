@@ -85,10 +85,10 @@ namespace Engine
 
 		CreateBindable("CullFront", true, D3D11_CULL_FRONT, D3D11_FILL_SOLID);
 		CreateBindable("NoDepth", false, D3D11_CULL_NONE, D3D11_FILL_SOLID);
-		CreateBindable("CullNone", true, D3D11_CULL_NONE, D3D11_FILL_SOLID);
+		CreateBindable(CULL_NONE, true, D3D11_CULL_NONE, D3D11_FILL_SOLID);
 
 #ifdef _DEBUG
-		CreateBindable("WireFrame", false, D3D11_CULL_NONE, D3D11_FILL_WIREFRAME);
+		CreateBindable(WIREFRAME, false, D3D11_CULL_NONE, D3D11_FILL_WIREFRAME);
 #endif
 	}
 
@@ -101,6 +101,10 @@ namespace Engine
 		CreateBindable("NoDepthWrite", true, D3D11_DEPTH_WRITE_MASK_ZERO);
 		CreateBindable("DepthAlways", true, D3D11_DEPTH_WRITE_MASK_ALL, D3D11_COMPARISON_ALWAYS);
 		CreateBindable("Greater", false, D3D11_DEPTH_WRITE_MASK_ALL, D3D11_COMPARISON_GREATER_EQUAL);
+		CreateBindable("OutLineMask", true, D3D11_DEPTH_WRITE_MASK_ALL, D3D11_COMPARISON_LESS,
+			true, 0, 0xff, D3D11_COMPARISON_ALWAYS, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_INCR);
+		CreateBindable("OutLine", true, D3D11_DEPTH_WRITE_MASK_ZERO, D3D11_COMPARISON_ALWAYS,
+			true, 0xff, 0, D3D11_COMPARISON_EQUAL);
 	}
 
 	template<>
@@ -119,11 +123,15 @@ namespace Engine
 		};
 
 		CreateBindable("DecalBlend", false, true, vecRenderTargetBlend);
+
+
+		CreateBindable("DestAlpha", D3D11_BLEND_ONE, D3D11_BLEND_DEST_ALPHA, D3D11_BLEND_OP_ADD);
 	}
 
 	template<>
 	inline BindableManager<class VertexShader>::BindableManager()
 	{
+
 #ifdef _DEBUG
 		CreateBindable("NullVS", TEXT("Debug.hlsl"), "NullVS");
 #endif
@@ -132,8 +140,8 @@ namespace Engine
 		CreateBindable("PointLightVS", TEXT("anisotropic_microfacet.hlsl"), "VS_PointLight");
 
 		CreateBindable("anisotropic_microfacet VS", TEXT("anisotropic_microfacet.hlsl"), "VS");
-		CreateBindable("anisotropic_microfacet VSSkin", TEXT("anisotropic_microfacet.hlsl"), "VS_Skin");
-		CreateBindable("anisotropic_microfacet VSNoSkin", TEXT("anisotropic_microfacet.hlsl"), "VS_NoSkin");
+		CreateBindable(STANDARD_ANIM_VS, TEXT("anisotropic_microfacet.hlsl"), "VS_Skin");
+		CreateBindable(STANDARD_VS, TEXT("anisotropic_microfacet.hlsl"), "VS_NoSkin");
 		CreateBindable("anisotropic_microfacet VS_Terrain", TEXT("anisotropic_microfacet.hlsl"), "VS_Terrain");
 
 		CreateBindable("anisotropic_microfacet VSInst", TEXT("anisotropic_microfacet.hlsl"), "VSInst");
@@ -146,9 +154,24 @@ namespace Engine
 		CreateBindable("anisotropic_microfacet VSSkinInstShadow", TEXT("Shadow.hlsl"), "VS_SkinInstShadow");
 
 		CreateBindable("ParticleVS", TEXT("Particle.fx"), "VS_PARTICLE");
-		CreateBindable("DecalVS", TEXT("Decal.fx"), "VS_DECAL");
+		CreateBindable("DecalVSInst", TEXT("Decal.fx"), "VS_DECAL_INST");
 		CreateBindable("FluidVS", TEXT("VertexShader.hlsl"), "VS_FLUID");
 		CreateBindable("EnvironmentVS", TEXT("VertexShader.hlsl"), "VS_ENV");
+	}
+
+	template<>
+	inline bool BindableManager<VertexShader>::Init()
+	{
+		std::shared_ptr<InputLayout> pStandardInputLayout = StaticFindBindable<InputLayout>(STANDARD_INPUT_LAYOUT);
+
+		std::shared_ptr<InputLayout> pDecalInstInputLayout = StaticFindBindable<InputLayout>("Decal_Inst");
+
+		if (!CreateBindable(DECAL_VS, TEXT("Decal.fx"), "VS_DECAL", pStandardInputLayout, pDecalInstInputLayout))
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	template<>
@@ -177,6 +200,7 @@ namespace Engine
 		CreateBindable("CollideDebugPS", TEXT("Debug.hlsl"), "CollideDebugPS");
 		CreateBindable("DebugPS", TEXT("Debug.hlsl"), "DebugPS");
 		CreateBindable("DebugPSInst", TEXT("Debug.hlsl"), "DebugPS");
+		CreateBindable("DebugAlphaPS", TEXT("Debug.hlsl"), "DebugAlphaPS");
 #endif
 
 		CreateBindable("MultiPS", TEXT("anisotropic_microfacet.hlsl"), "PS_Multi");
@@ -185,7 +209,7 @@ namespace Engine
 		CreateBindable("anisotropic_microfacet PS_NoTexture", TEXT("anisotropic_microfacet.hlsl"), "PS_NoTexture");
 		CreateBindable("anisotropic_microfacet PS_Terrain", TEXT("anisotropic_microfacet.hlsl"), "PS_Terrain");
 		CreateBindable("anisotropic_microfacet PS_NoSpecMapNoNormalMap", TEXT("anisotropic_microfacet.hlsl"), "PS_NoSpecMapNoNormalMap");
-		CreateBindable("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal", TEXT("anisotropic_microfacet.hlsl"), "PS_NoDiffuseNoSpecMapNoNormalMap");
+		CreateBindable(STANDARD_SOLID_PS, TEXT("anisotropic_microfacet.hlsl"), "PS_NoDiffuseNoSpecMapNoNormalMap");
 
 		CreateBindable("anisotropic_microfacet PSInst", TEXT("anisotropic_microfacet.hlsl"), "PSInst");
 		CreateBindable("anisotropic_microfacet PS_NoSpecInst", TEXT("anisotropic_microfacet.hlsl"), "PS_NoSpecInst");
@@ -197,12 +221,17 @@ namespace Engine
 		CreateBindable("AlphaPS", TEXT("anisotropic_microfacet.hlsl"), "PS_Alpha");
 		CreateBindable("AlphaPSInst", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaInst");
 		CreateBindable("AlphaNoUVPS", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaNoUV");
+		CreateBindable("AlphaNoUVPSInst", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaNoUVInst");
 
 		CreateBindable("ParticlePS", TEXT("Particle.fx"), "PS_PARTICLE");
-		CreateBindable("DecalPS", TEXT("Decal.fx"), "PS_DECAL");
+		CreateBindable(DECAL_PS, TEXT("Decal.fx"), "PS_DECAL");
+		CreateBindable(DECAL_PS_PBR, TEXT("Decal.fx"), "PS_DECAL_PBR");
+		CreateBindable("DecalPSInst", TEXT("Decal.fx"), "PS_DECAL_INST");
+		CreateBindable("DecalPSPBRInst", TEXT("Decal.fx"), "PS_DECAL_PBR_INST");
 
 		CreateBindable("PaperBurnPS", TEXT("PixelShader.hlsl"), "PS_PaperBurn");
 		CreateBindable("EnvironmentPS", TEXT("PixelShader.hlsl"), "PS_ENV");
+		CreateBindable("SolidPS", TEXT("PixelShader.hlsl"), "PS_SOLID");
 	}
 
 	template <>
@@ -432,13 +461,43 @@ namespace Engine
 			{"Bone", 2, DXGI_FORMAT_R32_SINT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	312
 		};
 
-		const std::shared_ptr<VertexShader>& pVSSkinInst = StaticFindBindable<VertexShader>("anisotropic_microfacet VSSkinInst");
+		std::shared_ptr<VertexShader> pVSSkinInst = StaticFindBindable<VertexShader>("anisotropic_microfacet VSSkinInst");
 
 		CreateBindable("Standard_Inst", pVSSkinInst, descSkinInst, static_cast<int>(sizeof(descSkinInst) / sizeof(D3D11_INPUT_ELEMENT_DESC)), 312);
 
 		D3D11_INPUT_ELEMENT_DESC descP = { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 };
 
 		CreateBindable("P", StaticFindBindable<VertexShader>("PointLightVS"), &descP, static_cast<int>(sizeof(descP) / sizeof(D3D11_INPUT_ELEMENT_DESC)));
+
+		D3D11_INPUT_ELEMENT_DESC pDecalInstDesc[] =
+		{
+			{"Tangent", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0},
+			{"BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0},
+			{"Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0},
+			{"Normal", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0},
+			{"BLENDWEIGHT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0},
+			{"Texcoord", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA,0},
+			{"World", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	16
+			{"World", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	32
+			{"World", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	48
+			{"World", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	64
+			{"InvWorldView", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	
+			{"InvWorldView", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	
+			{"InvWorldView", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	
+			{"InvWorldView", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	128
+			{"Diffuse", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	144
+			{"Specular", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	160
+			{"Emissive", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	176
+			{"Roughness", 0, DXGI_FORMAT_R32G32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	184
+			{"MaterialFraction", 0, DXGI_FORMAT_R32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	188
+			{"DECAL", 0, DXGI_FORMAT_R32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	192
+			{"DECAL", 1, DXGI_FORMAT_R32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	196
+			{"DECAL", 2, DXGI_FORMAT_R32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA,1},	//	200
+		};
+
+		std::shared_ptr<VertexShader> pVSDecalInst = StaticFindBindable<VertexShader>("DecalVSInst");
+
+		CreateBindable("Decal_Inst", pVSDecalInst, pDecalInstDesc, static_cast<int>(sizeof(pDecalInstDesc) / sizeof(D3D11_INPUT_ELEMENT_DESC)), 200);
 	}
 
 	template <>

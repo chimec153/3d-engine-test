@@ -114,10 +114,21 @@ namespace Engine
 		__super::Update(fDeltaTime);
 
 		UpdateView();
+
+		if (Graphics::GetInst()->GetCamera().get() == this)
+		{
+			Graphics::GetInst()->SetVeiw(matView);
+		}
 	}
 
 	void Camera::Collision(float fDeltaTime)
 	{
+		__super::Collision(fDeltaTime);
+	}
+
+	void Camera::PostUpdate(float fDeltaTime)
+	{
+		__super::PostUpdate(fDeltaTime);
 	}
 
 	void Camera::PreDraw(float fDeltaTime)

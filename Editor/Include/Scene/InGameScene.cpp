@@ -20,6 +20,11 @@
 #include "Bindable/ColliderSphere.h"
 #include "Bindable/NavMesh.h"
 #include "Input/Input.h"
+#include "Bindable/ColliderOBB.h"
+#include "Bindable/Animation.h"
+#include "Bindable/Material.h"
+#include "Bindable/BindableManager.h"
+
 namespace Editor
 {
 	InGameScene::InGameScene()
@@ -81,96 +86,15 @@ namespace Editor
 		pLight->SetIntensity(0.6f);
 		pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
 
-		CreateProtoType<Player>("Player", Engine::SCENE_TYPE::CURRENT);
+		std::shared_ptr<Engine::Drawable> pTest = CreateDrawable<Engine::Drawable>("test", FindLayer(DEFAULT_LAYER));
 
-		std::vector<const TCHAR*> vecTexture =
+		pTest->Load(TEXT("Attack_A_Slow.FBX"));
+
+		Engine::RenderManager::GetInst()->SetSkyBox(CreateDrawable<Engine::SkyBox>("SkyBox", FindLayer(DEFAULT_LAYER), TEXT("TYbvO.jpg")));
+		if (!Engine::CInput::GetInst()->CreateAction("_W", DIK_W))
 		{
-			TEXT("LandScape\\Terrain_Cliff_15_Large.dds"),
-			TEXT("LandScape\\BD_Terrain_Cliff05.dds"),
-		};
-
-		std::vector<const TCHAR*> vecNormalTexture =
-		{
-			TEXT("LandScape\\Terrain_Cliff_15_Large_NRM.bmp"),
-			TEXT("LandScape\\BD_Terrain_Cliff05_NRM.bmp"),
-		};
-
-		std::vector<const TCHAR*> vecSpecularTexture =
-		{
-			TEXT("LandScape\\Terrain_Cliff_15_Large_SPEC.bmp"),
-			TEXT("LandScape\\BD_Terrain_Cliff05_SPEC.bmp"),
-		};
-
-		std::vector<const TCHAR*> vecBlendTexture =
-		{
-			TEXT("LandScape\\baseAlpha.bmp"),
-			TEXT("LandScape\\RoadAlpha.bmp"),
-		};
-
-		std::shared_ptr<Engine::Terrain> pTerrain = CreateDrawable<Engine::Terrain>("Terrain", FindLayer(DEFAULT_LAYER));
-
-		pTerrain->CreateTerrainTexture("TerrainDiffuse", vecTexture);
-		pTerrain->CreateTerrainNormalTexture("TerrainNormal", vecNormalTexture);
-		pTerrain->CreateTerrainSpecularTexture("TerrainSpecular", vecSpecularTexture);
-		pTerrain->CreateBlendTerrainTexture("TerrainBlend", vecBlendTexture);
-		pTerrain->CreateHeightMap("TerrainHeight", TEXT("LandScape\\height2.bmp"));
-
-		std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = pTerrain->FindChild<Engine::ColliderMesh>();
-
-		pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, ImguiManager::GetInst(), &ImguiManager::CollisionStay);
-
-		//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pTerrain.get(), &Engine::Terrain::CollisionStay);
-		//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::LAST, pTerrain.get(), &Engine::Terrain::CollisionEnd);
-
-		std::vector<float> vecPoints;
-
-		pTerrain->GetPoints(vecPoints);
-
-		std::vector<int> vecTris;
-
-		pTerrain->GetTris(vecTris);
-
-		Engine::Vector3 vMin = { FLT_MAX,FLT_MAX, FLT_MAX };
-		Engine::Vector3 vMax = { FLT_MIN, FLT_MIN, FLT_MIN };
-
-		for (int i = 0; i < static_cast<int>(vecPoints.size()) / 3; ++i)
-		{
-			if (vMin.x > vecPoints[i * 3])
-			{
-				vMin.x = vecPoints[i * 3];
-			}
-
-			if (vMin.y > vecPoints[i * 3 + 1])
-			{
-				vMin.y = vecPoints[i * 3 + 1];
-			}
-
-			if (vMin.z > vecPoints[i * 3 + 2])
-			{
-				vMin.z = vecPoints[i * 3 + 2];
-			}
-
-			if (vMax.x < vecPoints[i * 3])
-			{
-				vMax.x = vecPoints[i * 3];
-			}
-
-			if (vMax.y < vecPoints[i * 3 + 1])
-			{
-				vMax.y = vecPoints[i * 3 + 1];
-			}
-
-			if (vMax.z < vecPoints[i * 3 + 2])
-			{
-				vMax.z = vecPoints[i * 3 + 2];
-			}
+			return false;
 		}
-
-		std::shared_ptr<Engine::NavMesh> pTerrainNavMesh = ImguiManager::GetInst()->CreateNavMesh(vecPoints, vecTris, vMax, vMin);
-
-		pTerrain->AddChild(pTerrainNavMesh);
-
-		Engine::RenderManager::GetInst()->SetSkyBox(CreateDrawable<Engine::SkyBox>("SkyBox", FindLayer(DEFAULT_LAYER), TEXT("gnbRv.jpg")));
 
 		Engine::CInput::GetInst()->AddAction("_W", Engine::CInput::KEY_STATE::PRESS, pCamera.get(), &Engine::Camera::CameraMoveFront);
 		if (!Engine::CInput::GetInst()->CreateAction("_S", DIK_S))
@@ -200,5 +124,25 @@ namespace Editor
 		Engine::CInput::GetInst()->AddAction("_E", Engine::CInput::KEY_STATE::PRESS, pCamera.get(), &Engine::Camera::CameraMoveDown);
 
 		return true;
+	}
+	void InGameScene::Update(float fDeltaTime)
+	{
+		__super::Update(fDeltaTime);
+
+		int iX = Engine::CInput::GetInst()->GetMouseDeltaX();
+		int iY = Engine::CInput::GetInst()->GetMouseDeltaY();
+
+		std::shared_ptr<Engine::Camera> pCamera = Engine::Graphics::GetInst()->GetCamera();
+
+		if (pCamera && !Engine::Window::GetInst()->IsLockRotation())
+		{
+			std::shared_ptr<Engine::Transform> pCamTranform = pCamera->GetTransform();
+
+			if (pCamTranform)
+			{
+				pCamTranform->AddRX(iY * fDeltaTime);
+				pCamTranform->AddRY(iX * fDeltaTime);
+			}
+		}
 	}
 }

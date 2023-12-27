@@ -1,6 +1,7 @@
 #pragma once
 #include "Drawable.h"
 #include "FbxLoader.h"
+#include "../Animation/Notify.h"
 
 namespace Engine
 {
@@ -11,13 +12,42 @@ namespace Engine
         public Bindable
     {
     public:
+        typedef struct _tagSequenceInfo
+        {
+            std::shared_ptr<class Sequence> pSequence;
+            float fTime;
+            std::list<std::shared_ptr<class Notify>> NotifyList;
+
+            std::shared_ptr<class Notify> FindNotify(const std::string& strNotify)  const
+            {
+                std::list<std::shared_ptr<Notify>>::const_iterator iter = NotifyList.begin();
+                std::list<std::shared_ptr<Notify>>::const_iterator iterEnd = NotifyList.end();
+
+                for (; iter != iterEnd; ++iter)
+                {
+                    if ((*iter)->GetTag() == strNotify)
+                    {
+                        return *iter;
+                    }
+                }
+
+                return std::shared_ptr<class Notify>();
+            }
+
+            _tagSequenceInfo() :
+                pSequence()
+                , fTime()
+            {
+            }
+        }SEQUENCEINFO, *PSEQUENCEINFO;
+    public:
         Animation();
         Animation(const Animation& animation);
-        virtual ~Animation() override = default;
+        virtual ~Animation() override;
 
     private:
-        std::unordered_map<std::string, std::shared_ptr<class Sequence>> m_mapSequence;
-        std::shared_ptr<class Sequence>    m_pCurrentSequence;
+        std::unordered_map<std::string, PSEQUENCEINFO> m_mapSequence;
+        PSEQUENCEINFO    m_pCurrentSequence;
         std::list<std::shared_ptr<class JointSocket>> m_SocketList;
         class std::shared_ptr<class Skeleton> m_pSkeleton;
         std::shared_ptr<class ComputeShader> m_pComputeShader;
@@ -25,26 +55,32 @@ namespace Engine
         std::shared_ptr<class StructuredBuffer> m_pMidBuffer;
         std::shared_ptr<class StructuredBuffer> m_pFinalBuffer;
         std::shared_ptr<class StructuredBuffer> m_pPoseBuffer;
-        float   m_fTime;
         std::vector<IKINFO>  m_vecIKInfo;
         std::shared_ptr<class ConstantBuffer<IKCBUFFER>> m_pIKCBuffer;
         Drawable* m_pOwner;
         float   m_fRate;
+        PSEQUENCEINFO m_pAdditiveSequence;
+        std::shared_ptr<class ConstantBuffer<BONECBUFFER>> m_pBoneCBuffer;
+        BONECBUFFER m_tBoneCBuffer;
+        bool m_bStop;
 
     public:
-        void AddSequance(const std::string& strTag, const std::shared_ptr<Sequence>& pSequence);
+        PSEQUENCEINFO AddSequance(const std::string& strTag, const std::shared_ptr<Sequence>& pSequence);
         void AddSequance(const std::string& strTag, const std::vector<FbxLoader::FBXBONEKEYFRAME>& vecPose);
+        std::shared_ptr<Sequence> FindAndAddSequence(const std::string& strTag);
         void ChangeSequence(const std::string& strTag);
         std::shared_ptr<class JointSocket> AddSocket(int iJointIndex, const std::shared_ptr<Drawable>& pDrawable);
         std::shared_ptr<class Sequence> GetCurrentSequence()    const;
+        std::shared_ptr<class Sequence> GetAdditiveSequence()    const;
         const std::list<std::shared_ptr<class JointSocket>>& GetSocketList()  const;
         void AddSocket(const std::string& strJoint, const std::shared_ptr<JointSocket>& pSocket);
         void AddSocket(int iJoint, const std::shared_ptr<JointSocket>& pSocket);
+        void SetSkeleton(const std::string& strTag);
         void SetSkeleton(std::shared_ptr<Skeleton> pSkeleton);
         class std::shared_ptr<class Skeleton> GetSkeleton() const;
         void UpdateMatrix();
         void MatrixPostProcess();
-        const std::unordered_map<std::string, std::shared_ptr<class Sequence>>& GetSequences()  const;
+        const std::unordered_map<std::string, PSEQUENCEINFO>& GetSequences()  const;
         float GetTime() const;
         int GetCurrentAnimID()  const;
         std::shared_ptr<StructuredBuffer> GetFinalBuffer()  const;
@@ -54,9 +90,16 @@ namespace Engine
         void SetTime(float fTime);
         float GetRate() const;
         void SetRate(float fRate);
+        void SetLoop(const std::string& strSeq);
+        void SetNextSequence(const std::string& strSeq, const std::string& strNext);
+        std::shared_ptr<class Notify> AddNotify(const std::string& strSeq, const std::string& strNotify, int iFrame);
+        std::shared_ptr<class Notify> AddNotify(const std::string& strSeq, const std::string& strNotify, float fTime);
+        void SetAdditiveSequence(const std::string& strSequence);
+        const PSEQUENCEINFO FindSeuqence(const std::string& strSeq) const;
 
     private:
-        std::shared_ptr<Sequence> FindSequence(const std::string& strTag)   const;
+        std::shared_ptr<class Notify> AddNotify(const std::string& strSeq, const std::string& strNotify);
+        PSEQUENCEINFO FindSequence(const std::string& strTag);
         PIKINFO FindIkInfo(int iIndex);
 
     public:

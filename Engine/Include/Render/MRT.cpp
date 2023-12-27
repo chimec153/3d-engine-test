@@ -123,6 +123,11 @@ namespace Engine
 		return m_pDepthSRV;
 	}
 
+	CPtr<ID3D11DepthStencilView> MRT::GetDSV() const
+	{
+		return m_pDSV;
+	}
+
 	void MRT::Clear(D3D11_CLEAR_FLAG eClearFlag)
 	{
 		float color[] = { 0.f, 0.f, 0.f, 0.f };
@@ -137,9 +142,14 @@ namespace Engine
 
 	void MRT::SetTargets()
 	{
+		SetTargets(m_pDSV);
+	}
+
+	void MRT::SetTargets(CPtr<ID3D11DepthStencilView> pDSV)
+	{
 		std::vector<ID3D11RenderTargetView*> vecRTV(8);
 
-		Graphics::GetInst()->GetDeviceContext()->OMGetRenderTargets((UINT)vecRTV.size(), &vecRTV[0], m_pPrevDSV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->OMGetRenderTargets((UINT)vecRTV.size(), &vecRTV[0], &m_pPrevDSV);
 
 		for (size_t i = 0; i < vecRTV.size(); ++i)
 		{
@@ -155,11 +165,11 @@ namespace Engine
 
 		if (vecRTV.size())
 		{
-			Graphics::GetInst()->GetDeviceContext()->OMSetRenderTargets((UINT)m_vecRTV.size(), &vecRTV[0], *m_pDSV);
+			Graphics::GetInst()->GetDeviceContext()->OMSetRenderTargets((UINT)m_vecRTV.size(), &vecRTV[0], *pDSV);
 		}
 		else
 		{
-			Graphics::GetInst()->GetDeviceContext()->OMSetRenderTargets(0U, nullptr, *m_pDSV);
+			Graphics::GetInst()->GetDeviceContext()->OMSetRenderTargets(0U, nullptr, *pDSV);
 		}
 	}
 
@@ -167,7 +177,7 @@ namespace Engine
 	{
 		std::vector<ID3D11RenderTargetView*> vecRTV(8);
 
-		Graphics::GetInst()->GetDeviceContext()->OMGetRenderTargets((UINT)vecRTV.size(), &vecRTV[0], m_pPrevDSV.GetAddressof());
+		Graphics::GetInst()->GetDeviceContext()->OMGetRenderTargets((UINT)vecRTV.size(), &vecRTV[0], &m_pPrevDSV);
 
 		for (size_t i = 0; i < vecRTV.size(); ++i)
 		{

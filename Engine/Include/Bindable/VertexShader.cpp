@@ -4,10 +4,12 @@
 namespace Engine
 {
 
-	VertexShader::VertexShader(const TCHAR* pFilePath, const char* pEntry) :
+	VertexShader::VertexShader(const TCHAR* pFilePath, const char* pEntry, std::shared_ptr<class InputLayout> pInputLayout, std::shared_ptr<class InputLayout> pInstInputLayout) :
 		Shader(pFilePath, pEntry)
 		, pVertexShader()
 		, pPrevVertexShader()
+		, m_pInputLayout(pInputLayout)
+		, m_pInputLayoutInst(pInstInputLayout)
 	{
 		SetBindableType(BINDABLE_TYPE::VERTEX_SHADER);
 
@@ -47,6 +49,16 @@ namespace Engine
 
 	void VertexShader::Update(float fDeltaTime)
 	{
+	}
+
+	std::shared_ptr<class InputLayout> VertexShader::GetInputLayout() const
+	{
+		return m_pInputLayout;
+	}
+
+	std::shared_ptr<class InputLayout> VertexShader::GetInstInputLayout() const
+	{
+		return m_pInputLayoutInst;
 	}
 
 	void VertexShader::LoadShader()

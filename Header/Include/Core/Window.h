@@ -71,6 +71,7 @@ namespace Engine
 		bool Update(float fDeltaTime);
 		void FixedUpdate(float fDeltaTime);
 		void Collision(float fDeltaTime);
+		bool PostUpdate(float fDeltaTime);
 		void PreDraw(float fDeltaTime);
 		void Draw(float fDeltaTime);
 

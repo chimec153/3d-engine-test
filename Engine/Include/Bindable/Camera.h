@@ -31,6 +31,7 @@ namespace Engine
         virtual void Input(float fDeltaTime) override;
         virtual void Update(float fDeltaTime) override;
         virtual void Collision(float fDeltaTime) override;
+        virtual void PostUpdate(float fDeltaTime) override;
         virtual void PreDraw(float fDeltaTime) override;
         virtual void Bind() override;
         virtual std::shared_ptr<Bindable> Clone() override;

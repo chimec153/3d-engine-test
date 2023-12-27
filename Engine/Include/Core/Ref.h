@@ -69,6 +69,7 @@ namespace Engine
 			m_bEnable = false;
 		}
 	public:
+		virtual void SaveFromFullPath(const TCHAR* pFullPath);
 		virtual void SaveFromFullPath(const char* pFullPath);
 		virtual void SaveFromPath(const char* pFilePath, const std::string& strPathKey = ROOT_PATH);
 		virtual void LoadFromPath(const char* pFilePath, const std::string& strPathKey = ROOT_PATH);

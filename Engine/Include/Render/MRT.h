@@ -23,10 +23,12 @@ namespace Engine
     public:
         const std::vector<CPtr<ID3D11ShaderResourceView>>& GetSRVs()    const;
         CPtr<ID3D11ShaderResourceView> GetDepthSRV()    const;
+        CPtr<ID3D11DepthStencilView> GetDSV()   const;
 
     public:
         void Clear(D3D11_CLEAR_FLAG eClearFlag = (D3D11_CLEAR_FLAG)((int)D3D11_CLEAR_DEPTH | (int)D3D11_CLEAR_STENCIL));
         void SetTargets();
+        void SetTargets(CPtr<ID3D11DepthStencilView> pDSV);
         void SetRenderTargets();
         void ResetTargets();
         void SetSRV();

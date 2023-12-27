@@ -13,6 +13,7 @@ namespace Engine
 		, m_pPaperBurnTexture(pTexture)
 		, m_pCBuffer(StaticFindBindable<ConstantBuffer<PAPERBURNCBUFFER>>("PaperBurn"))
 		, m_bStart(false)
+		, m_bCalled()
 	{
 		SetBindableType(BINDABLE_TYPE::PAPERBURN);
 	}
@@ -24,6 +25,7 @@ namespace Engine
 		, m_pCBuffer(paper.m_pCBuffer)
 		, m_bStart(paper.m_bStart)
 	{
+		memcpy_s(m_bCalled, static_cast<int>(PAPER_BURN_STAGE::END), paper.m_bCalled, static_cast<int>(PAPER_BURN_STAGE::END));
 	}
 
 	void Engine::PaperBurn::SetPaperBurnTexture(std::shared_ptr<Texture> pTexture)
@@ -76,6 +78,16 @@ namespace Engine
 		m_tCBuffer.fEndRate = fRate;
 	}
 
+	void PaperBurn::AddCallBack(PAPER_BURN_STAGE eStage, std::function<void(float)> pFunc)
+	{
+		m_vecCallBack[static_cast<int>(eStage)].push_back(pFunc);
+	}
+
+	void PaperBurn::AddCallBack(PAPER_BURN_STAGE eStage, void(*pFunc)(float))
+	{
+		m_vecCallBack[static_cast<int>(eStage)].push_back(std::bind(pFunc, std::placeholders::_1));
+	}
+
 	void Engine::PaperBurn::Update(float fDeltaTime)
 	{
 		__super::Update(fDeltaTime);
@@ -86,7 +98,48 @@ namespace Engine
 
 			if (m_tCBuffer.fTime >= m_tCBuffer.fMaxTime)
 			{
+				for (int i = 0; i < static_cast<int>(m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::OUT_STAGE)].size()); ++i)
+				{
+					m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::OUT_STAGE)][i](m_tCBuffer.fTime);
+				}
+
 				m_bStart = false;
+			}
+			else if (!m_bCalled[static_cast<int>(PAPER_BURN_STAGE::FINAL)] && m_tCBuffer.fTime >= m_tCBuffer.fFinalRate)
+			{
+				m_bCalled[static_cast<int>(PAPER_BURN_STAGE::FINAL)] = true;
+
+				for (int i = 0; i < static_cast<int>(m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::FINAL)].size()); ++i)
+				{
+					m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::FINAL)][i](m_tCBuffer.fTime);
+				}
+			}
+			else if (!m_bCalled[static_cast<int>(PAPER_BURN_STAGE::MID)] && m_tCBuffer.fTime >= m_tCBuffer.fMidRate)
+			{
+				m_bCalled[static_cast<int>(PAPER_BURN_STAGE::MID)] = true;
+
+				for (int i = 0; i < static_cast<int>(m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::MID)].size()); ++i)
+				{
+					m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::MID)][i](m_tCBuffer.fTime);
+				}
+			}
+			else if (!m_bCalled[static_cast<int>(PAPER_BURN_STAGE::START)] && m_tCBuffer.fTime >= m_tCBuffer.fStartRate)
+			{
+				m_bCalled[static_cast<int>(PAPER_BURN_STAGE::START)] = true;
+
+				for (int i = 0; i < static_cast<int>(m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::START)].size()); ++i)
+				{
+					m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::START)][i](m_tCBuffer.fTime);
+				}
+			}
+			else if (!m_bCalled[static_cast<int>(PAPER_BURN_STAGE::READY)])
+			{
+				m_bCalled[static_cast<int>(PAPER_BURN_STAGE::READY)] = true;
+
+				for (int i = 0; i < static_cast<int>(m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::READY)].size()); ++i)
+				{
+					m_vecCallBack[static_cast<int>(PAPER_BURN_STAGE::READY)][i](m_tCBuffer.fTime);
+				}
 			}
 		}
 	}

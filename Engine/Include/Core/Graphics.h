@@ -59,11 +59,13 @@ namespace Engine
 		void Clear(float r, float g, float b);
 		void SetRenderTarget();
 		void Update(float fDeltaTime);
+		void PostUpdate(float fDeltaTime);
 
 	public:
 		const Matrix& GetProjectMatrix()	const;
 		const Matrix& GetViewProject()	const;
 		const Matrix& GetView()	const;
+		void SetVeiw(const Matrix& matView);
 		std::shared_ptr<class Camera> GetCamera()	const;
 		void SetCamera(const std::shared_ptr<class Camera>& pCamera);
 		void SetCamera2(const std::shared_ptr<class Camera>& pCamera);

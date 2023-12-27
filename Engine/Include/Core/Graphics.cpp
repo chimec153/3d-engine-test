@@ -145,15 +145,10 @@ namespace Engine
 
 	void Graphics::Update(float fDeltaTime)
 	{
-		pCamera->GetTransform()->Update(0.f);
+	}
 
-		pCamera->UpdateView();
-
-		//pLight->Update(0.f);
-
-		m_matView = pCamera->GetView();
-
-		m_matViewProject = m_matView * m_matProject;
+	void Graphics::PostUpdate(float fDeltaTime)
+	{
 	}
 
 	const Matrix& Graphics::GetProjectMatrix() const
@@ -168,7 +163,14 @@ namespace Engine
 
 	const Matrix& Graphics::GetView() const
 	{
-		return m_matView;
+		return pCamera->GetView();
+	}
+
+	void Graphics::SetVeiw(const Matrix& matView)
+	{
+		m_matView = matView;
+
+		m_matViewProject = m_matView * m_matProject;
 	}
 
 	std::shared_ptr<class Camera> Graphics::GetCamera() const

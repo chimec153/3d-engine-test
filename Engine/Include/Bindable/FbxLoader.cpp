@@ -68,6 +68,8 @@ namespace Engine
 
 		LoadScene(m_pScene->GetRootNode());
 
+		LoadBindPose();
+
 		LoadAnimation();
 
 		for (int i = 0; i < static_cast<int>(m_vecSequence.size()); ++i)
@@ -90,6 +92,13 @@ namespace Engine
 		{
 			for (int j = 0; j < m_vecSequence[i].vecBoneKeyFrame.size(); ++j)
 			{
+				fbxsdk::FbxAMatrix matBind;
+
+				for (int k = 0; k < 4; ++k)
+				{
+					matBind.SetRow(k, m_vecBindPose[j].GetRow(k));
+				}
+
 				for (int k = 0; k < m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame.size(); ++k)
 				{
 					fbxsdk::FbxAMatrix matConvert;
@@ -99,7 +108,7 @@ namespace Engine
 					matConvert.SetRow(2, { 0.f, 1.f, 0.f, 0.f });
 					matConvert.SetRow(3, { 0.f, 0.f, 0.f, 1.f });
 
-					m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame[k].matTransform =
+					m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame[k].matTransform = 
 						matConvert * m_vecSequence[i].vecBoneKeyFrame[j].vecKeyFrame[k].matTransform * matConvert.Inverse();
 				}
 			}
@@ -758,12 +767,20 @@ namespace Engine
 				iter->second.resize(4);
 			}
 
+			float fWeightSum = 0.f;
+
+			for (int i = 0; i < iter->second.size(); ++i)
+			{
+				fWeightSum += iter->second[i].fWeight;
+			}
+
 			for (int i = 0; i < iter->second.size(); ++i)
 			{
 				if (i < 3)
 				{
-					group.tMesh.vecVertex[iter->first].blendWeight[i] = iter->second[i].fWeight;
+					group.tMesh.vecVertex[iter->first].blendWeight[i] = iter->second[i].fWeight / fWeightSum;
 				}
+
 				group.tMesh.vecVertex[iter->first].blendIndecies[i] = static_cast<float>(iter->second[i].iBoneIndex);
 			}
 		}
@@ -1047,10 +1064,8 @@ namespace Engine
 
 				tTime.SetFrame(i, m_vecSequence[iAnimStackIndex].eTimeMode);
 
-				fbxsdk::FbxAMatrix tMatrix;
-
-				m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].matTransform =
-					matT * matR * matS ;
+				m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].matTransform = 
+					matT * matR * matS;
 			}
 		}
 
@@ -1112,6 +1127,12 @@ namespace Engine
 
 				if (iFrame - iPrevFrame - 1 == 0)
 				{
+					fbxsdk::FbxTime time;
+
+					time.SetFrame(iFrame, m_vecSequence[iAnimStackIndex].eTimeMode);
+
+					m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[iFrame].dTime = time.GetSecondDouble();
+
 					vecPos[iFrame].x = fX;
 				}
 				else
@@ -1127,7 +1148,31 @@ namespace Engine
 							m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
 						}
 
-						vecPos[i].x = fX * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
+						int iInterpolation = pCurvePosX->KeyGetInterpolation(k);
+
+						if (iInterpolation & fbxsdk::FbxAnimCurveDef::EInterpolationType::eInterpolationConstant)
+						{
+							if (i == iFrame)
+							{
+								vecPos[i].x = fX;
+							}
+							else
+							{
+								vecPos[i].x = fPrevValue;
+							}
+						}
+						else if (iInterpolation & fbxsdk::FbxAnimCurveDef::EInterpolationType::eInterpolationLinear)
+						{
+							vecPos[i].x = fX * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
+						}
+						else if (iInterpolation & fbxsdk::FbxAnimCurveDef::EInterpolationType::eInterpolationCubic)
+						{
+							assert(false);
+						}
+						else
+						{
+							assert(false);
+						}
 					}
 				}
 
@@ -1298,6 +1343,42 @@ namespace Engine
 				m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
 
 				vecPos[i].z = fPrevValue;
+			}
+		}
+	}
+
+	void FbxLoader::LoadBindPose()
+	{
+		int iCount = m_pScene->GetPoseCount();
+
+		for (int i = 0; i < iCount && i < 1; ++i)
+		{
+			fbxsdk::FbxPose* pPose = m_pScene->GetPose(i);
+
+			if (!pPose->IsBindPose())
+			{
+				continue;
+			}
+
+			int iJointCount = pPose->GetCount();
+
+			m_vecBindPose.resize(m_tSkeleton.vecBone.size());
+
+			fbxsdk::FbxMatrix mat;
+
+			mat.SetRow(0, { 1.f, 0.f, 0.f, 0.f });
+			mat.SetRow(1, { 0.f, 0.f, 1.f, 0.f });
+			mat.SetRow(2, { 0.f, 1.f, 0.f, 0.f });
+			mat.SetRow(3, { 0.f, 0.f, 0.f, 1.f});
+
+			for (int j = 0; j < iJointCount; ++j)
+			{
+				int iBoneIndex = FindBoneIndex(pPose->GetNodeName(j).GetCurrentName());
+
+				if (iBoneIndex >= 0 && m_vecBindPose.size() > iBoneIndex)
+				{
+					m_vecBindPose[iBoneIndex] = pPose->GetMatrix(j);
+				}
 			}
 		}
 	}
@@ -1635,4 +1716,5 @@ namespace Engine
 	}
 
 }
+
 

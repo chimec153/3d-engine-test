@@ -5,6 +5,26 @@
 
 namespace Engine
 {
+	Mesh::Mesh(int iCount)	:
+		Bindable()
+	{
+		SetBindableType(Engine::BINDABLE_TYPE::MESH);
+
+		m_vecMeshContainer.resize(iCount);
+	}
+	Mesh::Mesh(const Mesh& mesh)	:
+		Bindable(mesh)
+		, m_vecMeshContainer(mesh.m_vecMeshContainer)
+		, m_vBoundingSphereInfo(mesh.m_vBoundingSphereInfo)
+	{
+		for (size_t i = 0; i < m_vecMeshContainer.size(); ++i)
+		{
+			for (size_t j = 0; j < m_vecMeshContainer[i].vecMaterial.size(); ++j)
+			{
+				m_vecMeshContainer[i].vecMaterial[j] = m_vecMeshContainer[i].vecMaterial[j] ? std::static_pointer_cast<Material>(m_vecMeshContainer[i].vecMaterial[j]->Clone()) : nullptr;
+			}
+		}
+	}
 	const Vector4& Mesh::GetBoundingSphereInfo() const
 	{
 		return m_vBoundingSphereInfo;
@@ -36,6 +56,11 @@ namespace Engine
 	}
 #endif
 
+	void Mesh::SetVertexCount(int iIndex, int iCount)
+	{
+		m_vecMeshContainer[iIndex].m_iCount = iCount;
+	}
+
 	void Mesh::SetTextures(const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture)
 	{
 		assert(m_vecMeshContainer.size() <= vecTexture.size());
@@ -57,7 +82,7 @@ namespace Engine
 		m_vecMeshContainer[iIndex].vecTexture = vecTexture;
 	}
 
-	void Mesh::SetMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial)
+	void Mesh::AddMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial)
 	{
 		if (m_vecMeshContainer.size() <= iIndex || iIndex < 0)
 		{
@@ -79,6 +104,19 @@ namespace Engine
 		}
 
 		return m_vecMeshContainer[iIndex].vecMaterial[iSubIndex];
+	}
+
+	void Mesh::SetMaterial(int iIndex, int iSubIndex, std::shared_ptr<Material> pMaterial)
+	{
+		if (m_vecMeshContainer.size() <= iIndex ||
+			m_vecMeshContainer[iIndex].vecMaterial.size() <= iSubIndex ||
+			iIndex < 0 || iSubIndex < 0)
+		{
+			assert(false);
+			return;
+		}
+
+		m_vecMeshContainer[iIndex].vecMaterial[iSubIndex] = pMaterial;
 	}
 
 	bool Mesh::SetVertexBuffer(int iIndex, const void* pData, int iSize)
@@ -123,6 +161,17 @@ namespace Engine
 		return true;
 	}
 
+	void Mesh::UsePaperBurn()
+	{
+		for (int i = 0; i < static_cast<int>(m_vecMeshContainer.size()); ++i)
+		{
+			for (int j = 0; j < static_cast<int>(m_vecMeshContainer[i].vecMaterial.size()); ++j)
+			{
+				m_vecMeshContainer[i].vecMaterial[j]->UsePaperBurn();
+			}
+		}
+	}
+
 	void Mesh::Bind()
 	{
 	}
@@ -161,7 +210,7 @@ namespace Engine
 				{
 #ifdef _DEBUG
 					Graphics::GetInst()->GetDeviceContext()->DrawIndexed(m_vecMeshContainer[i].m_vecIndexBuffer[j].iCount - m_vecMeshContainer[i].m_vecIndexBuffer[j].iOffset, m_vecMeshContainer[i].m_vecIndexBuffer[j].iOffset, 0);
-#elif
+#else
 					Graphics::GetInst()->GetDeviceContext()->DrawIndexed(m_vecMeshContainer[i].m_vecIndexBuffer[j].iCount, 0, 0);
 #endif
 				}
@@ -169,6 +218,11 @@ namespace Engine
 				{
 					Graphics::GetInst()->GetDeviceContext()->Draw(m_vecMeshContainer[i].m_iCount, 0);
 				}
+			}
+
+			if (m_vecMeshContainer[i].m_vecIndexBuffer.empty())
+			{
+				Graphics::GetInst()->GetDeviceContext()->Draw(m_vecMeshContainer[i].m_iCount, 0);
 			}
 		}
 	}
@@ -218,7 +272,7 @@ namespace Engine
 
 	std::shared_ptr<Bindable> Mesh::Clone()
 	{
-		return std::static_pointer_cast<Bindable>(shared_from_this());
+		return std::make_shared<Mesh>(*this);
 	}
 
 	void Mesh::Load(FILE* pFile)
@@ -290,7 +344,7 @@ namespace Engine
 
 				pMaterial->Load(pFile);
 
-				SetMaterial(i, pMaterial);
+				AddMaterial(i, pMaterial);
 			}
 
 			SetTextures(i, vecTexture);

@@ -13,7 +13,7 @@ Engine::Agent::Agent()	:
 	SetBindableType(BINDABLE_TYPE::AGENT);
 }
 
-Engine::Agent::Agent(std::shared_ptr<Transform> pTransform, class NavMesh* pNavMesh, const Vector3& pos)	:
+Engine::Agent::Agent(std::shared_ptr<Transform> pTransform, std::weak_ptr<NavMesh> pNavMesh, const Vector3& pos)	:
 	Bindable()
 	, m_pTransform(pTransform)
 	, m_pNavMesh(pNavMesh)
@@ -26,7 +26,7 @@ Engine::Agent::Agent(std::shared_ptr<Transform> pTransform, class NavMesh* pNavM
 	m_pCrowdParams->obstacleAvoidanceType = 0;
 	m_pCrowdParams->separationWeight = 0.f;
 
-	CreateAgent(pos);
+	m_iAgentIndex = CreateAgent(pos);
 
 	SetBindableType(BINDABLE_TYPE::AGENT);
 }
@@ -41,36 +41,47 @@ Engine::Agent::Agent(const Agent& agent)	:
 	*m_pCrowdParams = *agent.m_pCrowdParams;
 }
 
+Engine::Agent::~Agent()
+{
+	if (!m_pNavMesh.expired())
+	{
+		m_pNavMesh.lock()->DeleteAgent(m_iAgentIndex);
+		m_pNavMesh.reset();
+
+		m_iAgentIndex = -1;
+	}
+}
+
 void Engine::Agent::SetTargetPos(const Vector3& pos)
 {
-	if (m_pNavMesh)
+	if (!m_pNavMesh.expired())
 	{
-		m_pNavMesh->SetTargetPos(m_iAgentIndex, pos);
+		m_pNavMesh.lock()->SetTargetPos(m_iAgentIndex, pos);
 	}
 }
 
 const Engine::Vector3 Engine::Agent::GetAgentVelocity() const
 {
-	if (!m_pNavMesh)
+	if (m_pNavMesh.expired())
 	{
 		return Vector3();
 	}
 
-	return m_pNavMesh->GetAgentVelocity(m_iAgentIndex);
+	return m_pNavMesh.lock()->GetAgentVelocity(m_iAgentIndex);
 }
 
 int Engine::Agent::CreateAgent(const Vector3& pos)
 {
-	return m_pNavMesh ? m_pNavMesh->CreateAgent(pos, *m_pCrowdParams) : -1;
+	return !m_pNavMesh.expired() ? m_pNavMesh.lock()->CreateAgent(pos, *m_pCrowdParams) : -1;
 }
 
 void Engine::Agent::SetTransform(std::shared_ptr<Transform> pTransform)
 {
 	if (m_iAgentIndex != -1)
 	{
-		if (m_pNavMesh)
+		if (!m_pNavMesh.expired())
 		{
-			m_pNavMesh->DeleteAgent(m_iAgentIndex);
+			m_pNavMesh.lock()->DeleteAgent(m_iAgentIndex);
 		}
 	}
 
@@ -82,7 +93,7 @@ void Engine::Agent::SetTransform(std::shared_ptr<Transform> pTransform)
 	}
 }
 
-void Engine::Agent::SetNavMesh(NavMesh* pNavMesh)
+void Engine::Agent::SetNavMesh(std::weak_ptr<NavMesh> pNavMesh)
 {
 	m_pNavMesh = pNavMesh;
 }
@@ -91,11 +102,11 @@ void Engine::Agent::Update(float fDeltaTime)
 {
 	__super::Update(fDeltaTime);
 
-	if (m_pNavMesh && m_pTransform)
+	if (!m_pNavMesh.expired() && m_pTransform)
 	{
-		m_pTransform->SetPosition(m_pNavMesh->GetAgentPos(m_iAgentIndex));
+		m_pTransform->SetPosition(m_pNavMesh.lock()->GetAgentPos(m_iAgentIndex));
 
-		Vector3 vVelocity = m_pNavMesh->GetAgentVelocity(m_iAgentIndex);
+		Vector3 vVelocity = m_pNavMesh.lock()->GetAgentVelocity(m_iAgentIndex);
 
 		float fLength = vVelocity.Length();
 

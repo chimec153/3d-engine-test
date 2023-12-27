@@ -79,6 +79,10 @@ namespace Engine
 
 	void Transform::Update(float fDeltaTime)
 	{
+	}
+
+	void Transform::PostUpdate(float fDeltaTime)
+	{
 		if (m_bUpdateRotation)
 		{
 			m_bUpdateRotation = false;
@@ -204,7 +208,7 @@ namespace Engine
 
 		if (m_pParentTrasnform)
 		{
-			m_vPosition = (Matrix::Scaling(m_pParentTrasnform->GetScale()) * Matrix::RotationXYZ(m_pParentTrasnform->GetRotation())).TransformCoord(m_vRelativePosition) + m_pParentTrasnform->GetPosition();
+			m_vPosition = (Matrix::RotationXYZ(m_pParentTrasnform->GetRotation())).TransformCoord(m_vRelativePosition) + m_pParentTrasnform->GetPosition();
 		}
 		else
 		{
@@ -250,7 +254,7 @@ namespace Engine
 		{
 			m_vRotation += m_pParentTrasnform->GetRotation();
 
-			m_vPosition = (Matrix::Scaling(m_pParentTrasnform->GetScale()) * Matrix::RotationXYZ(m_pParentTrasnform->GetRotation())).TransformCoord(m_vRelativePosition) + m_pParentTrasnform->GetPosition();
+			m_vPosition = (Matrix::RotationXYZ(m_pParentTrasnform->GetRotation())).TransformCoord(m_vRelativePosition) + m_pParentTrasnform->GetPosition();
 
 			m_bUpdatePosition = true;
 		}
@@ -567,6 +571,11 @@ namespace Engine
 		return m_vRotationVelocity.z;
 	}
 
+	float Transform::GetRelativeRY() const
+	{
+		return m_vRelativeRotation.y;
+	}
+
 	void Transform::SetRandomPosAndRotation()
 	{
 		SetX((float)(rand() % 5 - 2));
@@ -649,6 +658,27 @@ namespace Engine
 	void Transform::SetRelativeRotation(const Vector3& vRotation)
 	{
 		m_vRelativeRotation = vRotation;
+
+		UpdateRotation();
+	}
+
+	void Transform::AddRelativeRX(float fX)
+	{
+		m_vRelativeRotation.x += fX;
+
+		UpdateRotation();
+	}
+
+	void Transform::AddRelativeRY(float fY)
+	{
+		m_vRelativeRotation.y += fY;
+
+		UpdateRotation();
+	}
+
+	void Transform::AddRelativeRZ(float fZ)
+	{
+		m_vRelativeRotation.z += fZ;
 
 		UpdateRotation();
 	}

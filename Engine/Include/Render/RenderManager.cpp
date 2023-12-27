@@ -67,16 +67,7 @@ namespace Engine
 
 	void RenderManager::AddDrawable(const std::shared_ptr<Drawable>& pDrawable)
 	{
-		const std::shared_ptr<Material>& pMaterial = pDrawable->GetMaterial();
-
-		std::hash<std::string> hs;
-
-		size_t iKey = 1;
-
-		if (pMaterial)
-		{
-			iKey *= hs(pMaterial->GetTag());
-		}
+		size_t iKey = pDrawable->GetInstanceKey();
 
 		const std::shared_ptr<VertexShader>& pVertexShader = pDrawable->GetVertexShader();
 
@@ -88,11 +79,7 @@ namespace Engine
 
 		if (pVertexShader && pPixelShader)
 		{
-			iKey *= pMesh ? hs(pMesh->GetTag()) : 1;
-
-			std::shared_ptr<Animation> pAnimation = pDrawable->GetAnimation();
-
-			iKey *= pAnimation ? hs(pAnimation->GetTag()) : 1;
+			const std::vector<std::shared_ptr<Texture>>& vecTexture = pDrawable->GetTextures();
 
 			if (pDrawable->IsInViewFrustum())
 			{
@@ -104,32 +91,39 @@ namespace Engine
 					{
 						const std::shared_ptr<InputLayout>& pInputLayout = pDrawable->FindChild<InputLayout>();
 
-						const std::shared_ptr<InputLayout>& pInstInputLayout = pInputLayout ? StaticFindBindable<InputLayout>(pInputLayout->GetTag() + "_Inst") : nullptr;
+						std::shared_ptr<InputLayout> pInstInputLayout = pVertexShader->GetInstInputLayout() ? pVertexShader->GetInstInputLayout() : (StaticFindBindable<InputLayout>((pInputLayout ? pInputLayout->GetTag() : std::string()) + "_Inst"));
 
-						const std::shared_ptr<VertexShader>& pInstVertexShader = StaticFindBindable<VertexShader>(pVertexShader->GetTag() + "Inst");
-
-						const std::shared_ptr<VertexShader>& pInstShadowVertexShader = StaticFindBindable<VertexShader>(pVertexShader->GetTag() + "InstShadow");
-
-						const std::shared_ptr<PixelShader>& pInstPixelShader = StaticFindBindable<PixelShader>(pPixelShader->GetTag() + "Inst");
-
-						const std::vector<std::shared_ptr<Texture>>& vecTexture = pDrawable->GetTextures();
-
-						std::shared_ptr<RenderInstancing> pRenderInstancing = std::make_shared<RenderInstancing>(pMesh, pInstInputLayout,
-							pInstVertexShader, pInstShadowVertexShader, pInstPixelShader, pInstInputLayout ? pInstInputLayout->GetInstSize() : 0, vecTexture);
-
-						pRenderInstancing->SetTag((pMesh ? pMesh->GetTag() : std::string()) +
-							pVertexShader->GetTag() + pPixelShader->GetTag());
-
-						pRenderInstancing->AddDrawable(pDrawable);
-
-						if (pAnimation)
+						if (pInstInputLayout)
 						{
-							pRenderInstancing->CreateBoneBuffer(pAnimation->GetSequences());
+							const std::shared_ptr<VertexShader>& pInstVertexShader = StaticFindBindable<VertexShader>(pVertexShader->GetTag() + "Inst");
 
-							pRenderInstancing->SetSkeleton(pAnimation->GetSkeleton());
+							const std::shared_ptr<VertexShader>& pInstShadowVertexShader = StaticFindBindable<VertexShader>(pVertexShader->GetTag() + "InstShadow");
+
+							const std::shared_ptr<PixelShader>& pInstPixelShader = StaticFindBindable<PixelShader>(pPixelShader->GetTag() + "Inst");
+
+							std::shared_ptr<RenderInstancing> pRenderInstancing = std::make_shared<RenderInstancing>(pMesh, pInstInputLayout,
+								pInstVertexShader, pInstShadowVertexShader, pInstPixelShader, pInstInputLayout ? pInstInputLayout->GetInstSize() : 0, vecTexture);
+
+							pRenderInstancing->SetTag((pMesh ? pMesh->GetTag() : std::string()) +
+								pVertexShader->GetTag() + pPixelShader->GetTag());
+
+							pRenderInstancing->AddDrawable(pDrawable);
+
+							std::shared_ptr<Animation> pAnimation = pDrawable->GetAnimation();
+
+							if (pAnimation)
+							{
+								pRenderInstancing->CreateBoneBuffer(pAnimation->GetSequences());
+
+								pRenderInstancing->SetSkeleton(pAnimation->GetSkeleton());
+							}
+
+							m_mapInstance[iLayer].insert(std::make_pair(iKey, pRenderInstancing));
 						}
-
-						m_mapInstance[iLayer].insert(std::make_pair(iKey, pRenderInstancing));
+						else
+						{
+							m_RenderList[iLayer].push_back(pDrawable);
+						}
 					}
 					else
 					{
@@ -150,7 +144,7 @@ namespace Engine
 				{
 					const std::shared_ptr<InputLayout>& pInputLayout = pDrawable->FindChild<InputLayout>();
 
-					const std::shared_ptr<InputLayout>& pInstInputLayout = StaticFindBindable<InputLayout>(pInputLayout->GetTag() + "_Inst");
+					const std::shared_ptr<InputLayout>& pInstInputLayout = pVertexShader->GetInstInputLayout() ? pVertexShader->GetInstInputLayout() : (StaticFindBindable<InputLayout>((pInputLayout ? pInputLayout->GetTag() : std::string()) + "_Inst"));
 
 					const std::shared_ptr<VertexShader>& pInstVertexShader = StaticFindBindable<VertexShader>(pVertexShader->GetTag() + "Inst");
 
@@ -257,16 +251,16 @@ namespace Engine
 		m_pDecalMRT->SetTag("DecalMRT");
 
 #ifdef _DEBUG
-		pDebugVertexShader = StaticFindBindable<VertexShader>("NullVS");
+		pNullVertexShader = StaticFindBindable<VertexShader>("NullVS");
 
-		if (pDebugVertexShader == nullptr)
+		if (pNullVertexShader == nullptr)
 		{
 			return false;
 		}
 
-		pDebugPixelShader = StaticFindBindable<PixelShader>("NullPS");
+		pNullPixelShader = StaticFindBindable<PixelShader>("NullPS");
 
-		if (pDebugPixelShader == nullptr)
+		if (pNullPixelShader == nullptr)
 		{
 			return false;
 		}
@@ -328,7 +322,7 @@ namespace Engine
 			return false;
 		}
 
-		m_pNoDepthWrite = StaticFindBindable<DepthStencilState>("NoDepth");
+		m_pNoDepthWrite = StaticFindBindable<DepthStencilState>("NoDepthWrite");
 
 		if (m_pNoDepthWrite == nullptr)
 		{
@@ -440,6 +434,18 @@ namespace Engine
 
 		m_pBloomFinalTexture = std::make_shared<Texture>(Window::GetInst()->GetWidth() / 4, Window::GetInst()->GetHeight() / 4, 3, DXGI_FORMAT_R32G32B32A32_FLOAT);
 
+		m_pBlurTarget = std::make_shared<MRT>(std::vector<DXGI_FORMAT>({DXGI_FORMAT_R8G8B8A8_UNORM}) , 0);
+
+		m_pBlurCS = std::make_shared<ComputeShader>(TEXT("Particle.fx"), "Blur");
+
+		m_pBlurTexture = std::make_shared<Texture>(Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0, DXGI_FORMAT_R8G8B8A8_UNORM);
+
+		pBlurNullVertexShader = std::make_shared<VertexShader>(TEXT("Particle.fx"), "NullVS");
+
+		pBlurNullPixelShader = std::make_shared<PixelShader>(TEXT("Particle.fx"), "NullPS");
+
+		m_pDestAlpha = StaticFindBindable<BlendState>("DestAlpha");
+
 		return true;
 	}
 
@@ -505,14 +511,17 @@ namespace Engine
 
 	void RenderManager::PreRender()
 	{
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[0].begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[0].end();
-
-		for (; iter != iterEnd; ++iter)
+		for (int i = 0; i < static_cast<int>(RENDER_LAYER::END); ++i)
 		{
-			if (iter->second->GetCount() > 4)
+			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[i].begin();
+			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[i].end();
+
+			for (; iter != iterEnd; ++iter)
 			{
-				iter->second->PreRender();
+				if (iter->second->GetCount() > 4)
+				{
+					iter->second->PreRender();
+				}
 			}
 		}
 
@@ -558,6 +567,8 @@ namespace Engine
 		RenderAlpha();
 
 		m_pHDRTexture->ResetTargets();
+
+		RenderBlur();
 
 		PostProcessing();
 
@@ -629,7 +640,11 @@ namespace Engine
 
 	void RenderManager::RenderAlpha()
 	{
-		pMRT->SetDepthSRV(10);
+		m_pHDRTexture->ResetTargets();
+
+		m_pHDRTexture->SetTargets(pMRT->GetDSV());
+
+		//pMRT->SetDepthSRV(10);
 		m_pAlphaBlend->Bind();
 
 		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
@@ -650,13 +665,24 @@ namespace Engine
 				{
 					(*iter)->Bind();
 				}
+
+				std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterI = m_mapInstance[static_cast<int>(RENDER_LAYER::ALPHA)].begin();
+				std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterIEnd = m_mapInstance[static_cast<int>(RENDER_LAYER::ALPHA)].end();
+
+				for (; iterI != iterIEnd; ++iterI)
+				{
+					if (iterI->second->GetCount())
+					{
+						iterI->second->Render();
+					}
+				}
 			}
 
 			pDepthBuffer[i]->ResetSRV(15);
 		}
 
 		m_pAlphaBlend->PostBind();
-		pMRT->ResetSRV(10);
+		//pMRT->ResetSRV(10);
 	}
 
 	void RenderManager::RenderLight()
@@ -827,6 +853,17 @@ namespace Engine
 			(*iter)->Bind();
 		}
 
+		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterI = m_mapInstance[static_cast<int>(RENDER_LAYER::DECAL)].begin();
+		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterIEnd = m_mapInstance[static_cast<int>(RENDER_LAYER::DECAL)].end();
+
+		for (; iterI != iterIEnd; ++iterI)
+		{
+			if (iterI->second->GetCount() > 0)
+			{
+				iterI->second->Render();
+			}
+		}
+
 		m_pNoDepthRead->PostBind();
 
 		m_pDecalBlend->PostBind();
@@ -904,6 +941,8 @@ namespace Engine
 		}
 
 		m_pHDRTexture->Clear();
+
+		m_pBlurTarget->Clear();
 	}
 
 	void RenderManager::HDRDownScaleFirst()
@@ -1008,14 +1047,71 @@ namespace Engine
 
 		m_pBloomTexture->ResetUAV(0);
 	}
+	void RenderManager::RenderBlur()
+	{
+		m_pBlurTarget->SetTargets(pMRT->GetDSV());
+
+		m_pDestAlpha->Bind();
+
+		pDepthBuffer[static_cast<int>(LIGHT_TYPE::DIRECTIONAL)]->SetDepthSRV(15);
+
+		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::BLUR)].begin();
+		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::BLUR)].end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			(*iter)->Bind();
+		}
+
+		pDepthBuffer[static_cast<int>(LIGHT_TYPE::DIRECTIONAL)]->ResetSRV(15);
+
+		m_pDestAlpha->PostBind();
+
+		m_pBlurTarget->ResetTargets();
+
+		m_pBlurTarget->SetSRV(0, 0);
+
+		m_pBlurTexture->SetUAV(0);
+
+		m_pDownScaleCBuffer->Bind();
+
+		m_pBlurCS->Bind();
+
+		m_pBlurCS->Dispatch(static_cast<int>(ceil((Window::GetInst()->GetWidth() * Window::GetInst()->GetHeight()) / 1024.f)));
+
+		m_pBlurTexture->ResetUAV(0);
+
+		m_pBlurTarget->ResetSRV(0);
+
+		m_pAlphaBlend->Bind();
+
+		m_pBlurTexture->Bind();
+
+		pBlurNullVertexShader->Bind();
+
+		pBlurNullPixelShader->Bind();
+
+		m_pHDRTexture->SetTargets();
+
+		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+		Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+		Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
+
+		m_pBlurTexture->PostBind();
+
+		m_pHDRTexture->ResetTargets();
+
+		m_pAlphaBlend->PostBind();
+	}
 #ifdef _DEBUG
 	void RenderManager::RenderDebug()
 	{
 		m_pNoDepthRead->Bind();
 
-		pDebugVertexShader->Bind();
+		pNullVertexShader->Bind();
 
-		pDebugPixelShader->Bind();
+		pNullPixelShader->Bind();
 
 		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 

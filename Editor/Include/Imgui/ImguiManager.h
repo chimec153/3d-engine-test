@@ -24,6 +24,7 @@ namespace Engine
 	class Terrain;
 	class Texture;
 	class Animation;
+	class Sequence;
 }
 namespace Editor
 {
@@ -88,6 +89,7 @@ namespace Editor
 		void Terrain_ShowImguiWindow(std::shared_ptr<Engine::Terrain> pTerrain);
 		void Animation_ImGuiWindow(std::shared_ptr<Engine::Animation> pAnimation);
 		void Scene_ImGuiWindow(Engine::Scene* pScene);
+		void Sequence_ImGuiWindow(std::shared_ptr<Engine::Sequence> pSeq);
 
 	private:
 		float m_fCellSize;

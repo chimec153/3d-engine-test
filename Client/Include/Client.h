@@ -9,13 +9,13 @@
 #ifdef _WIN64
 	#ifdef _DEBUG
 		#pragma comment(lib, "Engine_Debug.lib")
-	#elif
+	#else
 		#pragma comment(lib, "Engine.lib")
 	#endif
 #elif
 	#ifdef _DEBUG
 		#pragma comment(lib, "Engine32_Debug.lib")
-	#elif
+	#else
 		#pragma comment(lib, "Engine32.lib")
 	#endif
 #endif

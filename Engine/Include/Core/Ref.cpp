@@ -3,7 +3,18 @@
 
 namespace Engine
 {
+	void CRef::SaveFromFullPath(const TCHAR* pFullPath)
+	{
+		char strFullPath[MAX_PATH] = {};
 
+#ifdef UNICODE
+		WideCharToMultiByte(CP_ACP, 0, pFullPath, -1, strFullPath, wcslen(pFullPath), nullptr, nullptr);
+#else
+		strcpy_s(strFullPath, pFullPath);
+#endif
+
+		SaveFromFullPath(strFullPath);
+	}
 	void CRef::SaveFromFullPath(const char* pFullPath)
 	{
 		FILE* pFile = nullptr;

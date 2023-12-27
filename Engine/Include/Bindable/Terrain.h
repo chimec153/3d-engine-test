@@ -1,7 +1,10 @@
 #pragma once
 #include "Drawable.h"
+
 namespace Engine
 {
+    class StructuredBuffer;
+
     class ENGINE_DLL Terrain :
         public Drawable
     {
@@ -23,14 +26,16 @@ namespace Engine
         std::shared_ptr<Texture>    m_pBrushTexture;
         std::shared_ptr<class Decal> m_pDecal;
         bool m_bEraseMode;
+        std::shared_ptr<StructuredBuffer> m_pTileTypeBuffer;
+        std::vector<int> m_vecTileType;
 
     public:
         void CreateTerrain(int iWidth, int iHeight);
+        void CreateTileTypeBuffer(int iWidth, int iHeight);
         void CreateTerrainTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath);
         void CreateTerrainNormalTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath);
         void CreateTerrainSpecularTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath);
         void CreateTerrainEmissiveTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath);
-        void CreateBlendTerrainTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath);
         void CreateHeightMap(const std::string& strTag, const TCHAR* pFilePath);
         void SaveHeightMap(const TCHAR* pFilePath, const std::string& strPathKey = TEXTURE_PATH);
         void CreateMeshCollider();
@@ -39,6 +44,11 @@ namespace Engine
         void SetEraseMode();
         void SetAddMode();
         bool IsEraseMode()  const;
+        float GetTerrainHeight(const Vector3& vPos);
+        void AddTerrainHeight(const Vector3& vPos, float fHeight = 1.f);
+        int GetTerrainIndex(const Vector3& vLocalPos)   const;
+        Vector3 GetTerrainLocalPos(const Vector3& vWorldPos);
+        void SetTileType(const Vector3& vWorldPos, int iTileType);
 
     private:
         void CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight);

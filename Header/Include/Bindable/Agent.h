@@ -9,13 +9,13 @@ namespace Engine
     {
     public:
         Agent();
-        Agent(std::shared_ptr<class Transform> pTransform, class NavMesh* pNavMesh, const Vector3& pos);
+        Agent(std::shared_ptr<class Transform> pTransform, std::weak_ptr<class NavMesh> pNavMesh, const Vector3& pos);
         Agent(const Agent& agent);
-        virtual ~Agent() override = default;
+        virtual ~Agent() override;
 
     private:
         std::shared_ptr<class Transform> m_pTransform;
-        class NavMesh* m_pNavMesh;
+        std::weak_ptr<NavMesh> m_pNavMesh;
         int m_iAgentIndex;
         std::unique_ptr<dtCrowdAgentParams> m_pCrowdParams;
 
@@ -24,7 +24,7 @@ namespace Engine
         const Vector3 GetAgentVelocity()  const;
         int CreateAgent(const Vector3& pos);
         void SetTransform(std::shared_ptr<Transform> pTransform);
-        void SetNavMesh(NavMesh* pNavMesh);
+        void SetNavMesh(std::weak_ptr<NavMesh> pNavMesh);
 
     public:
         virtual void Update(float fDeltaTime) override;

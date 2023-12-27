@@ -30,21 +30,17 @@ float Random(float fSeed, float fSeed2)
 }
 
 [numthreads(64, 1, 1)]
-void CS_PARTICLE(uint3 iDispatchThreadID : SV_DispatchThreadID)
+void CS_PARTICLE(uint3 iDispatchThreadID : SV_DispatchThreadID, uint3 iGroupID : SV_GroupID)
 {
     if (!g_vecParticleInfo[iDispatchThreadID.x].alive)
     {
-        if (g_vecEmitter[0] > 0)
-        {
-            int iExpect = g_vecEmitter[0] - 1;
-            
-            int iPrevValue = g_vecEmitter[0];
-            
+        if (g_vecEmitter[iGroupID.x] > 0)
+        {            
             int iOriginValue = 0;
             
-            InterlockedCompareExchange(g_vecEmitter[0], iPrevValue, iPrevValue - 1, iOriginValue);
+            InterlockedCompareExchange(g_vecEmitter[iGroupID.x], g_vecEmitter[iGroupID.x], g_vecEmitter[iGroupID.x] - 1, iOriginValue);
             
-            if (iOriginValue != 0)
+            if (iOriginValue == g_vecEmitter[iGroupID.x] + 1)
             {
                 float fSeed = g_fGlobalAccTime;
                 
@@ -65,7 +61,9 @@ void CS_PARTICLE(uint3 iDispatchThreadID : SV_DispatchThreadID)
                 g_vecParticleInfo[iDispatchThreadID.x].maxage = g_fParticleMaxLifeTime * (1.f + Random(fSeed * 10.f, fSeed * g_fGlobalDeltaTime) * 0.2f);
                 g_vecParticleInfo[iDispatchThreadID.x].pos = g_vParticleMinimumPosition * (1.f - vRandom) + g_vParticleMaximumPosition * vRandom + g_matWorld[3].xyz;
                 g_vecParticleInfo[iDispatchThreadID.x].size = g_vParticleStartSize;
-                g_vecParticleInfo[iDispatchThreadID.x].speed = g_vParticleVelocity;
+                
+                float3 vSpeed = g_vParticleVelocity * (1.f - vRandom) + g_vParticleMaxVelocity * vRandom;
+                g_vecParticleInfo[iDispatchThreadID.x].speed = normalize(vSpeed);
                 g_vecParticleInfo[iDispatchThreadID.x].color = g_vParticleStartColor;
 
             }
@@ -144,4 +142,75 @@ float4 PS_PARTICLE(VSOut input) :   SV_Target
 {
     return input.tangent * g_Texture.Sample(g_sAnisotropic, input.uv);
 
+}
+
+RWTexture2D<float4> g_BlurTexture : register(u0);
+
+[numthreads(1024, 1, 1)]
+void Blur(uint3 iDispatchThreadId : SV_DispatchThreadID)
+{    
+    int iPixelIndex = iDispatchThreadId.x + iDispatchThreadId.y * g_vDownScaleResolution.x * 4;
+    
+    if (iPixelIndex >= g_vDownScaleResolution.x * g_vDownScaleResolution.y * 16)
+    {
+        return;
+    }
+    
+    int2 uv = int2(iPixelIndex % (g_vDownScaleResolution.x * 4), iPixelIndex / (g_vDownScaleResolution.x * 4));
+    
+    float4 color = 0.f;
+    
+    for (int i = -2; i <= 2;++i)
+    {
+        for (int j = -2; j <= 2;++j)
+        {
+            if(uv.x + i < 0 || uv.x + i >= g_vDownScaleResolution.x * 4 ||
+                uv.y + j < 0 || uv.y + j >= g_vDownScaleResolution.y * 4)
+            {
+                continue;
+            }
+            
+            color += g_Texture.Load(int3(uv + int2(i, j), 0)) * g_pGaussianFilter[i + 2][j + 2];
+
+        }
+    }
+    
+    g_BlurTexture[uv] = color;
+}
+
+const static float4 g_vPosition[4] =
+{
+    float4(-1.f, 1.f, 0.f, 1.f),
+    float4(1.f, 1.f, 0.f, 1.f),
+    float4(-1.f, -1.f, 0.f, 1.f),
+    float4(1.f, -1.f, 0.f, 1.f)
+};
+
+const static float2 g_vUV[4] =
+{
+    float2(0.f, 0.f),
+    float2(1.f, 0.f),
+    float2(0.f, 1.f),
+    float2(1.f, 1.f)
+};
+
+struct VS_OUT_NULL
+{
+    float4 pos : SV_Position;
+    float2 uv : TEXCOORD;
+};
+
+VS_OUT_NULL NullVS(uint iVertexID : SV_VertexID)
+{
+    VS_OUT_NULL output = (VS_OUT_NULL)0;
+    
+    output.pos = g_vPosition[iVertexID];
+    output.uv = g_vUV[iVertexID];
+
+    return output;
+}
+
+float4 NullPS(VS_OUT_NULL input)    :   SV_Target
+{
+    return g_Texture.Sample(g_sPoint, input.uv);
 }

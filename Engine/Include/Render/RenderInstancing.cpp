@@ -67,23 +67,23 @@ namespace Engine
 		return m_RenderList;
 	}
 
-	void RenderInstancing::CreateBoneBuffer(const std::unordered_map<std::string, std::shared_ptr<class Sequence>>& mapSequence)
+	void RenderInstancing::CreateBoneBuffer(const std::unordered_map<std::string, Animation::PSEQUENCEINFO>& mapSequence)
 	{
 		m_tBoneCBuffer.iMaxFrame = INT_MIN;
 		m_tBoneCBuffer.iMaxJoint = 0;
 
-		std::unordered_map<std::string, std::shared_ptr<Sequence>>::const_iterator iter = mapSequence.begin();
-		std::unordered_map<std::string, std::shared_ptr<Sequence>>::const_iterator iterEnd = mapSequence.end();
+		std::unordered_map<std::string, Animation::PSEQUENCEINFO>::const_iterator iter = mapSequence.begin();
+		std::unordered_map<std::string, Animation::PSEQUENCEINFO>::const_iterator iterEnd = mapSequence.end();
 
 		for (; iter != iterEnd; ++iter)
 		{
-			Sequence::PSEQUENCEINFO pInfo = iter->second->GetSequenceInfo();
+			Sequence::PSEQUENCEINFO pInfo = iter->second->pSequence->GetSequenceInfo();
 
-			m_tBoneCBuffer.iMaxJoint = static_cast<int>(pInfo->vecPose.size());
+			m_tBoneCBuffer.iMaxJoint = static_cast<int>(pInfo->vecJoint.size());
 
-			if (m_tBoneCBuffer.iMaxFrame < iter->second->GetMaxFrame())
+			if (m_tBoneCBuffer.iMaxFrame < iter->second->pSequence->GetMaxFrame())
 			{
-				m_tBoneCBuffer.iMaxFrame = iter->second->GetMaxFrame();
+				m_tBoneCBuffer.iMaxFrame = iter->second->pSequence->GetMaxFrame();
 			}
 		}
 
@@ -100,17 +100,17 @@ namespace Engine
 
 		for (int k=0; iter != iterEnd; ++iter, ++k)
 		{
-			Sequence::PSEQUENCEINFO pInfo = iter->second->GetSequenceInfo();
+			Sequence::PSEQUENCEINFO pInfo = iter->second->pSequence->GetSequenceInfo();
 
-			for (size_t i = 0; i < pInfo->vecPose.size(); ++i)
+			for (size_t i = 0; i < pInfo->vecJoint.size(); ++i)
 			{
-				for (size_t j = 0; j < pInfo->vecPose[i].vecJoint.size(); ++j)
+				for (size_t j = 0; j < pInfo->vecJoint[i].vecFrame.size(); ++j)
 				{
 					int iIndex = (k * m_tBoneCBuffer.iMaxJoint + static_cast<int>(i)) * m_tBoneCBuffer.iMaxFrame + static_cast<int>(j);
 
-					vecTransform[iIndex].vPos = pInfo->vecPose[i].vecJoint[j].vPos;
-					vecTransform[iIndex].vQueternion = pInfo->vecPose[i].vecJoint[j].vQueternion;
-					vecTransform[iIndex].vScale = pInfo->vecPose[i].vecJoint[j].vScale;
+					vecTransform[iIndex].vPos = pInfo->vecJoint[i].vecFrame[j].vPos;
+					vecTransform[iIndex].vQueternion = pInfo->vecJoint[i].vecFrame[j].vQueternion;
+					vecTransform[iIndex].vScale = pInfo->vecJoint[i].vecFrame[j].vScale;
 				}
 			}
 		}
