@@ -205,25 +205,61 @@ namespace Engine
 		}
 
 	private:
-		SPACE* m_pSpace;
-		std::list<class Collider*>	m_ColliderList;
-		std::unordered_map<class Drawable*, SPACE*>	m_mapDrawable;
+		typedef struct _tagCollisionChannel
+		{
+			SPACE* m_pSpace;
+			std::list<class Collider*>	m_ColliderList;
+			std::unordered_map<class Drawable*, SPACE*>	m_mapDrawable;
+
+			_tagCollisionChannel() :
+				m_pSpace(dbg_new SPACE({}, 4096.f))
+			{
+			}
+
+			~_tagCollisionChannel()
+			{
+				SAFE_DELETE(m_pSpace);
+			}
+
+
+			SPACE* FindSpaceAndErase(class Drawable* pDrawable);
+			void DeleteDrawable(class Drawable* pDrawable);
+		}COLLISIONCHANNEL, *PCOLLISIONCHANEEL;
+
+		template <int I, int C>
+		constexpr static int log2()
+		{
+			if constexpr(static_cast<bool>((1 << C) & I))
+			{
+				return C;
+			}
+
+			return log2<I, C - 1>();
+		}
+
+		template <>
+		constexpr static int log2<static_cast<int>(COLLISION_CHANNEL::END) - 1, 0>()
+		{
+			return 0;
+		}
+
+		COLLISIONCHANNEL m_tChannel[log2<static_cast<int>(COLLISION_CHANNEL::END) - 1, 31>() + 1];
 		float fAcutenessThreshold;
+
 	public:
 		void AddDrawable(class Drawable* pDrawable);
 		void AddCollider(class Collider* pCollider);
-		void VisibleTest();
+		void VisibleTest(CAMERA_TYPE eType);
 		PSPACE CreateChildSpace(SPACE* pParent, int iIndex)	const;
 		void VisibleTest(PSPACE pSpace, const std::vector<Vector4>& vecPlanes, const std::vector<Vector4>* vecLocalPlanes = nullptr);
 		void PortalVisibleTest(PSPACE pSpace, const std::vector<Vector4>& vecPlanes);
 		bool VisibleTestNoRecursive(PSPACE pSpace, const std::vector<Vector4>& vecPlanes, const std::vector<Vector4>* vecLocalPlanes = nullptr);
 		void DeleteDrawable(class Drawable* pDrawable);
+		void Collision(CAMERA_TYPE eType, float fDeltaTime);
 
 	public:
 		void Collision(float fDeltaTime);
-
-	private:
-		SPACE* FindSpaceAndErase(class Drawable* pDrawable);
+		void VisibleTest();
 	};
 
 }

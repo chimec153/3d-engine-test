@@ -11,7 +11,7 @@
 #include "../Bindable/DomainShader.h"
 #include "../Bindable/DepthStencilState.h"
 #include "../Bindable/RasterizerState.h"
-#include "../Bindable/TransformBuffer.h"
+#include "../Bindable/Transform.h"
 #include "../Bindable/ConstantBuffer.h"
 #include "../Bindable/Camera.h"
 #include "../Bindable/PointLight.h"
@@ -85,6 +85,7 @@ namespace Engine
 			{
 				if (pDrawable->UseInstance())
 				{
+					assert(iLayer >= 0 && iLayer < static_cast<int>(RENDER_LAYER::END));
 					std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[iLayer].find(iKey);
 
 					if (iter == m_mapInstance[iLayer].end())
@@ -108,6 +109,13 @@ namespace Engine
 								pVertexShader->GetTag() + pPixelShader->GetTag());
 
 							pRenderInstancing->AddDrawable(pDrawable);
+
+							std::shared_ptr<RasterizerState> pRasterizerState = std::static_pointer_cast<RasterizerState>(pDrawable->FindChild(BINDABLE_TYPE::RASTERIZER_STATE));
+
+							if (pRasterizerState)
+							{
+								pRenderInstancing->SetRasterizerState(pRasterizerState);
+							}
 
 							std::shared_ptr<Animation> pAnimation = pDrawable->GetAnimation();
 
@@ -572,6 +580,8 @@ namespace Engine
 
 		PostProcessing();
 
+		RenderUI();
+
 		m_pNoDepthWrite->PostBind();
 
 #ifdef _DEBUG
@@ -687,16 +697,16 @@ namespace Engine
 
 	void RenderManager::RenderLight()
 	{
-		const Matrix& matProj = Graphics::GetInst()->GetProjectMatrix();
+		const std::shared_ptr<Camera>& pCamera = Graphics::GetInst()->GetCamera();
 
 		PERSPECTIVEBUFFER buffer = {};
 
-		buffer.vPerspective = { 1.f / matProj.ff[0][0],1.f / matProj.ff[1][1], matProj.ff[2][2], -matProj.ff[3][2] };
-
-		const std::shared_ptr<Camera>& pCamera = Graphics::GetInst()->GetCamera();
-
 		if (pCamera)
 		{
+			const Matrix& matProj = pCamera->GetProjectMatrix();
+
+			buffer.vPerspective = { 1.f / matProj.ff[0][0],1.f / matProj.ff[1][1], matProj.ff[2][2], -matProj.ff[3][2] };
+
 			const std::shared_ptr<Transform>& pTransform = pCamera->GetTransform();
 
 			const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();
@@ -1128,7 +1138,7 @@ namespace Engine
 			pMRT->SetSRV(i, 0);
 
 			tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
-				Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+				Matrix::OthorGraphicLH(0.f, static_cast<float>(Window::GetInst()->GetWidth()), static_cast<float>(Window::GetInst()->GetHeight()), 0.f, 0.f, 500.f);
 
 			tBuffer.matWorldViewProject.Transpose();
 
@@ -1147,7 +1157,7 @@ namespace Engine
 		pMRT->SetDepthSRV(0);
 
 		tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
-			Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+			Matrix::OthorGraphicLH(0.f, static_cast<float>(Window::GetInst()->GetWidth()), static_cast<float>(Window::GetInst()->GetHeight()), 0.f, 0.f, 500.f);
 
 		tBuffer.matWorldViewProject.Transpose();
 
@@ -1164,7 +1174,7 @@ namespace Engine
 			pDepthBuffer[i]->SetDepthSRV(0);
 
 			tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
-				Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+				Matrix::OthorGraphicLH(0.f, static_cast<float>(Window::GetInst()->GetWidth()), static_cast<float>(Window::GetInst()->GetHeight()), 0.f, 0.f, 500.f);
 
 			tBuffer.matWorldViewProject.Transpose();
 
@@ -1185,7 +1195,7 @@ namespace Engine
 			m_pDecalMRT->SetSRV(i, 0);
 
 			tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
-				Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+				Matrix::OthorGraphicLH(0.f, static_cast<float>(Window::GetInst()->GetWidth()), static_cast<float>(Window::GetInst()->GetHeight()), 0.f, 0.f, 500.f);
 
 			tBuffer.matWorldViewProject.Transpose();
 
@@ -1204,7 +1214,7 @@ namespace Engine
 		m_pHDRTexture->SetSRV(0, 0);
 
 		tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
-			Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+			Matrix::OthorGraphicLH(0.f, static_cast<float>(Window::GetInst()->GetWidth()), static_cast<float>(Window::GetInst()->GetHeight()), 0.f, 0.f, 500.f);
 
 		tBuffer.matWorldViewProject.Transpose();
 
@@ -1219,7 +1229,7 @@ namespace Engine
 		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(0, 1, m_pBloomFinalTexture->GetSRV().GetAddressof());
 
 		tBuffer.matWorldViewProject = Matrix::Scaling(100.f, 100.f, 1.f) * Matrix::TranslateFromVector(vPos) *
-			Matrix::OthorGraphicLH(0.f, Window::GetInst()->GetWidth(), Window::GetInst()->GetHeight(), 0.f, 0.f, 500.f);
+			Matrix::OthorGraphicLH(0.f, static_cast<float>(Window::GetInst()->GetWidth()), static_cast<float>(Window::GetInst()->GetHeight()), 0.f, 0.f, 500.f);
 
 		tBuffer.matWorldViewProject.Transpose();
 
@@ -1234,6 +1244,31 @@ namespace Engine
 		m_pNoDepthRead->PostBind();
 	}
 #endif
+	void RenderManager::RenderUI()
+	{
+		m_pAlphaBlend->Bind();
+
+		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::UI)].begin();
+		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::UI)].end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			(*iter)->Bind();
+		}
+
+		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterI = m_mapInstance[static_cast<int>(RENDER_LAYER::UI)].begin();
+		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterIEnd = m_mapInstance[static_cast<int>(RENDER_LAYER::UI)].end();
+
+		for (; iterI != iterIEnd; ++iterI)
+		{
+			if (iterI->second->GetCount())
+			{
+				iterI->second->Render();
+			}
+		}
+
+		m_pAlphaBlend->PostBind();
+	}
 
 	void RenderManager::BloomFilter()
 	{
@@ -1243,11 +1278,11 @@ namespace Engine
 
 		m_pBloomVerticalFilterCS->Bind();
 
-		m_pBloomVerticalFilterCS->Dispatch(m_tDownScaleCBuffer.iResX, ceil(m_tDownScaleCBuffer.iResY / (128.f - 12.f)));
+		m_pBloomVerticalFilterCS->Dispatch(m_tDownScaleCBuffer.iResX, static_cast<int>(ceil(m_tDownScaleCBuffer.iResY / (128.f - 12.f))));
 
 		m_pBloomHorizontalFilterCS->Bind();
 
-		m_pBloomHorizontalFilterCS->Dispatch(ceil(m_tDownScaleCBuffer.iResX / (128.f - 12.f)), m_tDownScaleCBuffer.iResY);
+		m_pBloomHorizontalFilterCS->Dispatch(static_cast<int>(ceil(m_tDownScaleCBuffer.iResX / (128.f - 12.f))), m_tDownScaleCBuffer.iResY);
 
 		m_pBloomFinalTexture->ResetUAV(0);
 

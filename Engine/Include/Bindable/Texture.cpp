@@ -265,7 +265,7 @@ namespace Engine
 			}
 		}
 
-		return CreateTexture(image[0]->GetMetadata().width, image[0]->GetMetadata().height, image[0]->GetMetadata().format, image[0]->GetMetadata().mipLevels, static_cast<int>(image.size()), &vecSub[0]);
+		return CreateTexture(static_cast<int>(image[0]->GetMetadata().width), static_cast<int>(image[0]->GetMetadata().height), image[0]->GetMetadata().format, static_cast<int>(image[0]->GetMetadata().mipLevels), static_cast<int>(image.size()), &vecSub[0]);
 	}
 
 	bool Texture::CreateTexture(const DirectX::ScratchImage& image, D3D11_CPU_ACCESS_FLAG eCpuFlag, D3D11_USAGE eUsage)
@@ -283,7 +283,7 @@ namespace Engine
 			}
 		}
 
-		return CreateTexture(image.GetMetadata().width, image.GetMetadata().height, image.GetMetadata().format, image.GetMetadata().mipLevels, image.GetMetadata().arraySize, &vecSub[0]);
+		return CreateTexture(static_cast<int>(image.GetMetadata().width), static_cast<int>(image.GetMetadata().height), image.GetMetadata().format, static_cast<int>(image.GetMetadata().mipLevels), static_cast<int>(image.GetMetadata().arraySize), &vecSub[0]);
 	}
 
 	bool Texture::CreateTexture(int iWidth, int iHeight, DXGI_FORMAT eFormat, int iMipLevels, int iArraySize, const D3D11_SUBRESOURCE_DATA* pData, D3D11_CPU_ACCESS_FLAG eCpuFlag, D3D11_USAGE eUsage, D3D11_BIND_FLAG eFlag)

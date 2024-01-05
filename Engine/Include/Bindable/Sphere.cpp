@@ -4,7 +4,7 @@
 #include "InputLayout.h"
 #include "VertexBuffer.h"
 #include "IndexBuffer.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "ConstantBuffer.h"
 #include "Topology.h"
 #include "Material.h"

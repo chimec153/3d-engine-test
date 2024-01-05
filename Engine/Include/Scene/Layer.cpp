@@ -99,6 +99,22 @@ namespace Engine
 		return std::shared_ptr<Bindable>();
 	}
 
+	void Layer::DeleteDrawable(std::shared_ptr<Bindable> pDrawable)
+	{
+		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
+		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			if (*iter == pDrawable)
+			{
+				m_DrawList.erase(iter);
+
+				return;
+			}
+		}
+	}
+
 	void Layer::Input(float fDeltaTime)
 	{
 		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();

@@ -4,7 +4,7 @@
 #include "Bindable/Particle.h"
 #include "Bindable/Decal.h"
 #include "Scene/Scene.h"
-#include "Bindable/TransformBuffer.h"
+#include "Bindable/Transform.h"
 
 Client::Attackable::Attackable(int iMaxHP, int iAttackMin, int iAttackMax)	:
 	Drawable()
@@ -38,7 +38,7 @@ bool Client::Attackable::Attack(Attackable* pHit) const
 
 int Client::Attackable::GetAttack() const
 {
-	return m_iAttackMin + (m_iAttackMax - m_iAttackMin) * (rand() / static_cast<float>(RAND_MAX));
+	return m_iAttackMin + static_cast<int>((m_iAttackMax - m_iAttackMin) * (rand() / static_cast<float>(RAND_MAX)));
 }
 
 void Client::Attackable::StartPaperBurn()

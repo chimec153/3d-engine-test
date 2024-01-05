@@ -1,7 +1,7 @@
 #include "Graphics.h"
 #include "PathManager.h"
 #include "../Bindable/Camera.h"
-#include "../Bindable/TransformBuffer.h"
+#include "../Bindable/Transform.h"
 #include "../Bindable/PointLight.h"
 
 namespace Engine
@@ -15,20 +15,12 @@ namespace Engine
 		, pSwapChain(nullptr)
 		, pDeviceContext(nullptr)
 		, pRenderTargetView(nullptr)
-		, m_matProject()
-		, m_matView()
-		, m_matViewProject()
-		, pCamera(nullptr)
-		, m_fAngle(DegToRad(45.f))
-		, m_fRatio(0.f)
-		, m_fNear(0.5f)
+		, pCamera()
 	{
 	}
 
 	bool Graphics::Init(HWND hWnd, int iWidth, int iHeight)
 	{
-		m_fRatio = iWidth / static_cast<float>(iHeight);
-
 		DXGI_SWAP_CHAIN_DESC desc = {};
 
 		desc.BufferDesc.Width = 0;
@@ -120,8 +112,6 @@ namespace Engine
 
 		pDeviceContext->RSSetViewports(1, &tViewPort);
 
-		m_matProject = Matrix::PerspectiveFovLHInfinity(atanf(tanf(m_fAngle) / m_fRatio), m_fRatio, m_fNear);
-
 		return true;
 	}
 
@@ -151,41 +141,14 @@ namespace Engine
 	{
 	}
 
-	const Matrix& Graphics::GetProjectMatrix() const
+	std::shared_ptr<class Camera> Graphics::GetCamera(CAMERA_TYPE eType) const
 	{
-		return m_matProject;
+		return pCamera[static_cast<int>(eType)];
 	}
 
-	const Matrix& Graphics::GetViewProject() const
+	void Graphics::SetCamera(std::shared_ptr<class Camera> _pCamera, CAMERA_TYPE eType)
 	{
-		return m_matViewProject;
-	}
-
-	const Matrix& Graphics::GetView() const
-	{
-		return pCamera->GetView();
-	}
-
-	void Graphics::SetVeiw(const Matrix& matView)
-	{
-		m_matView = matView;
-
-		m_matViewProject = m_matView * m_matProject;
-	}
-
-	std::shared_ptr<class Camera> Graphics::GetCamera() const
-	{
-		return std::shared_ptr<class Camera>(pCamera);
-	}
-
-	void Graphics::SetCamera(const std::shared_ptr<Camera>& _pCamera)
-	{
-		pCamera = _pCamera;
-	}
-
-	void Graphics::SetCamera2(const std::shared_ptr<class Camera>& pCamera)
-	{
-		pCamera2 = pCamera;
+		pCamera[static_cast<int>(eType)] = _pCamera;
 	}
 
 	void Graphics::SetLight(const std::shared_ptr<class PointLight>& _pLight)
@@ -216,20 +179,5 @@ namespace Engine
 	const std::shared_ptr<PointLight>& Graphics::GetLight() const
 	{
 		return pLight;
-	}
-
-	float Graphics::GetAngle() const
-	{
-		return m_fAngle;
-	}
-
-	float Graphics::GetRatio() const
-	{
-		return m_fRatio;
-	}
-
-	float Graphics::GetNear() const
-	{
-		return m_fNear;
 	}
 }

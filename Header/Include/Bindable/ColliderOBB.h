@@ -31,6 +31,7 @@ namespace Engine
     public:
         virtual void Update(float fDeltaTime) override;
         virtual bool Collision(Collider* pCollider, float fDeltaTime) override;
+        virtual void PostUpdate(float fDeltaTime) override;
         virtual void PreDraw(float fDeltaTime) override;
 
     public:

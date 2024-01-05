@@ -3,7 +3,7 @@
 #include "IndexBuffer.h"
 #include "VertexShader.h"
 #include "PixelShader.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "InputLayout.h"
 #include "Topology.h"
 #include "Material.h"

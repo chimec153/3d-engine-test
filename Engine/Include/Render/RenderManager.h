@@ -131,6 +131,7 @@ namespace Engine
 		void RenderDecal();
 		void RenderSkyBox();
 		void RenderBlur();
+		void RenderUI();
 		void PostProcessing();
 		void Clear();
 #ifdef _DEBUG

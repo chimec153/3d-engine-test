@@ -148,6 +148,11 @@ namespace Engine
 		m_pJointSocketBuffer = pBuffer;
 	}
 
+	void RenderInstancing::SetRasterizerState(std::shared_ptr<class RasterizerState> pState)
+	{
+		m_pRasterizerState = pState;
+	}
+
 	void RenderInstancing::CreateInstBuffer()
 	{
 		D3D11_BUFFER_DESC desc = {};
@@ -341,7 +346,18 @@ namespace Engine
 			m_vecTexture[i]->Bind();
 		}
 
-		Draw();
+		if (m_pRasterizerState)
+		{
+			m_pRasterizerState->Bind();
+
+			Draw();
+
+			m_pRasterizerState->PostBind();
+		}
+		else
+		{
+			Draw();
+		}
 	}
 
 	void RenderInstancing::RenderShadow()

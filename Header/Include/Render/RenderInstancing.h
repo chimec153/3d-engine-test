@@ -41,6 +41,7 @@ namespace Engine
         std::shared_ptr<class Skeleton> m_pSkeleton;
         std::shared_ptr<class StructuredBuffer> m_pSkeletonBuffer;
         std::shared_ptr<class StructuredBuffer> m_pJointSocketBuffer;
+        std::shared_ptr<class RasterizerState> m_pRasterizerState;
 
     public:
         int GetCount()  const;
@@ -49,6 +50,7 @@ namespace Engine
         void CreateBoneBuffer(const std::unordered_map<std::string, Animation::PSEQUENCEINFO>& mapSequence);
         void SetSkeleton(std::shared_ptr<class Skeleton> pBuffer);
         void SetJointSocketBuffer(std::shared_ptr<StructuredBuffer> pBuffer);
+        void SetRasterizerState(std::shared_ptr<class RasterizerState> pState);
 
     private:
         void CreateInstBuffer();

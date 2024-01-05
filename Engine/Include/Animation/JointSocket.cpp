@@ -1,6 +1,6 @@
 #include "JointSocket.h"
 #include "../Bindable/Drawable.h"
-#include "../Bindable/TransformBuffer.h"
+#include "../Bindable/Transform.h"
 #include "../Shader/StructuredBuffer.h"
 
 namespace Engine

@@ -488,4 +488,12 @@ namespace Engine
 		float fBloomScale;
 		Vector2 vDOFFarValues;
 	}HDRCBUFFER, *PHDRCBUFFER;
+
+	typedef struct ENGINE_DLL alignas(16) _tagUICBuffer
+	{
+		Vector2 vStartUV;
+		Vector2 vEndUV;
+		Vector2 vStartPos;
+		Vector2 vSize;
+	}UICBUFFER, *PUICBUFFER;
 }

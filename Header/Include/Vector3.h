@@ -35,6 +35,12 @@ namespace Engine
 			return *(&x + index);
 		}
 
+		const float operator[](int index)	const
+		{
+			assert(index >= 0 && index < 3);
+			return *(&x + index);
+		}
+
 		_tagVector3& operator =(float f)
 		{
 			x = f;

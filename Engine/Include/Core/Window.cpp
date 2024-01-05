@@ -10,7 +10,7 @@
 #include "../Bindable/PixelShader.h"
 #include "../Bindable/InputLayout.h"
 #include "../Bindable/Cylinder.h"
-#include "../Bindable/TransformBuffer.h"
+#include "../Bindable/Transform.h"
 #include "../Bindable/Camera.h"
 #include "../Bindable/PointLight.h"
 #include "../Bindable/Sampler.h"
@@ -89,6 +89,7 @@ namespace Engine
 		Engine::BindableManager<class Engine::Texture>::DestroyInst();
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagTransformBuffer>>::DestroyInst();
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagBoneCBuffer> >::DestroyInst();
+		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagUICBuffer> >::DestroyInst();
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagTerrainCBuffer> >::DestroyInst();
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPointLight> >::DestroyInst();
 		Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagMaterial> >::DestroyInst();

@@ -1,7 +1,10 @@
 #include "BindableManager.h"
 #include "Texture.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "Box.h"
+#ifdef _DEBUG
+#include "Camera.h"
+#endif
 
 namespace Engine
 {
@@ -43,6 +46,7 @@ namespace Engine
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagIKCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagIKCBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagUICBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagUICBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPaperBurnCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPaperBurnCBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagFluidCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagFluidCBuffer> >::m_pInst = nullptr;
 
@@ -157,6 +161,7 @@ namespace Engine
 		CreateBindable("DecalVSInst", TEXT("Decal.fx"), "VS_DECAL_INST");
 		CreateBindable("FluidVS", TEXT("VertexShader.hlsl"), "VS_FLUID");
 		CreateBindable("EnvironmentVS", TEXT("VertexShader.hlsl"), "VS_ENV");
+		CreateBindable("UIVS", TEXT("UI.fx"), "VS_UI");
 	}
 
 	template<>
@@ -199,8 +204,9 @@ namespace Engine
 		CreateBindable("NullPS", TEXT("Debug.hlsl"), "NullPS");
 		CreateBindable("CollideDebugPS", TEXT("Debug.hlsl"), "CollideDebugPS");
 		CreateBindable("DebugPS", TEXT("Debug.hlsl"), "DebugPS");
-		CreateBindable("DebugPSInst", TEXT("Debug.hlsl"), "DebugPS");
+		CreateBindable("DebugPSInst", TEXT("Debug.hlsl"), "DebugPSInst");
 		CreateBindable("DebugAlphaPS", TEXT("Debug.hlsl"), "DebugAlphaPS");
+		CreateBindable("DebugAlphaPSInst", TEXT("Debug.hlsl"), "DebugAlphaPSInst");
 #endif
 
 		CreateBindable("MultiPS", TEXT("anisotropic_microfacet.hlsl"), "PS_Multi");
@@ -222,6 +228,7 @@ namespace Engine
 		CreateBindable("AlphaPSInst", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaInst");
 		CreateBindable("AlphaNoUVPS", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaNoUV");
 		CreateBindable("AlphaNoUVPSInst", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaNoUVInst");
+		CreateBindable("AlphaNoUVNoShadowPS", TEXT("anisotropic_microfacet.hlsl"), "PS_AlphaNoUVNoShadow");
 
 		CreateBindable("ParticlePS", TEXT("Particle.fx"), "PS_PARTICLE");
 		CreateBindable(DECAL_PS, TEXT("Decal.fx"), "PS_DECAL");
@@ -232,6 +239,7 @@ namespace Engine
 		CreateBindable("PaperBurnPS", TEXT("PixelShader.hlsl"), "PS_PaperBurn");
 		CreateBindable("EnvironmentPS", TEXT("PixelShader.hlsl"), "PS_ENV");
 		CreateBindable("SolidPS", TEXT("PixelShader.hlsl"), "PS_SOLID");
+		CreateBindable("UIPS", TEXT("UI.fx"), "PS_UI");
 	}
 
 	template <>
@@ -306,6 +314,12 @@ namespace Engine
 	inline BindableManager<class ConstantBuffer<DECALCBUFFER>>::BindableManager()
 	{
 		CreateBindable("Decal", 9);
+	}
+
+	template <>
+	inline BindableManager<class ConstantBuffer<UICBUFFER>>::BindableManager()
+	{
+		CreateBindable("UI", 5);
 	}
 
 	template <>
@@ -504,29 +518,34 @@ namespace Engine
 	inline BindableManager<class VertexBuffer>::BindableManager()
 	{
 #ifdef _DEBUG
-		float fNear = Graphics::GetInst()->GetNear();
+		std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera();
 
-		float fAngle = Graphics::GetInst()->GetAngle();
-
-		float fX = tanf(fAngle) * fNear;
-		float fY = fX / Graphics::GetInst()->GetRatio();
-
-		float fFarX = tanf(fAngle) * 5000.f;
-		float fFarY = fFarX / Graphics::GetInst()->GetRatio();
-
-		std::vector<VertexTexture> vecViewFrustomVertex =
+		if (pCamera)
 		{
-			{0.f,0.f,0.f,0.f,fX,-fY,fNear,0.f,0.f,0.f,0.f,0.f},
-			{0.f,0.f,0.f,0.f,fX,fY,fNear,0.f,0.f,0.f,0.f,0.f},
-			{0.f,0.f,0.f,0.f,-fX,-fY,fNear,0.f,0.f,0.f,0.f,0.f},
-			{0.f,0.f,0.f,0.f,-fX,fY,fNear,0.f,0.f,0.f,0.f,0.f},
-			{0.f,0.f,0.f,0.f,fFarX,-fFarY,5000.f,0.f,0.f,0.f,0.f,0.f},
-			{0.f,0.f,0.f,0.f,fFarX,fFarY,5000.f,0.f,0.f,0.f,0.f,0.f},
-			{0.f,0.f,0.f,0.f,-fFarX,-fFarY,5000.f,0.f,0.f,0.f,0.f,0.f},
-			{0.f,0.f,0.f,0.f,-fFarX,fFarY,5000.f,0.f,0.f,0.f,0.f,0.f},
-		};
+			float fNear = pCamera->GetNear();
 
-		CreateBindable("ViewFrustom", vecViewFrustomVertex);
+			float fAngle = pCamera->GetAngle();
+
+			float fX = tanf(fAngle) * fNear;
+			float fY = fX / pCamera->GetRatio();
+
+			float fFarX = tanf(fAngle) * 5000.f;
+			float fFarY = fFarX / pCamera->GetRatio();
+
+			std::vector<VertexTexture> vecViewFrustomVertex =
+			{
+				{0.f,0.f,0.f,0.f,fX,-fY,fNear,0.f,0.f,0.f,0.f,0.f},
+				{0.f,0.f,0.f,0.f,fX,fY,fNear,0.f,0.f,0.f,0.f,0.f},
+				{0.f,0.f,0.f,0.f,-fX,-fY,fNear,0.f,0.f,0.f,0.f,0.f},
+				{0.f,0.f,0.f,0.f,-fX,fY,fNear,0.f,0.f,0.f,0.f,0.f},
+				{0.f,0.f,0.f,0.f,fFarX,-fFarY,5000.f,0.f,0.f,0.f,0.f,0.f},
+				{0.f,0.f,0.f,0.f,fFarX,fFarY,5000.f,0.f,0.f,0.f,0.f,0.f},
+				{0.f,0.f,0.f,0.f,-fFarX,-fFarY,5000.f,0.f,0.f,0.f,0.f,0.f},
+				{0.f,0.f,0.f,0.f,-fFarX,fFarY,5000.f,0.f,0.f,0.f,0.f,0.f},
+			};
+
+			CreateBindable("ViewFrustom", vecViewFrustomVertex);
+		}
 #endif
 	}
 

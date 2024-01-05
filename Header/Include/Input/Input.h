@@ -118,6 +118,7 @@ namespace Engine
 
 			if (!pActionInfo)
 			{
+				assert(false);
 				return;
 			}
 

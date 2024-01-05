@@ -3,7 +3,7 @@
 #include "../Navigation/Detour/DetourNavMeshQuery.h"
 #include "Agent.h"
 #include "../Navigation/Detour/DetourCrowd.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 
 Engine::NavMesh::NavMesh(dtNavMeshCreateParams& tParams, float fAgentRadius, float fAgentHeight) :
 	Bindable()

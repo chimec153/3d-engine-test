@@ -1,8 +1,8 @@
 #include "Box.h"
 #include <Windows.h>
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include <DirectXMath.h>
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "InputLayout.h"
 #include "VertexShader.h"
 #include "PixelShader.h"

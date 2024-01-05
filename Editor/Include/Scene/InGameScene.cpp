@@ -2,7 +2,7 @@
 #include "../Imgui/ImguiManager.h"
 #include "Bindable/Camera.h"
 #include "Bindable/PointLight.h"
-#include "Bindable/TransformBuffer.h"
+#include "Bindable/Transform.h"
 #include "Scene/Scene.h"
 #include "../Object/Player.h"
 #include "Bindable/Terrain.h"
@@ -24,6 +24,7 @@
 #include "Bindable/Animation.h"
 #include "Bindable/Material.h"
 #include "Bindable/BindableManager.h"
+#include "Resource/ResourceManager.h"
 
 namespace Editor
 {
@@ -34,63 +35,107 @@ namespace Editor
 
 	bool InGameScene::Init()
 	{
-		__super::Init();
+		Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Medieval.mesh", MESH_PATH);
+		Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
 
-		const std::shared_ptr<Engine::Camera>& pCamera = CreateDrawable<Engine::Camera>("camera", FindLayer(DEFAULT_LAYER));
+		Engine::ResourceManager::GetInst()->LoadSkeleton("Medieval.skel");
+		Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
 
-		Engine::Graphics::GetInst()->SetCamera(pCamera);
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Death.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Gun_Shoot.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve_2.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun_Pointing.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun_Shoot.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Neutral.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Sword.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Interact.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Kick_Left.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Kick_Right.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Punch_Left.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Punch_Right.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Roll.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Back.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Left.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Right.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Shoot.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Sword_Slash.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Walk.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Wave.seq");
 
-		const std::shared_ptr<Engine::PointLight>& pDirLight = CreateDrawable<Engine::PointLight>("light2", FindLayer(DEFAULT_LAYER));
+		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Attack.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Death.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Idle.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Jump.seq");
 
-		std::shared_ptr<Engine::Transform> pDirLightTransform = pDirLight->GetTransform();
-
-		pDirLightTransform->SetRX(0.962f);
-		pDirLightTransform->SetX(15.f);
-		pDirLightTransform->SetY(50.f);
-		pDirLightTransform->SetZ(-20.f);
-
-		Engine::ORTHOINFO tLightOrthoInfo = pDirLight->GetOrthoInfo();
-
-		tLightOrthoInfo.fLeft = -0.f;
-		tLightOrthoInfo.fRight = 100.f;
-		tLightOrthoInfo.fTop = 100.f;
-		tLightOrthoInfo.fBottom = 0.f;
-
-		pDirLight->SetOrthoInfo(tLightOrthoInfo);
-
-		pDirLight->SetIntensity(1.f);
-
-		pDirLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
-
-		Engine::Graphics::GetInst()->SetLight(pDirLight);
-
-		const std::shared_ptr<Engine::PointLight>& pLight = CreateDrawable<Engine::PointLight>("light", FindLayer(DEFAULT_LAYER));
-
-		if (!pLight)
+		std::vector<const TCHAR*> vecTexture =
 		{
-			assert(false);
-			return false;
+			TEXT("LandScape\\Terrain_Cliff_15_Large.dds"),
+			TEXT("LandScape\\BD_Terrain_Cliff05.dds"),
+		};
+
+		std::vector<const TCHAR*> vecNormalTexture =
+		{
+			TEXT("LandScape\\Terrain_Cliff_15_Large_NRM.bmp"),
+			TEXT("LandScape\\BD_Terrain_Cliff05_NRM.bmp"),
+		};
+
+		std::vector<const TCHAR*> vecSpecularTexture =
+		{
+			TEXT("LandScape\\Terrain_Cliff_15_Large_SPEC.bmp"),
+			TEXT("LandScape\\BD_Terrain_Cliff05_SPEC.bmp"),
+		};
+
+		std::vector<const TCHAR*> vecBlendTexture =
+		{
+			TEXT("LandScape\\baseAlpha.bmp"),
+			TEXT("LandScape\\RoadAlpha.bmp"),
+		};
+
+		Engine::StaticCreateBindable<Engine::Texture>("TerrainDiffuse", vecTexture, TEXTURE_PATH, 20);
+		Engine::StaticCreateBindable<Engine::Texture>("TerrainNormal", vecNormalTexture, TEXTURE_PATH, 21);
+		Engine::StaticCreateBindable<Engine::Texture>("TerrainSpecular", vecSpecularTexture, TEXTURE_PATH, 22);
+		Engine::StaticCreateBindable<Engine::Texture>("TerrainBlend", vecBlendTexture, TEXTURE_PATH, 24);
+		Engine::StaticCreateBindable<Engine::Texture>("TerrainHeight", TEXT("LandScape\\height2.bmp"), TEXTURE_PATH, 16);
+		Engine::StaticCreateBindable<Engine::Texture>("SkyBoxTexture", TEXT("TYbvO.jpg"), TEXTURE_PATH, 5);
+		Engine::StaticCreateBindable<Engine::Texture>("PaperBurn", TEXT("DefaultBurn.png"), TEXTURE_PATH, 4);
+		Engine::StaticCreateBindable<Engine::Texture>("QuickSlot", TEXT("item.png"), TEXTURE_PATH, 0);
+		Engine::StaticCreateBindable<Engine::Texture>("frame", TEXT("frame.png"), TEXTURE_PATH, 0);
+		Engine::StaticCreateBindable<Engine::Texture>("frame", TEXT("frame.png"), TEXTURE_PATH, 0);
+		Engine::StaticCreateBindable<Engine::Texture>("shovel_icon", TEXT("shovel_icon.png"), TEXTURE_PATH, 0);
+		Engine::StaticCreateBindable<Engine::Texture>("sword_icon", TEXT("sword_icon.png"), TEXTURE_PATH, 0);
+
+		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodAlbedo", TEXT("Decal\\sgfjdepc_8K_Albedo.tga"), TEXTURE_PATH, 0);
+		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodNormal", TEXT("Decal\\sgfjdepc_8K_Normal.tga"), TEXTURE_PATH, 1);
+		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodOpacity", TEXT("Decal\\sgfjdepc_8K_Opacity.tga"), TEXTURE_PATH, 2);
+		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodRoughness", TEXT("Decal\\sgfjdepc_8K_Roughness.tga"), TEXTURE_PATH, 3);
+
+		Load("Resource\\Scene\\test.scn");
+
+		std::shared_ptr<Engine::Bindable> _pCamera = FindBindable("UICamera");
+
+		while (_pCamera)
+		{
+			_pCamera->GetLayer()->DeleteDrawable(_pCamera);
+
+			_pCamera = FindBindable("UICamera");
 		}
 
-		const std::shared_ptr<Engine::Transform>& pLightTransform = pLight->GetTransform();
+		std::shared_ptr<Engine::Camera> pUICamera = CreateDrawable<Engine::Camera>("UICamera", FindLayer(DEFAULT_LAYER));
 
-		if (pLightTransform)
+		if (pUICamera)
 		{
-			pLightTransform->SetRX(-PI / 2.f);
-			pLightTransform->SetZ(-25.f);
-			pLightTransform->SetY(100.f);
-
-			pLightTransform->SetScale({ 5000.f, 5000.f, 5000.f });
+			pUICamera->SetProjectType(Engine::Camera::PROJECT_TYPE::ORTHOGONAL);
+			pUICamera->SetCameraType(Engine::CAMERA_TYPE::UI);
 		}
 
-		pLight->SetIntensity(0.6f);
-		pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
+		Engine::Graphics::GetInst()->SetCamera(pUICamera, Engine::CAMERA_TYPE::UI);
 
-		std::shared_ptr<Engine::Drawable> pTest = CreateDrawable<Engine::Drawable>("test", FindLayer(DEFAULT_LAYER));
+		std::shared_ptr<Engine::Camera> pCamera = Engine::Graphics::GetInst()->GetCamera();
 
-		pTest->Load(TEXT("Attack_A_Slow.FBX"));
-
-		Engine::RenderManager::GetInst()->SetSkyBox(CreateDrawable<Engine::SkyBox>("SkyBox", FindLayer(DEFAULT_LAYER), TEXT("TYbvO.jpg")));
 		if (!Engine::CInput::GetInst()->CreateAction("_W", DIK_W))
 		{
 			return false;

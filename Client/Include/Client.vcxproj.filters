@@ -19,6 +19,9 @@
     <Filter Include="02. Object">
       <UniqueIdentifier>{ac5133e5-a0e9-4934-a4ef-fc589a89c9a4}</UniqueIdentifier>
     </Filter>
+    <Filter Include="03. UI">
+      <UniqueIdentifier>{58343bac-fa54-49a2-9dd0-e7d9da771d0f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -42,6 +45,12 @@
     <ClCompile Include="Object\Attackable.cpp">
       <Filter>02. Object</Filter>
     </ClCompile>
+    <ClCompile Include="UI\Inventory.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\ItemIcon.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Scene\StartScene.h">
@@ -64,6 +73,12 @@
     </ClInclude>
     <ClInclude Include="Object\Attackable.h">
       <Filter>02. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\Inventory.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\ItemIcon.h">
+      <Filter>03. UI</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -1,6 +1,7 @@
-
+Client/BinObj/*.*
 Engine/BinObj/*.*
 Editor/BinObj/*.*
+Client/Bin/*.*
 Engine/Bin/*.*
 Editor/Bin/*.*
 .vs/230301/v17/Browse.VC.opendb
@@ -1339,3 +1340,5 @@ Client/Bin/Resource/Mesh/nano_textured/LICENSE.txt
 Client/Bin/Client_Debug.exe
 *.iobj
 *.ipdb
+*.exe
+*.exe

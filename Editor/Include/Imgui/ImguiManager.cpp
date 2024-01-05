@@ -15,7 +15,7 @@
 #include "Bindable/PixelShader.h"
 #include "Bindable/Texture.h"
 #include "Bindable/Material.h"
-#include "Bindable/TransformBuffer.h"
+#include "Bindable/Transform.h"
 #include "Bindable/InputLayout.h"
 #include "Bindable/Topology.h"
 #include "Bindable/ConstantBuffer.h"
@@ -1551,6 +1551,16 @@ namespace Editor
 
 		if (ImGui::Begin(strTitle.c_str()))
 		{
+			bool bLoop = pSequence->IsLoop();
+
+			if (ImGui::Checkbox("Loop", &bLoop))
+			{
+				if (bLoop)
+				{
+					pSequence->Loop();
+				}
+			}
+
 			int iFrame = pSequence->GetFrame();
 
 			Engine::Sequence::PSEQUENCEINFO pInfo = pSequence->GetSequenceInfo();

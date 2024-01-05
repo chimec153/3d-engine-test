@@ -46,7 +46,24 @@ PSOut DebugPS(VSOut input)
     return output;
 }
 
+PSOut DebugPSInst(VSInstOut input)
+{
+    PSOut output;
+    
+    output.value0 = input.vDiffuseColor;
+    output.value1 = float4(input.normal * 0.5f + 0.5f, 1.f);
+    output.value2 = 1.f;
+    output.value3 = 1.f;
+    
+    return output;
+}
+
 float4 DebugAlphaPS(VSOut input)    :   SV_Target
 {    
     return g_vDiffuseColor;
+}
+
+float4 DebugAlphaPSInst(VSInstOut input) : SV_Target
+{
+    return input.vDiffuseColor;
 }

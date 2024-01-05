@@ -66,13 +66,13 @@ namespace Engine
 		void UpdateInstanceKey();
 
 	public:
-		virtual bool Init();
-		virtual void Start();
-		virtual void Input(float fDeltaTime);
-		virtual void Update(float fDeltaTime);
-		virtual void Collision(float fDeltaTime);
-		virtual void PreDraw(float fDeltaTime);
-		virtual void Bind();
+		virtual bool Init() override;
+		virtual void Start() override;
+		virtual void Input(float fDeltaTime) override;
+		virtual void Update(float fDeltaTime) override;
+		virtual void Collision(float fDeltaTime) override;
+		virtual void PreDraw(float fDeltaTime) override;
+		virtual void Bind() override;
 		virtual void DrawShadow();
 		virtual std::shared_ptr<Bindable> Clone();
 
@@ -80,6 +80,7 @@ namespace Engine
 		void BindExceptShader();
 		void PostBindExceptShader();
 		void PostBind();
+		void BindChild();
 
 	public:
 		template <typename T, typename P>

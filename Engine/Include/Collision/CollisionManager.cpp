@@ -1,7 +1,7 @@
 #include "CollisionManager.h"
 #include "../Bindable/Collider.h"
 #include "../Bindable/Drawable.h"
-#include "../Bindable/TransformBuffer.h"
+#include "../Bindable/Transform.h"
 #include "../Bindable/Camera.h"
 #ifdef _DEBUG
 #include "../Bindable/Material.h"
@@ -12,8 +12,7 @@ namespace Engine
 	CollisionManager* CollisionManager::m_pInst = nullptr;
 
 	CollisionManager::CollisionManager() :
-		m_pSpace(dbg_new SPACE({}, 4096.f))
-		, fAcutenessThreshold(cosf(DegToRad(30.f)))
+		fAcutenessThreshold(cosf(DegToRad(30.f)))
 	{
 		/*PSPACE pSpace[4] = {};
 
@@ -70,7 +69,6 @@ namespace Engine
 
 	CollisionManager::~CollisionManager()
 	{
-		SAFE_DELETE(m_pSpace);
 	}
 
 	void CollisionManager::AddDrawable(class Drawable* pDrawable)
@@ -82,7 +80,9 @@ namespace Engine
 			return;
 		}
 
-		SPACE* pPrevSpace = FindSpaceAndErase(pDrawable);
+		int iType = static_cast<int>(pTransform->GetCameraType());
+
+		SPACE* pPrevSpace = m_tChannel[iType].FindSpaceAndErase(pDrawable);
 
 		if (pPrevSpace)
 		{
@@ -118,7 +118,7 @@ namespace Engine
 
 		vSphereInfo = pTransform->GetTransformMatrix().TransformCoord({ vSphereInfo.x, vSphereInfo.y, vSphereInfo.z });
 
-		SPACE* _pSpace = m_pSpace;
+		SPACE* _pSpace = m_tChannel[iType].m_pSpace;
 
 		while (_pSpace->fSize > 64.f)
 		{
@@ -154,23 +154,36 @@ namespace Engine
 		}
 
 		_pSpace->DrawableList.push_back(pDrawable);
-		m_mapDrawable.insert(std::make_pair(pDrawable, _pSpace));
+		m_tChannel[iType].m_mapDrawable.insert(std::make_pair(pDrawable, _pSpace));
 	}
 
 	void CollisionManager::AddCollider(Collider* pCollider)
 	{
-		m_ColliderList.push_back(pCollider);
+		for (int i = 0; i < log2<static_cast<int>(COLLISION_CHANNEL::END) - 1, 31>() + 1; ++i)
+		{
+			if (static_cast<int>(pCollider->GetChannel()) & (i + 1))
+			{
+				m_tChannel[i].m_ColliderList.push_back(pCollider);
+			}
+		}
 	}
 
-	void CollisionManager::VisibleTest()
+	void CollisionManager::VisibleTest(CAMERA_TYPE eType)
 	{
-		float fAngle = Graphics::GetInst()->GetAngle();
+		std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera(eType);
 
-		float fBeta = atanf(tanf(fAngle) / Graphics::GetInst()->GetRatio());
+		if (!pCamera) 
+		{
+			return;
+		}
 
-		const Matrix& matCameraTransform = Graphics::GetInst()->GetCamera()->GetTransform()->GetTransformMatrix();
+		float fAngle = pCamera->GetAngle();
 
-		const Vector3& vCameraPos = Graphics::GetInst()->GetCamera()->GetTransform()->GetPosition();
+		float fBeta = atanf(tanf(fAngle) / pCamera->GetRatio());
+
+		const Matrix& matCameraTransform = pCamera->GetTransform()->GetTransformMatrix();
+
+		const Vector3& vCameraPos = pCamera->GetTransform()->GetPosition();
 
 		Vector3 vNearNormal = matCameraTransform.TransformNormal({ 0.f, 0.f, 1.f });
 		Vector3 vLeftNormal = matCameraTransform.TransformNormal({ cosf(fAngle), 0.f, sinf(fAngle) });
@@ -178,7 +191,7 @@ namespace Engine
 		Vector3 vTopNormal = matCameraTransform.TransformNormal({ 0.f, -cosf(fBeta), sinf(fBeta) });
 		Vector3 vBottomNormal = matCameraTransform.TransformNormal({ 0.f, cosf(fBeta), sinf(fBeta) });
 
-		Vector3 vNearPos = matCameraTransform.TransformCoord({ 0.f, 0.f, Graphics::GetInst()->GetNear() });
+		Vector3 vNearPos = matCameraTransform.TransformCoord({ 0.f, 0.f, pCamera->GetNear() });
 
 		std::vector<Vector4> vecPlanes;
 
@@ -194,11 +207,11 @@ namespace Engine
 		float fTopRadius = (abs(vTopNormal.x) + abs(vTopNormal.y) + abs(vTopNormal.z)) / 2.f;
 		float fBottomRadius = (abs(vBottomNormal.x) + abs(vBottomNormal.y) + abs(vBottomNormal.z)) / 2.f;
 
-		VisibleTest(m_pSpace, vecPlanes);
+		VisibleTest(m_tChannel[static_cast<int>(eType)].m_pSpace, vecPlanes);
 
 		std::list<PSPACE> SpaceList;
 
-		SpaceList.push_back(m_pSpace);
+		SpaceList.push_back(m_tChannel[static_cast<int>(eType)].m_pSpace);
 
 		while (!SpaceList.empty())
 		{
@@ -572,43 +585,28 @@ namespace Engine
 
 	void CollisionManager::DeleteDrawable(Drawable* pDrawable)
 	{
-		PSPACE pSpace = FindSpaceAndErase(pDrawable);
+		std::shared_ptr<Transform> pTransform = pDrawable->GetTransform();
 
-		if (!pSpace)
-		{
-			return;
-		}
-
-		std::list<Drawable*>::iterator iter = pSpace->DrawableList.begin();
-		std::list<Drawable*>::iterator iterEnd = pSpace->DrawableList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			if ((*iter) == pDrawable)
-			{
-				pSpace->DrawableList.erase(iter);
-				return;
-			}
-		}
+		m_tChannel[pTransform ? static_cast<int>(pTransform->GetCameraType()) : 0].DeleteDrawable(pDrawable);
 	}
 
-	void CollisionManager::Collision(float fDeltaTime)
+	void CollisionManager::Collision(CAMERA_TYPE eType, float fDeltaTime)
 	{
-		if (m_ColliderList.size() < 2)
+		if (m_tChannel[static_cast<int>(eType)].m_ColliderList.size() < 2)
 		{
-			m_ColliderList.clear();
+			m_tChannel[static_cast<int>(eType)].m_ColliderList.clear();
 			return;
 		}
 
-		std::list<Collider*>::iterator iterSrc = m_ColliderList.begin();
-		std::list<Collider*>::iterator iterEnd = m_ColliderList.end();
+		std::list<Collider*>::iterator iterSrc = m_tChannel[static_cast<int>(eType)].m_ColliderList.begin();
+		std::list<Collider*>::iterator iterEnd = m_tChannel[static_cast<int>(eType)].m_ColliderList.end();
 
 		--iterEnd;
 
 		for (; iterSrc != iterEnd; ++iterSrc)
 		{
 			std::list<Collider*>::iterator iterDest = iterSrc;
-			std::list<Collider*>::iterator iterDestEnd = m_ColliderList.end();
+			std::list<Collider*>::iterator iterDestEnd = m_tChannel[static_cast<int>(eType)].m_ColliderList.end();
 
 			++iterDest;
 
@@ -641,10 +639,26 @@ namespace Engine
 			}
 		}
 
-		m_ColliderList.clear();
+		m_tChannel[static_cast<int>(eType)].m_ColliderList.clear();
 	}
 
-	SPACE* CollisionManager::FindSpaceAndErase(class Drawable* pDrawable)
+	void CollisionManager::Collision(float fDeltaTime)
+	{
+		for (int i = 0; i < static_cast<int>(CAMERA_TYPE::END); ++i)
+		{
+			Collision(static_cast<CAMERA_TYPE>(i), fDeltaTime);
+		}
+	}
+
+	void CollisionManager::VisibleTest()
+	{
+		for (int i = 0; i < static_cast<int>(CAMERA_TYPE::END); ++i)
+		{
+			VisibleTest(static_cast<CAMERA_TYPE>(i));
+		}
+	}
+
+	SPACE* CollisionManager::_tagCollisionChannel::FindSpaceAndErase(Drawable* pDrawable)
 	{
 		std::unordered_map<Drawable*, PSPACE>::const_iterator iter = m_mapDrawable.find(pDrawable);
 
@@ -658,5 +672,26 @@ namespace Engine
 		m_mapDrawable.erase(iter);
 
 		return pSpace;
+	}
+	void CollisionManager::_tagCollisionChannel::DeleteDrawable(Drawable* pDrawable)
+	{
+		PSPACE pSpace = FindSpaceAndErase(pDrawable);
+
+		if (!pSpace)
+		{
+			return;
+		}
+
+		std::list<Drawable*>::iterator iter = pSpace->DrawableList.begin();
+		std::list<Drawable*>::iterator iterEnd = pSpace->DrawableList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			if ((*iter) == pDrawable)
+			{
+				pSpace->DrawableList.erase(iter);
+				return;
+			}
+		}
 	}
 }

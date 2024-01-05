@@ -5,7 +5,7 @@
 #include "BindableManager.h"
 #include "../Bindable/ComputeShader.h"
 #include "../Bindable/Drawable.h"
-#include "../Bindable/TransformBuffer.h"
+#include "../Bindable/Transform.h"
 #include "../Bindable/ConstantBuffer.h"
 #include "../Resource/ResourceManager.h"
 #include "../Animation/Notify.h"
@@ -423,7 +423,7 @@ namespace Engine
 
 		MatrixPostProcess();
 
-		m_pFinalBuffer->SetSRV(30);
+		SetFinalBuffer();
 	}
 
 	void Animation::PostBind()
@@ -481,7 +481,7 @@ namespace Engine
 
 		if (bAdditiveSequence)
 		{
-			int iLength = m_pAdditiveSequence->pSequence->GetTag().length();
+			int iLength = static_cast<int>(m_pAdditiveSequence->pSequence->GetTag().length());
 
 			fwrite(&iLength, 4, 1, pFile);
 
@@ -980,5 +980,9 @@ namespace Engine
 		}
 
 		return iter->second;
+	}
+	void Animation::SetFinalBuffer()
+	{
+		m_pFinalBuffer->SetSRV(30);
 	}
 };;

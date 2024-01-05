@@ -6,7 +6,7 @@
 #include "InputLayout.h"
 #include "Topology.h"
 #include "../Input/Input.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "Decal.h"
 #include "../Shader/StructuredBuffer.h"
 
@@ -147,7 +147,7 @@ namespace Engine
 		for (int i = 0; i < static_cast<int>(m_vecVertex.size()); ++i)
 		{
 			vecPoint.push_back(m_vecVertex[i].pos.x);
-			vecPoint.push_back(m_vecHeight[i]);
+			vecPoint.push_back(static_cast<float>(m_vecHeight[i]));
 			vecPoint.push_back(m_vecVertex[i].pos.z);
 		}
 	}
@@ -202,13 +202,13 @@ namespace Engine
 			float s = 1.f - vLocalPos.z + static_cast<int>(vLocalPos.z);
 			float t = vLocalPos.x - static_cast<int>(vLocalPos.x);
 
-			Vector3 u = Vector3(m_vecVertex[iLeftBottomIndex].pos.x, m_vecHeight[iLeftBottomIndex], m_vecVertex[iLeftBottomIndex].pos.z) -
-			Vector3(m_vecVertex[iLeftTopIndex].pos.x, m_vecHeight[iLeftTopIndex], m_vecVertex[iLeftTopIndex].pos.z);
+			Vector3 u = Vector3(m_vecVertex[iLeftBottomIndex].pos.x, static_cast<float>(m_vecHeight[iLeftBottomIndex]), m_vecVertex[iLeftBottomIndex].pos.z) -
+			Vector3(m_vecVertex[iLeftTopIndex].pos.x, static_cast<float>(m_vecHeight[iLeftTopIndex]), m_vecVertex[iLeftTopIndex].pos.z);
 
-			Vector3 v = Vector3(m_vecVertex[iRightTopIndex].pos.x, m_vecHeight[iRightTopIndex], m_vecVertex[iRightTopIndex].pos.z) -
-				Vector3(m_vecVertex[iLeftTopIndex].pos.x, m_vecHeight[iLeftTopIndex], m_vecVertex[iLeftTopIndex].pos.z);
+			Vector3 v = Vector3(m_vecVertex[iRightTopIndex].pos.x, static_cast<float>(m_vecHeight[iRightTopIndex]), m_vecVertex[iRightTopIndex].pos.z) -
+				Vector3(m_vecVertex[iLeftTopIndex].pos.x, static_cast<float>(m_vecHeight[iLeftTopIndex]), m_vecVertex[iLeftTopIndex].pos.z);
 
-			Vector3 vResult = (u * s + v * t) + Vector3(m_vecVertex[iLeftTopIndex].pos.x, m_vecHeight[iLeftTopIndex], m_vecVertex[iLeftTopIndex].pos.z);
+			Vector3 vResult = (u * s + v * t) + Vector3(m_vecVertex[iLeftTopIndex].pos.x, static_cast<float>(m_vecHeight[iLeftTopIndex]), m_vecVertex[iLeftTopIndex].pos.z);
 
 			return GetTransform()->GetTransformMatrix().TransformCoord(vResult).y;
 		}
@@ -216,13 +216,13 @@ namespace Engine
 		{
 			float s = vLocalPos.z - static_cast<int>(vLocalPos.z);
 			float t = 1.f - vLocalPos.x + static_cast<int>(vLocalPos.x);
-			Vector3 u = Vector3(m_vecVertex[iRightTopIndex].pos.x, m_vecHeight[iRightTopIndex], m_vecVertex[iRightTopIndex].pos.z) -
-			Vector3(m_vecVertex[iRightBottomIndex].pos.x, m_vecHeight[iRightBottomIndex], m_vecVertex[iRightBottomIndex].pos.z);
+			Vector3 u = Vector3(m_vecVertex[iRightTopIndex].pos.x, static_cast<float>(m_vecHeight[iRightTopIndex]), m_vecVertex[iRightTopIndex].pos.z) -
+			Vector3(m_vecVertex[iRightBottomIndex].pos.x, static_cast<float>(m_vecHeight[iRightBottomIndex]), m_vecVertex[iRightBottomIndex].pos.z);
 
-			Vector3 v = Vector3(m_vecVertex[iLeftBottomIndex].pos.x, m_vecHeight[iLeftBottomIndex], m_vecVertex[iLeftBottomIndex].pos.z) -
-				Vector3(m_vecVertex[iRightBottomIndex].pos.x, m_vecHeight[iRightBottomIndex], m_vecVertex[iRightBottomIndex].pos.z);
+			Vector3 v = Vector3(m_vecVertex[iLeftBottomIndex].pos.x, static_cast<float>(m_vecHeight[iLeftBottomIndex]), m_vecVertex[iLeftBottomIndex].pos.z) -
+				Vector3(m_vecVertex[iRightBottomIndex].pos.x, static_cast<float>(m_vecHeight[iRightBottomIndex]), m_vecVertex[iRightBottomIndex].pos.z);
 
-			Vector3 vResult = (u * s + v * t) + Vector3(m_vecVertex[iRightBottomIndex].pos.x, m_vecHeight[iRightBottomIndex], m_vecVertex[iRightBottomIndex].pos.z);
+			Vector3 vResult = (u * s + v * t) + Vector3(m_vecVertex[iRightBottomIndex].pos.x, static_cast<float>(m_vecHeight[iRightBottomIndex]), m_vecVertex[iRightBottomIndex].pos.z);
 
 			return GetTransform()->GetTransformMatrix().TransformCoord(vResult).y;
 		}
@@ -230,7 +230,7 @@ namespace Engine
 		return 0.0f;
 	}
 
-	void Terrain::AddTerrainHeight(const Vector3& vPos, float fHeight)
+	void Terrain::AddTerrainHeight(const Vector3& vPos, int iHeight)
 	{
 		int iLeftTopIndex = GetTerrainIndex(GetTerrainLocalPos(vPos));
 		
@@ -243,23 +243,23 @@ namespace Engine
 		int iLeftBottonIndex = iLeftTopIndex + m_tTerrainBuffer.m_iWidth + 1;
 		int iRightBottomIndex = iLeftBottonIndex + 1;
 
-		float fMin = std::min(std::min(m_vecHeight[iLeftTopIndex], m_vecHeight[iRightTopIndex]), std::min(m_vecHeight[iLeftBottonIndex], m_vecHeight[iRightBottomIndex]));
+		int iMin = std::min(std::min(m_vecHeight[iLeftTopIndex], m_vecHeight[iRightTopIndex]), std::min(m_vecHeight[iLeftBottonIndex], m_vecHeight[iRightBottomIndex]));
 
-		if (fMin == m_vecHeight[iLeftTopIndex])
+		if (iMin == m_vecHeight[iLeftTopIndex])
 		{
-			m_vecHeight[iLeftTopIndex] += fHeight;
+			m_vecHeight[iLeftTopIndex] += iHeight;
 		}
-		if (fMin == m_vecHeight[iRightTopIndex])
+		if (iMin == m_vecHeight[iRightTopIndex])
 		{
-			m_vecHeight[iRightTopIndex] += fHeight;
+			m_vecHeight[iRightTopIndex] += iHeight;
 		}
-		if (fMin == m_vecHeight[iLeftBottonIndex])
+		if (iMin == m_vecHeight[iLeftBottonIndex])
 		{
-			m_vecHeight[iLeftBottonIndex] += fHeight;
+			m_vecHeight[iLeftBottonIndex] += iHeight;
 		}
-		if (fMin == m_vecHeight[iRightBottomIndex])
+		if (iMin == m_vecHeight[iRightBottomIndex])
 		{
-			m_vecHeight[iRightBottomIndex] += fHeight;
+			m_vecHeight[iRightBottomIndex] += iHeight;
 		}
 
 		DirectX::ScratchImage* pImage = m_pHeightMap->GetImage();
@@ -285,7 +285,7 @@ namespace Engine
 
 		m_pHeightMap->CreateTexture(*pImage);
 
-		m_pHeightMap->CreateShaderResourceView(pImage->GetMetadata().format, pImage->GetMetadata().mipLevels, pImage->GetMetadata().arraySize);
+		m_pHeightMap->CreateShaderResourceView(pImage->GetMetadata().format, static_cast<int>(pImage->GetMetadata().mipLevels), static_cast<int>(pImage->GetMetadata().arraySize));
 
 		CreateMeshCollider();
 	}

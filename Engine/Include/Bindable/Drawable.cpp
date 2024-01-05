@@ -1,7 +1,7 @@
 #include "Drawable.h"
 #include "Bindable.h"
 #include "../Core/Graphics.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "IndexBuffer.h"
 #include "Material.h"
 #include "../Core/PathManager.h"
@@ -27,6 +27,7 @@
 #include "NavMesh.h"
 #include "Agent.h"
 #include "Mesh.h"
+#include "Camera.h"
 
 namespace Engine
 {
@@ -499,21 +500,7 @@ namespace Engine
 
 	void Drawable::Bind()
 	{
-		const std::list<std::shared_ptr<Bindable>>& ChildList = GetChildList();
-
-		std::list<std::shared_ptr<Bindable>>::const_iterator iter = ChildList.begin();
-		std::list<std::shared_ptr<Bindable>>::const_iterator iterEnd = ChildList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			switch ((*iter)->GetObjectType())
-			{
-			case Engine::OBJECT_TYPE::BIND:
-			case Engine::OBJECT_TYPE::COLLIDER:
-				(*iter)->Bind();
-				break;
-			}
-		}
+		BindChild();
 
 		if (m_pMesh)
 		{
@@ -605,6 +592,25 @@ namespace Engine
 		}
 	}
 
+	void Drawable::BindChild()
+	{
+		const std::list<std::shared_ptr<Bindable>>& ChildList = GetChildList();
+
+		std::list<std::shared_ptr<Bindable>>::const_iterator iter = ChildList.begin();
+		std::list<std::shared_ptr<Bindable>>::const_iterator iterEnd = ChildList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			switch ((*iter)->GetObjectType())
+			{
+			case Engine::OBJECT_TYPE::BIND:
+			case Engine::OBJECT_TYPE::COLLIDER:
+				(*iter)->Bind();
+				break;
+			}
+		}
+	}
+
 	void Drawable::Reset()
 	{
 		if (m_pTransform == nullptr)
@@ -685,7 +691,7 @@ namespace Engine
 
 	bool Drawable::CollisionFrustumAndBox(const OBBINFO& tBoxInfo) const
 	{
-		const Matrix& matWV = m_pTransform->GetTransformMatrix() * Graphics::GetInst()->GetView();
+		const Matrix& matWV = m_pTransform->GetWV();
 
 		const Vector3& vViewPos = matWV.TransformCoord(tBoxInfo.vCenter);
 
@@ -705,7 +711,9 @@ namespace Engine
 			return false;
 		}
 
-		float fAngle = Graphics::GetInst()->GetAngle();
+		std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera();
+
+		float fAngle = pCamera->GetAngle();
 
 		float fCos = cosf(fAngle);
 		float fSin = sinf(fAngle);
@@ -722,7 +730,7 @@ namespace Engine
 			return false;
 		}
 
-		float fRatio = Graphics::GetInst()->GetRatio();
+		float fRatio = pCamera->GetRatio();
 
 		float fBeta = atanf(tanf(fAngle) / fRatio);
 
@@ -941,7 +949,7 @@ namespace Engine
 
 		if (bAgent)
 		{
-			int iLength = m_pAgent->GetTag().length();
+			int iLength = static_cast<int>(m_pAgent->GetTag().length());
 
 			fwrite(&iLength, 4, 1, pFile);
 
@@ -1762,17 +1770,6 @@ namespace Engine
 		{
 			vecVertex.push_back(loader.GetVertexData(i));
 			vecIndex.push_back(loader.GetIndexData(i));
-		}
-
-		for (int i = 0; i< vecIndex.size(); ++i)
-		{
-			for (int j = 0; j < vecIndex[i].size(); ++j)
-			{
-				for (int k = 0; k < vecVertex.size(); ++k)
-				{
-					SetTangent(vecVertex[k], vecIndex[i][j]);
-				}
-			}
 		}
 
 		std::shared_ptr<Mesh> pMesh = StaticCreateBindable<Mesh>(strFileName, vecVertex, vecIndex);

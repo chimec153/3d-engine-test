@@ -5,7 +5,7 @@
 #include "ConstantBuffer.h"
 #include "../Core/Graphics.h"
 #include "Camera.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 
 Engine::Decal::Decal()	:
 	m_pCBuffer(StaticFindBindable<ConstantBuffer<DECALCBUFFER>>("Decal"))

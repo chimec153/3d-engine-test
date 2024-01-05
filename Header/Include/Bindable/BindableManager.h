@@ -92,5 +92,4 @@ namespace Engine
 	{
 		return BindableManager<T>::GetInst()->BindableManager<T>::CreateBindable<Args...>(strTag, args...);
 	}
-
 }

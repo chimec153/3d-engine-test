@@ -9,8 +9,15 @@
 #include "Bindable/Agent.h"
 #include "../Object/Monster.h"
 #include "Bindable/Decal.h"
-#include "Bindable/TransformBuffer.h"
+#include "Bindable/Transform.h"
 #include "Bindable/Topology.h"
+#include "UI/Image.h"
+#include "UI/Frame.h"
+#include "../UI/Inventory.h"
+#include "Input/Input.h"
+#include "Bindable/Camera.h"
+#include "Core/Graphics.h"
+#include "Bindable/UIRenderer.h"
 
 Client::GameScene::GameScene()
 {
@@ -20,6 +27,8 @@ bool Client::GameScene::Init()
 {
 	Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Medieval.mesh", MESH_PATH);
 	Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
+	Engine::StaticCreateBindable<Engine::Mesh>("sword", "Sword.mesh", MESH_PATH);
+	Engine::StaticCreateBindable<Engine::Mesh>("shovel", "Shovel.mesh", MESH_PATH);
 
 	Engine::ResourceManager::GetInst()->LoadSkeleton("Medieval.skel");
 	Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
@@ -85,6 +94,11 @@ bool Client::GameScene::Init()
 	Engine::StaticCreateBindable<Engine::Texture>("TerrainHeight", TEXT("LandScape\\height2.bmp"), TEXTURE_PATH, 16);
 	Engine::StaticCreateBindable<Engine::Texture>("SkyBoxTexture", TEXT("TYbvO.jpg"), TEXTURE_PATH, 5);
 	Engine::StaticCreateBindable<Engine::Texture>("PaperBurn", TEXT("DefaultBurn.png"), TEXTURE_PATH, 4);
+	Engine::StaticCreateBindable<Engine::Texture>("QuickSlot", TEXT("item.png"), TEXTURE_PATH, 0);
+	Engine::StaticCreateBindable<Engine::Texture>("frame", TEXT("frame.png"), TEXTURE_PATH, 0);
+	Engine::StaticCreateBindable<Engine::Texture>("frame", TEXT("frame.png"), TEXTURE_PATH, 0);
+	Engine::StaticCreateBindable<Engine::Texture>("shovel_icon", TEXT("shovel_icon.png"), TEXTURE_PATH, 0);
+	Engine::StaticCreateBindable<Engine::Texture>("sword_icon", TEXT("sword_icon.png"), TEXTURE_PATH, 0);
 
 	Engine::StaticCreateBindable<Engine::Texture>("DecalBloodAlbedo", TEXT("Decal\\sgfjdepc_8K_Albedo.tga"), TEXTURE_PATH, 0);
 	Engine::StaticCreateBindable<Engine::Texture>("DecalBloodNormal", TEXT("Decal\\sgfjdepc_8K_Normal.tga"), TEXTURE_PATH, 1);
@@ -97,7 +111,22 @@ bool Client::GameScene::Init()
 
 	std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = std::static_pointer_cast<Engine::ColliderMesh>(pTerrain->FindChild(Engine::BINDABLE_TYPE::COLLIDER_MESH));
 
+	std::shared_ptr<Engine::Camera> pUIInventoryCamera = CreateDrawable<Engine::Camera>("InventoryCamera", FindLayer(DEFAULT_LAYER));
+
+	pUIInventoryCamera->SetProjectType(Engine::Camera::PROJECT_TYPE::PERSPECTIVE);
+
 	std::shared_ptr<Client::Player> pPlayer = CreateDrawable<Client::Player>("player", FindLayer(DEFAULT_LAYER), 100, 10, 15);
+
+	pPlayer->AddChild(pUIInventoryCamera);
+
+	std::shared_ptr<Engine::Transform> pInventoryCameraTransform = pUIInventoryCamera->GetTransform();
+
+	if (!pInventoryCameraTransform)
+	{
+		return false;
+	}
+
+	pInventoryCameraTransform->SetRelativePosition(1.f, -0.2f, -20.f);
 
 	//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pPlayer.get(), &Client::Player::CollisionTerrainStay);
 
@@ -130,6 +159,48 @@ bool Client::GameScene::Init()
 		pDecalTransform->SetPosition(5.f, 31.f, 5.f);
 
 		pDecalTransform->SetScale(2.f, 1.f, 2.f);
+	}
+
+	std::shared_ptr<Engine::Image> pQuickSlot = CreateDrawable<Engine::Image>("QuickSlot", FindLayer(DEFAULT_LAYER), "QuickSlot");
+
+	std::shared_ptr<Engine::Transform> pQuickSlotTransform = pQuickSlot->GetTransform();
+
+	pQuickSlotTransform->SetScale(287.f, 42.f, 1.f);
+	pQuickSlotTransform->SetPosition(floor((Engine::Window::GetInst()->GetWidth() - 287.f) / 2.f), 10.f, 0.f);
+
+	std::shared_ptr<Inventory> pInventory = CreateDrawable<Inventory>("Inventory", FindLayer(DEFAULT_LAYER), "frame");
+
+	std::shared_ptr<Engine::Transform> pFrameTransform = pInventory->GetTransform();
+
+	pFrameTransform->SetScale(291.f, 313.f, 1.f);
+	pFrameTransform->SetPosition(Engine::Window::GetInst()->GetWidth() / 2 - 145.f, Engine::Window::GetInst()->GetHeight() / 2 - 156.f, 0.f);
+
+	Engine::CInput::GetInst()->AddKey(DIK_I);
+
+	Engine::CInput::GetInst()->CreateAction("Inventory", DIK_I);
+
+	Engine::CInput::GetInst()->AddAction("Inventory", Engine::CInput::KEY_STATE::UP, pInventory.get(), &Inventory::ToggleInventory);
+
+	pInventory->AddItem(1);
+
+	pInventory->AddItem(2);
+
+	std::shared_ptr<Engine::UIRenderer> pUIRenderer = std::static_pointer_cast<Engine::UIRenderer>(pInventory->FindChild("uirenderer"));
+
+	if (pUIRenderer)
+	{
+		pUIRenderer->SetCamera(pUIInventoryCamera);
+
+		pUIRenderer->SetTarget(pPlayer);
+	}
+
+	std::shared_ptr<Engine::UIRenderer> pUIWeaponRenderer = std::static_pointer_cast<Engine::UIRenderer>(pInventory->FindChild("uirenderer_weapon"));
+
+	if (pUIWeaponRenderer)
+	{
+		pUIWeaponRenderer->SetCamera(pUIInventoryCamera);
+
+		pUIWeaponRenderer->SetTarget(pPlayer->GetWeapon());
 	}
 
 	return true;

@@ -68,6 +68,7 @@ namespace Engine
 	{
 		AddLayer(DEFAULT_LAYER);
 		AddLayer(ALPHA_LAYER, 1);
+		AddLayer(UI_LAYER, 2);
 
 		return true;
 	}

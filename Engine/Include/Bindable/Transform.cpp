@@ -1,10 +1,12 @@
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "Drawable.h"
 #include "../Core/Graphics.h"
 #include "BindableManager.h"
 #include "ConstantBuffer.h"
 #include "PointLight.h"
 #include "../Shader/StructuredBuffer.h"
+#include "Camera.h"
+#include "Transform.h"
 
 namespace Engine
 {
@@ -27,6 +29,7 @@ namespace Engine
 		, m_bUpdateRotation(true)
 		, m_bUpdatePosition(true)
 		, m_bUpdateScale(true)
+		, m_eCameraType(CAMERA_TYPE::NORMAL)
 	{
 		m_tBuffer.matJoint = Matrix::matIdentity;
 		SetBindableType(BINDABLE_TYPE::TRANSFORM);
@@ -51,6 +54,7 @@ namespace Engine
 		, m_bUpdateRotation(true)
 		, m_bUpdatePosition(true)
 		, m_bUpdateScale(true)
+		, m_eCameraType(buffer.m_eCameraType)
 	{
 		m_tBuffer.matJoint = Matrix::matIdentity;
 	}
@@ -75,6 +79,16 @@ namespace Engine
 	const _tagTransformBuffer& Transform::GetBuffer() const
 	{
 		return m_tBuffer;
+	}
+
+	void Transform::SetCameraType(CAMERA_TYPE eType)
+	{
+		m_eCameraType = eType;
+	}
+
+	CAMERA_TYPE Transform::GetCameraType() const
+	{
+		return m_eCameraType;
 	}
 
 	void Transform::Update(float fDeltaTime)
@@ -107,21 +121,16 @@ namespace Engine
 
 		m_matTransform = Matrix::Scaling(m_vScale) * m_matRotationTranslation * m_tBuffer.matJoint;
 
-		m_matWV = m_matParent * m_matTransform * Graphics::GetInst()->GetView();
-
-		m_tBuffer.matWorldViewProject = m_matWV * Graphics::GetInst()->GetProjectMatrix();
-
-		m_tBuffer.matWorldView = m_matWV;
-
 		m_tBuffer.matWorld = m_matTransform;
 
-		Matrix matInvRot = m_matRotation;
+		m_tBuffer.matWorld.Transpose();
 
-		matInvRot.Transpose();
+		std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera(m_eCameraType);
 
-		m_tBuffer.matView = Graphics::GetInst()->GetView();
-
-		m_tBuffer.matProj = Graphics::GetInst()->GetProjectMatrix();
+		if (pCamera)
+		{
+			UpdateCameraRelateMatrix(pCamera);
+		}
 
 		const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();
 
@@ -131,16 +140,6 @@ namespace Engine
 
 			m_tBuffer.matLightWVP.Transpose();
 		}
-
-		m_tBuffer.matWorldViewProject.Transpose();
-
-		m_tBuffer.matWorldView.Transpose();
-
-		m_tBuffer.matWorld.Transpose();
-
-		m_tBuffer.matView.Transpose();
-
-		m_tBuffer.matProj.Transpose();
 	}
 
 	void Transform::Bind()
@@ -183,6 +182,7 @@ namespace Engine
 		fwrite(&m_vRelativePosition, 12, 1, pFile);
 		fwrite(&m_vRelativeRotation, 12, 1, pFile);
 		fwrite(&m_vRelativeScale, 12, 1, pFile);
+		fwrite(&m_eCameraType, 4, 1, pFile);
 	}
 
 	void Transform::Load(FILE* pFile)
@@ -198,6 +198,7 @@ namespace Engine
 		fread(&m_vRelativePosition, 12, 1, pFile);
 		fread(&m_vRelativeRotation, 12, 1, pFile);
 		fread(&m_vRelativeScale, 12, 1, pFile);
+		fread(&m_eCameraType, 4, 1, pFile);
 	}
 
 	void Transform::UpdatePosition()
@@ -792,5 +793,27 @@ namespace Engine
 	void Transform::SetRotationTranslationMatrix(const Matrix& mat)
 	{
 		m_matRotationTranslation = mat;
+	}
+	void Transform::UpdateCameraRelateMatrix(std::shared_ptr<Camera> pCamera)
+	{
+		m_tBuffer.matView = pCamera->GetView();
+
+		m_tBuffer.matProj = pCamera->GetProjectMatrix();
+
+		m_tBuffer.matProj.Transpose();
+
+		const Matrix& matWorld = m_matParent * m_matTransform;
+
+		m_matWV = matWorld * m_tBuffer.matView;
+
+		m_tBuffer.matWorldView = m_matWV;
+
+		m_tBuffer.matWorldView.Transpose();
+
+		m_tBuffer.matWorldViewProject = matWorld * pCamera->GetViewProject();
+
+		m_tBuffer.matWorldViewProject.Transpose();
+
+		m_tBuffer.matView.Transpose();
 	}
 }

@@ -72,6 +72,7 @@ namespace Engine
 		DEPTH_STENCIL_STATE,
 		RASTERIZER_STATE,
 		MOUSE,
+		UIRENDERER,
 		UI_FRAME,
 		UI_IMAGE,
 		UI_GAUGE,
@@ -86,6 +87,13 @@ namespace Engine
 		MESH,
 		TERRAIN,
 		OBB,
+		END
+	};
+
+	enum class COLLISION_CHANNEL
+	{
+		NORMAL = 0x1,
+		UI = 0x2,
 		END
 	};
 
@@ -122,6 +130,14 @@ namespace Engine
 		DECAL,
 		ALPHA,
 		BLUR,
+		UI,
+		END
+	};
+
+	enum class CAMERA_TYPE
+	{
+		NORMAL,
+		UI,
 		END
 	};
 }

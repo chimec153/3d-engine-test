@@ -169,6 +169,7 @@ namespace Engine
 	{
 		if (eType < MOUSE_TYPE::LEFT || static_cast<int>(eType) >= sizeof(state.rgbButtons) / sizeof(state.rgbButtons[0]))
 		{
+			assert(false);
 			return false;
 		}
 
@@ -179,6 +180,7 @@ namespace Engine
 	{
 		if (eType < MOUSE_TYPE::LEFT || static_cast<int>(eType) >= sizeof(state.rgbButtons) / sizeof(state.rgbButtons[0]))
 		{
+			assert(false);
 			return false;
 		}
 
@@ -189,6 +191,7 @@ namespace Engine
 	{
 		if (eType < MOUSE_TYPE::LEFT || static_cast<int>(eType) >= sizeof(state.rgbButtons) / sizeof(state.rgbButtons[0]))
 		{
+			assert(false);
 			return false;
 		}
 
@@ -251,7 +254,7 @@ namespace Engine
 		{
 			if (state.rgbButtons[m_pMouseButton[i].iKey] && m_bEnable)
 			{
-				if (!m_pMouseButton[i].bDown)
+				if (!m_pMouseButton[i].bDown && !m_pMouseButton[i].bPressed)
 				{
 					m_pMouseButton[i].bDown = true;
 					m_pMouseButton[i].bUp = false;
@@ -288,6 +291,7 @@ namespace Engine
 
 		if (!pActionInfo)
 		{
+			assert(false);
 			return;
 		}
 
@@ -300,6 +304,7 @@ namespace Engine
 
 		if (pActionInfo)
 		{
+			assert(false);
 			return false;
 		}
 

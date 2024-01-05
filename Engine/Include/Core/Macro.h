@@ -26,6 +26,7 @@
 #include "fbxsdk/scene/geometry/fbxlayer.h"
 #include <fbxsdk.h>
 #include <memory>
+#include <map>
 
 #pragma comment(lib, "zlib-md.lib")
 #pragma comment(lib, "libxml2-md.lib")
@@ -76,6 +77,7 @@
 
 #define DEFAULT_LAYER	"DefaultLayer"
 #define ALPHA_LAYER		"AlphaLayer"
+#define UI_LAYER		"UILayer"
 
 #define epsilon	0.0001
 #define FIXED_UPDATE_TIME	0.01666666f

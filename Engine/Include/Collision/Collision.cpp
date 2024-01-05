@@ -1,7 +1,7 @@
 #include "Collision.h"
 #include "../Bindable/ColliderLine.h"
 #include "../Bindable/ColliderSphere.h"
-#include "../Bindable/TransformBuffer.h"
+#include "../Bindable/Transform.h"
 #include "../Bindable/ColliderMesh.h"
 #include "../Bindable/ColliderOBB.h"
 
@@ -482,6 +482,73 @@ namespace Engine
 		return true;
 	}
 
+	bool Collision::CollisionOBBToLine(const OBBINFO& tSrc, const LINECOLLIDERINFO& tDest, Vector3& vCross)
+	{
+		const Vector3& p = tSrc.vCenter - tDest.vStart;
+
+		Vector3 vHalfLength = {tSrc.vAxis[0].Length() * 0.5f, tSrc.vAxis[1].Length() * 0.5f, tSrc.vAxis[2].Length() * 0.5f };
+
+		Vector3 vAxis[3] = {};
+
+		vAxis[0] = tSrc.vAxis[0] / tSrc.vAxis[0].Length();
+		vAxis[1] = tSrc.vAxis[1] / tSrc.vAxis[1].Length();
+		vAxis[2] = tSrc.vAxis[2] / tSrc.vAxis[2].Length();
+
+		float tmin = -FLT_MAX;
+		float tmax = FLT_MAX;
+
+		for (int i = 0; i < 3; ++i)
+		{
+			float e = vAxis[i].Dot(p);
+			float f = vAxis[i].Dot(tDest.vDir);
+
+			if (abs(f) > epsilon)
+			{
+				f = 1.f / f;
+
+				float t1 = (e + vHalfLength[i]) * f;
+				float t2 = (e - vHalfLength[i]) * f;
+
+				if (t1 > t2)
+				{
+					tmin = t2 > tmin ? t2 : tmin;
+
+					tmax = t1 < tmax ? t1 : tmax;
+				}
+				else
+				{
+					tmin = t1 > tmin ? t1 : tmin;
+
+					tmax = t2 < tmax ? t2 : tmax;
+				}
+
+				if (tmin > tmax)
+				{
+					return false;
+				}
+
+				if (tmax < 0.f)
+				{
+					return false;
+				}
+			}
+			else if (-e - vHalfLength[i] > 0.f || -e + vHalfLength[i] < 0.f)
+			{
+				return false;
+			}
+		}
+
+		if (tmin > 0.f)
+		{
+			vCross = tDest.vStart + tDest.vDir * tmin;
+			return true;
+		}
+
+		vCross = tDest.vStart + tDest.vDir * tmax;
+
+		return true;
+	}
+
 	bool Collision::CollisionLineToSphere(ColliderLine* pSrc, ColliderSphere* pDest)
 	{
 		Vector3 vCross;
@@ -556,6 +623,19 @@ namespace Engine
 		Vector3 vCross = {};
 
 		if (CollisionOBBToOBB(pSrc->GetInfo(), pDest->GetInfo(), vCross))
+		{
+			pSrc->SetCross(vCross);
+			pDest->SetCross(vCross);
+			return true;
+		}
+
+		return false;
+	}
+	bool Collision::CollisionOBBToLine(ColliderOBB* pSrc, ColliderLine* pDest)
+	{
+		Vector3 vCross = {};
+
+		if (CollisionOBBToLine(pSrc->GetInfo(), pDest->GetInfo(), vCross))
 		{
 			pSrc->SetCross(vCross);
 			pDest->SetCross(vCross);

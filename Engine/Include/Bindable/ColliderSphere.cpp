@@ -1,6 +1,6 @@
 #include "ColliderSphere.h"
 #include "Drawable.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "ColliderLine.h"
 #include "../Collision/Collision.h"
 #ifdef _DEBUG

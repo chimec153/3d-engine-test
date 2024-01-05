@@ -48,7 +48,7 @@ namespace Client
         };
     public:
         Player(int iMaxHP, int iAttackMin, int iAttackMax);
-        virtual ~Player() override = default;
+        virtual ~Player() override;
 
     private:
         typedef struct _tagShadowInfo
@@ -92,6 +92,8 @@ namespace Client
         void ChangeSequence(const std::string& strSeq);
         void SetRate(float fRate);
         void SetAdditiveSequence(const std::string& strSeq);
+        void ChangeWeaponMesh(const std::string& strMesh);
+        std::shared_ptr<Engine::Drawable> GetWeapon()   const;
 
     public:
         void CollisionTerrainStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);

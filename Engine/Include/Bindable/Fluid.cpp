@@ -7,7 +7,7 @@
 #include "InputLayout.h"
 #include "Topology.h"
 #include "../Input/Input.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 
 Engine::Fluid::Fluid()	:
 	m_pBuffer()

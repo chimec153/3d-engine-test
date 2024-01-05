@@ -1,7 +1,9 @@
 #include "ColliderOBB.h"
 #include "../Collision/Collision.h"
 #include "ColliderSphere.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
+#include "ColliderLine.h"
+#include "Camera.h"
 #ifdef _DEBUG
 #include "Mesh.h"
 #include "RasterizerState.h"
@@ -95,32 +97,6 @@ const Engine::OBBINFO& Engine::ColliderOBB::GetInfo() const
 void Engine::ColliderOBB::Update(float fDeltaTime)
 {
 	__super::Update(fDeltaTime);
-
-	Bindable* pParent = GetParent();
-
-	if(pParent)
-	{
-		std::shared_ptr<Transform> pTransform = static_cast<Drawable*>(pParent)->GetTransform();
-
-		if (pTransform)
-		{
-			m_tInfo.vCenter = m_vOffset + pTransform->GetTransformMatrix().v[3];
-
-			for (int i = 0; i < 3; ++i)
-			{
-				m_tInfo.vAxis[i] = pTransform->GetAxis(static_cast<AXIS_TYPE>(i)) * m_vScaleOffset[i];
-				m_tInfo.vCenter += pTransform->GetAxis(static_cast<AXIS_TYPE>(i)) * m_vAxisOffset[i];
-			}
-		}
-	}
-
-#ifdef _DEBUG
-	if (m_pDebugTransform)
-	{
-		m_pDebugTransform->SetScale(m_vScaleOffset);
-		m_pDebugTransform->SetPosition(m_tInfo.vCenter);
-	}
-#endif
 }
 
 bool Engine::ColliderOBB::Collision(Collider* pCollider, float fDeltaTime)
@@ -130,7 +106,7 @@ bool Engine::ColliderOBB::Collision(Collider* pCollider, float fDeltaTime)
 	case Engine::COLLIDER_TYPE::NONE:
 		break;
 	case Engine::COLLIDER_TYPE::LINE:
-		break;
+		return Collision::CollisionOBBToLine(this, static_cast<ColliderLine*>(pCollider));
 	case Engine::COLLIDER_TYPE::SPHERE:
 		return Collision::CollisionOBBToSphere(this, static_cast<ColliderSphere*>(pCollider));
 	case Engine::COLLIDER_TYPE::MESH:
@@ -146,6 +122,110 @@ bool Engine::ColliderOBB::Collision(Collider* pCollider, float fDeltaTime)
 	}
 
 	return false;
+}
+
+void Engine::ColliderOBB::PostUpdate(float fDeltaTime)
+{
+	__super::PostUpdate(fDeltaTime);
+
+	Bindable* pParent = GetParent();
+
+	if (pParent)
+	{
+		std::shared_ptr<Transform> pTransform = static_cast<Drawable*>(pParent)->GetTransform();
+
+		if (pTransform)
+		{
+			if (pTransform->GetCameraType() == CAMERA_TYPE::UI)
+			{
+				std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera();
+
+				std::shared_ptr<Camera> pUICamera = Graphics::GetInst()->GetCamera(CAMERA_TYPE::UI);
+
+				if (pCamera)
+				{
+					std::shared_ptr<Transform> pCameraTransform = pCamera->GetTransform();
+
+					Vector3 vPos = pTransform->GetPosition() + m_vScaleOffset / 2.f + m_vOffset;
+
+					Vector3 vRightPos = vPos;
+
+					Vector3 vUpPos = vPos;
+
+					vRightPos.x += m_vScaleOffset.x;
+
+					vUpPos.y += m_vScaleOffset.y;
+
+					Vector3 vClipPos = pUICamera->ScreenPosToClipPos({ vPos.x, vPos.y });
+
+					Vector3 vClipRightPos = pUICamera->ScreenPosToClipPos({ vRightPos.x, vRightPos.y });
+
+					Vector3 vClipUpPos = pUICamera->ScreenPosToClipPos({ vUpPos.x, vUpPos.y });
+
+					Vector3 vWorldPos = pCamera->CameraPosToWorldPos({ vClipPos.x, vClipPos.y });
+
+					Vector3 vWorldRightPos = pCamera->CameraPosToWorldPos({ vClipRightPos.x, vClipRightPos.y });
+
+					Vector3 vWorldUpPos = pCamera->CameraPosToWorldPos({ vClipUpPos.x, vClipUpPos.y });
+
+					const Vector3& vCamPos = pCameraTransform->GetPosition();
+
+					const Vector3& vAxisZ = (vWorldPos - vCamPos).Normalize();
+
+					const Vector3& vUp = pCameraTransform->GetAxis(Engine::AXIS_TYPE::Y);
+
+					const Vector3& vAxisX = vUp.Cross(vAxisZ).Normalize();
+
+					const Vector3& vAxisY = vAxisZ.Cross(vAxisX);
+
+					Vector3 vScaleOffset[3] = {};
+
+					m_tInfo.vAxis[0] = vAxisX * (vWorldRightPos - vWorldPos).Length();
+
+					m_tInfo.vAxis[1] = vAxisY * (vWorldUpPos - vWorldPos).Length();
+
+					m_tInfo.vAxis[2] = vAxisZ * 0.001f;
+
+					m_tInfo.vCenter = vWorldPos;
+
+					//m_tInfo.vCenter += vAxisX * m_vAxisOffset[0] / Engine::Window::GetInst()->GetWidth() + vAxisY * m_vAxisOffset[1] / Engine::Window::GetInst()->GetHeight();
+				}
+			}
+			else
+			{
+				m_tInfo.vCenter = m_vOffset + pTransform->GetTransformMatrix().v[3];
+
+				for (int i = 0; i < 3; ++i)
+				{
+					m_tInfo.vAxis[i] = pTransform->GetAxis(static_cast<AXIS_TYPE>(i)) * m_vScaleOffset[i];
+					m_tInfo.vCenter += pTransform->GetAxis(static_cast<AXIS_TYPE>(i)) * m_vAxisOffset[i];
+				}
+			}
+		}
+	}
+
+#ifdef _DEBUG
+	if (m_pDebugTransform)
+	{
+		Matrix matRot = {};
+
+		matRot[0] = m_tInfo.vAxis[0];
+		matRot[1] = m_tInfo.vAxis[1];
+		matRot[2] = m_tInfo.vAxis[2];
+		matRot[3][3] = 1.f;
+
+		Vector3 vRot = {};
+		Vector3 vScale = {};
+		Vector3 vPos = {};
+
+		matRot.GetSRT(vScale, vRot, vPos);
+
+		m_pDebugTransform->SetRotation(vRot);
+
+		m_pDebugTransform->SetScale(m_tInfo.vAxis[0].Length(), m_tInfo.vAxis[1].Length(), m_tInfo.vAxis[2].Length());
+		m_pDebugTransform->SetPosition(m_tInfo.vCenter);
+	}
+#endif
 }
 
 void Engine::ColliderOBB::PreDraw(float fDeltaTime)

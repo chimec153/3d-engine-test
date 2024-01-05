@@ -1,6 +1,6 @@
 #include "Bindable.h"
 #include "../Core/Graphics.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "Agent.h"
 #include "Drawable.h"
 #include "VertexBuffer.h"

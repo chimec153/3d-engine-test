@@ -96,6 +96,7 @@ namespace Engine
         std::shared_ptr<class Notify> AddNotify(const std::string& strSeq, const std::string& strNotify, float fTime);
         void SetAdditiveSequence(const std::string& strSequence);
         const PSEQUENCEINFO FindSeuqence(const std::string& strSeq) const;
+        void SetFinalBuffer();
 
     private:
         std::shared_ptr<class Notify> AddNotify(const std::string& strSeq, const std::string& strNotify);

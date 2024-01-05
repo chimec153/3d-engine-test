@@ -3,7 +3,7 @@
 #include "Bindable/NavMesh.h"
 #include "Bindable/Agent.h"
 #include "Core/Window.h"
-#include "Bindable/TransformBuffer.h"
+#include "Bindable/Transform.h"
 #include "Bindable/Animation.h"
 #include "Animation/Sequence.h"
 #include "Animation/Skeleton.h"

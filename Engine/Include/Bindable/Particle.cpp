@@ -10,7 +10,7 @@
 #include "Topology.h"
 #include "BlendState.h"
 #include "DepthStencilState.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 
 namespace Engine
 {
@@ -28,7 +28,7 @@ namespace Engine
 		, m_pCS(StaticFindBindable<ComputeShader>("ParticleCS"))
 		, m_tCBuffer(iMaxCount)
 		, m_pBuffer(std::make_shared<StructuredBuffer>(iMaxCount, static_cast<int>(sizeof(PARTICLE))))
-		, m_pSystemBuffer(std::make_shared<StructuredBuffer>(ceil(iMaxCount / 64), 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS))
+		, m_pSystemBuffer(std::make_shared<StructuredBuffer>(static_cast<int>(ceil(iMaxCount / 64.f)), 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS))
 		, m_pParticleCBuffer(StaticFindBindable<ConstantBuffer<PARTICLECBUFFER>>("Particle"))
 		, m_fElapsedTime(0.f)
 		, m_fEmitMaxTime(1.f)
@@ -75,7 +75,7 @@ namespace Engine
 
 		m_pBuffer->SetUAV(2);
 
-		int iGroupCount = ceil(m_tCBuffer.iMaxParticleCount / 64);
+		int iGroupCount = static_cast<int>(ceil(m_tCBuffer.iMaxParticleCount / 64.f));
 
 		std::vector<int> vecCreateCount(iGroupCount);
 

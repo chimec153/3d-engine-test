@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Types.h"
+
 namespace Engine
 {
     template <typename T>
@@ -23,12 +25,15 @@ namespace Engine
         std::list<Transform*> m_ChildTransformList;
         _tagTransformBuffer m_tBuffer;
         std::shared_ptr<class StructuredBuffer> m_pJointSequenceBuffer;
+        CAMERA_TYPE m_eCameraType;
 
     public:
         void SetParentTransform(Transform* pParent);
         void AddChildTransform(Transform* pChild);
         const std::shared_ptr<class ConstantBuffer<_tagTransformBuffer>>& GetConstantBuffer()    const;
         const _tagTransformBuffer& GetBuffer()  const;
+        void SetCameraType(CAMERA_TYPE eType);
+        CAMERA_TYPE GetCameraType() const;
 
     private:
         Vector3 m_vPosition;
@@ -117,6 +122,7 @@ namespace Engine
         void SetAxis(AXIS_TYPE eType, const Vector3& vAxisZ, const Vector3& vUp = {0.f, 1.f, 0.f});
         void SetParentMatrix(const Matrix& matParent, int iJointIndex, std::shared_ptr<class StructuredBuffer> pBuffer);
         void SetRotationTranslationMatrix(const Matrix& mat);
+        void UpdateCameraRelateMatrix(std::shared_ptr<Camera> pCamera);
 
     public:
         virtual void Update(float fDeltaTime) override;

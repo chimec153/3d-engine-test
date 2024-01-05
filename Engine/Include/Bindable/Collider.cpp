@@ -6,6 +6,7 @@ namespace Engine
 	Collider::Collider() :
 		Bindable()
 		, m_eColliderType(COLLIDER_TYPE::NONE)
+		, m_eChannel(COLLISION_CHANNEL::NORMAL)
 	{
 		SetObjectType(OBJECT_TYPE::COLLIDER);
 	}
@@ -16,6 +17,7 @@ namespace Engine
 		, m_vCross()
 		, m_PrevColliderList()
 		, m_CallBack()
+		, m_eChannel(collider.m_eChannel)
 	{
 	}
 
@@ -96,6 +98,24 @@ namespace Engine
 		return m_PrevColliderList;
 	}
 
+	void Collider::ClearCallBack()
+	{
+		for (int i = 0; i < static_cast<int>(COLLISION_TYPE::END); ++i)
+		{
+			m_CallBack[i] = nullptr;
+		}
+	}
+
+	void Collider::SetChannel(COLLISION_CHANNEL eChannel)
+	{
+		m_eChannel = eChannel;
+	}
+
+	COLLISION_CHANNEL Collider::GetChannel() const noexcept
+	{
+		return m_eChannel;
+	}
+
 	void Collider::Collision(float fDeltaTime)
 	{
 		CollisionManager::GetInst()->AddCollider(this);
@@ -112,11 +132,13 @@ namespace Engine
 		__super::Save(pFile);
 
 		fwrite(&m_eColliderType, 4, 1, pFile);
+		fwrite(&m_eChannel, 4, 1, pFile);
 	}
 	void Collider::Load(FILE* pFile)
 	{
 		__super::Load(pFile);
 
 		fread(&m_eColliderType, 4, 1, pFile);
+		fread(&m_eChannel, 4, 1, pFile);
 	}
 }

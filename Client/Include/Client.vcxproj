@@ -178,6 +178,8 @@
     <ClCompile Include="Object\Trail.cpp" />
     <ClCompile Include="Scene\GameScene.cpp" />
     <ClCompile Include="Scene\StartScene.cpp" />
+    <ClCompile Include="UI\Inventory.cpp" />
+    <ClCompile Include="UI\ItemIcon.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Client.h" />
@@ -187,6 +189,8 @@
     <ClInclude Include="Object\Trail.h" />
     <ClInclude Include="Scene\GameScene.h" />
     <ClInclude Include="Scene\StartScene.h" />
+    <ClInclude Include="UI\Inventory.h" />
+    <ClInclude Include="UI\ItemIcon.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -481,12 +481,12 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     shadowpos.y = 1.f - shadowpos.y;
     
+    float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
+    
     float4 decal0 = g_DecalTexture0.Sample(g_sPoint, input.uv);
     float4 decal1 = g_DecalTexture1.Sample(g_sPoint, input.uv);
     float4 decal2 = g_DecalTexture2.Sample(g_sPoint, input.uv);
     float4 decal3 = g_DecalTexture3.Sample(g_sPoint, input.uv);
-    
-    float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
     
     float4 value0 = g_GBufferTexture0.Sample(g_sPoint, input.uv);
     
@@ -875,6 +875,24 @@ float4 PS_AlphaNoUV(VSOut input) : SV_Target
     return BRDF(view, hdir, input.normal, light, albedo, g_vSpecularColor, C, g_vMaterialRoughness, g_fMaterialFraction, fShadowAttr) + g_vEmissiveColor;
 }
 
+float4 PS_AlphaNoUVNoShadow(VSOut input) : SV_Target
+{
+    float4 albedo = g_vDiffuseColor;
+    
+    albedo = GetPaperBurnColor(albedo, input.uv);
+    
+    float3 light = 0.f;
+    
+    float4 C = 0.f;
+    
+    GetLightDirAndColor(input.view, C, light);
+    
+    float3 view = normalize(-input.view);
+    
+    float3 hdir = normalize(light + view);
+    
+    return BRDF(view, hdir, input.normal, light, albedo, g_vSpecularColor, C, g_vMaterialRoughness, g_fMaterialFraction, 1.f) + g_vEmissiveColor;
+}
 
 float4 PS_AlphaInst(VSInstOut input) : SV_Target
 {

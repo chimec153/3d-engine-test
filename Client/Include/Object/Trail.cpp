@@ -58,7 +58,7 @@ void Client::Trail::SetPosition(const Engine::Vector3& vTop, const Engine::Vecto
 	SetNormals(m_vecVertex, m_vecIndex);
 	SetTangent(m_vecVertex, m_vecIndex);
 
-	m_pMesh->SetVertexBuffer(0, &m_vecVertex[0], sizeof(Engine::VertexStandard) * m_vecVertex.size());
+	m_pMesh->SetVertexBuffer(0, &m_vecVertex[0], static_cast<int>(sizeof(Engine::VertexStandard) * m_vecVertex.size()));
 }
 
 bool Client::Trail::Init()

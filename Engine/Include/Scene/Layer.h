@@ -31,6 +31,7 @@ namespace Engine
         const std::shared_ptr<class LoadingThread>& GetLoadingThread()  const;
         std::shared_ptr<Bindable> FindDrawable(const std::string& strTag)    const;
         std::shared_ptr<Bindable> FindDrawable(BINDABLE_TYPE eType)    const;
+        void DeleteDrawable(std::shared_ptr<Bindable> pDrawable);
 
     public:
         void Input(float fDeltaTime);

@@ -187,6 +187,14 @@ cbuffer downscale : register(b0)
     float g_fBloomThreshold;
 }
 
+cbuffer UI : register(b5)
+{
+    float2 g_vUIStartUV;
+    float2 g_vUIEndUV;
+    float2 g_vUIStartPos;
+    float2 g_vUISize;
+}
+
 cbuffer light : register(b1)
 {
     float3 g_vLightPos;

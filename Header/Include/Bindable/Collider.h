@@ -15,6 +15,7 @@ namespace Engine
         Vector3     m_vCross;
         std::list<class Collider*> m_PrevColliderList;
         std::function<void(Collider*, Collider*, float)>    m_CallBack[static_cast<int>(COLLISION_TYPE::END)];
+        COLLISION_CHANNEL m_eChannel;
 
     public:
         const COLLIDER_TYPE GetColliderType()   const;
@@ -34,6 +35,9 @@ namespace Engine
         void SetCallBack(COLLISION_TYPE eType, void(*pFunc)(Collider*, Collider*, float));
         void Call(COLLISION_TYPE eType, Collider* pDest, float fDeltaTime);
         const std::list<class Collider*>& GetPrevColliderList() const;
+        void ClearCallBack();
+        void SetChannel(COLLISION_CHANNEL eChannel);
+        COLLISION_CHANNEL GetChannel()  const noexcept;
 
     public:
         virtual void Collision(float fDeltaTime) override;

@@ -6,6 +6,9 @@
 
 #include "Core/Window.h"
 
+#define	INVENTORY_WIDTH		8
+#define INVENTORY_HEIGHT	4
+
 #ifdef _WIN64
 	#ifdef _DEBUG
 		#pragma comment(lib, "Engine_Debug.lib")

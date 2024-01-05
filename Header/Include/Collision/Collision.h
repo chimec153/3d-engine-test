@@ -13,6 +13,7 @@ namespace Engine
 		static bool CollisionLineToTerrain(const LINECOLLIDERINFO& tSrc, const PMESHCOLLIDERINFO tDest, Vector3& vCross);
 		static bool CollisionOBBToSphere(const OBBINFO& tSrc, const SPHERECOLLIDERINFO tDest, Vector3& vCross);
 		static bool CollisionOBBToOBB(const OBBINFO& tSrc, const OBBINFO& tDest, Vector3& vCross);
+		static bool CollisionOBBToLine(const OBBINFO& tSrc, const LINECOLLIDERINFO& tDest, Vector3& vCross);
 
 	public:
 		static bool CollisionLineToSphere(class ColliderLine* pSrc, class ColliderSphere* pDest);
@@ -21,6 +22,7 @@ namespace Engine
 		static bool CollisionLineToTerrain(class ColliderLine* pSrc, class ColliderMesh* pDest);
 		static bool CollisionOBBToSphere(class ColliderOBB* pSrc, class ColliderSphere* pDest);
 		static bool CollisionOBBToOBB(class ColliderOBB* pSrc, class ColliderOBB* pDest);
+		static bool CollisionOBBToLine(class ColliderOBB* pSrc, class ColliderLine* pDest);
 
 	private:
 		static bool CollisionLineToTriangle(const LINECOLLIDERINFO& tLine, const Vector3& p0, const Vector3& p1, const Vector3& p2, Vector3& vCross);

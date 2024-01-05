@@ -59,7 +59,7 @@ void Engine::Notify::Update(float fTime, int iFrame)
 	if ((m_fTime != -1 && m_fTime <= fTime) ||
 		(m_iFrame != -1 && m_iFrame <= iFrame))
 	{
-		m_pFunc(fTime, iFrame, m_pOwner);
+		m_pFunc(iFrame, fTime, m_pOwner);
 
 		m_bCalled = true;
 	}

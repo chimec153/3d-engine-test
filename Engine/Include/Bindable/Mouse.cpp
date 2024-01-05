@@ -2,7 +2,7 @@
 #include "../Core/Graphics.h"
 #include "../Core/Window.h"
 #include "Camera.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "ColliderLine.h"
 #include "../Input/Input.h"
 #ifdef _DEBUG
@@ -27,6 +27,13 @@ namespace Engine
 
 		m_pLineCollider = CreateBindable<class ColliderLine>("MouseLine");
 
+		if (!m_pLineCollider)
+		{
+			return false;
+		}
+
+		m_pLineCollider->SetChannel(static_cast<COLLISION_CHANNEL>(static_cast<int>(COLLISION_CHANNEL::NORMAL) | static_cast<int>(COLLISION_CHANNEL::UI)));
+
 		return true;
 	}
 
@@ -34,37 +41,35 @@ namespace Engine
 	{
 		__super::Update(fDeltaTime);
 
-		const std::shared_ptr<Transform>& pTransform = Graphics::GetInst()->GetCamera()->GetTransform();
+		std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera();
 
-		const Vector3& vPos = pTransform->GetPosition();
+		const std::shared_ptr<Transform>& pTransform = pCamera->GetTransform();
 
-		const Vector3& vAxis = pTransform->GetAxis(AXIS_TYPE::Z);
+		if (pCamera)
+		{
+			const Vector3& vPos = pTransform->GetPosition();
 
-		float iX = CInput::GetInst()->GetMouseX() / static_cast<float>(Window::GetInst()->GetWidth()) * 2.f - 1.f;
+			const Vector3& vAxis = pTransform->GetAxis(AXIS_TYPE::Z);
 
-		float iY = 1.f - CInput::GetInst()->GetMouseY() / static_cast<float>(Window::GetInst()->GetHeight()) * 2.f;
+			float iX = CInput::GetInst()->GetMouseX() / static_cast<float>(Window::GetInst()->GetWidth()) * 2.f - 1.f;
 
-		const Matrix& matProject = Graphics::GetInst()->GetProjectMatrix();
+			float iY = 1.f - CInput::GetInst()->GetMouseY() / static_cast<float>(Window::GetInst()->GetHeight()) * 2.f;
 
-		Vector3 vViewPos = {};
+			const Vector3& vWorldPos = pCamera->CameraPosToWorldPos({ iX, iY });
 
-		vViewPos.z = matProject[3][2] / -matProject[2][2];
+			GetTransform()->SetPosition(vWorldPos);
 
-		vViewPos.x = iX / matProject[0][0] * vViewPos.z;
-		vViewPos.y = iY / matProject[1][1] * vViewPos.z;
+			m_pLineCollider->SetStartOffset(vWorldPos);
 
-		const Vector3& vWorldPos = pTransform->GetRotationTranslationMatrix().TransformCoord(vViewPos);
-
-		GetTransform()->SetPosition(vWorldPos);
-
-		m_pLineCollider->SetStartOffset(vWorldPos);
-
-		m_pLineCollider->SetEndOffset(vWorldPos + vWorldPos - vPos);
+			m_pLineCollider->SetEndOffset(vWorldPos + vWorldPos - vPos);
+		}
 	}
+
 	void Mouse::Save(FILE* pFile)
 	{
 		__super::Save(pFile);
 	}
+
 	void Mouse::Load(FILE* pFile)
 	{
 		__super::Load(pFile);

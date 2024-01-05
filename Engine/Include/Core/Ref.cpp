@@ -8,7 +8,7 @@ namespace Engine
 		char strFullPath[MAX_PATH] = {};
 
 #ifdef UNICODE
-		WideCharToMultiByte(CP_ACP, 0, pFullPath, -1, strFullPath, wcslen(pFullPath), nullptr, nullptr);
+		WideCharToMultiByte(CP_ACP, 0, pFullPath, -1, strFullPath, static_cast<int>(wcslen(pFullPath)), nullptr, nullptr);
 #else
 		strcpy_s(strFullPath, pFullPath);
 #endif

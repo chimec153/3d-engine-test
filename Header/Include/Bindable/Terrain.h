@@ -45,7 +45,7 @@ namespace Engine
         void SetAddMode();
         bool IsEraseMode()  const;
         float GetTerrainHeight(const Vector3& vPos);
-        void AddTerrainHeight(const Vector3& vPos, float fHeight = 1.f);
+        void AddTerrainHeight(const Vector3& vPos, int iHeight = 1);
         int GetTerrainIndex(const Vector3& vLocalPos)   const;
         Vector3 GetTerrainLocalPos(const Vector3& vWorldPos);
         void SetTileType(const Vector3& vWorldPos, int iTileType);

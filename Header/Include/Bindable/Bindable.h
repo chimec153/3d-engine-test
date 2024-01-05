@@ -109,6 +109,8 @@ namespace Engine
 
 			pBindable->SetTag(strTag);
 
+			pBindable->SetParent(this);
+
 			if (!pBindable->Init())
 			{
 				return nullptr;

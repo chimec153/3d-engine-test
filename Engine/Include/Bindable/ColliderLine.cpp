@@ -2,8 +2,9 @@
 #include "../Collision/Collision.h"
 #include "ColliderSphere.h"
 #include "Drawable.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "ColliderMesh.h"
+#include "ColliderOBB.h"
 #ifdef _DEBUG
 #include "BindableManager.h"
 #include "VertexShader.h"
@@ -122,6 +123,8 @@ namespace Engine
 			return Collision::CollisionLineToMesh(this, static_cast<ColliderMesh*>(pDest));
 		case COLLIDER_TYPE::TERRAIN:
 			return Collision::CollisionLineToTerrain(this, static_cast<ColliderMesh*>(pDest));
+		case COLLIDER_TYPE::OBB:
+			return Collision::CollisionOBBToLine(static_cast<ColliderOBB*>(pDest), this);
 		}
 
 		return false;

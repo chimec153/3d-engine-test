@@ -1,5 +1,5 @@
 #include "PointLight.h"
-#include "TransformBuffer.h"
+#include "Transform.h"
 #include "Sphere.h"
 #include "VertexBuffer.h"
 #include "InputLayout.h"
@@ -10,6 +10,7 @@
 #include "../Core/Graphics.h"
 #include "BindableManager.h"
 #include "../Render/RenderManager.h"
+#include "Camera.h"
 
 namespace Engine
 {
@@ -277,8 +278,15 @@ namespace Engine
 		//							0	0	1	0		Uz	Vz	Wz	0		Uz		Vz		Wz		0
 		//							-x	-y	-z	1		0	0	0	1		-U.P	-V.P	-W.P	1
 
-		tPointLight.pos = Graphics::GetInst()->GetView().TransformCoord(GetTransform()->GetPosition());
-		tPointLight.dir = Graphics::GetInst()->GetView().TransformNormal(GetTransform()->GetAxis(AXIS_TYPE::Z));
+		std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera();
+
+		if (pCamera)
+		{
+			const Matrix& matView = pCamera->GetView();
+
+			tPointLight.pos = matView.TransformCoord(GetTransform()->GetPosition());
+			tPointLight.dir = matView.TransformNormal(GetTransform()->GetAxis(AXIS_TYPE::Z));
+		}
 	}
 
 	void PointLight::PreDraw(float fDeltaTime)
