@@ -37,6 +37,7 @@ namespace Editor
 	{
 		Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Medieval.mesh", MESH_PATH);
 		Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
+		Engine::StaticCreateBindable<Engine::Mesh>("armor", "Armor_Leather.mesh", MESH_PATH);
 
 		Engine::ResourceManager::GetInst()->LoadSkeleton("Medieval.skel");
 		Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
@@ -115,24 +116,23 @@ namespace Editor
 
 		Load("Resource\\Scene\\test.scn");
 
-		std::shared_ptr<Engine::Bindable> _pCamera = FindBindable("UICamera");
+		std::shared_ptr<Engine::Drawable> pPlayer = CreateDrawable<Engine::Drawable>("player", FindLayer(DEFAULT_LAYER));
 
-		while (_pCamera)
-		{
-			_pCamera->GetLayer()->DeleteDrawable(_pCamera);
+		pPlayer->Load(TEXT("UltimateModularWomenPack\\Medieval\\Medieval.fbx"));
 
-			_pCamera = FindBindable("UICamera");
-		}
+		std::shared_ptr<Engine::Drawable> pItemDrawable = CreateDrawable<Engine::Drawable>("testDrawable", FindLayer(DEFAULT_LAYER));
 
-		std::shared_ptr<Engine::Camera> pUICamera = CreateDrawable<Engine::Camera>("UICamera", FindLayer(DEFAULT_LAYER));
+		pItemDrawable->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSNoSkin");
+		pItemDrawable->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
+		pItemDrawable->FindAndAddBind<Engine::Topology>("TriangleList");
+		pItemDrawable->FindAndAddBind<Engine::InputLayout>("Standard");
+		pItemDrawable->FindAndAddBind<Engine::Mesh>("armor");
 
-		if (pUICamera)
-		{
-			pUICamera->SetProjectType(Engine::Camera::PROJECT_TYPE::ORTHOGONAL);
-			pUICamera->SetCameraType(Engine::CAMERA_TYPE::UI);
-		}
+		std::shared_ptr<Engine::Material> pSrcMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
 
-		Engine::Graphics::GetInst()->SetCamera(pUICamera, Engine::CAMERA_TYPE::UI);
+		pItemDrawable->AddChild(pSrcMaterial->Clone());
+
+		pPlayer->GetAnimation()->AddSocket(10, pItemDrawable);
 
 		std::shared_ptr<Engine::Camera> pCamera = Engine::Graphics::GetInst()->GetCamera();
 

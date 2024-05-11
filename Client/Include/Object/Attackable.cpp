@@ -5,6 +5,7 @@
 #include "Bindable/Decal.h"
 #include "Scene/Scene.h"
 #include "Bindable/Transform.h"
+#include "Bindable/SoundBindable.h"
 
 Client::Attackable::Attackable(int iMaxHP, int iAttackMin, int iAttackMax)	:
 	Drawable()
@@ -32,6 +33,8 @@ bool Client::Attackable::Attack(Attackable* pHit) const
 	pDecal->SetFadeStartTime(20.f * fRate);
 
 	m_pBloodParticle->AddEmitCount(iAttack * 64);
+
+	m_pHitSound->Play();
 
 	return (pHit->m_iHP -= iAttack) <= 0;
 }
@@ -82,7 +85,7 @@ bool Client::Attackable::Init()
 
 	m_pPaperBurn->AddCallBack(Engine::PaperBurn::PAPER_BURN_STAGE::OUT_STAGE, [this](float) 
 		{
-			InActivate();
+			//InActivate();
 		}
 	);
 
@@ -132,6 +135,12 @@ bool Client::Attackable::Init()
 	m_pBloodParticle->CreateBindable<Engine::Texture>("particletexture", "Particle\\particle_00.png", TEXTURE_PATH);
 	m_pBloodParticle->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
 	m_pBloodParticle->AddEmitCount(1);
+
+	char strHit[TEXT_LEN] = {};
+
+	sprintf_s(strHit, "hit%02d", rand() % 38);
+
+	m_pHitSound = CreateBindable<Engine::SoundBindable>("hitsound", strHit);
 
 	return true;
 }

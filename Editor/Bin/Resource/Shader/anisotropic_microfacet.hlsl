@@ -283,7 +283,7 @@ PSOut PS_NoDiffuseNoSpecMapNoNormalMap(VSOut input)
     
     output.value1.xyz = normalize(input.normal) * 0.5f + 0.5f;
     
-    output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor, input.uv).xyz;
+    output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor, input.pos.xz).xyz;
     
     output.value0.w = g_vMaterialRoughness.x;
     output.value1.w = g_vMaterialRoughness.y;
@@ -560,8 +560,12 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     //return float4(outgoingLight, 1.0);
     
-    return (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
+    float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
     + (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
+    
+    finalColor.xyz = ApplyFog(finalColor.xyz, mul(float4(viewPos, 1.f), g_matInvView).y, viewPos);
+    
+    return finalColor;
     
     //return saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV) * fShadowAttr;
 

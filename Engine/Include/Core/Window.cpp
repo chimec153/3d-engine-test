@@ -104,11 +104,11 @@ namespace Engine
 
 		ThreadManager::DestroyInst();
 
-		ResourceManager::DestroyInst();
-
 		Scene::Clear();
 
 		SceneManager::DestroyInst();
+
+		ResourceManager::DestroyInst();
 
 		RenderManager::DestroyInst();
 
@@ -240,6 +240,12 @@ namespace Engine
 			return false;
 		}
 
+		// 리소스 관리자 초기화 (사운드)
+		if (!ResourceManager::GetInst()->Init())
+		{
+			return false;
+		}
+
 		// 셰이더 관리자 초기화
 		if (!ShaderManager::GetInst()->Init())
 		{
@@ -353,6 +359,8 @@ namespace Engine
 		CInput::GetInst()->Update(fDeltaTime * !bStop);
 
 		ShaderManager::GetInst()->Update(fDeltaTime, fTime);
+
+		ResourceManager::GetInst()->Update(fDeltaTime);
 
 		return SceneManager::GetInst()->Update(fDeltaTime * !bStop);
 	}

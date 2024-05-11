@@ -49,6 +49,8 @@ namespace Engine
 
         AddPath(MESH_PATH, TEXT("Resource\\Mesh\\"));
 
+        AddPath(SOUND_PATH, TEXT("Resource\\Sound\\"));
+
         return true;
     }
 

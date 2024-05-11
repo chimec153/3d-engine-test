@@ -454,6 +454,21 @@ namespace Engine
 
 		m_pDestAlpha = StaticFindBindable<BlendState>("DestAlpha");
 
+		m_pFogCBuffer = std::make_shared<ConstantBuffer<FOGCBUFFER>>(12);
+
+		if (!m_pFogCBuffer) 
+		{
+			return false;
+		}
+
+		m_tFogCBuffer.vFogColor = Vector3(0.f, 0.f, 1.f);
+		m_tFogCBuffer.vFogHighlightColor = Vector3(1.f, 0.f, 0.f);
+		m_tFogCBuffer.fFogStartDepth = 500.f;
+		m_tFogCBuffer.fFogGlobalDensity = 1.f;
+		m_tFogCBuffer.fFogHeightFallOff = 1.f;
+
+		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
+
 		return true;
 	}
 
@@ -713,11 +728,17 @@ namespace Engine
 
 			if (pTransform && pLight)
 			{
-				buffer.matCameraViewToLightClip = pTransform->GetRotationTranslationMatrix() * pLight->GetViewProject();
+				buffer.matInvView = pTransform->GetRotationTranslationMatrix();
+
+				buffer.matCameraViewToLightClip = buffer.matInvView * pLight->GetViewProject();
+
+				buffer.matInvView.Transpose();
 
 				buffer.matCameraViewToLightClip.Transpose();
 			}
 		}
+
+		m_pFogCBuffer->Bind();
 
 		m_pPerspecCBuffer->UpdateBuffer(buffer);
 
@@ -843,6 +864,66 @@ namespace Engine
 	std::shared_ptr<class Texture> RenderManager::GetBloomFinalTexture()	const
 	{
 		return m_pBloomFinalTexture;
+	}
+
+	void RenderManager::SetFogColor(const Vector3& vColor)
+	{
+		m_tFogCBuffer.vFogColor = vColor;
+
+		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
+	}
+
+	void RenderManager::SetFogHighlightColor(const Vector3& vColor)
+	{
+		m_tFogCBuffer.vFogHighlightColor = vColor;
+
+		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
+	}
+
+	void RenderManager::SetFogStartDepth(float fDepth)
+	{
+		m_tFogCBuffer.fFogStartDepth = fDepth;
+
+		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
+	}
+
+	void RenderManager::SetFogDensity(float fDensity)
+	{
+		m_tFogCBuffer.fFogGlobalDensity = fDensity;
+
+		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
+	}
+
+	void RenderManager::SetFogHeightFallOff(float fHeightFallOff)
+	{
+		m_tFogCBuffer.fFogHeightFallOff = fHeightFallOff;
+
+		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
+	}
+
+	const Vector3& RenderManager::GetFogColor() const
+	{
+		return m_tFogCBuffer.vFogColor;
+	}
+
+	const Vector3& RenderManager::GetFogHighlightColor() const
+	{
+		return m_tFogCBuffer.vFogHighlightColor;
+	}
+
+	float RenderManager::GetFogStartDepth() const
+	{
+		return m_tFogCBuffer.fFogStartDepth;
+	}
+
+	float RenderManager::GetFogDensity() const
+	{
+		return m_tFogCBuffer.fFogGlobalDensity;
+	}
+
+	float RenderManager::GetFogHeightFallOff() const
+	{
+		return m_tFogCBuffer.fFogHeightFallOff;
 	}
 
 	void RenderManager::RenderDecal()

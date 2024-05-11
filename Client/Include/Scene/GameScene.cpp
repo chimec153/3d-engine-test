@@ -18,6 +18,9 @@
 #include "Bindable/Camera.h"
 #include "Core/Graphics.h"
 #include "Bindable/UIRenderer.h"
+#include "Sound/Sound.h"
+#include "../Object/Tree.h"
+#include "Render/RenderManager.h"
 
 Client::GameScene::GameScene()
 {
@@ -25,10 +28,13 @@ Client::GameScene::GameScene()
 
 bool Client::GameScene::Init()
 {
+
 	Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Medieval.mesh", MESH_PATH);
 	Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
 	Engine::StaticCreateBindable<Engine::Mesh>("sword", "Sword.mesh", MESH_PATH);
 	Engine::StaticCreateBindable<Engine::Mesh>("shovel", "Shovel.mesh", MESH_PATH);
+	Engine::StaticCreateBindable<Engine::Mesh>("armor", "Armor_Leather.mesh", MESH_PATH);
+	Engine::StaticCreateBindable<Engine::Mesh>("pistol", "Pistol_5.mesh", MESH_PATH);
 
 	Engine::ResourceManager::GetInst()->LoadSkeleton("Medieval.skel");
 	Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
@@ -63,22 +69,62 @@ bool Client::GameScene::Init()
 	Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Idle.seq");
 	Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Jump.seq");
 
+	Engine::ResourceManager::GetInst()->CreateSound("leather_inventory", "inventory_sound_effects\\leather_inventory.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, false);
+	Engine::ResourceManager::GetInst()->CreateSound("metal-clash", "inventory_sound_effects\\metal-clash.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, false);
+	Engine::ResourceManager::GetInst()->CreateSound("sword sound", "melee sounds\\sword sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+	Engine::ResourceManager::GetInst()->CreateSound("step_rock_l", "sfx_step_rock_l.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+	Engine::ResourceManager::GetInst()->CreateSound("step_rock_r", "sfx_step_rock_r.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+	Engine::ResourceManager::GetInst()->CreateSound("melee sound", "melee sounds\\melee sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+
+	for (int i = 0; i < 37; ++i)
+	{
+		char strSound[TEXT_LEN] = {};
+
+		sprintf_s(strSound, "hit%02d", i + 1);
+
+		std::string strPath = "hits\\";
+
+		strPath += strSound;
+		strPath += ".mp3.flac";
+
+		Engine::ResourceManager::GetInst()->CreateSound(strSound, strPath.c_str(), SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+	}
+
+	std::shared_ptr<Engine::Sound> pSound = Engine::ResourceManager::GetInst()->CreateSound("TownTheme", "TownTheme.mp3", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, true);
+
+	//pSound->Play();
+
 	std::vector<const TCHAR*> vecTexture =
 	{
-		TEXT("LandScape\\Terrain_Cliff_15_Large.dds"),
-		TEXT("LandScape\\BD_Terrain_Cliff05.dds"),
+		TEXT("LandScape\\dirt.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\sand.bmp"),
+		TEXT("LandScape\\cyan.bmp"),
+		TEXT("LandScape\\blue.bmp"),
+		TEXT("LandScape\\pink.bmp"),
+		TEXT("LandScape\\test.bmp"),
 	};
 
 	std::vector<const TCHAR*> vecNormalTexture =
 	{
-		TEXT("LandScape\\Terrain_Cliff_15_Large_NRM.bmp"),
-		TEXT("LandScape\\BD_Terrain_Cliff05_NRM.bmp"),
+		TEXT("LandScape\\grass_normal.png"),
+		TEXT("LandScape\\grass_normal.png"),
+		TEXT("LandScape\\grass_normal.png"),
+		TEXT("LandScape\\grass_normal.png"),
+		TEXT("LandScape\\grass_normal.png"),
+		TEXT("LandScape\\grass_normal.png"),
+		TEXT("LandScape\\grass_normal.png"),
 	};
 
 	std::vector<const TCHAR*> vecSpecularTexture =
 	{
-		TEXT("LandScape\\Terrain_Cliff_15_Large_SPEC.bmp"),
-		TEXT("LandScape\\BD_Terrain_Cliff05_SPEC.bmp"),
+		TEXT("LandScape\\grass_spec.png"),
+		TEXT("LandScape\\grass_spec.png"),
+		TEXT("LandScape\\grass_spec.png"),
+		TEXT("LandScape\\grass_spec.png"),
+		TEXT("LandScape\\grass_spec.png"),
+		TEXT("LandScape\\grass_spec.png"),
+		TEXT("LandScape\\grass_spec.png"),
 	};
 
 	std::vector<const TCHAR*> vecBlendTexture =
@@ -99,6 +145,8 @@ bool Client::GameScene::Init()
 	Engine::StaticCreateBindable<Engine::Texture>("frame", TEXT("frame.png"), TEXTURE_PATH, 0);
 	Engine::StaticCreateBindable<Engine::Texture>("shovel_icon", TEXT("shovel_icon.png"), TEXTURE_PATH, 0);
 	Engine::StaticCreateBindable<Engine::Texture>("sword_icon", TEXT("sword_icon.png"), TEXTURE_PATH, 0);
+	Engine::StaticCreateBindable<Engine::Texture>("armor_icon", TEXT("armor_icon.png"), TEXTURE_PATH, 0);
+	Engine::StaticCreateBindable<Engine::Texture>("gun_icon", TEXT("gun_icon.png"), TEXTURE_PATH, 0);
 
 	Engine::StaticCreateBindable<Engine::Texture>("DecalBloodAlbedo", TEXT("Decal\\sgfjdepc_8K_Albedo.tga"), TEXTURE_PATH, 0);
 	Engine::StaticCreateBindable<Engine::Texture>("DecalBloodNormal", TEXT("Decal\\sgfjdepc_8K_Normal.tga"), TEXTURE_PATH, 1);
@@ -128,7 +176,7 @@ bool Client::GameScene::Init()
 
 	pInventoryCameraTransform->SetRelativePosition(1.f, -0.2f, -20.f);
 
-	//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pPlayer.get(), &Client::Player::CollisionTerrainStay);
+	pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pPlayer.get(), &Client::Player::CollisionTerrainStay);
 
 	CreateDrawable<Client::Monster>("frog", FindLayer(DEFAULT_LAYER), 50, 5, 10);
 
@@ -185,6 +233,10 @@ bool Client::GameScene::Init()
 
 	pInventory->AddItem(2);
 
+	pInventory->AddItem(3);
+
+	pInventory->AddItem(4);
+
 	std::shared_ptr<Engine::UIRenderer> pUIRenderer = std::static_pointer_cast<Engine::UIRenderer>(pInventory->FindChild("uirenderer"));
 
 	if (pUIRenderer)
@@ -199,9 +251,21 @@ bool Client::GameScene::Init()
 	if (pUIWeaponRenderer)
 	{
 		pUIWeaponRenderer->SetCamera(pUIInventoryCamera);
-
-		pUIWeaponRenderer->SetTarget(pPlayer->GetWeapon());
 	}
+
+	pPlayer->SetInventory(pInventory);
+
+	//std::shared_ptr<Engine::Drawable> pArmor = CreateDrawable<Engine::Drawable>("armor", FindLayer(DEFAULT_LAYER));
+
+	//pArmor->Load(TEXT("UltimateRPGItemsBundle\\ArmorLeather\\Armor_Leather.fbx"));
+
+	CreateDrawable<Tree>("tree", FindLayer(DEFAULT_LAYER));
+
+	Engine::RenderManager::GetInst()->SetFogColor({0.f, 43.f / 255.f, 152.f / 255.f});
+	Engine::RenderManager::GetInst()->SetFogHighlightColor({1.f, 0.f, 0.f});
+	Engine::RenderManager::GetInst()->SetFogStartDepth(10.f);
+	Engine::RenderManager::GetInst()->SetFogDensity(0.03f);
+	Engine::RenderManager::GetInst()->SetFogHeightFallOff(0.001f);
 
 	return true;
 }

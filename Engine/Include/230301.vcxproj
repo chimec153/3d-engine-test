@@ -235,6 +235,7 @@
     <ClCompile Include="Bindable\Sampler.cpp" />
     <ClCompile Include="Bindable\Shader.cpp" />
     <ClCompile Include="Bindable\SkyBox.cpp" />
+    <ClCompile Include="Bindable\SoundBindable.cpp" />
     <ClCompile Include="Bindable\Sphere.cpp" />
     <ClCompile Include="Bindable\Terrain.cpp" />
     <ClCompile Include="Bindable\Texture.cpp" />
@@ -263,6 +264,7 @@
     <ClCompile Include="Scene\SceneManager.cpp" />
     <ClCompile Include="Shader\ShaderManager.cpp" />
     <ClCompile Include="Shader\StructuredBuffer.cpp" />
+    <ClCompile Include="Sound\Sound.cpp" />
     <ClCompile Include="Thread\LoadingThread.cpp" />
     <ClCompile Include="Thread\Thread.cpp" />
     <ClCompile Include="Thread\ThreadManager.cpp" />
@@ -318,6 +320,7 @@
     <ClInclude Include="Bindable\Sampler.h" />
     <ClInclude Include="Bindable\Shader.h" />
     <ClInclude Include="Bindable\SkyBox.h" />
+    <ClInclude Include="Bindable\SoundBindable.h" />
     <ClInclude Include="Bindable\Sphere.h" />
     <ClInclude Include="Bindable\Terrain.h" />
     <ClInclude Include="Bindable\Texture.h" />
@@ -367,6 +370,7 @@
     <ClInclude Include="Scene\SceneManager.h" />
     <ClInclude Include="Shader\ShaderManager.h" />
     <ClInclude Include="Shader\StructuredBuffer.h" />
+    <ClInclude Include="Sound\Sound.h" />
     <ClInclude Include="Thread\LoadingThread.h" />
     <ClInclude Include="Thread\Thread.h" />
     <ClInclude Include="Thread\ThreadManager.h" />

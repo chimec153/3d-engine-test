@@ -230,6 +230,21 @@ namespace Engine
 		m_SocketList.push_back(pSocket);
 	}
 
+	void Animation::DeleteSocket(std::shared_ptr<JointSocket> pSocket)
+	{
+		std::list<std::shared_ptr<JointSocket>>::iterator iter = m_SocketList.begin();
+		std::list<std::shared_ptr<JointSocket>>::iterator iterEnd = m_SocketList.end();
+
+		for (; iter != iterEnd; ++iter)
+		{
+			if ((*iter) == pSocket)
+			{
+				m_SocketList.erase(iter);
+				return;
+			}
+		}
+	}
+
 	void Animation::SetSkeleton(const std::string& strTag)
 	{
 		std::shared_ptr<Skeleton> pSkeleton = ResourceManager::GetInst()->FindSkeleton(strTag);

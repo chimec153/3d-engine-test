@@ -302,7 +302,7 @@ namespace Engine
 		return static_cast<int>(floorf(vLocalPos.x)) + (m_tTerrainBuffer.m_iHeight - static_cast<int>(ceilf(vLocalPos.z))) * (m_tTerrainBuffer.m_iWidth + 1);
 	}
 
-	Vector3 Terrain::GetTerrainLocalPos(const Vector3& vPos)
+	Vector3 Terrain::GetTerrainLocalPos(const Vector3& vPos)	const
 	{
 		std::shared_ptr<Transform> pTransform = GetTransform();
 
@@ -325,6 +325,22 @@ namespace Engine
 		m_vecTileType[iIndex] = iTileType;
 
 		m_pTileTypeBuffer->WriteData(&m_vecTileType[0], 0, 4 * static_cast<int>(m_vecTileType.size()));
+	}
+
+	int Terrain::GetTileType(const Vector3& vWorldPos) const
+	{
+		const Vector3& vLocalPos = GetTerrainLocalPos(vWorldPos);
+
+		if (vLocalPos.x >= m_tTerrainBuffer.m_iWidth ||
+			vLocalPos.z >= m_tTerrainBuffer.m_iHeight ||
+			vLocalPos.x < 0.f || vLocalPos.z < 0.f)
+		{
+			return -1;
+		}
+
+		int iIndex = static_cast<int>(vLocalPos.x) + static_cast<int>(m_tTerrainBuffer.m_iHeight - vLocalPos.z) * m_tTerrainBuffer.m_iWidth;
+
+		return m_vecTileType[iIndex];
 	}
 
 	void Terrain::CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight)

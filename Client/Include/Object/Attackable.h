@@ -5,6 +5,7 @@ namespace Engine
 {
     class PaperBurn;
     class Particle;
+    class SoundBindable;
 }
 
 namespace Client
@@ -24,6 +25,7 @@ namespace Client
         std::shared_ptr<Engine::PaperBurn> m_pPaperBurn;
         std::shared_ptr<Engine::Particle>   m_pParticle;
         std::shared_ptr<Engine::Particle>   m_pBloodParticle;
+        std::shared_ptr<Engine::SoundBindable> m_pHitSound;
 
     public:
         bool Attack(Attackable* pHit)    const;

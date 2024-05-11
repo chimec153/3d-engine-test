@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UI/Image.h"
+#include "../Client.h"
 
 namespace Engine
 {
@@ -30,16 +31,20 @@ namespace Client
             int iItemID;
             std::string strIcon;
             std::string strMesh;
+            std::string strSound;
+            WEAPON_TYPE eWeaponType;
 
             _tagItemInfo() :
                 iItemID()
             {
             }
 
-            _tagItemInfo(int iItemID, const std::string& strIcon, const std::string& strMesh) :
+            _tagItemInfo(int iItemID, const std::string& strIcon, const std::string& strMesh, const std::string& strSound, WEAPON_TYPE eWeaponType) :
                 iItemID(iItemID)
                 , strIcon(strIcon)
                 , strMesh(strMesh)
+                , strSound(strSound)
+                , eWeaponType(eWeaponType)
             {
             }
 
@@ -52,6 +57,7 @@ namespace Client
         {
             std::shared_ptr<ItemIcon> pItemIcon;
             PITEMINFO pInfo;
+            std::shared_ptr<Drawable> pItemDrawable;
 
             _tagItemIconInfo() :
                 pItemIcon()
@@ -73,6 +79,9 @@ namespace Client
 
     public:
         bool AddItem(int iItemID);
+        int GetEquipItem(EQUIP_SLOT eSlot)  const;
+        const PITEMINFO GetEquipItemInfo(EQUIP_SLOT eSlot)    const;
+        WEAPON_TYPE GetEquipWeaponType(EQUIP_SLOT eSlot)    const;
         void DropItem(int x, int y, ItemIcon* pItem);
         void UpdateEquipSlot(int iSlot);
         void UpdateInventory(int iIndex);

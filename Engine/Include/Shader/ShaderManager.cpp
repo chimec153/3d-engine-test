@@ -89,6 +89,11 @@ namespace Engine
 
 		std::shared_ptr<Bindable> pMicroNoAlbedoNoSpecNoNormal = StaticCreateBindable<PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal", TEXT("anisotropic_microfacet.hlsl"), "PS_NoDiffuseNoSpecMapNoNormalMap");
 
+		if (!pMicroNoAlbedoNoSpecNoNormal)
+		{
+			pMicroNoAlbedoNoSpecNoNormal = StaticFindBindable<PixelShader>(STANDARD_SOLID_PS);
+		}
+
 		vecMicroNoDiffuseNoSpecNoNormal.push_back(pMicroVS);
 		vecMicroNoDiffuseNoSpecNoNormal.push_back(pMicroNoAlbedoNoSpecNoNormal);
 		vecMicroNoDiffuseNoSpecNoNormal.push_back(pInputLayoutTPNT);

@@ -5,17 +5,31 @@
 #include "../Bindable/BindableManager.h"
 #include "../Bindable/Texture.h"
 #include "../Animation/Sequence.h"
+#include "../Bindable/Camera.h"
+#include "../Bindable/Transform.h"
+#include "../Sound/Sound.h"
 
 namespace Engine
 {
 	ResourceManager* ResourceManager::m_pInst = nullptr;
 
-	ResourceManager::ResourceManager()
+	ResourceManager::ResourceManager()	:
+		m_pSoundSystem(nullptr)
 	{
 	}
 
 	ResourceManager::~ResourceManager()
 	{
+		m_mapSound.clear();
+
+		if (m_pSoundSystem)
+		{
+			m_pSoundSystem->close();
+
+			m_pSoundSystem->release();
+
+			m_pSoundSystem = nullptr;
+		}
 	}
 
 	std::shared_ptr<Skeleton> ResourceManager::CreateSkeleton(const std::string& strTag, const std::vector<BONE>& vecBone)
@@ -191,5 +205,105 @@ namespace Engine
 		pSequence->LoadFromPath(pFilePath, strPathKey);
 
 		m_mapSequence.insert(std::make_pair(pSequence->GetTag(), pSequence));
+	}
+	std::shared_ptr<Sound> ResourceManager::CreateSound(const std::string& strSound, const char* pFilePath, const std::string& strPathKey, float fMin, float fMax, FMOD_MODE b3D, bool bLoop)
+	{
+		std::shared_ptr<Sound> pSound = FindSound(strSound); 
+
+		if (pSound)
+		{
+			return nullptr;
+		}
+
+		pSound = std::make_shared<Sound>(m_pSoundSystem, strSound, pFilePath, strPathKey, fMin, fMax, b3D, bLoop);
+
+		m_mapSound.insert(std::make_pair(strSound, pSound));
+
+		return pSound;
+	}
+	std::shared_ptr<Sound> ResourceManager::FindSound(const std::string& strSound) const
+	{
+		std::unordered_map<std::string, std::shared_ptr<Sound>>::const_iterator iter = m_mapSound.find(strSound);
+
+		if (iter == m_mapSound.end())
+		{
+			return nullptr;
+		}
+
+		return iter->second;
+	}
+	void ResourceManager::Play_Sound(const std::string& strSound)
+	{
+		std::shared_ptr<Sound> pSound = FindSound(strSound);
+
+		if (!pSound)
+		{
+			return;
+		}
+
+		pSound->Play();
+	}
+	void ResourceManager::Stop_Sound(const std::string& strSound)
+	{
+		std::shared_ptr<Sound> pSound = FindSound(strSound);
+
+		if (!pSound)
+		{
+			return;
+		}
+
+		pSound->Stop();
+	}
+	bool ResourceManager::Init()
+	{
+		if (FMOD_OK != FMOD::System_Create(&m_pSoundSystem))
+		{
+			return false;
+		}
+
+		void* pExtraDriverData = nullptr;
+
+		if (FMOD_OK != m_pSoundSystem->init(100, FMOD_INIT_NORMAL, &pExtraDriverData))
+		{
+			return false;
+		}
+
+		if (FMOD_OK != m_pSoundSystem->set3DSettings(1.0, 1.f, 1.f))
+		{
+			return false;
+		}
+
+		return true;
+	}
+	void ResourceManager::Update(float fDeltaTime)
+	{
+		std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera();
+
+		if (pCamera)
+		{
+			std::shared_ptr<Transform> pTransform = pCamera->GetTransform();
+
+			if (pTransform)
+			{
+				const Vector3& vPos = pTransform->GetPosition();
+
+				const Vector3& vVel = pTransform->GetVelocity();
+
+				FMOD_VECTOR vListenerPos = { vPos.x, vPos.y, vPos.z };
+				FMOD_VECTOR vListenerVel = { vVel.x, vVel.y, vVel.z };
+
+				const Vector3& vAxisZ = pTransform->GetAxis(AXIS_TYPE::Z);
+
+				FMOD_VECTOR _vAxisZ = { vAxisZ.x,vAxisZ.y, vAxisZ.z };
+
+				const Vector3& vAxisY = pTransform->GetAxis(AXIS_TYPE::Y);
+
+				FMOD_VECTOR _vAxisY = { vAxisY.x,vAxisY.y, vAxisY.z };
+
+				m_pSoundSystem->set3DListenerAttributes(0, &vListenerPos, &vListenerVel, &_vAxisZ, &_vAxisY);
+			}
+		}
+
+		m_pSoundSystem->update();
 	}
 }

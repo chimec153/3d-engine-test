@@ -211,8 +211,6 @@ namespace Engine
 			return false;
 		}
 
-		m_pImage = nullptr;
-
 		return true;
 	}
 

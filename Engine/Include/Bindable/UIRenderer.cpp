@@ -21,11 +21,22 @@ namespace Engine
 
 	void UIRenderer::SetTarget(std::shared_ptr<class Drawable> pTarget)
 	{
-		m_pParentTransform = pTarget->GetTransform();
+		if (pTarget)
+		{
+			m_pParentTransform = pTarget->GetTransform();
 
-		m_pParentMesh = pTarget->GetMesh();
+			m_pParentMesh = pTarget->GetMesh();
 
-		m_pParentAnimation = pTarget->GetAnimation();
+			m_pParentAnimation = pTarget->GetAnimation();
+		}
+		else
+		{
+			m_pParentTransform = nullptr;
+
+			m_pParentMesh = nullptr;
+
+			m_pParentAnimation = nullptr;
+		}
 	}
 
 	bool UIRenderer::Init()
@@ -46,10 +57,18 @@ namespace Engine
 			m_pCamera->PostUpdate(0.f);
 			m_pCamera->Update(0.f);
 
-			m_pParentTransform->UpdateCameraRelateMatrix(m_pCamera);
+			if (m_pParentTransform)
+			{
+				m_pParentTransform->UpdateCameraRelateMatrix(m_pCamera);
+
+				m_pParentTransform->Bind();
+			}
 		}
 
-		m_pParentTransform->Bind();
+		else if (m_pParentTransform)
+		{
+			m_pParentTransform->Bind();
+		}
 
 		if (m_pParentAnimation)
 		{

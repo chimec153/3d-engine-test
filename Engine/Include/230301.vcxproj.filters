@@ -133,6 +133,12 @@
     <Filter Include="05. Drawable\12. Renderer">
       <UniqueIdentifier>{b583db27-7b99-4646-8f1c-3c8e21db542e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="15. Sound">
+      <UniqueIdentifier>{e5928ea1-d766-4408-8d4e-def79543e1e5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. Bindable\12. Sound">
+      <UniqueIdentifier>{0501027e-aafe-416b-84be-2ba2345763bc}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\Window.cpp">
@@ -372,8 +378,14 @@
     <ClCompile Include="UI\Gauge.cpp">
       <Filter>14. UI</Filter>
     </ClCompile>
+    <ClCompile Include="Sound\Sound.cpp">
+      <Filter>15. Sound</Filter>
+    </ClCompile>
+    <ClCompile Include="Bindable\SoundBindable.cpp">
+      <Filter>04. Bindable\12. Sound</Filter>
+    </ClCompile>
     <ClCompile Include="Bindable\UIRenderer.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>05. Drawable\12. Renderer</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -689,8 +701,14 @@
     <ClInclude Include="UI\Gauge.h">
       <Filter>14. UI</Filter>
     </ClInclude>
+    <ClInclude Include="Sound\Sound.h">
+      <Filter>15. Sound</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\SoundBindable.h">
+      <Filter>04. Bindable\12. Sound</Filter>
+    </ClInclude>
     <ClInclude Include="Bindable\UIRenderer.h">
-      <Filter>Header Files</Filter>
+      <Filter>05. Drawable\12. Renderer</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

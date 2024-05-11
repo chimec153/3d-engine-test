@@ -1732,6 +1732,46 @@ namespace Editor
 		}
 
 		ImGui::End();
+
+		if (ImGui::Begin("Fog Setting"))
+		{
+			Engine::Vector3 vColor = Engine::RenderManager::GetInst()->GetFogColor();
+
+			if (ImGui::ColorPicker3("color", &vColor.x))
+			{
+				Engine::RenderManager::GetInst()->SetFogColor(vColor);
+			}
+
+			Engine::Vector3 vHighlightColor = Engine::RenderManager::GetInst()->GetFogHighlightColor();
+
+			if (ImGui::ColorPicker3("highlightcolor", &vHighlightColor.x))
+			{
+				Engine::RenderManager::GetInst()->SetFogHighlightColor(vHighlightColor);
+			}
+
+			float fDepth = Engine::RenderManager::GetInst()->GetFogStartDepth();
+
+			if (ImGui::InputFloat("depth", &fDepth))
+			{
+				Engine::RenderManager::GetInst()->SetFogStartDepth(fDepth);
+			}
+
+			float fDensity = Engine::RenderManager::GetInst()->GetFogDensity();
+
+			if (ImGui::InputFloat("density", &fDensity))
+			{
+				Engine::RenderManager::GetInst()->SetFogDensity(fDensity);
+			}
+
+			float fHeightFallOff = Engine::RenderManager::GetInst()->GetFogHeightFallOff();
+
+			if (ImGui::InputFloat("height fall off", &fHeightFallOff))
+			{
+				Engine::RenderManager::GetInst()->SetFogHeightFallOff(fHeightFallOff);
+			}
+		}
+
+		ImGui::End();
 	}
 
 	void ImguiManager::Layer_DrawListImgui(std::shared_ptr<Engine::Layer> pLayer)

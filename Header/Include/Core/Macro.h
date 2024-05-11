@@ -27,6 +27,8 @@
 #include <fbxsdk.h>
 #include <memory>
 #include <map>
+#include "../Sound/inc/fmod.h"
+#include "../Sound/inc/fmod.hpp"
 
 #pragma comment(lib, "zlib-md.lib")
 #pragma comment(lib, "libxml2-md.lib")
@@ -36,6 +38,7 @@
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "fmod_vc.lib")
 
 #ifdef _DEBUG
 #pragma comment(lib, "DirectXTex_Debug.lib")
@@ -72,6 +75,7 @@
 #define SHADER_PATH "ShaderPath"
 #define TEXTURE_PATH "TexturePath"
 #define MESH_PATH "MeshPath"
+#define SOUND_PATH "SoundPath"
 
 #define TEXT_LEN	4096
 

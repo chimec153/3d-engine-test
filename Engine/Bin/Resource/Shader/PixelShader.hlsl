@@ -100,9 +100,15 @@ float4 PS_ENV(VSOut_Env input)  :   SV_Target
     
     clip(g_DepthTexture0.Sample(g_sPoint, depth_uv).r - 1.f);
     
+    float3 eye = normalize(input.localpos) * 5000.f;
+    
     float2 uv = SphereMapping(normalize(input.localpos));
 
-    return g_EnvironmentTexture.Sample(g_sAnisotropic, uv);
+    float4 finalColor = g_EnvironmentTexture.Sample(g_sAnisotropic, uv);
+    
+    finalColor.xyz = ApplyFog(finalColor.xyz, eye.y, eye);
+    
+    return finalColor;
 }
 
 float4 PS_SOLID(VSOut input)    :   SV_TARGET

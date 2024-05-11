@@ -75,6 +75,7 @@ namespace Engine
         const std::list<std::shared_ptr<class JointSocket>>& GetSocketList()  const;
         void AddSocket(const std::string& strJoint, const std::shared_ptr<JointSocket>& pSocket);
         void AddSocket(int iJoint, const std::shared_ptr<JointSocket>& pSocket);
+        void DeleteSocket(std::shared_ptr<JointSocket> pSocket);
         void SetSkeleton(const std::string& strTag);
         void SetSkeleton(std::shared_ptr<Skeleton> pSkeleton);
         class std::shared_ptr<class Skeleton> GetSkeleton() const;

@@ -47,8 +47,9 @@ namespace Engine
         float GetTerrainHeight(const Vector3& vPos);
         void AddTerrainHeight(const Vector3& vPos, int iHeight = 1);
         int GetTerrainIndex(const Vector3& vLocalPos)   const;
-        Vector3 GetTerrainLocalPos(const Vector3& vWorldPos);
+        Vector3 GetTerrainLocalPos(const Vector3& vWorldPos)    const;
         void SetTileType(const Vector3& vWorldPos, int iTileType);
+        int GetTileType(const Vector3& vWorldPos)   const;
 
     private:
         void CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight);

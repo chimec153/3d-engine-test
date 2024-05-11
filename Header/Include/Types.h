@@ -183,6 +183,7 @@ namespace Engine
 	{
 		Vector4 vPerspective;
 		Matrix matCameraViewToLightClip;
+		Matrix matInvView;
 	}PERSPECTIVEBUFFER, * PPERSPECTIVEBUFFER;
 
 	ENGINE_DLL typedef struct _tagLineColliderInfo
@@ -496,4 +497,13 @@ namespace Engine
 		Vector2 vStartPos;
 		Vector2 vSize;
 	}UICBUFFER, *PUICBUFFER;
+
+	typedef struct alignas(16) ENGINE_DLL _tagFogCBuffer
+	{
+		Vector3 vFogColor;
+		float fFogStartDepth;
+		Vector3 vFogHighlightColor;
+		float fFogGlobalDensity;
+		float fFogHeightFallOff;
+	}FOGCBUFFER, *PFOGCBUFFER;
 }

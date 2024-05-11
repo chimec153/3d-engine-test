@@ -4,6 +4,7 @@ namespace Engine
 {
     class ColliderSphere;
     class ColliderOBB;
+    class SoundBindable;
 }
 namespace Client
 {
@@ -29,6 +30,7 @@ namespace Client
         std::shared_ptr<Engine::ColliderSphere> m_pBody;
         std::shared_ptr<Engine::ColliderOBB> m_pClawBody;
         MONSTER_STATE m_eState;
+        std::shared_ptr<Engine::SoundBindable> m_pAttackSound;
 
     public:
         bool SetState(MONSTER_STATE eState);

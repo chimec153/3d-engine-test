@@ -22,3 +22,11 @@
 		#pragma comment(lib, "Engine32.lib")
 	#endif
 #endif
+
+enum class WEAPON_TYPE
+{
+	FIST,
+	SWORD,
+	GUN,
+	END
+};

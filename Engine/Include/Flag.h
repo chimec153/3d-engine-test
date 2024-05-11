@@ -73,6 +73,7 @@ namespace Engine
 		RASTERIZER_STATE,
 		MOUSE,
 		UIRENDERER,
+		SOUND,
 		UI_FRAME,
 		UI_IMAGE,
 		UI_GAUGE,

@@ -10,14 +10,17 @@ namespace Engine
     class Particle;
     class ColliderLine;
     class Camera;
+    class SoundBindable;
 }
 
 namespace Client
 {
+    class Inventory;
+
     class Player :
         public Attackable
     {
-    private:
+    public:
         enum class PLAYER_STATE
         {
             IDLE,
@@ -35,6 +38,7 @@ namespace Client
             IDLE,
             ATTACK,
             ATTACK_END,
+            GUN_IDLE,
             END
         };
 
@@ -83,6 +87,11 @@ namespace Client
         std::shared_ptr<Engine::JointSocket> m_pJointSocket;
         std::shared_ptr<Engine::Particle> m_pSwordParticle;
         std::shared_ptr<Engine::ColliderLine> m_pCameraLine;
+        std::shared_ptr<Inventory> m_pInventory;
+        std::shared_ptr<Engine::JointSocket> m_pJointSocketArmor;
+        std::shared_ptr<Engine::SoundBindable> m_pSwordSound;
+        std::shared_ptr<Engine::SoundBindable> m_pFootLSound;
+        std::shared_ptr<Engine::SoundBindable> m_pFootRSound;
 
     public:
         bool SetState(PLAYER_STATE eState);
@@ -92,8 +101,10 @@ namespace Client
         void ChangeSequence(const std::string& strSeq);
         void SetRate(float fRate);
         void SetAdditiveSequence(const std::string& strSeq);
-        void ChangeWeaponMesh(const std::string& strMesh);
+        void ChangeWeaponMesh(std::shared_ptr<Engine::Drawable> pDrawable);
+        void ChangeArmorMesh(std::shared_ptr<Engine::Drawable> pDrawable);
         std::shared_ptr<Engine::Drawable> GetWeapon()   const;
+        void SetInventory(std::shared_ptr<Inventory> pInventory);
 
     public:
         void CollisionTerrainStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);

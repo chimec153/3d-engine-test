@@ -225,6 +225,7 @@ cbuffer GBufferProject : register(b3)
 {
     float4 g_vProjectValues;
     matrix g_matCameraViewToLightClip;
+    matrix g_matInvView;
 };
 
 struct BoneInfo
@@ -322,6 +323,15 @@ cbuffer Fluid : register(b11)
     float g_fFluidc3;
     int g_iFluidWidth;
     float g_fFluidDist;
+}
+
+cbuffer Fog : register(b12)
+{
+    float3 FogColor;
+    float FogStartDepth;
+    float3 FogHighlightColor;
+    float FogGlobalDensity;
+    float FogHeightFallOff;
 }
 
 struct Transform
@@ -476,8 +486,6 @@ float3 BumpMapping(float3 n, float4 t, float3 bump)
 
 float4 GetPaperBurnColor(float4 color, float2 uv)
 {
-    return color;
-    
     if(!g_bMaterialUsePaperBurn)
     {
         return color;
@@ -632,4 +640,33 @@ void GetLightDirAndColor(in float3 view, out float4 C, out float3 light)
         
         C = g_vLightColor * g_fLightIntensity;
     }
+}
+
+float3 ApplyFog(float3 originalColor, float eyePosY, float3 eyeToPixel)
+{
+    float pixelDist = length(eyeToPixel);
+    float3 eyeToPixelNorm = eyeToPixel / pixelDist;
+    
+    // 픽셀 거리에 대해 안개 시작 지점 계산
+    float fogDist = max(pixelDist - FogStartDepth, 0.0);
+    
+    // 안개 세기에 대해 거리 계산
+    float fogHeightDensityAtViewer = exp(-FogHeightFallOff * eyePosY);
+    float fogDistInt = fogDist * fogHeightDensityAtViewer;
+    
+    // 안개 세기에 대해 높이 계산
+    float eyeToPixelY = eyeToPixel.y * (fogDist / pixelDist);
+    float t = FogHeightFallOff * eyeToPixelY;
+    const float thresholdT = 0.01;
+    float fogHeightInt = abs(t) > thresholdT ? (1.0 - exp(-t)) / t : 1.0;
+    
+    // 위 계산 값을 합해 최종 인수 계산
+    float fogFinalFactor = exp(-FogGlobalDensity * fogDistInt * fogHeightInt);
+    
+    // 태양 하이라이트 계산 및 안개 색상 혼합
+    float sunHighlightFactor = saturate(dot(eyeToPixelNorm, g_vLightDir));
+    sunHighlightFactor = pow(sunHighlightFactor, 8.0);
+    float3 fogFinalColor = lerp(FogColor, FogHighlightColor, sunHighlightFactor);
+    
+    return lerp(fogFinalColor, originalColor, fogFinalFactor);
 }

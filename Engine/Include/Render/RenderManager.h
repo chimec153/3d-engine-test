@@ -92,6 +92,8 @@ namespace Engine
 		std::shared_ptr<class VertexShader> pBlurNullVertexShader;
 		std::shared_ptr<class PixelShader> pBlurNullPixelShader;
 		std::shared_ptr<class BlendState> m_pDestAlpha;
+		FOGCBUFFER m_tFogCBuffer;
+		std::shared_ptr<class ConstantBuffer<FOGCBUFFER>> m_pFogCBuffer;
 
 	public:
 		void SetSkyBox(std::shared_ptr<SkyBox> pSkyBox);
@@ -110,6 +112,16 @@ namespace Engine
 		std::shared_ptr<class Texture> GetHDRDownScaleTexture()	const;
 		std::shared_ptr<class Texture> GetBloomTexture()	const;
 		std::shared_ptr<class Texture> GetBloomFinalTexture()	const;
+		void SetFogColor(const Vector3& vColor);
+		void SetFogHighlightColor(const Vector3& vColor);
+		void SetFogStartDepth(float fDepth);
+		void SetFogDensity(float fDensity);
+		void SetFogHeightFallOff(float fHeightFallOff);
+		const Vector3& GetFogColor() const;
+		const Vector3& GetFogHighlightColor() const;
+		float GetFogStartDepth() const;
+		float GetFogDensity() const;
+		float GetFogHeightFallOff() const;
 
 	public:
 		void AddLight(const std::shared_ptr<PointLight>& pLight);

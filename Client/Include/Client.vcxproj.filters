@@ -51,6 +51,12 @@
     <ClCompile Include="UI\ItemIcon.cpp">
       <Filter>03. UI</Filter>
     </ClCompile>
+    <ClCompile Include="Object\Bullet.cpp">
+      <Filter>02. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Tree.cpp">
+      <Filter>02. Object</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Scene\StartScene.h">
@@ -79,6 +85,12 @@
     </ClInclude>
     <ClInclude Include="UI\ItemIcon.h">
       <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Bullet.h">
+      <Filter>02. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Tree.h">
+      <Filter>02. Object</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

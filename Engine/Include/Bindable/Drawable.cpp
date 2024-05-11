@@ -1277,29 +1277,16 @@ namespace Engine
 						}
 					}
 
-					switch (vecVertexSub.size())
+					// 0 1 2
+					// 0 1 2 0 2 3
+					// 0 1 2 0 2 3 0 3 4
+
+					for (int i = 0; i < vecVertexSub.size() - 2; ++i)
 					{
-					case 3:
-						for (size_t i = 0; i < vecVertexSub.size(); ++i)
-						{
-							vecSubIndex.push_back(vecVertexSub[i]);
-						}
-
-						break;
-					case 4:
 						vecSubIndex.push_back(vecVertexSub[0]);
-						vecSubIndex.push_back(vecVertexSub[1]);
-						vecSubIndex.push_back(vecVertexSub[2]);
-
-						vecSubIndex.push_back(vecVertexSub[0]);
-						vecSubIndex.push_back(vecVertexSub[2]);
-						vecSubIndex.push_back(vecVertexSub[3]);
-						break;
-					default:
-						assert(false);
-						break;
+						vecSubIndex.push_back(vecVertexSub[i + 1]);
+						vecSubIndex.push_back(vecVertexSub[i + 2]);
 					}
-
 				}
 				break;
 				case 'm':
@@ -1321,7 +1308,14 @@ namespace Engine
 							}
 						}
 
-						strcat_s(strFull, pContext);
+						if (pContext[0] == '.' && pContext[1] == '/')
+						{
+							strcat_s(strFull, &pContext[2]);
+						}
+						else
+						{
+							strcat_s(strFull, pContext);
+						}
 
 						strFull[strlen(strFull) - 1] = 0;
 
@@ -1337,6 +1331,31 @@ namespace Engine
 
 					if (!strcmp(_pResult, "usemtl"))
 					{
+						if (vecSubIndex.size())
+						{
+							iPrevPos = static_cast<int>(vecPos.size());
+							iPrevUV = static_cast<int>(vecUV.size());
+							iPrevNormal = static_cast<int>(vecNormal.size());
+
+							vecIndex.push_back(vecSubIndex);
+
+							std::vector<std::vector<unsigned int>> _vecSubIndex;
+
+							_vecSubIndex.push_back(vecSubIndex);
+
+							vecTotalIndex.push_back(_vecSubIndex);
+
+							vecTotalTexture.push_back(vecTexture);
+
+							vecTotalVertex.push_back(vecVertex);
+
+							vecVertex.clear();
+
+							vecSubIndex.clear();
+
+							vecTexture.clear();
+						}
+
 						bool bFind = false;
 
 						pContext[strlen(pContext) - 1] = 0;
@@ -1346,6 +1365,8 @@ namespace Engine
 							if (vecMaterial[i].pMaterial->GetTag() == pContext)
 							{
 								bFind = true;
+
+								vecUseMaterial.push_back(vecMaterial[i]);
 
 								const std::shared_ptr<Material>& pMaterial = std::static_pointer_cast<Material>(vecMaterial[i].pMaterial->Clone());
 
@@ -1369,6 +1390,22 @@ namespace Engine
 				}
 			}
 
+			if (vecVertex.size())
+			{
+				vecTotalVertex.push_back(vecVertex);
+			}
+
+			if (vecSubIndex.size())
+			{
+				vecIndex.push_back(vecSubIndex);
+
+				std::vector<std::vector<unsigned int>> _vecSubIndex;
+
+				_vecSubIndex.push_back(vecSubIndex);
+
+				vecTotalIndex.push_back(_vecSubIndex);
+			}
+
 			std::vector<unsigned int> _vecIndex;
 
 			for (size_t i = 0; i < vecIndex.size(); ++i)
@@ -1388,9 +1425,12 @@ namespace Engine
 
 			SetTangent<VertexStandard>(vecTotalVertex, vecIndex);
 
-			const std::shared_ptr<Mesh>& pMesh = StaticCreateBindable<Mesh>(GetTag(), vecTotalVertex, vecTotalIndex);
+			std::shared_ptr<Mesh> pMesh = StaticCreateBindable<Mesh>(GetTag(), vecTotalVertex, vecTotalIndex);
 
-			pMesh->SetTextures(vecTotalTexture);
+			if (!pMesh)
+			{
+				pMesh = StaticFindBindable<Mesh>(GetTag());
+			}
 
 			AddChild(pMesh);
 
@@ -1461,7 +1501,12 @@ namespace Engine
 
 			FindAndAddBind<Topology>("TriangleList");
 
-			FindAndAddBind<Material>("Material");
+			for (int i = 0; i < static_cast<int>(vecUseMaterial.size()); ++i)
+			{
+				vecUseMaterial[i].pMaterial->SetReflectivity(1.f);
+
+				pMesh->AddMaterial(i, vecUseMaterial[i].pMaterial);
+			}
 
 			fclose(pFile);
 		}
@@ -1533,6 +1578,11 @@ namespace Engine
 						pContext[strlen(pContext) - 1] = 0;
 
 						pCurrentMaterial->pMaterial = StaticCreateBindable<Material>(pContext);
+
+						if (!pCurrentMaterial->pMaterial)
+						{
+							pCurrentMaterial->pMaterial = StaticFindBindable<Material>(pContext);
+						}
 					}
 				}
 
@@ -1773,6 +1823,11 @@ namespace Engine
 		}
 
 		std::shared_ptr<Mesh> pMesh = StaticCreateBindable<Mesh>(strFileName, vecVertex, vecIndex);
+
+		if (!pMesh)
+		{
+			pMesh = StaticFindBindable<Mesh>(strFileName);
+		}
 
 		AddChild(pMesh);
 

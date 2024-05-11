@@ -13,6 +13,7 @@
 #include "Bindable/Mesh.h"
 #include "Attackable.h"
 #include "Bindable/Particle.h"
+#include "Bindable/SoundBindable.h"
 
 namespace Client
 {
@@ -178,6 +179,17 @@ namespace Client
 			{
 				StartPaperBurn();
 				GetParticle()->StopEmit();
+			}
+		);
+
+		m_pAttackSound = pClaw->CreateBindable<Engine::SoundBindable>("attack sound", "melee sound");
+
+		std::shared_ptr<Engine::Notify> pAttackNotify = pFrogAnimation->AddNotify("FrogArmature|Frog_Attack", "Attack", 0.5f);
+
+		pAttackNotify->SetCallBack(
+			[this](int, float, Engine::Bindable*)
+			{
+				m_pAttackSound->Play();
 			}
 		);
 

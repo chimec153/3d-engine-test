@@ -23,6 +23,9 @@
 #include "Bindable/Decal.h"
 #include "Bindable/ColliderLine.h"
 #include "Bindable/UIRenderer.h"
+#include "../UI/Inventory.h"
+#include "Bindable/SoundBindable.h"
+#include "Bullet.h"
 
 namespace Client
 {
@@ -201,8 +204,44 @@ namespace Client
 
 		switch (eState)
 		{
+		case PLAYER_UPPER_BODY_STATE::IDLE:
+			
+			break;
 		case PLAYER_UPPER_BODY_STATE::ATTACK:
-			SetAdditiveSequence("CharacterArmature|Sword_Slash");
+		{
+			WEAPON_TYPE eWeaponType = m_pInventory->GetEquipWeaponType(Inventory::EQUIP_SLOT::HAND_RIGHT);
+
+			switch (eWeaponType)
+			{
+			case WEAPON_TYPE::FIST:
+				SetAdditiveSequence("CharacterArmature|Punch_Left");
+				break;
+			case WEAPON_TYPE::SWORD:
+				SetAdditiveSequence("CharacterArmature|Sword_Slash");
+				break;
+			case WEAPON_TYPE::GUN:
+			{
+				SetAdditiveSequence("CharacterArmature|Idle_Gun_Shoot");
+
+				std::shared_ptr<Bullet> pBullet = GetScene()->CreateDrawable<Bullet>("bullet", GetScene()->FindLayer(DEFAULT_LAYER));
+
+				std::shared_ptr<Engine::Transform> pBulletTransform = pBullet->GetTransform();
+
+				if (m_pSword)
+				{
+					pBulletTransform->SetPosition(m_pSword->GetTransform()->GetPosition());
+
+					pBulletTransform->SetAxis(Engine::AXIS_TYPE::Y, m_pSword->GetTransform()->GetAxis(Engine::AXIS_TYPE::X));
+				}
+			}
+				break;
+			case WEAPON_TYPE::END:
+				break;
+			default:
+				break;
+			}
+
+		}
 			break;
 		}
 
@@ -353,16 +392,59 @@ namespace Client
 		GetAnimation()->SetAdditiveSequence(strSeq.c_str());
 	}
 
-	void Player::ChangeWeaponMesh(const std::string& strMesh)
+	void Player::ChangeWeaponMesh(std::shared_ptr<Engine::Drawable> pDrawable)
 	{
-		std::shared_ptr<Engine::Bindable> pMesh = m_pSword->FindChild(Engine::BINDABLE_TYPE::MESH);
-
-		if (pMesh)
+		if (m_pJointSocket)
 		{
-			m_pSword->DeleteChild(pMesh);
+			GetAnimation()->DeleteSocket(m_pJointSocket);
 		}
 
-		m_pSword->FindAndAddBind<Engine::Mesh>(strMesh);
+		if (m_pSword)
+		{
+			m_pSword->Disable();
+		}
+
+		m_pSword = pDrawable;
+
+		if (pDrawable)
+		{
+			m_pSwordSound = std::static_pointer_cast<Engine::SoundBindable>(pDrawable->FindChild("weapon sound"));
+
+			m_pSwordBody = std::static_pointer_cast<Engine::ColliderOBB>(pDrawable->FindChild(Engine::BINDABLE_TYPE::COLLIDER_OBB));
+
+			m_pSwordParticle = std::static_pointer_cast<Engine::Particle>(pDrawable->FindChild(pDrawable->GetTag() + " particle"));
+
+			m_pJointSocket = GetAnimation()->AddSocket(40, m_pSword);
+
+			m_pJointSocket->SetRotation({ 0.f, -PI / 2.f, PI / 2.f });
+			m_pJointSocket->SetScale(0.5f, 0.5f, 0.5f);
+			m_pJointSocket->SetPosition({ 0.f, -0.03f, 0.1f });
+		}
+		else
+		{
+			m_pSwordBody = nullptr;
+
+			m_pSwordParticle = nullptr;
+
+			m_pSwordSound = nullptr;
+		}
+	}
+
+	void Player::ChangeArmorMesh(std::shared_ptr<Engine::Drawable> pDrawable)
+	{
+		if (m_pJointSocketArmor)
+		{
+			GetAnimation()->DeleteSocket(m_pJointSocketArmor);
+		}
+
+		if (pDrawable)
+		{
+			m_pJointSocketArmor = GetAnimation()->AddSocket(5, pDrawable);
+
+			m_pJointSocketArmor->SetRotation({ PI / 2.f, 0.f, 0.f });
+			m_pJointSocketArmor->SetScale(0.4f, 0.4f, 0.4f);
+			m_pJointSocketArmor->SetPosition({ 0.f, 0.03f, 0.f });
+		}
 	}
 
 	std::shared_ptr<Engine::Drawable> Player::GetWeapon() const
@@ -370,9 +452,21 @@ namespace Client
 		return m_pSword;
 	}
 
+	void Player::SetInventory(std::shared_ptr<Inventory> pInventory)
+	{
+		m_pInventory = pInventory;
+	}
+
 	void Player::CollisionTerrainStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
 	{
-		Engine::Collider* pTerrainCollider = pSrc->GetColliderType() == Engine::COLLIDER_TYPE::TERRAIN ? pSrc : pDest;
+		int iItemID = m_pInventory->GetEquipItem(Inventory::EQUIP_SLOT::HAND_RIGHT);
+
+		if (pDest->GetTag() != "MouseLine")
+		{
+			return;
+		}
+
+		Engine::Collider* pTerrainCollider = pSrc;
 
 		const Engine::Vector3& vCross = pTerrainCollider->GetCross();
 
@@ -380,10 +474,43 @@ namespace Client
 
 		if (Engine::CInput::GetInst()->IsMouseButtonUp(Engine::CInput::MOUSE_TYPE::LEFT))
 		{
-			pTerrain->AddTerrainHeight(vCross);
+			switch (iItemID)
+			{
+			case 2:
+				pTerrain->AddTerrainHeight(vCross);
+				break;
+			case 3:
+			{
+				int iType = pTerrain->GetTileType(vCross);
+
+				pTerrain->SetTileType(vCross, (iType + 1) % 7);
+			}
+				break;
+			default:
+				break;
+			}
 		}
 
 		else if (Engine::CInput::GetInst()->IsMouseButtonUp(Engine::CInput::MOUSE_TYPE::RIGHT))
+		{
+			switch (iItemID)
+			{
+			case 2:
+				pTerrain->AddTerrainHeight(vCross, -1);
+				break;
+			case 3:
+			{
+				int iType = pTerrain->GetTileType(vCross);
+
+				pTerrain->SetTileType(vCross, (7 + iType - 1) % 7);
+			}
+				break;
+			default:
+				break;
+			}
+		}
+
+		else if (Engine::CInput::GetInst()->IsMouseButtonUp(Engine::CInput::MOUSE_TYPE::WHEEL))
 		{
 			pTerrain->SetTileType(vCross, 1);
 		}
@@ -543,67 +670,6 @@ namespace Client
 		m_pCameraLine->SetCallBack(Engine::COLLISION_TYPE::STAY, this, &Player::CollisionCameraLine);
 		m_pCameraLine->SetCallBack(Engine::COLLISION_TYPE::LAST, this, &Player::CollisionCameraLineLast);
 
-		GetTransform()->SetY(10.f);
-
-		for (int i = 0; i < 45; ++i)
-		{
-			std::string strNotify = "effect";
-
-			strNotify += std::to_string(i + 1);
-
-			std::shared_ptr<Engine::Notify> pNotify = pAnimation->AddNotify("CharacterArmature|Roll", strNotify, 0.048f * i + 0.075f);
-
-			pNotify->SetCallBack(this, &Player::RollEffect);
-		}
-
-		m_pSword = GetScene()->CreateDrawable<Attackable>("sword", GetScene()->FindLayer(DEFAULT_LAYER), 50, 20, 25);
-
-		m_pSword->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSNoSkin");
-		m_pSword->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
-		m_pSword->FindAndAddBind<Engine::Topology>("TriangleList");
-		m_pSword->FindAndAddBind<Engine::InputLayout>("Standard");
-		m_pSword->FindAndAddBind<Engine::DepthStencilState>("OutLineMask");
-		m_pSwordBody = m_pSword->CreateBindable<Engine::ColliderOBB>("sword_body");
-
-		m_pSwordBody->Disable();
-
-		m_pSwordBody->SetScaleOffset({ 0.175f, 1.1f, 0.175f });
-		m_pSwordBody->SetAxisOffset({ 0.f, 0.4f, 0.f });
-
-		std::shared_ptr<Engine::Material> pSrcMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
-
-		m_pSword->AddChild(pSrcMaterial->Clone());
-
-		m_pSwordParticle = m_pSword->CreateBindable<Engine::Particle>("sword particle", 4096);
-
-		std::shared_ptr<Engine::Transform> pSwordParticleTransform = m_pSwordParticle->GetTransform();
-
-		if (pSwordParticleTransform)
-		{
-			pSwordParticleTransform->SetRelativePosition(0.f, 1.f, 0.f);
-		}
-		m_pSwordParticle->SetStartSize({ 0.04f, 0.04f });
-		m_pSwordParticle->SetEndSize({ 0.04f, 0.04f });
-		m_pSwordParticle->SetMaxCreatePosition({ 0.f, 0.f, 0.f });
-		m_pSwordParticle->SetMinCreatePosition({ 0.f, 0.f, 0.f });
-		m_pSwordParticle->SetStartColor(Engine::White);
-		m_pSwordParticle->SetEndColor({ 1.f,0.f, 0.f, 0.f });
-		m_pSwordParticle->SetMaxParticleCount(4096);
-		m_pSwordParticle->SetAccelaration({ 0.f, -1.f, 0.f });
-		m_pSwordParticle->SetVelocity({ -1.f, -1.f, -1.f });
-		m_pSwordParticle->SetMaxVelocity({ 1.f, 1.f, 1.f });
-		m_pSwordParticle->SetEmitTime(0.001f);
-		m_pSwordParticle->SetMaxLifeTime(2.f);
-		m_pSwordParticle->SetRenderLayer(Engine::RENDER_LAYER::BLUR);
-		m_pSwordParticle->CreateBindable<Engine::Texture>("particletexture", "Particle\\particle_00.png", TEXTURE_PATH);
-		m_pSwordParticle->StopEmit();
-
-		m_pJointSocket = pAnimation->AddSocket(40, m_pSword);
-
-		m_pJointSocket->SetRotation({ 0.f, -PI / 2.f, PI / 2.f });
-		m_pJointSocket->SetScale(0.5f, 0.5f, 0.5f);
-		m_pJointSocket->SetPosition({ 0.f, -0.03f, 0.1f });
-
 		m_pTrail = GetScene()->CreateDrawable<Trail>("Trail", GetScene()->FindLayer(DEFAULT_LAYER), 10);
 
 		for (int i = 0; i < 77; ++i)
@@ -612,13 +678,18 @@ namespace Client
 
 			strNotify += std::to_string(i);
 
-			std::shared_ptr<Engine::Notify> pNotify = pAnimation->AddNotify("CharacterArmature|Sword_Slash", strNotify, i * 0.01666f);
+			std::shared_ptr<Engine::Notify> pNotify = GetAnimation()->AddNotify("CharacterArmature|Sword_Slash", strNotify, i * 0.01666f);
 
 			if (i == 0)
 			{
 				pNotify->SetCallBack(
 					[this](int iFrame, float fTime, Engine::Bindable* pOwner)
 					{
+						if (!m_pSword)
+						{
+							return;
+						}
+
 						Engine::Vector3 vTop = { 0.f, 2.0f, 0.f };
 						Engine::Vector3 vBottom = { 0.f, 0.3f, 0.f };
 
@@ -635,9 +706,26 @@ namespace Client
 				pNotify->SetCallBack(
 					[this](int, float, Engine::Bindable*)
 					{
+						if (!m_pSword)
+						{
+							return;
+						}
+
 						m_pTrail->Disable();
 						m_pSwordBody->Disable();
 						m_pSwordParticle->StopEmit();
+					});
+			}
+			else if (i == 30)
+			{
+				pNotify->SetCallBack(
+					[this](int, float, Engine::Bindable*)
+					{
+
+						if (m_pSwordSound)
+						{
+							m_pSwordSound->Play();
+						}
 					});
 			}
 			else
@@ -645,6 +733,11 @@ namespace Client
 				pNotify->SetCallBack(
 					[this](int iFrame, float fTime, Engine::Bindable* pOwner)
 					{
+						if (!m_pSword)
+						{
+							return;
+						}
+
 						Engine::Vector3 vTop = { 0.f, 2.0f, 0.f };
 						Engine::Vector3 vBottom = { 0.f, 0.3f, 0.f };
 
@@ -654,6 +747,18 @@ namespace Client
 					});
 
 			}
+		}
+		GetTransform()->SetY(10.f);
+
+		for (int i = 0; i < 45; ++i)
+		{
+			std::string strNotify = "effect";
+
+			strNotify += std::to_string(i + 1);
+
+			std::shared_ptr<Engine::Notify> pNotify = pAnimation->AddNotify("CharacterArmature|Roll", strNotify, 0.048f * i + 0.075f);
+
+			pNotify->SetCallBack(this, &Player::RollEffect);
 		}
 
 		std::shared_ptr<Engine::Notify> pDieNotify = pAnimation->AddNotify("CharacterArmature|Death", "DiePaperBurn", 1.f);
@@ -665,6 +770,26 @@ namespace Client
 		);
 
 		Engine::CInput::GetInst()->AddKey(DIK_LCONTROL);
+
+		m_pFootLSound = CreateBindable<Engine::SoundBindable>("step_rock_l", "step_rock_l");
+
+		m_pFootRSound = CreateBindable<Engine::SoundBindable>("step_rock_r", "step_rock_r");
+
+		std::shared_ptr<Engine::Notify> pRunLNotify = pAnimation->AddNotify("CharacterArmature|Run", "foot_l", 0.5f);
+
+		pRunLNotify->SetCallBack([this](int, float, Engine::Bindable*)
+			{
+				m_pFootLSound->Play();
+			}
+		);
+
+		std::shared_ptr<Engine::Notify> pRunRNotify = pAnimation->AddNotify("CharacterArmature|Run", "foot_r", 0.9f);
+
+		pRunRNotify->SetCallBack([this](int, float, Engine::Bindable*)
+			{
+				m_pFootRSound->Play();
+			}
+		);
 
 		return true;
 	}
