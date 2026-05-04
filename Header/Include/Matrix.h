@@ -75,6 +75,14 @@ namespace Engine
 			return v[index];
 		}
 
+		void operator*=(const float value)
+		{
+			for (int i = 0; i < 16; ++i)
+			{
+				f[i] *= value;
+			}
+		}
+
 		_tagMatrix operator* (const _tagMatrix& mat)	const
 		{
 			_tagMatrix _mat;
@@ -277,6 +285,25 @@ namespace Engine
 		{
 			return {atan2(v[1][2] / y, v[2][2] / z), asin(-v[0][2] / x), atan2(v[0][1], v[0][0])};
 		}
+
+		void Inverse(int iSize = 4)
+		{
+			float fDeter = Determinant();
+
+			Matrix matInv;
+
+			for (int i = 0; i < iSize; ++i)
+			{
+				for (int j = 0; j < iSize; ++j)
+				{
+					matInv[i][j] = Determinant(((i + 1) * 4 + j + 1) % 16, 3);
+				}
+			}
+
+			*this = matInv;
+		}
+
+
 
 		static _tagMatrix RotationX(float x)
 		{

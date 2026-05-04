@@ -21,6 +21,8 @@
 #include "Sound/Sound.h"
 #include "../Object/Tree.h"
 #include "Render/RenderManager.h"
+#include "Core/PathManager.h"
+#include "Bindable/PointLight.h"
 
 Client::GameScene::GameScene()
 {
@@ -28,43 +30,48 @@ Client::GameScene::GameScene()
 
 bool Client::GameScene::Init()
 {
+	{
+		std::shared_ptr<Engine::Drawable> pPlayer = CreateDrawable<Engine::Drawable>("player", FindLayer(DEFAULT_LAYER));
 
-	Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Medieval.mesh", MESH_PATH);
-	Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
-	Engine::StaticCreateBindable<Engine::Mesh>("sword", "Sword.mesh", MESH_PATH);
-	Engine::StaticCreateBindable<Engine::Mesh>("shovel", "Shovel.mesh", MESH_PATH);
-	Engine::StaticCreateBindable<Engine::Mesh>("armor", "Armor_Leather.mesh", MESH_PATH);
-	Engine::StaticCreateBindable<Engine::Mesh>("pistol", "Pistol_5.mesh", MESH_PATH);
+		pPlayer->Load(TEXT("Walking.fbx"));
+	}
 
-	Engine::ResourceManager::GetInst()->LoadSkeleton("Medieval.skel");
-	Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
+	Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Walking.mesh", MESH_PATH);
+	//Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
+	//Engine::StaticCreateBindable<Engine::Mesh>("sword", "Sword.mesh", MESH_PATH);
+	//Engine::StaticCreateBindable<Engine::Mesh>("shovel", "Shovel.mesh", MESH_PATH);
+	//Engine::StaticCreateBindable<Engine::Mesh>("armor", "Armor_Leather.mesh", MESH_PATH);
+	//Engine::StaticCreateBindable<Engine::Mesh>("pistol", "Pistol_5.mesh", MESH_PATH);
 
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Death.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Gun_Shoot.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve_2.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun_Pointing.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun_Shoot.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Neutral.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Sword.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Interact.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Kick_Left.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Kick_Right.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Punch_Left.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Punch_Right.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Roll.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Back.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Left.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Right.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Shoot.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Sword_Slash.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Walk.seq");
-	Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Wave.seq");
+	Engine::ResourceManager::GetInst()->LoadSkeleton("Walking.skel");
+	//Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
 
-	Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Attack.seq");
+	Engine::ResourceManager::GetInst()->LoadSequence("Walkingmixamo.com.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Gun_Shoot.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve_2.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun_Pointing.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun_Shoot.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Neutral.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Sword.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Interact.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Kick_Left.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Kick_Right.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Punch_Left.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Punch_Right.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Roll.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Back.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Left.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Right.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Shoot.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Sword_Slash.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Walk.seq");
+	//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Wave.seq");
+
+	/*Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Attack.seq");
 	Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Death.seq");
 	Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Idle.seq");
 	Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Jump.seq");
@@ -74,23 +81,23 @@ bool Client::GameScene::Init()
 	Engine::ResourceManager::GetInst()->CreateSound("sword sound", "melee sounds\\sword sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
 	Engine::ResourceManager::GetInst()->CreateSound("step_rock_l", "sfx_step_rock_l.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
 	Engine::ResourceManager::GetInst()->CreateSound("step_rock_r", "sfx_step_rock_r.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-	Engine::ResourceManager::GetInst()->CreateSound("melee sound", "melee sounds\\melee sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+	Engine::ResourceManager::GetInst()->CreateSound("melee sound", "melee sounds\\melee sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);*/
 
-	for (int i = 0; i < 37; ++i)
-	{
-		char strSound[TEXT_LEN] = {};
+	//for (int i = 0; i < 37; ++i)
+	//{
+	//	char strSound[TEXT_LEN] = {};
 
-		sprintf_s(strSound, "hit%02d", i + 1);
+	//	sprintf_s(strSound, "hit%02d", i + 1);
 
-		std::string strPath = "hits\\";
+	//	std::string strPath = "hits\\";
 
-		strPath += strSound;
-		strPath += ".mp3.flac";
+	//	strPath += strSound;
+	//	strPath += ".mp3.flac";
 
-		Engine::ResourceManager::GetInst()->CreateSound(strSound, strPath.c_str(), SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-	}
+	//	Engine::ResourceManager::GetInst()->CreateSound(strSound, strPath.c_str(), SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+	//}
 
-	std::shared_ptr<Engine::Sound> pSound = Engine::ResourceManager::GetInst()->CreateSound("TownTheme", "TownTheme.mp3", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, true);
+	//std::shared_ptr<Engine::Sound> pSound = Engine::ResourceManager::GetInst()->CreateSound("TownTheme", "TownTheme.mp3", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, true);
 
 	//pSound->Play();
 
@@ -99,46 +106,46 @@ bool Client::GameScene::Init()
 		TEXT("LandScape\\dirt.bmp"),
 		TEXT("LandScape\\grass.bmp"),
 		TEXT("LandScape\\sand.bmp"),
-		TEXT("LandScape\\cyan.bmp"),
-		TEXT("LandScape\\blue.bmp"),
-		TEXT("LandScape\\pink.bmp"),
-		TEXT("LandScape\\test.bmp"),
+		TEXT("LandScape\\sand.bmp"),
+		TEXT("LandScape\\sand.bmp"),
+		TEXT("LandScape\\sand.bmp"),
+		TEXT("LandScape\\sand.bmp"),
 	};
 
 	std::vector<const TCHAR*> vecNormalTexture =
 	{
-		TEXT("LandScape\\grass_normal.png"),
-		TEXT("LandScape\\grass_normal.png"),
-		TEXT("LandScape\\grass_normal.png"),
-		TEXT("LandScape\\grass_normal.png"),
-		TEXT("LandScape\\grass_normal.png"),
-		TEXT("LandScape\\grass_normal.png"),
-		TEXT("LandScape\\grass_normal.png"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
 	};
 
 	std::vector<const TCHAR*> vecSpecularTexture =
 	{
-		TEXT("LandScape\\grass_spec.png"),
-		TEXT("LandScape\\grass_spec.png"),
-		TEXT("LandScape\\grass_spec.png"),
-		TEXT("LandScape\\grass_spec.png"),
-		TEXT("LandScape\\grass_spec.png"),
-		TEXT("LandScape\\grass_spec.png"),
-		TEXT("LandScape\\grass_spec.png"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
+		TEXT("LandScape\\grass.bmp"),
 	};
 
 	std::vector<const TCHAR*> vecBlendTexture =
 	{
-		TEXT("LandScape\\baseAlpha.bmp"),
-		TEXT("LandScape\\RoadAlpha.bmp"),
+		TEXT("LandScape\\baseAlpha.png"),
+		TEXT("LandScape\\baseAlpha.png"),
 	};
 
 	Engine::StaticCreateBindable<Engine::Texture>("TerrainDiffuse", vecTexture, TEXTURE_PATH, 20);
 	Engine::StaticCreateBindable<Engine::Texture>("TerrainNormal", vecNormalTexture, TEXTURE_PATH, 21);
 	Engine::StaticCreateBindable<Engine::Texture>("TerrainSpecular", vecSpecularTexture, TEXTURE_PATH, 22);
 	Engine::StaticCreateBindable<Engine::Texture>("TerrainBlend", vecBlendTexture, TEXTURE_PATH, 24);
-	Engine::StaticCreateBindable<Engine::Texture>("TerrainHeight", TEXT("LandScape\\height2.bmp"), TEXTURE_PATH, 16);
-	Engine::StaticCreateBindable<Engine::Texture>("SkyBoxTexture", TEXT("TYbvO.jpg"), TEXTURE_PATH, 5);
+	Engine::StaticCreateBindable<Engine::Texture>("TerrainHeight", TEXT("LandScape\\height2.png"), TEXTURE_PATH, 16);
+	Engine::StaticCreateBindable<Engine::Texture>("SkyBoxTexture", TEXT("TYbvO.png"), TEXTURE_PATH, 5);
 	Engine::StaticCreateBindable<Engine::Texture>("PaperBurn", TEXT("DefaultBurn.png"), TEXTURE_PATH, 4);
 	Engine::StaticCreateBindable<Engine::Texture>("QuickSlot", TEXT("item.png"), TEXTURE_PATH, 0);
 	Engine::StaticCreateBindable<Engine::Texture>("frame", TEXT("frame.png"), TEXTURE_PATH, 0);
@@ -155,9 +162,24 @@ bool Client::GameScene::Init()
 
 	Load("Resource\\Scene\\test.scn", ROOT_PATH);
 
-	std::shared_ptr<Engine::Bindable> pTerrain = FindBindable("Terrain");
+	AddLayer(DEFAULT_LAYER);
 
-	std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = std::static_pointer_cast<Engine::ColliderMesh>(pTerrain->FindChild(Engine::BINDABLE_TYPE::COLLIDER_MESH));
+	if (std::shared_ptr<Engine::Bindable> pTerrain = FindBindable("Terrain"))
+	{
+		std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = std::static_pointer_cast<Engine::ColliderMesh>(pTerrain->FindChild(Engine::BINDABLE_TYPE::COLLIDER_MESH));
+	}
+
+	if (std::shared_ptr<Engine::Camera> pCamera = CreateDrawable<Engine::Camera>("Camera", FindLayer(DEFAULT_LAYER)))
+	{
+		pCamera->SetProjectType(Engine::Camera::PROJECT_TYPE::PERSPECTIVE);
+
+		Engine::Graphics::GetInst()->SetCamera(pCamera);
+	}
+
+	if (auto pLight = CreateDrawable<Engine::PointLight>("Light", FindLayer(DEFAULT_LAYER)))
+	{
+		pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
+	}
 
 	std::shared_ptr<Engine::Camera> pUIInventoryCamera = CreateDrawable<Engine::Camera>("InventoryCamera", FindLayer(DEFAULT_LAYER));
 
@@ -176,11 +198,11 @@ bool Client::GameScene::Init()
 
 	pInventoryCameraTransform->SetRelativePosition(1.f, -0.2f, -20.f);
 
-	pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pPlayer.get(), &Client::Player::CollisionTerrainStay);
+	//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pPlayer.get(), &Client::Player::CollisionTerrainStay);
 
 	CreateDrawable<Client::Monster>("frog", FindLayer(DEFAULT_LAYER), 50, 5, 10);
 
-	std::shared_ptr<Engine::Decal> pDecal = CreateProtoType<Engine::Decal>("blooddecal", Engine::SCENE_TYPE::CURRENT);
+	/*std::shared_ptr<Engine::Decal> pDecal = CreateProtoType<Engine::Decal>("blooddecal", Engine::SCENE_TYPE::CURRENT);
 
 	pDecal->FindAndAddBind<Engine::PixelShader>(DECAL_PS_PBR);
 	pDecal->FindAndAddBind<Engine::Texture>("DecalBloodAlbedo");
@@ -253,13 +275,13 @@ bool Client::GameScene::Init()
 		pUIWeaponRenderer->SetCamera(pUIInventoryCamera);
 	}
 
-	pPlayer->SetInventory(pInventory);
+	pPlayer->SetInventory(pInventory);*/
 
 	//std::shared_ptr<Engine::Drawable> pArmor = CreateDrawable<Engine::Drawable>("armor", FindLayer(DEFAULT_LAYER));
 
 	//pArmor->Load(TEXT("UltimateRPGItemsBundle\\ArmorLeather\\Armor_Leather.fbx"));
 
-	CreateDrawable<Tree>("tree", FindLayer(DEFAULT_LAYER));
+	//CreateDrawable<Tree>("tree", FindLayer(DEFAULT_LAYER));
 
 	Engine::RenderManager::GetInst()->SetFogColor({0.f, 43.f / 255.f, 152.f / 255.f});
 	Engine::RenderManager::GetInst()->SetFogHighlightColor({1.f, 0.f, 0.f});

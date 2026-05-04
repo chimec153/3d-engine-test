@@ -1813,6 +1813,12 @@ namespace Engine
 			pSkeleton->SaveFromPath(strSkelPath, MESH_PATH);
 		}
 
+		if (!loader.GetLODCount())
+		{
+			assert(false);
+			return;
+		}
+
 		std::vector<std::vector<VertexStandard>> vecVertex;
 		std::vector<std::vector<std::vector<unsigned int>>> vecIndex;
 
@@ -1837,14 +1843,14 @@ namespace Engine
 		{
 			CreateBindable<class Animation>("Animation");
 
-			//int iLodCount = loader.GetLODCount();
+			int iLodCount = loader.GetLODCount();
 
-			//for (int i = 0; i < iLodCount; ++i)
-			//{
-				const std::vector<FbxLoader::SEQUENCE>& vecSequance = loader.GetSequences();
+			for (int i = 0; i < iLodCount; ++i)
+			{
+				const std::vector<FbxLoader::SEQUENCE>& vecSequance = loader.GetSequences(i);
 
 				AddSeqeunces(vecSequance);
-			//}
+			}
 
 			const std::unordered_map<std::string, Animation::PSEQUENCEINFO>& mapSequence = m_pAnimation->GetSequences();
 

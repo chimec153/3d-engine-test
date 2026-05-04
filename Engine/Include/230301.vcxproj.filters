@@ -774,5 +774,6 @@
     <Natvis Include="NatvisFile.natvis">
       <Filter>Source Files</Filter>
     </Natvis>
+    <Natvis Include="NatvisFile1.natvis" />
   </ItemGroup>
 </Project>

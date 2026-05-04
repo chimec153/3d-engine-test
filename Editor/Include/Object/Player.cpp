@@ -28,7 +28,7 @@ namespace Editor
 	{
 		CreateBindable<Engine::Animation>("anim");
 
-		std::shared_ptr<Engine::Mesh> pMesh = CreateBindable<Engine::Mesh>("Medieval", "Medieval.mesh", MESH_PATH);
+		std::shared_ptr<Engine::Mesh> pMesh = CreateBindable<Engine::Mesh>("Medieval", "Walking.mesh", MESH_PATH);
 
 		std::shared_ptr<Engine::Sequence> pSequence = std::make_shared<Engine::Sequence>();
 
@@ -57,17 +57,18 @@ namespace Editor
 
 		if (pSkeleton)
 		{
-			pSkeleton->LoadFromPath("Medieval.skel", MESH_PATH);
+			pSkeleton->LoadFromPath("Walking.skel", MESH_PATH);
 			GetAnimation()->SetSkeleton(pSkeleton);
 		}
 
-		GetAnimation()->AddSequance("idle", pSequence);
-		GetAnimation()->AddSequance("attack", pWalkSequence);
+		//GetAnimation()->AddSequance("idle", pSequence);
+		//GetAnimation()->AddSequance("attack", pWalkSequence);
 
-		GetAnimation()->SetAdditiveSequence("attack");
+		//GetAnimation()->SetAdditiveSequence("attack");
 
-		FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
-		FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
+		FindAndAddBind<Engine::VertexShader>(STANDARD_VS);
+		FindAndAddBind<Engine::PixelShader>("AlphaNoUVPS");
+		//FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
 		FindAndAddBind<Engine::InputLayout>("Standard");
 		FindAndAddBind<Engine::Topology>("TriangleList");
 	}

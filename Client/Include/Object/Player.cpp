@@ -38,7 +38,7 @@ namespace Client
 		, m_eState(PLAYER_STATE::IDLE)
 		, m_eUpperState(PLAYER_UPPER_BODY_STATE::IDLE)
 		, m_iMaxShadowFrame(15)
-		, m_fCameraDist(10.f)
+		, m_fCameraDist(2.f)
 		, m_bCanJump(true)
 	{
 	}
@@ -209,36 +209,39 @@ namespace Client
 			break;
 		case PLAYER_UPPER_BODY_STATE::ATTACK:
 		{
-			WEAPON_TYPE eWeaponType = m_pInventory->GetEquipWeaponType(Inventory::EQUIP_SLOT::HAND_RIGHT);
-
-			switch (eWeaponType)
+			if (m_pInventory)
 			{
-			case WEAPON_TYPE::FIST:
-				SetAdditiveSequence("CharacterArmature|Punch_Left");
-				break;
-			case WEAPON_TYPE::SWORD:
-				SetAdditiveSequence("CharacterArmature|Sword_Slash");
-				break;
-			case WEAPON_TYPE::GUN:
-			{
-				SetAdditiveSequence("CharacterArmature|Idle_Gun_Shoot");
+				WEAPON_TYPE eWeaponType = m_pInventory->GetEquipWeaponType(Inventory::EQUIP_SLOT::HAND_RIGHT);
 
-				std::shared_ptr<Bullet> pBullet = GetScene()->CreateDrawable<Bullet>("bullet", GetScene()->FindLayer(DEFAULT_LAYER));
-
-				std::shared_ptr<Engine::Transform> pBulletTransform = pBullet->GetTransform();
-
-				if (m_pSword)
+				switch (eWeaponType)
 				{
-					pBulletTransform->SetPosition(m_pSword->GetTransform()->GetPosition());
+				case WEAPON_TYPE::FIST:
+					SetAdditiveSequence("CharacterArmature|Punch_Left");
+					break;
+				case WEAPON_TYPE::SWORD:
+					SetAdditiveSequence("CharacterArmature|Sword_Slash");
+					break;
+				case WEAPON_TYPE::GUN:
+				{
+					SetAdditiveSequence("CharacterArmature|Idle_Gun_Shoot");
 
-					pBulletTransform->SetAxis(Engine::AXIS_TYPE::Y, m_pSword->GetTransform()->GetAxis(Engine::AXIS_TYPE::X));
+					std::shared_ptr<Bullet> pBullet = GetScene()->CreateDrawable<Bullet>("bullet", GetScene()->FindLayer(DEFAULT_LAYER));
+
+					std::shared_ptr<Engine::Transform> pBulletTransform = pBullet->GetTransform();
+
+					if (m_pSword)
+					{
+						pBulletTransform->SetPosition(m_pSword->GetTransform()->GetPosition());
+
+						pBulletTransform->SetAxis(Engine::AXIS_TYPE::Y, m_pSword->GetTransform()->GetAxis(Engine::AXIS_TYPE::X));
+					}
 				}
-			}
 				break;
-			case WEAPON_TYPE::END:
-				break;
-			default:
-				break;
+				case WEAPON_TYPE::END:
+					break;
+				default:
+					break;
+				}
 			}
 
 		}
@@ -344,7 +347,7 @@ namespace Client
 
 		_pDrawable->FindAndAddBind<Engine::Topology>("TriangleList");
 		_pDrawable->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
-		_pDrawable->FindAndAddBind<Engine::PixelShader>("AlphaNoUVPS");
+		_pDrawable->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoSpecMapNoNormalMap");
 		_pDrawable->FindAndAddBind<Engine::InputLayout>("Standard");
 
 		std::shared_ptr<Engine::Material> pMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
@@ -459,6 +462,11 @@ namespace Client
 
 	void Player::CollisionTerrainStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
 	{
+		if (!m_pInventory)
+		{
+			return;
+		}
+
 		int iItemID = m_pInventory->GetEquipItem(Inventory::EQUIP_SLOT::HAND_RIGHT);
 
 		if (pDest->GetTag() != "MouseLine")
@@ -575,20 +583,24 @@ namespace Client
 		}
 
 		GetTransform()->SetPosition(10.f, 5.f, 10.f);
+		//GetTransform()->SetScale(0.01f, 0.01f, 0.01f);
 
-		std::shared_ptr<Engine::Mesh> pMesh = CreateBindable<Engine::Mesh>("PlayerMesh", "Medieval.mesh");
+		std::shared_ptr<Engine::Mesh> pMesh = CreateBindable<Engine::Mesh>("PlayerMesh", "Walking.mesh");
 
 		pMesh->UsePaperBurn();
 
-		FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
+		FindAndAddBind<Engine::VertexShader>(STANDARD_ANIM_VS);
 		FindAndAddBind<Engine::InputLayout>("Standard");
 		FindAndAddBind<Engine::Topology>("TriangleList");
+
+		FindAndAddBind<Engine::PixelShader>(STANDARD_PS);
+		FindAndAddBind<Engine::DepthStencilState>("OutLineMask");
 
 		std::shared_ptr<Engine::Animation> pAnimation = CreateBindable<Engine::Animation>("PlayerAnimation");
 
 		std::vector<std::string> vecSeq = {
-			"CharacterArmature|Death",
-			"CharacterArmature|Gun_Shoot",
+			"mixamo.com",
+			/*"CharacterArmature|Gun_Shoot",
 			"CharacterArmature|HitRecieve",
 			"CharacterArmature|HitRecieve_2",
 			"CharacterArmature|Idle",
@@ -610,26 +622,29 @@ namespace Client
 			"CharacterArmature|Run_Shoot",
 			"CharacterArmature|Sword_Slash",
 			"CharacterArmature|Walk",
-			"CharacterArmature|Wave",
+			"CharacterArmature|Wave",*/
 		};
 
 		for (size_t i = 0; i < vecSeq.size(); ++i)
 		{
-			std::shared_ptr<Engine::Sequence> pSequence = Engine::ResourceManager::GetInst()->FindSequence(vecSeq[i]);
+			if (std::shared_ptr<Engine::Sequence> pSequence = Engine::ResourceManager::GetInst()->FindSequence(vecSeq[i]))
+			{
+				pSequence->UseRootMotion();
 
-			pAnimation->AddSequance(pSequence->GetTag(), pSequence);
+				pAnimation->AddSequance(pSequence->GetTag(), pSequence);
+			}
 		}
 
-		std::shared_ptr<Engine::Skeleton> pSkeleton = Engine::ResourceManager::GetInst()->FindSkeleton("Medieval");
+		std::shared_ptr<Engine::Skeleton> pSkeleton = Engine::ResourceManager::GetInst()->FindSkeleton("Walking");
 
 		assert(pSkeleton);
 
 		pAnimation->SetSkeleton(pSkeleton);
 
-		pAnimation->ChangeSequence("CharacterArmature|Idle");
+		//pAnimation->ChangeSequence("CharacterArmature|Idle");
 
-		pAnimation->SetLoop("CharacterArmature|Idle");
-		pAnimation->SetLoop("CharacterArmature|Run");
+		pAnimation->SetLoop("mixamo.com");
+		/*pAnimation->SetLoop("CharacterArmature|Run");
 		pAnimation->SetLoop("CharacterArmature|Run_Back");
 		pAnimation->SetLoop("CharacterArmature|Run_Left");
 		pAnimation->SetLoop("CharacterArmature|Run_Right");
@@ -642,10 +657,7 @@ namespace Client
 
 		pAnimation->SetNextSequence("CharacterArmature|Roll", "CharacterArmature|Run");
 		pAnimation->SetNextSequence("CharacterArmature|Sword_Slash", "CharacterArmature|Idle");
-		pAnimation->SetNextSequence("CharacterArmature|HitRecieve", "CharacterArmature|Idle");
-
-		FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
-		FindAndAddBind<Engine::DepthStencilState>("OutLineMask");
+		pAnimation->SetNextSequence("CharacterArmature|HitRecieve", "CharacterArmature|Idle");*/
 
 		m_pBody = CreateBindable<Engine::ColliderOBB>("PlayerBody");
 
@@ -672,7 +684,7 @@ namespace Client
 
 		m_pTrail = GetScene()->CreateDrawable<Trail>("Trail", GetScene()->FindLayer(DEFAULT_LAYER), 10);
 
-		for (int i = 0; i < 77; ++i)
+		/*for (int i = 0; i < 77; ++i)
 		{
 			std::string strNotify = "trail";
 
@@ -789,7 +801,7 @@ namespace Client
 			{
 				m_pFootRSound->Play();
 			}
-		);
+		);*/
 
 		return true;
 	}
@@ -853,9 +865,9 @@ namespace Client
 		{
 			const Engine::Vector3& vPlayerPos = pTransform->GetPosition();
 
-			float fHeight = m_pTerrain->GetTerrainHeight(vPlayerPos);
+			float fHeight = m_pTerrain ? m_pTerrain->GetTerrainHeight(vPlayerPos) : 0.f;
 
-			float fNextHeight = m_pTerrain->GetTerrainHeight(vPlayerPos + vDir);
+			float fNextHeight = m_pTerrain ? m_pTerrain->GetTerrainHeight(vPlayerPos + vDir) : 0.f;
 
 			vDir.y = fNextHeight - fHeight;
 

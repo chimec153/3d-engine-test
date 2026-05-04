@@ -30,6 +30,7 @@ namespace Engine
 		, fTime(seq.fTime)
 		, fMaxTime(seq.fMaxTime)
 		, m_tCBuffer(seq.m_tCBuffer)
+		, m_bLoop(seq.m_bLoop)
 	{
 		for (int i = 0; i < static_cast<int>(m_vecInfo.size()); ++i)
 		{
@@ -308,8 +309,8 @@ namespace Engine
 		m_tCBuffer.vRootPos = vRootPos;
 
 #ifdef _DEBUG
-		/*std::vector<TRANSFORM> vecSrc(m_pBuffer->GetCount());
-		m_pBuffer->DebugBuffer(&vecSrc.front(), 0, sizeof(TRANSFORM));*/
+		std::vector<TRANSFORM> vecSrc(m_pBuffer->GetCount());
+		m_pBuffer->ReadBuffer(&vecSrc[0], 0, sizeof(TRANSFORM) * m_pBuffer->GetCount());
 #endif
 		if (m_pBuffer)
 		{

@@ -844,7 +844,7 @@ namespace Engine
 				FBXKEYFRAME tKeyFrame;
 
 				fbxsdk::FbxAMatrix tNodeMatrix;
-
+				
 				GetGlobalMatrix(pNode, j - iStart, tTime, tNodeMatrix);
 
 				fbxsdk::FbxAMatrix matOffset = matConvert * tNodeMatrix * matConvert.Inverse();
@@ -1054,7 +1054,7 @@ namespace Engine
 
 				fbxsdk::FbxAMatrix matS;
 
-				matS.SetS({ vecScale[i].x, vecScale[i].y, vecScale[i].z ,0.f });
+				matS.SetS({ vecScale[i].x, vecScale[i].y, vecScale[i].z,0.f });
 
 				fbxsdk::FbxAMatrix matR;
 
@@ -1131,7 +1131,10 @@ namespace Engine
 
 					time.SetFrame(iFrame, m_vecSequence[iAnimStackIndex].eTimeMode);
 
-					m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[iFrame].dTime = time.GetSecondDouble();
+					if (m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame.size() > iFrame)
+					{
+						m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[iFrame].dTime = time.GetSecondDouble();
+					}
 
 					vecPos[iFrame].x = fX;
 				}

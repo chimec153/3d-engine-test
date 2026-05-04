@@ -46,10 +46,7 @@ namespace Engine
 		, m_pBoneCBuffer(animation.m_pBoneCBuffer)
 		, m_bStop(animation.m_bStop)
 	{
-		std::unordered_map<std::string, PSEQUENCEINFO>::const_iterator iter = animation.m_mapSequence.begin();
-		std::unordered_map<std::string, PSEQUENCEINFO>::const_iterator iterEnd = animation.m_mapSequence.end();
-
-		for (; iter != iterEnd; ++iter)
+		for (auto iter = animation.m_mapSequence.begin(), iterEnd = animation.m_mapSequence.end(); iter != iterEnd; ++iter)
 		{
 			PSEQUENCEINFO pInfo = dbg_new SEQUENCEINFO;
 
@@ -107,11 +104,14 @@ namespace Engine
 			{
 				for (int j = 0; j < pPrevInfo->vecJoint[i].vecFrame.size(); ++j)
 				{
-					if (pPrevInfo->vecJoint[i].vecFrame[j].dTime == pNewInfo->vecJoint[i].vecFrame[j].dTime)
+					if (pNewInfo->vecJoint[i].vecFrame.size() > j)
 					{
-						assert(pPrevInfo->vecJoint[i].vecFrame[j].vPos == pNewInfo->vecJoint[i].vecFrame[j].vPos);
-						assert(pPrevInfo->vecJoint[i].vecFrame[j].vScale == pNewInfo->vecJoint[i].vecFrame[j].vScale);
-						assert(pPrevInfo->vecJoint[i].vecFrame[j].vQueternion == pNewInfo->vecJoint[i].vecFrame[j].vQueternion);
+						if (pPrevInfo->vecJoint[i].vecFrame[j].dTime == pNewInfo->vecJoint[i].vecFrame[j].dTime)
+						{
+							assert(pPrevInfo->vecJoint[i].vecFrame[j].vPos == pNewInfo->vecJoint[i].vecFrame[j].vPos);
+							assert(pPrevInfo->vecJoint[i].vecFrame[j].vScale == pNewInfo->vecJoint[i].vecFrame[j].vScale);
+							assert(pPrevInfo->vecJoint[i].vecFrame[j].vQueternion == pNewInfo->vecJoint[i].vecFrame[j].vQueternion);
+						}
 					}
 				}
 			}
@@ -232,10 +232,7 @@ namespace Engine
 
 	void Animation::DeleteSocket(std::shared_ptr<JointSocket> pSocket)
 	{
-		std::list<std::shared_ptr<JointSocket>>::iterator iter = m_SocketList.begin();
-		std::list<std::shared_ptr<JointSocket>>::iterator iterEnd = m_SocketList.end();
-
-		for (; iter != iterEnd; ++iter)
+		for (auto iter = m_SocketList.begin(), iterEnd = m_SocketList.end(); iter != iterEnd; ++iter)
 		{
 			if ((*iter) == pSocket)
 			{
@@ -711,10 +708,40 @@ namespace Engine
 
 		m_pComputeShader->Dispatch(iJointCount / 32 + static_cast<bool>((iJointCount) % 32));
 
-#ifdef _DEBUG
-		/*std::vector<Matrix> matFinal(iJointCount);
+		int iFrame = m_pCurrentSequence->pSequence->GetBoneInfo().iFrame;
 
-		m_pFinalBuffer->ReadBuffer(&matFinal.front(), 0, 64 * iJointCount);*/
+		auto pSequenceInfo = m_pCurrentSequence->pSequence->GetSequenceInfo();
+
+		//std::vector<Matrix> vecMatrix(pSequenceInfo->vecJoint.size());
+		//std::vector<Vector3> vecPos;
+
+		//for (size_t i = 0, iSize = pSequenceInfo->vecJoint.size(); i < iSize; ++i)
+		//{
+		//	Vector3 vPos = pSequenceInfo->vecJoint[i].vecFrame[0].vPos - pSequenceInfo->vecJoint[0].vecFrame[0].vPos;
+		//	vecPos.push_back(vPos);
+		//	Matrix matGlobalTransform = 
+		//		//Matrix::Scaling(pSequenceInfo->vecJoint[i].vecFrame[iFrame].vScale) *
+		//		//Matrix::Rotation(pSequenceInfo->vecJoint[i].vecFrame[iFrame].vQueternion) *
+		//		//Matrix::TranslateFromVector();
+		//		Matrix::TranslateFromVector(vPos);
+
+		//	//vecMatrix[i] = m_pSkeleton->GetBones()[i]->matInvBindPose * matGlobalTransform;
+		//	vecMatrix[i] = m_pSkeleton->GetBones()[i]->matInvBindPose * matGlobalTransform;
+
+		//	//vecMatrix[i].Inverse();
+
+		//	vecMatrix[i].Transpose();
+		//}
+
+		//m_pMidBuffer->WriteData(&vecMatrix[0], 0, sizeof(Matrix) * pSequenceInfo->vecJoint.size());
+
+#ifdef _DEBUG
+		std::vector<Matrix> matFinal(iJointCount);
+
+		m_pFinalBuffer->ReadBuffer(&matFinal.front(), 0, sizeof(Matrix) * iJointCount);
+		std::vector<Matrix> matMid(iJointCount);
+
+		m_pMidBuffer->ReadBuffer(&matMid[0], 0, sizeof(Matrix) * iJointCount);
 #endif
 
 		m_pCurrentSequence->pSequence->ResetResource();
@@ -817,7 +844,7 @@ namespace Engine
 			vecKeyFrame[i][2].w = pPos[i].z;
 		}
 
-		m_pPoseBuffer->WriteData(&vecKeyFrame.front(), 0, sizeof(Matrix)* m_pSkeleton->GetBoneCount());
+		//m_pPoseBuffer->WriteData(&vecKeyFrame.front(), 0, sizeof(Matrix)* m_pSkeleton->GetBoneCount());
 
 		for (int i = 0; i < m_pSkeleton->GetBoneCount(); ++i)
 		{
@@ -828,7 +855,7 @@ namespace Engine
 			vecKeyFrame[i].Transpose();
 		}
 
-		m_pMidBuffer->WriteData(&vecKeyFrame.front(), 0, sizeof(Matrix) * m_pSkeleton->GetBoneCount());
+		//m_pMidBuffer->WriteData(&vecKeyFrame.front(), 0, sizeof(Matrix) * m_pSkeleton->GetBoneCount());
 
 		m_pFinalBuffer->SetUAV(0);
 
@@ -847,6 +874,11 @@ namespace Engine
 		m_pMidBuffer->ResetSRV(30);
 
 		m_pFinalBuffer->ResetUAV(0);
+
+#ifdef _DEBUG
+		std::vector<Matrix> vecFinal(iJointCount);
+		m_pFinalBuffer->ReadBuffer(&vecFinal[0], 0, sizeof(Matrix) * iJointCount);
+#endif
 	}
 	const std::unordered_map<std::string, Animation::PSEQUENCEINFO>& Animation::GetSequences() const
 	{

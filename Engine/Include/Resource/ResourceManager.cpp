@@ -184,7 +184,6 @@ namespace Engine
 			std::shared_ptr<Sequence> pSequence = CreateSequence(vecSequence[j].strTag);
 
 			pSequence->SetSequance(vecSequence[j].vecBoneKeyFrame);
-
 			//pSequence->SetSkeleton(pSkeleton);
 		}
 	}

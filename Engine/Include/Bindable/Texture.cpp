@@ -165,7 +165,7 @@ namespace Engine
 		{
 			if (FAILED(DirectX::LoadFromDDSFile(strFullPath, DirectX::DDS_FLAGS_NONE, nullptr, image)))
 			{
-				assert(false);
+				//assert(false);
 				return false;
 			}
 		}
@@ -174,7 +174,7 @@ namespace Engine
 		{
 			if (FAILED(DirectX::LoadFromTGAFile(strFullPath, nullptr, image)))
 			{
-				assert(false);
+				//assert(false);
 				return false;
 			}
 		}

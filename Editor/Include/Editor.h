@@ -7,7 +7,7 @@
 #ifdef _WIN64
 	#ifdef _DEBUG
 		#pragma comment(lib, "Engine_Debug.lib")
-		#pragma comment(lib, "DebugUtils-d")
+		//#pragma comment(lib, "DebugUtils-d")
 		#pragma comment(lib, "Recast-d")
 	#else
 		#pragma comment(lib, "Engine.lib")

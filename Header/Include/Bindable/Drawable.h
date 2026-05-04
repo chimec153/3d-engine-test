@@ -871,7 +871,7 @@ namespace Engine
 		{
 			m_eBoundingVolumeType = BOUNDING_VOLUME_TYPE::ELIPSOID;
 
-			const std::vector<Vector3>& vRST = GetPrincipalAxis<T>(vecVertex, vecIndex);
+			const std::vector<Vector3>& vRST = GetPrincipalAxis(vecVertex, vecIndex);
 
 			std::vector<unsigned int> _vecIndex;
 

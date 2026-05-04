@@ -86,7 +86,7 @@ namespace Engine
 #ifdef _DEBUG
 		std::vector<Matrix> vecBone(m_pBuffer->GetCount());
 
-		m_pBuffer->ReadBuffer(&vecBone.front(), 0, sizeof(Matrix));
+		m_pBuffer->ReadBuffer(&vecBone[0], 0, sizeof(Matrix) * m_pBuffer->GetCount());
 #endif
 	}
 
@@ -176,6 +176,8 @@ namespace Engine
 		}
 
 		m_pBuffer = std::make_shared<StructuredBuffer>(static_cast<int>(vecMatrix.size()), static_cast<int>(sizeof(Matrix)), &vecMatrix.front());
+
+		m_pBuffer->ReadBuffer(&vecMatrix[0], 0, static_cast<int>(sizeof(Matrix)) * vecMatrix.size());
 
 		m_pJointHierarchy = std::make_shared<StructuredBuffer>(static_cast<int>(vecParent.size()), 4, &vecParent.front());
 	}

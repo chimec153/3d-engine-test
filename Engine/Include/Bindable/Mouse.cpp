@@ -43,10 +43,9 @@ namespace Engine
 
 		std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera();
 
-		const std::shared_ptr<Transform>& pTransform = pCamera->GetTransform();
-
 		if (pCamera)
 		{
+			const std::shared_ptr<Transform>& pTransform = pCamera->GetTransform();
 			const Vector3& vPos = pTransform->GetPosition();
 
 			const Vector3& vAxis = pTransform->GetAxis(AXIS_TYPE::Z);

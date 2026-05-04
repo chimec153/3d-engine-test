@@ -34,7 +34,10 @@ namespace Engine
 				return nullptr;
 			}
 
-			pLayer->AddDrawable(pDrawable);
+			if (pLayer)
+			{
+				pLayer->AddDrawable(pDrawable);
+			}
 
 			return pDrawable;
 		}

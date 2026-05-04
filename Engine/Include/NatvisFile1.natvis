@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+	<!-- 최소 BONE 시각화 -->
+	<Type Name="Engine::BONE">
+		<Expand>
+			<Item Name="strName">strName</Item>
+		</Expand>
+	</Type>
+
+</AutoVisualizer>
