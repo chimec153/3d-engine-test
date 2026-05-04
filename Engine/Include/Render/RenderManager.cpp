@@ -28,6 +28,12 @@
 #include "../Bindable/SkyBox.h"
 #include "../Bindable/ComputeShader.h"
 #include "../Shader/StructuredBuffer.h"
+#include "../Core/Graphics.h"
+#include "../RenderV2/RenderQueue.h"
+#include "../RenderV2/D3D11Context.h"
+#include "../RenderV2/Demo.h"
+#include "../RenderV2/GpuResources.h"
+#include "../RenderV2/EngineShaderCB.h"
 
 namespace Engine
 {
@@ -39,6 +45,12 @@ namespace Engine
 
 	RenderManager::~RenderManager()
 	{
+		// Tear down V2 demo state while D3D11 device is still alive. Window's
+		// shutdown chain destroys RenderManager before Graphics, so this is
+		// the right hook for releasing GpuResources held by long-lived demo
+		// statics. Without this they outlive Graphics and leak as Refcount: 1
+		// in the D3D11 debug layer report.
+		RenderV2::ShutdownDemo();
 	}
 
 	void RenderManager::SetSkyBox(std::shared_ptr<SkyBox> pSkyBox)
@@ -228,6 +240,39 @@ namespace Engine
 
 	bool RenderManager::Init()
 	{
+		Graphics* gfx = Graphics::GetInst();
+		m_pV2Queue = std::make_unique<RenderV2::RenderQueue>();
+		m_pV2Ctx   = std::make_unique<RenderV2::D3D11Context>(gfx->GetDevice(), gfx->GetDeviceContext());
+
+		// Light CB for V2 lit drawables (b1, mirrors shared.hlsl `light`).
+		// Hardcoded directional light for the pilot — overridable by future
+		// V2 light registration once a real light system exists.
+		{
+			auto cb = std::make_shared<RenderV2::ConstantBufferRes>();
+			cb->Create(gfx->GetDevice(), sizeof(RenderV2::EngineLightCB));
+
+			RenderV2::EngineLightCB light = {};
+			light.vLightPos          = {0.0f, 5.0f, -3.0f};
+			light.fConstAttenuation  = 1.0f;
+			light.vLightColor        = {1.0f, 1.0f, 1.0f, 1.0f};
+			light.vLightAmbientColor = {0.25f, 0.25f, 0.25f, 1.0f};
+			light.vLightDir          = {0.3f, -0.7f, 0.5f};   // pointing down-right
+			light.fLinearAttenuation = 0.0f;
+			light.fQuadraticAttenuation = 0.0f;
+			light.iLightType         = 2;   // DIRECTIONAL_LIGHT
+			light.fLightIntensity    = 1.0f;
+
+			ID3D11DeviceContext* ctx = gfx->GetDeviceContext();
+			D3D11_MAPPED_SUBRESOURCE mapped = {};
+			ID3D11Buffer* h = cb->Handle();
+			if (SUCCEEDED(ctx->Map(h, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+			{
+				memcpy(mapped.pData, &light, sizeof(light));
+				ctx->Unmap(h, 0);
+			}
+			m_pV2LightCB = cb;
+		}
+
 		const std::vector<DXGI_FORMAT>& format = { DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM };
 
 		pMRT = std::make_shared<MRT>(format, 11);
@@ -602,6 +647,50 @@ namespace Engine
 #ifdef _DEBUG
 		RenderDebug();
 #endif
+
+		// RenderV2 flush — draws V2-submitted commands directly to the engine's
+		// back buffer + depth buffer after all post-processing/UI. Uses the
+		// engine's "Basic" depth preset (LESS_EQUAL, write enabled) so
+		// complex meshes occlude themselves correctly. Depth is cleared
+		// to 1.0 here because earlier engine passes left it in their own
+		// state.
+		if (m_pV2Queue && m_pV2Ctx && m_pV2Queue->Size() > 0)
+		{
+			Graphics* gfx = Graphics::GetInst();
+			ID3D11DeviceContext* d3dCtx = gfx->GetDeviceContext();
+			ID3D11RenderTargetView* rtv = gfx->GetRTV().Get();
+			ID3D11DepthStencilView* dsv = gfx->GetDSV().Get();
+
+			d3dCtx->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH, 1.0f, 0);
+			d3dCtx->OMSetRenderTargets(1, &rtv, dsv);
+
+			std::shared_ptr<DepthStencilState> dsBasic =
+				StaticFindBindable<DepthStencilState>("Basic");
+			if (dsBasic) dsBasic->Bind();
+
+			// Light CB at PS b1 (engine shader convention). One per frame —
+			// all V2 lit drawables share it. Bound by RenderManager rather
+			// than per-DrawCommand so primitives don't pay for it.
+			if (m_pV2LightCB)
+			{
+				ID3D11Buffer* lightBuf =
+					static_cast<RenderV2::ConstantBufferRes*>(m_pV2LightCB.get())->Handle();
+				d3dCtx->PSSetConstantBuffers(1, 1, &lightBuf);
+			}
+
+			m_pV2Queue->Flush(*m_pV2Ctx);
+			m_pV2Queue->Clear();
+
+			if (dsBasic) dsBasic->PostBind();
+
+			// Unbind V2 vertex buffer at slot 0. Some engine fullscreen
+			// passes (HDR/Bloom/UI null-VS) issue Draw() without setting
+			// their own VB, inheriting whatever was last bound. Leaving
+			// V2's small VB attached triggers DEVICE_DRAW_VERTEX_BUFFER_TOO_SMALL.
+			ID3D11Buffer* nullVB = nullptr;
+			UINT stride = 0, offset = 0;
+			d3dCtx->IASetVertexBuffers(0, 1, &nullVB, &stride, &offset);
+		}
 
 		Clear();
 	}

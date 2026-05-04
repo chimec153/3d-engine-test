@@ -55,6 +55,72 @@ VS_Out VS(VS_In input)
     return output;
 }
 
+// Skinned variant for RenderV2 — same VS_Out as VS, but transforms position
+// / normal / tangent through up to 4 weighted bone matrices (g_vecBones at
+// t30, declared in shared.hlsl). Mirrors anisotropic_microfacet's VS_Skin
+// pattern. Used by Engine::RenderV2::Drawables::Mesh.
+struct VS_SkinIn
+{
+    float4 tangent      : Tangent;
+    float4 blendIndex   : BlendIndices;
+    float3 pos          : Position;
+    float3 normal       : Normal;
+    float3 blendWeight  : BlendWeight;
+    float2 uv           : Texcoord;
+};
+
+VS_Out VSSkin(VS_SkinIn input)
+{
+    VS_Out output = (VS_Out) 0.f;
+
+    float fW[4] = {
+        input.blendWeight[0], input.blendWeight[1], input.blendWeight[2],
+        1.f - input.blendWeight[0] - input.blendWeight[1] - input.blendWeight[2]
+    };
+
+    float4 skinnedPos = 0.f;
+    float3 skinnedNormal = 0.f;
+    float3 skinnedTangent = 0.f;
+    [unroll]
+    for (int i = 0; i < 4; ++i)
+    {
+        int idx = (int) input.blendIndex[i];
+        skinnedPos     += mul(float4(input.pos, 1.f), g_vecBones[idx]) * fW[i];
+        skinnedNormal  += mul(input.normal,        (float3x3) g_vecBones[idx]) * fW[i];
+        skinnedTangent += mul(input.tangent.xyz,   (float3x3) g_vecBones[idx]) * fW[i];
+    }
+
+    output.pos = mul(skinnedPos, g_matTransform);
+    output.uv  = input.uv;
+
+    float3 viewPos       = mul(skinnedPos, g_matWorldView).xyz;
+    float3 viewNormal    = normalize(mul(skinnedNormal,  (float3x3) g_matWorldView));
+    float3 viewTangent   = normalize(mul(skinnedTangent, (float3x3) g_matWorldView));
+    float3 viewBitangent = cross(viewNormal, viewTangent) * input.tangent.w;
+
+    float3 vPointToLight = 0.f;
+    float3 lightDir      = 0.f;
+    if (g_iLightType == POINT_LIGHT)
+    {
+        vPointToLight = g_vLightPos - viewPos;
+    }
+    else if (g_iLightType == SPOT_LIGHT)
+    {
+        vPointToLight = g_vLightPos - viewPos;
+        lightDir = -g_vLightDir;
+        output.lightDir = normalize(float3(dot(lightDir, viewTangent), dot(lightDir, viewBitangent), dot(lightDir, viewNormal)));
+    }
+    else if (g_iLightType == DIRECTIONAL_LIGHT)
+    {
+        vPointToLight = -g_vLightDir;
+    }
+
+    output.light = float3(dot(vPointToLight, viewTangent), dot(vPointToLight, viewBitangent), dot(vPointToLight, viewNormal));
+    output.view  = normalize(float3(dot(-viewPos, viewTangent), dot(-viewPos, viewBitangent), dot(-viewPos, viewNormal)));
+
+    return output;
+}
+
 float4 PS(VS_Out input) : SV_Target
 {
     float4 T = g_Texture.Sample(g_sPoint, input.uv);
