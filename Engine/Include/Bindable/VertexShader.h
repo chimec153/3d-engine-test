@@ -31,6 +31,15 @@ namespace Engine
     public:
         void GetAndBind();
         void BindEnd();
+
+        // Sort-by-state cache. RenderManager calls ResetBoundCache() at the
+        // start of each pass; within a pass, Bind() skips redundant VSSet
+        // when the same shader is requested back-to-back, and PostBind()
+        // leaves the shader bound for the next drawable.
+        static void ResetBoundCache();
+
+    private:
+        static ID3D11VertexShader* s_pBoundVS;
     };
 
 }

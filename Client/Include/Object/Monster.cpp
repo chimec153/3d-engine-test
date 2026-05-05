@@ -142,11 +142,14 @@ namespace Client
 		GetTransform()->SetScale(0.25f, 0.25f, 0.25f);
 		GetTransform()->SetPosition(5.f, 30.f, 5.f);
 
-		std::shared_ptr<Engine::Bindable> pTerrain = std::static_pointer_cast<Engine::NavMesh>(GetScene()->FindBindable("Terrain"));
+		std::shared_ptr<Engine::Bindable> pTerrain = GetScene()->FindBindable("Terrain");
 
 		if (pTerrain)
 		{
-			std::shared_ptr<Engine::NavMesh> pNavMesh = std::static_pointer_cast<Engine::NavMesh>(pTerrain->FindChild(Engine::BINDABLE_TYPE::NAV_MESH));
+			// Phase B.4 — NavMesh is now a Component, not a Bindable child.
+			// Terrain is a Drawable, so it owns the NavMesh in m_ComponentChildren.
+			auto pTerrainDrawable = std::static_pointer_cast<Engine::Drawable>(pTerrain);
+			std::shared_ptr<Engine::NavMesh> pNavMesh = std::static_pointer_cast<Engine::NavMesh>(pTerrainDrawable->FindComponent(Engine::COMPONENT_TYPE::NAV_MESH));
 
 			if (pNavMesh)
 			{
@@ -154,7 +157,7 @@ namespace Client
 			}
 		}
 
-		m_pBody = CreateBindable<Engine::ColliderSphere>(GetTag() + "body");
+		m_pBody = CreateComponent<Engine::ColliderSphere>(GetTag() + "body");
 
 		m_pBody->SetRadius(0.5f);
 
@@ -164,7 +167,7 @@ namespace Client
 
 		std::shared_ptr<Attackable> pClaw = GetScene()->CreateDrawable<Attackable>("Claw", GetScene()->FindLayer(DEFAULT_LAYER), 30, 5, 10);
 
-		m_pClawBody = pClaw->CreateBindable<Engine::ColliderOBB>(GetTag() + "clawbody");
+		m_pClawBody = pClaw->CreateComponent<Engine::ColliderOBB>(GetTag() + "clawbody");
 
 		m_pClawBody->SetScaleOffset({ 0.2f, 0.1f, 0.2f });
 
@@ -182,7 +185,7 @@ namespace Client
 			}
 		);
 
-		m_pAttackSound = pClaw->CreateBindable<Engine::SoundBindable>("attack sound", "melee sound");
+		m_pAttackSound = pClaw->CreateComponent<Engine::SoundBindable>("attack sound", "melee sound");
 
 		std::shared_ptr<Engine::Notify> pAttackNotify = pFrogAnimation->AddNotify("FrogArmature|Frog_Attack", "Attack", 0.5f);
 
@@ -262,7 +265,8 @@ namespace Client
 	{
 		if (pDest->GetTag() == "sword_body")
 		{
-			Attackable* pWeapon = static_cast<Attackable*>(pDest->GetParent());
+			// Phase B.4 — Collider migrated to Component; use GetOwner.
+			Attackable* pWeapon = static_cast<Attackable*>(pDest->GetOwner());
 
 			if (pWeapon->Attack(this))
 			{

@@ -12,10 +12,10 @@
 namespace Engine
 {
 	Mouse::Mouse() :
-		Drawable()
+		Component()
 		, m_pLineCollider()
 	{
-		SetBindableType(BINDABLE_TYPE::MOUSE);
+		SetComponentType(COMPONENT_TYPE::MOUSE);
 	}
 
 	bool Mouse::Init()
@@ -25,7 +25,10 @@ namespace Engine
 			return false;
 		}
 
-		m_pLineCollider = CreateBindable<class ColliderLine>("MouseLine");
+		m_pTransform = std::make_shared<Transform>();
+		AddChild(m_pTransform);
+
+		m_pLineCollider = CreateComponent<class ColliderLine>("MouseLine");
 
 		if (!m_pLineCollider)
 		{
@@ -35,6 +38,11 @@ namespace Engine
 		m_pLineCollider->SetChannel(static_cast<COLLISION_CHANNEL>(static_cast<int>(COLLISION_CHANNEL::NORMAL) | static_cast<int>(COLLISION_CHANNEL::UI)));
 
 		return true;
+	}
+
+	std::shared_ptr<Component> Mouse::Clone()
+	{
+		return std::make_shared<Mouse>();
 	}
 
 	void Mouse::Update(float fDeltaTime)
@@ -56,7 +64,7 @@ namespace Engine
 
 			const Vector3& vWorldPos = pCamera->CameraPosToWorldPos({ iX, iY });
 
-			GetTransform()->SetPosition(vWorldPos);
+			m_pTransform->SetPosition(vWorldPos);
 
 			m_pLineCollider->SetStartOffset(vWorldPos);
 
@@ -73,6 +81,8 @@ namespace Engine
 	{
 		__super::Load(pFile);
 
+		// Phase B.4/B.6 — Collider is a Component, Mouse is a Component;
+		// look up via Component::FindChild (Mouse's child list).
 		m_pLineCollider = std::static_pointer_cast<ColliderLine>(FindChild("MouseLine"));
 	}
 }

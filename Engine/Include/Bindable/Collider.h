@@ -1,9 +1,15 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
+#include "../Types.h"
 namespace Engine
 {
+    // Phase B.4 — Collider migrated from Bindable to Component. Pure
+    // collision-detection logic; debug-visualization Drawables (used by
+    // OBB/Sphere etc.) are owned as direct members and re-parented onto
+    // the owning Drawable's m_ChildList<Bindable> when the Collider is
+    // attached, so the existing debug-render path keeps working.
     class ENGINE_DLL Collider :
-        public Bindable
+        public Component
     {
     protected:
         Collider();
@@ -16,6 +22,15 @@ namespace Engine
         std::list<class Collider*> m_PrevColliderList;
         std::function<void(Collider*, Collider*, float)>    m_CallBack[static_cast<int>(COLLISION_TYPE::END)];
         COLLISION_CHANNEL m_eChannel;
+
+    protected:
+        // Phase B.4 — debug visualization Drawable (created in the subtype
+        // ctor for OBB/Sphere; null for Line/Mesh which don't draw).
+        // Drawable::AddChild(Component) inspects this and, if non-null,
+        // re-parents it onto the owning Drawable's Bindable child list.
+        std::shared_ptr<class Drawable> m_pDebugDrawable;
+    public:
+        std::shared_ptr<class Drawable> GetDebugDrawable() const { return m_pDebugDrawable; }
 
     public:
         const COLLIDER_TYPE GetColliderType()   const;
@@ -46,7 +61,6 @@ namespace Engine
     public:
         virtual void Save(FILE* pFile) override;
         virtual void Load(FILE* pFile) override;
-
     };
 
 }

@@ -4,15 +4,17 @@
 namespace Engine
 {
 	Collider::Collider() :
-		Bindable()
+		Component()
 		, m_eColliderType(COLLIDER_TYPE::NONE)
 		, m_eChannel(COLLISION_CHANNEL::NORMAL)
 	{
-		SetObjectType(OBJECT_TYPE::COLLIDER);
+		// OBJECT_TYPE was a Bindable concept; on the Component side the
+		// "this is a collider" tag lives in m_eColliderType and the
+		// COMPONENT_TYPE enum (per-subtype). No SetObjectType call needed.
 	}
 
 	Collider::Collider(const Collider& collider) :
-		Bindable(collider)
+		Component(collider)
 		, m_eColliderType(collider.m_eColliderType)
 		, m_vCross()
 		, m_PrevColliderList()

@@ -1,9 +1,11 @@
 #include "ColliderOBB.h"
 #include "../Collision/Collision.h"
 #include "ColliderSphere.h"
+#include "Drawable.h"
 #include "Transform.h"
 #include "ColliderLine.h"
 #include "Camera.h"
+#include "BindableManager.h"
 #ifdef _DEBUG
 #include "Mesh.h"
 #include "RasterizerState.h"
@@ -18,10 +20,14 @@
 Engine::ColliderOBB::ColliderOBB()	:
 	Collider()
 {
-	SetBindableType(BINDABLE_TYPE::COLLIDER_OBB);
+	SetComponentType(COMPONENT_TYPE::COLLIDER_OBB);
 	SetColliderType(COLLIDER_TYPE::OBB);
 #ifdef _DEBUG
-	std::shared_ptr<Drawable> pDebugBox = CreateBindable<Drawable>("debug_obb");
+	// Phase B.4 — debug Drawable as direct member; re-parented onto
+	// owning Drawable when this Collider is attached.
+	auto pDebugBox = std::make_shared<Drawable>();
+	pDebugBox->SetTag("debug_obb");
+	pDebugBox->Init();
 	pDebugBox->FindAndAddBind<Mesh>("Box");
 	pDebugBox->FindAndAddBind<RasterizerState>(WIREFRAME);
 	pDebugBox->FindAndAddBind<Topology>("TriangleList");
@@ -33,14 +39,13 @@ Engine::ColliderOBB::ColliderOBB()	:
 	m_pDebugTransform = pDebugBox->GetTransform();
 
 	std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
-
 	m_pDebugMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
-
 	pDebugBox->AddChild(m_pDebugMaterial);
 
 	pDebugBox->NotUseShadow();
-
 	pDebugBox->SetRenderLayer(RENDER_LAYER::ALPHA);
+
+	m_pDebugDrawable = pDebugBox;
 #endif
 }
 
@@ -52,14 +57,12 @@ Engine::ColliderOBB::ColliderOBB(const ColliderOBB& collider)	:
 	, m_vAxisOffset(collider.m_vAxisOffset)
 {
 #ifdef _DEBUG
-	std::shared_ptr<Drawable> pDebugBox = std::static_pointer_cast<Drawable>(FindChild("debug_obb"));
-
-	if (pDebugBox)
-	{
-		m_pDebugTransform = pDebugBox->GetTransform();
-
-		m_pDebugMaterial = pDebugBox->GetMaterial();
-	}
+	// Collider's copy ctor doesn't clone m_pDebugDrawable — clones share
+	// nothing visual with the original. Re-derive the cached references
+	// from the (now non-existent for this clone) debug drawable: leave
+	// them null, the clone gets its own debug drawable on next attach.
+	m_pDebugTransform = nullptr;
+	m_pDebugMaterial = nullptr;
 #endif
 }
 
@@ -128,11 +131,11 @@ void Engine::ColliderOBB::PostUpdate(float fDeltaTime)
 {
 	__super::PostUpdate(fDeltaTime);
 
-	Bindable* pParent = GetParent();
-
-	if (pParent)
+	// Phase B.4 — owning Drawable via Component::GetOwner instead of
+	// the old Bindable parent-chain lookup.
+	if (Drawable* pOwner = GetOwner())
 	{
-		std::shared_ptr<Transform> pTransform = static_cast<Drawable*>(pParent)->GetTransform();
+		std::shared_ptr<Transform> pTransform = pOwner->GetTransform();
 
 		if (pTransform)
 		{
@@ -232,18 +235,17 @@ void Engine::ColliderOBB::PreDraw(float fDeltaTime)
 {
 	__super::PreDraw(fDeltaTime);
 #ifdef _DEBUG
-	if (GetPrevColliderList().size())
+	if (m_pDebugMaterial)
 	{
-		m_pDebugMaterial->SetDiffuseColor(1.f, 0.f, 0.f, 1.f);
-	}
-	else
-	{
-		m_pDebugMaterial->SetDiffuseColor(0.f, 1.f, 0.f, 1.f);
+		if (GetPrevColliderList().size())
+			m_pDebugMaterial->SetDiffuseColor(1.f, 0.f, 0.f, 1.f);
+		else
+			m_pDebugMaterial->SetDiffuseColor(0.f, 1.f, 0.f, 1.f);
 	}
 #endif
 }
 
-std::shared_ptr<Engine::Bindable> Engine::ColliderOBB::Clone()
+std::shared_ptr<Engine::Component> Engine::ColliderOBB::Clone()
 {
 	return std::make_shared<ColliderOBB>(*this);
 }

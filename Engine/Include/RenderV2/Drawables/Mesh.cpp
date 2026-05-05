@@ -5,6 +5,9 @@
 #include "../../Core/Graphics.h"        // immediate context for bone-buffer update
 #include "../../Bindable/FbxLoader.h"
 #include "../../Bindable/Drawable.h"   // for static SetTangent helper
+#include "../../Bindable/Animation.h"  // engine compute-shader skinning
+#include "../../Animation/Sequence.h"
+#include "../../Resource/ResourceManager.h"
 #include "../../Types.h"
 
 #include <fbxsdk/scene/geometry/fbxlayer.h>
@@ -80,17 +83,41 @@ namespace Engine::RenderV2::Drawables
 
 	void Mesh::SetPosition(const XMFLOAT3& pos)   { if (m_transform) m_transform->position = pos; }
 	void Mesh::SetScale(float u)                  { if (m_transform) m_transform->scale = { u, u, u }; }
+	void Mesh::SetRotation(const XMFLOAT3& r)     { if (m_transform) m_transform->rotation = r; }
 
-	bool Mesh::Init(ID3D11Device* device, const wchar_t* fbxFile)
+	bool Mesh::Init(ID3D11Device* device, const wchar_t* fbxFile,
+	                const std::string& skeletonTag, const std::string& sequenceTag)
 	{
 		using namespace mesh_detail;
 
 		m_transform = std::make_shared<TransformComp>();
+		// Engine FbxLoader's matConvert (Y/Z swap) leaves loaded FBX assets
+		// upside-down relative to the rendered camera convention. Apply a
+		// 180° X-axis pitch by default; callers can override via SetRotation
+		// after Init if their content already accounts for the flip.
+		m_transform->rotation = { 3.14159265f, 0.0f, 0.0f };
 
-		// --- 1. Load FBX --------------------------------------------------
+		// --- 1. Load FBX or OBJ ------------------------------------------
+		// Reuses the engine's FbxLoader (handles both formats — FBX through
+		// the SDK, OBJ via its own parser). Extension dispatch.
 		FbxLoader loader;
-		if (!loader.Init() || !loader.LoadFile(fbxFile, MESH_PATH))
-			return false;
+		if (!loader.Init()) return false;
+		const size_t fnLen = wcslen(fbxFile);
+		const wchar_t* ext = (fnLen >= 4) ? (fbxFile + fnLen - 4) : L"";
+		bool loaded = false;
+		if (_wcsicmp(ext, L".obj") == 0)
+		{
+			if (!loader.LoadOBJ(fbxFile, MESH_PATH))
+			{
+				return false;
+			}
+			loaded = !loader.GetVertexData(0).empty();
+		}
+		else
+		{
+			loaded = loader.LoadFile(fbxFile, MESH_PATH);
+		}
+		if (!loaded) return false;
 
 		std::vector<VertexStandard>& srcVerts = loader.GetVertexData(0);   // mutable: tangent fill below
 		const auto& srcIndexGroups = loader.GetIndexData(0);
@@ -306,6 +333,47 @@ namespace Engine::RenderV2::Drawables
 		m_proxy.psId          = 2;
 		m_proxy.layer         = 0;
 
+		// Optional: engine Animation (compute-shader skinning). Skeleton +
+		// sequence must already be registered via ResourceManager before
+		// Mesh::Init runs. If the tag is missing the Animation falls back
+		// off (bind would otherwise crash on null compute buffers); the V2
+		// CPU path still runs so the model stays visible (just unanimated).
+		if (!skeletonTag.empty())
+		{
+			auto anim = std::make_shared<Engine::Animation>();
+			anim->SetSkeleton(skeletonTag);
+			if (!anim->GetSkeleton())
+			{
+				char buf[256];
+				sprintf_s(buf, "[RenderV2::Mesh] skeletonTag '%s' not registered — Animation disabled\n",
+				          skeletonTag.c_str());
+				::OutputDebugStringA(buf);
+			}
+			else
+			{
+				// Check ResourceManager directly first — Animation's
+				// FindAndAddSequence asserts on missing tag rather than
+				// returning gracefully.
+				if (!sequenceTag.empty())
+				{
+					auto pSeq = Engine::ResourceManager::GetInst()->FindSequence(sequenceTag);
+					if (pSeq)
+					{
+						anim->FindAndAddSequence(sequenceTag);
+						anim->ChangeSequence(sequenceTag);
+					}
+					else
+					{
+						char buf[256];
+						sprintf_s(buf, "[RenderV2::Mesh] sequenceTag '%s' not registered\n",
+						          sequenceTag.c_str());
+						::OutputDebugStringA(buf);
+					}
+				}
+				m_engineAnimation = anim;
+			}
+		}
+
 		m_ready = true;
 		return true;
 	}
@@ -315,8 +383,14 @@ namespace Engine::RenderV2::Drawables
 		if (!m_transform) return;
 		m_transform->rotation.y += dt * 0.4f;
 
-		if (m_animMaxTime > 0.0f)
+		if (m_engineAnimation)
 		{
+			// Engine path advances time + (next frame) compute pose.
+			m_engineAnimation->Update(dt);
+		}
+		else if (m_animMaxTime > 0.0f)
+		{
+			// V2 fallback CPU path (current — produces upside-down anim).
 			m_animTime += dt;
 			if (m_animTime >= m_animMaxTime)
 				m_animTime = fmodf(m_animTime, m_animMaxTime);
@@ -327,55 +401,59 @@ namespace Engine::RenderV2::Drawables
 	{
 		if (!m_ready) return;
 
-		// Per-bone TRS interpolation between adjacent keyframes, then
-		// final = invBindPose * currentBoneTransform. Keyframes are already
-		// mesh-space (FbxLoader composed the parent chain), so per-bone
-		// independent interpolation is sufficient.
-		for (int b = 0; b < m_boneCount; ++b)
+		// Two paths:
+		// (1) Engine Animation present  → its compute shader runs at flush
+		//     time (preDraw hook), binds FinalBuffer at t30. We don't bind
+		//     our own bone buffer.
+		// (2) Fallback (no Animation)   → CPU TRS evaluation → upload
+		//     identity-ish bones to our own StructuredBuffer at t30.
+		const bool useEngineAnim = (m_engineAnimation != nullptr);
+
+		if (!useEngineAnim)
 		{
-			const BoneAnim& a = m_anim[b];
-			XMMATRIX bone;
-			if (a.matrices.empty())
+			for (int b = 0; b < m_boneCount; ++b)
 			{
-				bone = XMMatrixIdentity();
+				const BoneAnim& a = m_anim[b];
+				XMMATRIX bone;
+				if (a.matrices.empty())
+				{
+					bone = XMMatrixIdentity();
+				}
+				else if (a.matrices.size() == 1)
+				{
+					bone = a.matrices[0];
+				}
+				else
+				{
+					size_t i = 0;
+					while (i + 1 < a.times.size() && a.times[i + 1] < m_animTime) ++i;
+					size_t j = (i + 1 < a.times.size()) ? i + 1 : i;
+					float t0 = a.times[i], t1 = a.times[j];
+					float alpha = (t1 > t0) ? (m_animTime - t0) / (t1 - t0) : 0.0f;
+					if (alpha < 0.0f) alpha = 0.0f; else if (alpha > 1.0f) alpha = 1.0f;
+
+					XMVECTOR s0, r0, p0, s1, r1, p1;
+					XMMatrixDecompose(&s0, &r0, &p0, a.matrices[i]);
+					XMMatrixDecompose(&s1, &r1, &p1, a.matrices[j]);
+					XMVECTOR s = XMVectorLerp(s0, s1, alpha);
+					XMVECTOR r = XMQuaternionSlerp(r0, r1, alpha);
+					XMVECTOR p = XMVectorLerp(p0, p1, alpha);
+					bone = XMMatrixAffineTransformation(s, XMVectorZero(), r, p);
+				}
+
+				XMMATRIX final = m_invBindPose[b] * bone;
+				XMStoreFloat4x4(&m_boneMatrices[b], XMMatrixTranspose(final));
 			}
-			else if (a.matrices.size() == 1)
+
+			auto* bbRes = static_cast<StructuredBufferRes*>(m_proxy.boneBufferVS.get());
+			if (bbRes)
 			{
-				bone = a.matrices[0];
+				ID3D11DeviceContext* ctxImm = nullptr;
+				Graphics::GetInst()->GetDevice()->GetImmediateContext(&ctxImm);
+				bbRes->Update(ctxImm, m_boneMatrices.data(),
+				              m_boneMatrices.size() * sizeof(XMFLOAT4X4));
+				ctxImm->Release();
 			}
-			else
-			{
-				// Find segment containing m_animTime.
-				size_t i = 0;
-				while (i + 1 < a.times.size() && a.times[i + 1] < m_animTime) ++i;
-				size_t j = (i + 1 < a.times.size()) ? i + 1 : i;
-
-				float t0 = a.times[i], t1 = a.times[j];
-				float alpha = (t1 > t0) ? (m_animTime - t0) / (t1 - t0) : 0.0f;
-				if (alpha < 0.0f) alpha = 0.0f; else if (alpha > 1.0f) alpha = 1.0f;
-
-				XMVECTOR s0, r0, p0, s1, r1, p1;
-				XMMatrixDecompose(&s0, &r0, &p0, a.matrices[i]);
-				XMMatrixDecompose(&s1, &r1, &p1, a.matrices[j]);
-				XMVECTOR s = XMVectorLerp(s0, s1, alpha);
-				XMVECTOR r = XMQuaternionSlerp(r0, r1, alpha);
-				XMVECTOR p = XMVectorLerp(p0, p1, alpha);
-				bone = XMMatrixAffineTransformation(s, XMVectorZero(), r, p);
-			}
-
-			XMMATRIX final = m_invBindPose[b] * bone;
-			XMStoreFloat4x4(&m_boneMatrices[b], XMMatrixTranspose(final));
-		}
-
-		// Re-upload bone matrices for this frame.
-		auto* bbRes = static_cast<StructuredBufferRes*>(m_proxy.boneBufferVS.get());
-		if (bbRes)
-		{
-			ID3D11DeviceContext* ctxImm = nullptr;
-			Graphics::GetInst()->GetDevice()->GetImmediateContext(&ctxImm);
-			bbRes->Update(ctxImm, m_boneMatrices.data(),
-			              m_boneMatrices.size() * sizeof(XMFLOAT4X4));
-			ctxImm->Release();
 		}
 
 		XMMATRIX world      = m_transform->World();
@@ -397,6 +475,17 @@ namespace Engine::RenderV2::Drawables
 		DrawCommand cmd  = m_proxy.BuildCommand(&m_cbData, sizeof(m_cbData));
 		cmd.materialData = nullptr;   // material was uploaded once at init
 		cmd.materialSize = 0;
+
+		if (useEngineAnim)
+		{
+			// Engine Animation owns t30 — drop our identity bone buffer.
+			cmd.boneBufferVS = nullptr;
+			// Bind() runs at flush time (compute pass + state). Capture
+			// shared_ptr so the Animation outlives the queued command.
+			std::shared_ptr<Engine::Animation> anim = m_engineAnimation;
+			cmd.preDraw = [anim]() { if (anim) anim->Bind(); };
+		}
+
 		queue.Submit(cmd);
 	}
 }

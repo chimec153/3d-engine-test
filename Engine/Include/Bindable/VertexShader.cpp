@@ -20,14 +20,28 @@ namespace Engine
 	{
 	}
 
+	ID3D11VertexShader* VertexShader::s_pBoundVS = nullptr;
+
+	void VertexShader::ResetBoundCache()
+	{
+		s_pBoundVS = nullptr;
+	}
+
 	void VertexShader::Bind()
 	{
-		Graphics::GetInst()->GetDeviceContext()->VSSetShader(*pVertexShader, nullptr, 0);
+		ID3D11VertexShader* mine = *pVertexShader;
+		if (mine == s_pBoundVS)
+			return;   // sort-by-state win: same shader as last drawable
+		Graphics::GetInst()->GetDeviceContext()->VSSetShader(mine, nullptr, 0);
+		s_pBoundVS = mine;
 	}
 
 	void VertexShader::PostBind()
 	{
-		Graphics::GetInst()->GetDeviceContext()->VSSetShader(nullptr, nullptr, 0);
+		// Intentionally no-op: leave the shader bound for the next drawable
+		// to potentially skip the rebind. RenderManager invalidates the
+		// cache via ResetBoundCache() at pass boundaries so cross-pass state
+		// doesn't leak.
 	}
 
 	std::shared_ptr<Bindable> VertexShader::Clone()

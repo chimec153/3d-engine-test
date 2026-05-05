@@ -21,7 +21,7 @@ namespace Client
 
 		GetTransform()->SetScale(0.001f, 0.001f, 0.001f);
 
-		std::shared_ptr<Engine::ColliderSphere> pSphere = CreateBindable<Engine::ColliderSphere>("bullet_body");
+		std::shared_ptr<Engine::ColliderSphere> pSphere = CreateComponent<Engine::ColliderSphere>("bullet_body");
 
 		pSphere->SetRadius(0.001f);
 		 

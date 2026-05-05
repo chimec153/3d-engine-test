@@ -519,7 +519,7 @@ namespace Editor
 			return;
 		}
 
-		std::shared_ptr<Engine::ColliderMesh> pColliderMesh = pNavigation->CreateBindable<Engine::ColliderMesh>("ColliderMesh");
+		std::shared_ptr<Engine::ColliderMesh> pColliderMesh = pNavigation->CreateComponent<Engine::ColliderMesh>("ColliderMesh");
 
 		pColliderMesh->SetInfo(vecPoint, vecTris);
 
@@ -753,9 +753,17 @@ namespace Editor
 
 						if (pParent)
 						{
-							std::shared_ptr<Engine::NavMesh> pNavMesh = std::static_pointer_cast<Engine::NavMesh>(pParent->FindChild(Engine::BINDABLE_TYPE::NAV_MESH));
+							// Phase B.4 â€” NavMesh migrated to Component; resolve via FindComponent
+							// on the parent (assumed Drawable, which owns NavMesh as a Component).
+							auto* pParentDrawable = dynamic_cast<Engine::Drawable*>(pParent);
+							std::shared_ptr<Engine::NavMesh> pNavMesh = pParentDrawable
+								? std::static_pointer_cast<Engine::NavMesh>(pParentDrawable->FindComponent(Engine::COMPONENT_TYPE::NAV_MESH))
+								: nullptr;
 
-							pPlayer->SetAgent(pNavMesh->CreateAgent(strPlayer, pPlayer->GetTransform(), pSrc->GetCross()));
+							if (pNavMesh)
+							{
+								pPlayer->SetAgent(pNavMesh->CreateAgent(strPlayer, pPlayer->GetTransform(), pSrc->GetCross()));
+							}
 						}
 					}
 
@@ -1527,7 +1535,7 @@ namespace Editor
 						}
 						else
 						{
-							MessageBox(0, TEXT("È®ÀåÀÚ ¸íÀÌ ¿Ã¹Ù¸£Áö ¾Ê½À´Ï´Ù."), TEXT("¿À·ù"), MB_OK);
+							MessageBox(0, TEXT("È®ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ã¹Ù¸ï¿½ï¿½ï¿½ ï¿½Ê½ï¿½ï¿½Ï´ï¿½."), TEXT("ï¿½ï¿½ï¿½ï¿½"), MB_OK);
 						}
 					}
 					else

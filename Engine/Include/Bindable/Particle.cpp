@@ -8,6 +8,7 @@
 #include "GeometryShader.h"
 #include "PixelShader.h"
 #include "Topology.h"
+#include "InputLayout.h"
 #include "BlendState.h"
 #include "DepthStencilState.h"
 #include "Transform.h"
@@ -179,8 +180,16 @@ namespace Engine
 		m_pBlendState->Bind();
 
 		Graphics::GetInst()->GetDeviceContext()->IASetInputLayout(nullptr);
+		// Direct IL/Topology set bypasses the bound caches — invalidate
+		// them so the next drawable's Bind actually re-issues the
+		// IASet* call instead of skipping on a stale cache hit.
+		// Without this, debug colliders / alpha drawables that share
+		// "Standard" IL pointer w/ a previously-bound drawable end up
+		// drawing with no IL → DEVICE_DRAW_INPUTLAYOUT_NOT_SET.
+		InputLayout::ResetBoundCache();
 
 		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+		Topology::ResetBoundCache();
 
 		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
 

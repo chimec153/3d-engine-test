@@ -7,14 +7,14 @@
 namespace Engine
 {
 	SoundBindable::SoundBindable(const std::string& strSound) :
-		Bindable()
+		Component()
 		, m_pSound(ResourceManager::GetInst()->FindSound(strSound))
 	{
-		SetBindableType(BINDABLE_TYPE::SOUND);
+		SetComponentType(COMPONENT_TYPE::SOUND);
 	}
 
 	SoundBindable::SoundBindable(const SoundBindable& tBindable)	:
-		Bindable(tBindable)
+		Component(tBindable)
 		, m_pSound(tBindable.m_pSound)
 	{
 	}
@@ -57,23 +57,20 @@ namespace Engine
 
 		if (m_pSound)
 		{
-			Bindable* pParent = GetParent();
-
-			if (pParent)
+			// Phase B.4 — Component's owner is the attached Drawable.
+			// Set by Drawable::AddChild(shared_ptr<Component>) when this
+			// sound was added to the entity.
+			if (Drawable* pOwner = GetOwner())
 			{
-				if (OBJECT_TYPE::DRAW == pParent->GetObjectType())
+				std::shared_ptr<Transform> pTransform = pOwner->GetTransform();
+				if (pTransform)
 				{
-					std::shared_ptr<Transform> pTransform = static_cast<Drawable*>(pParent)->GetTransform();
-
-					if (pTransform)
-					{
-						m_pSound->SetPosition(pTransform->GetPosition(), pTransform->GetVelocity());
-					}
+					m_pSound->SetPosition(pTransform->GetPosition(), pTransform->GetVelocity());
 				}
 			}
 		}
 	}
-	std::shared_ptr<Bindable> SoundBindable::Clone()
+	std::shared_ptr<Component> SoundBindable::Clone()
 	{
 		return std::make_shared<SoundBindable>(*this);
 	}

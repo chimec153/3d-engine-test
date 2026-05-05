@@ -203,9 +203,14 @@ namespace Engine
 		{
 		case COLLIDER_TYPE::SPHERE:
 		{
-			const Vector3& vNormal = (static_cast<Drawable*>(pSrc->GetParent())->GetTransform()->GetPosition() - pSrc->GetCross()).Normalize();
-
-			m_vDir = m_vDir - m_vDir.Dot(vNormal) * 2.f * vNormal;
+			// Phase B.4 — Collider migrated to Component. Owning Drawable
+			// via Component::GetOwner.
+			Drawable* pSrcOwner = pSrc->GetOwner();
+			if (pSrcOwner && pSrcOwner->GetTransform())
+			{
+				const Vector3& vNormal = (pSrcOwner->GetTransform()->GetPosition() - pSrc->GetCross()).Normalize();
+				m_vDir = m_vDir - m_vDir.Dot(vNormal) * 2.f * vNormal;
+			}
 		}
 		break;
 		}

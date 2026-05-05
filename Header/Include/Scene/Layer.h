@@ -19,6 +19,11 @@ namespace Engine
     private:
         int     m_iZOrder;
         std::list<class std::shared_ptr<class Bindable>>   m_DrawList;
+        // Phase B.5 — Component-side companion to m_DrawList. Holds
+        // top-level Components (Camera, Light controllers, etc.) that
+        // shouldn't be Drawables. Lifecycle iteration runs over both
+        // lists; rendering only touches m_DrawList.
+        std::list<std::shared_ptr<class Component>> m_ComponentList;
         class Scene* m_pScene;
         std::shared_ptr<class LoadingThread> m_pLoadingThread;
 
@@ -26,12 +31,17 @@ namespace Engine
         void SetZOrder(int iZOrder);
         int GetZOrder() const;
         void AddDrawable(const class std::shared_ptr<Bindable>& pDrawable);
+        void AddComponent(const std::shared_ptr<class Component>& pComp);
         void SetScene(class Scene* pScene);
         const std::list<class std::shared_ptr<class Bindable>>& GetDrawList()   const;
+        const std::list<std::shared_ptr<class Component>>& GetComponentList() const;
         const std::shared_ptr<class LoadingThread>& GetLoadingThread()  const;
         std::shared_ptr<Bindable> FindDrawable(const std::string& strTag)    const;
         std::shared_ptr<Bindable> FindDrawable(BINDABLE_TYPE eType)    const;
+        std::shared_ptr<class Component> FindComponent(const std::string& strTag) const;
+        std::shared_ptr<class Component> FindComponent(COMPONENT_TYPE eType) const;
         void DeleteDrawable(std::shared_ptr<Bindable> pDrawable);
+        void DeleteComponent(std::shared_ptr<class Component> pComp);
 
     public:
         void Input(float fDeltaTime);

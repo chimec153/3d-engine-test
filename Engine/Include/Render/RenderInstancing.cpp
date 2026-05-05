@@ -5,6 +5,7 @@
 #include "../Bindable/VertexShader.h"
 #include "../Bindable/PixelShader.h"
 #include "../Bindable/InputLayout.h"
+#include "../Bindable/Topology.h"
 #include "../Bindable/IndexBuffer.h"
 #include "../Bindable/Texture.h"
 #include "../Bindable/Mesh.h"
@@ -307,6 +308,9 @@ namespace Engine
 		}
 
 		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		// Direct topology set bypasses the bound cache — invalidate so a
+		// later drawable's Topology::Bind doesn't skip on a stale cache hit.
+		Topology::ResetBoundCache();
 
 		m_pInputLayout->Bind();
 

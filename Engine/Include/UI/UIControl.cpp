@@ -1,5 +1,6 @@
 #include "UIControl.h"
 #include "../Bindable/Topology.h"
+#include "../Bindable/InputLayout.h"
 #include "../Bindable/BindableManager.h"
 #include "../Bindable/ConstantBuffer.h"
 #include "../Bindable/Transform.h"
@@ -54,6 +55,9 @@ void Engine::UIControl::DrawQuad()
 	Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
 	Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 	Graphics::GetInst()->GetDeviceContext()->IASetInputLayout(nullptr);
+	// Direct IL set bypasses the bound cache — invalidate so the next
+	// drawable's InputLayout::Bind doesn't skip on a stale cache hit.
+	InputLayout::ResetBoundCache();
 
 	Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
 }

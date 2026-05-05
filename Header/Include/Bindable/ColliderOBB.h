@@ -35,7 +35,7 @@ namespace Engine
         virtual void PreDraw(float fDeltaTime) override;
 
     public:
-        virtual std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
     };
 
 }

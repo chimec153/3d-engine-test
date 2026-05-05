@@ -2,6 +2,7 @@
 
 #include "RenderContext.h"
 #include <cstdint>
+#include <functional>
 
 namespace Engine::RenderV2
 {
@@ -67,5 +68,10 @@ namespace Engine::RenderV2
 		uint32_t      indexCount    = 0;
 		uint32_t      startIndex    = 0;
 		int32_t       baseVertex    = 0;
+
+		// Optional callback executed at flush time, right before this draw's
+		// DrawIndexed. Used to bridge V2 to legacy bind paths that have to
+		// run per-frame (e.g., engine Animation's compute shader pass).
+		std::function<void()> preDraw;
 	};
 }

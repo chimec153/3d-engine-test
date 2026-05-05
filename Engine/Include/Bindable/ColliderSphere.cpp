@@ -24,7 +24,11 @@ namespace Engine
 		, m_vOffset()
 	{
 #ifdef _DEBUG
-		std::shared_ptr<Drawable> pDebug = CreateBindable<Drawable>("DebugSphere");
+		// Phase B.4 — debug drawable as direct member; re-parented onto
+		// owning Drawable when this Collider is attached.
+		auto pDebug = std::make_shared<Drawable>();
+		pDebug->SetTag("DebugSphere");
+		pDebug->Init();
 		pDebug->FindAndAddBind<class VertexShader>("PointLightVS");
 		pDebug->FindAndAddBind<class HullShader>("PointLightHS");
 		pDebug->FindAndAddBind<class DomainShader>("PointLightDS");
@@ -35,17 +39,17 @@ namespace Engine
 		pDebug->SetRenderLayer(RENDER_LAYER::ALPHA);
 
 		m_pDebugMaterial = StaticFindBindable<Material>("Material");
-
 		m_pDebugMaterial = std::static_pointer_cast<Material>(m_pDebugMaterial->Clone());
-
 		pDebug->AddChild(m_pDebugMaterial);
 
 		std::shared_ptr<Mesh> pMesh = pDebug->CreateBindable<Mesh>("2point", 1);
-
 		pMesh->SetVertexCount(0, 2);
 
 		pDebug->NotUseShadow();
+
+		m_pDebugDrawable = pDebug;
 #endif
+		SetComponentType(COMPONENT_TYPE::COLLIDER_SPHERE);
 		SetColliderType(COLLIDER_TYPE::SPHERE);
 	}
 
@@ -68,16 +72,11 @@ namespace Engine
 	{
 		m_tInfo.fRadius = fRadius;
 #ifdef _DEBUG
-		std::shared_ptr<Drawable> pSphere = std::static_pointer_cast<Drawable>(FindChild("DebugSphere"));
-
-		if (pSphere)
+		if (m_pDebugDrawable)
 		{
-			std::shared_ptr<Transform> pTransform = pSphere->GetTransform();
-
+			std::shared_ptr<Transform> pTransform = m_pDebugDrawable->GetTransform();
 			if (pTransform)
-			{
 				pTransform->SetScale({ m_tInfo.fRadius,m_tInfo.fRadius,m_tInfo.fRadius });
-			}
 		}
 #endif
 	}
@@ -93,26 +92,19 @@ namespace Engine
 
 		m_tInfo.vCenter = m_vOffset;
 
-		Bindable* pParent = GetParent();
-
-		if (pParent)
+		// Phase B.4 — owning Drawable via Component::GetOwner.
+		if (Drawable* pOwner = GetOwner())
 		{
-			std::shared_ptr<Transform> pTransform = std::static_pointer_cast<Transform>(pParent->FindChild(BINDABLE_TYPE::TRANSFORM));
-
+			std::shared_ptr<Transform> pTransform = pOwner->GetTransform();
 			if (pTransform)
 			{
 				m_tInfo.vCenter += pTransform->GetPosition();
 #ifdef _DEBUG
-				std::shared_ptr<Drawable> pSphere = std::static_pointer_cast<Drawable>(FindChild("DebugSphere"));
-
-				if (pSphere)
+				if (m_pDebugDrawable)
 				{
-					std::shared_ptr<Transform> pTransform = pSphere->GetTransform();
-
-					if (pTransform)
-					{
-						pTransform->SetPosition(m_tInfo.vCenter);
-					}
+					std::shared_ptr<Transform> pDebugTr = m_pDebugDrawable->GetTransform();
+					if (pDebugTr)
+						pDebugTr->SetPosition(m_tInfo.vCenter);
 				}
 #endif
 			}
@@ -138,7 +130,7 @@ namespace Engine
 		return false;
 	}
 
-	std::shared_ptr<Bindable> ColliderSphere::Clone()
+	std::shared_ptr<Component> ColliderSphere::Clone()
 	{
 		return std::make_shared<ColliderSphere>(*this);
 	}
@@ -146,27 +138,24 @@ namespace Engine
 	void ColliderSphere::PreDraw(float fDeltaTime)
 	{
 #ifdef _DEBUG
-		std::static_pointer_cast<Drawable>(FindChild("DebugSphere"))->InViewFrustum();
+		// Phase B.4 — color update was previously in Bind() (which Component
+		// no longer has). Move it into PreDraw so it runs once per frame
+		// before the actual render. The owning Drawable's render path picks
+		// up m_pDebugDrawable through the re-parented Bindable child list.
+		if (m_pDebugDrawable)
+		{
+			if (m_pDebugMaterial)
+			{
+				if (GetPrevColliderList().size())
+					m_pDebugMaterial->SetDiffuseColor(Red);
+				else
+					m_pDebugMaterial->SetDiffuseColor(Green);
+			}
+			m_pDebugDrawable->InViewFrustum();
+		}
 #endif
 
 		__super::PreDraw(fDeltaTime);
-	}
-
-	void ColliderSphere::Bind()
-	{
-#ifdef _DEBUG
-
-		if (GetPrevColliderList().size())
-		{
-			m_pDebugMaterial->SetDiffuseColor(Red);
-		}
-		else
-		{
-			m_pDebugMaterial->SetDiffuseColor(Green);
-		}
-
-		__super::Bind();
-#endif
 	}
 	void ColliderSphere::Save(FILE* pFile)
 	{

@@ -51,6 +51,29 @@ namespace Engine
 			return pDrawable;
 		}
 
+		// Phase B.5 — Component-side analogue of CreateDrawable. Used to
+		// register top-level Components (Camera, Light controller, etc.) on
+		// a Layer. Layer drives lifecycle on its m_ComponentList.
+		template <typename T, typename ...Args>
+		std::shared_ptr<T> CreateComponent(const std::string& strTag, const class std::shared_ptr<class Layer>& pLayer, Args... args)
+		{
+			std::shared_ptr<T> pComp = std::make_shared<T>(args...);
+
+			pComp->SetTag(strTag);
+
+			if (!pComp->Init())
+			{
+				return nullptr;
+			}
+
+			if (pLayer)
+			{
+				pLayer->AddComponent(std::static_pointer_cast<class Component>(pComp));
+			}
+
+			return pComp;
+		}
+
 	public:
 
 		template <typename T, typename ...Args>

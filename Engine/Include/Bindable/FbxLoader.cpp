@@ -1386,7 +1386,7 @@ namespace Engine
 		}
 	}
 
-	void FbxLoader::LoadOBJ(const TCHAR* pFileName, const std::string& strPathKey)
+	bool FbxLoader::LoadOBJ(const TCHAR* pFileName, const std::string& strPathKey)
 	{
 		TCHAR strFullPath[MAX_PATH] = {};
 
@@ -1715,7 +1715,11 @@ namespace Engine
 			}
 
 			fclose(pFile);
+
+			return true;
 		}
+
+		return false;
 	}
 
 }

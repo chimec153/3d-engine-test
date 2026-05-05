@@ -119,7 +119,7 @@ namespace Engine
 		const std::vector<SEQUENCE>& GetSequences(int iIndex)	const;
 		const std::vector<SEQUENCE>& GetSequences()	const;
 		const SKELETON& GetSkeleton(int iIndex = 0) const;
-		void LoadOBJ(const TCHAR* pFileName, const std::string& strPathKey);
+		bool LoadOBJ(const TCHAR* pFileName, const std::string& strPathKey);
 
 	private:
 		fbxsdk::FbxAMatrix GetTransform(fbxsdk::FbxNode* pMesh);

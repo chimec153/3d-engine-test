@@ -11,7 +11,7 @@
 namespace Engine
 {
 	Transform::Transform() :
-		Bindable()
+		Component()
 		, m_pConstantBuffer(StaticFindBindable<ConstantBuffer<_tagTransformBuffer>>("Transform"))
 		, m_pParentTrasnform(nullptr)
 		, m_vPosition(0.f, 0.f, 0.f)
@@ -32,11 +32,11 @@ namespace Engine
 		, m_eCameraType(CAMERA_TYPE::NORMAL)
 	{
 		m_tBuffer.matJoint = Matrix::matIdentity;
-		SetBindableType(BINDABLE_TYPE::TRANSFORM);
+		SetComponentType(COMPONENT_TYPE::TRANSFORM);
 	}
 
 	Transform::Transform(const Transform& buffer) :
-		Bindable(buffer)
+		Component(buffer)
 		, m_pConstantBuffer(buffer.m_pConstantBuffer)
 		, m_pParentTrasnform(nullptr)
 		, m_vPosition(buffer.m_vPosition)
@@ -154,15 +154,15 @@ namespace Engine
 		m_pConstantBuffer->Bind();
 	}
 
-	std::shared_ptr<Bindable> Transform::Clone()
+	std::shared_ptr<Component> Transform::Clone()
 	{
 		return std::make_shared<Transform>(*this);
 	}
 
 	void Transform::PostBind()
 	{
-		__super::PostBind();
-
+		// Component has no PostBind to delegate to — Transform's PostBind
+		// is now a leaf operation called directly by Drawable.
 		if (m_pJointSequenceBuffer)
 		{
 			m_pJointSequenceBuffer->ResetSRV(32);

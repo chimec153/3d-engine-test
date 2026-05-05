@@ -1,5 +1,6 @@
 #include "Layer.h"
 #include "../Bindable/Drawable.h"
+#include "../Component/Component.h"
 #include "../Core/PathManager.h"
 #include "../Scene/Scene.h"
 #include "../Thread/ThreadManager.h"
@@ -38,6 +39,12 @@ namespace Engine
 		m_DrawList.push_back(pDrawable);
 	}
 
+	void Layer::AddComponent(const std::shared_ptr<Component>& pComp)
+	{
+		pComp->Start();
+		m_ComponentList.push_back(pComp);
+	}
+
 	void Layer::SetScene(Scene* pScene)
 	{
 		m_pScene = pScene;
@@ -46,6 +53,42 @@ namespace Engine
 	const std::list<class std::shared_ptr<class Bindable>>& Layer::GetDrawList() const
 	{
 		return m_DrawList;
+	}
+
+	const std::list<std::shared_ptr<Component>>& Layer::GetComponentList() const
+	{
+		return m_ComponentList;
+	}
+
+	std::shared_ptr<Component> Layer::FindComponent(const std::string& strTag) const
+	{
+		for (const auto& p : m_ComponentList)
+		{
+			if (p->GetTag() == strTag) return p;
+			if (auto pChild = p->FindChild(strTag)) return pChild;
+		}
+		return nullptr;
+	}
+
+	std::shared_ptr<Component> Layer::FindComponent(COMPONENT_TYPE eType) const
+	{
+		for (const auto& p : m_ComponentList)
+		{
+			if (p->GetComponentType() == eType) return p;
+		}
+		return nullptr;
+	}
+
+	void Layer::DeleteComponent(std::shared_ptr<Component> pComp)
+	{
+		for (auto iter = m_ComponentList.begin(); iter != m_ComponentList.end(); ++iter)
+		{
+			if (*iter == pComp)
+			{
+				m_ComponentList.erase(iter);
+				return;
+			}
+		}
 	}
 
 	const std::shared_ptr<class LoadingThread>& Layer::GetLoadingThread() const
@@ -115,29 +158,35 @@ namespace Engine
 		}
 	}
 
+	namespace
+	{
+		// Phase B.5 — shared lifecycle iteration over a typed list. Same
+		// active/enable filter pattern Bindable/Drawable use.
+		template <typename ListT, typename Fn>
+		void ForEachActive(ListT& list, Fn fn)
+		{
+			for (auto iter = list.begin(); iter != list.end();)
+			{
+				if (!(*iter)->IsActive())
+				{
+					iter = list.erase(iter);
+					continue;
+				}
+				if (!(*iter)->IsEnable())
+				{
+					++iter;
+					continue;
+				}
+				fn(*iter);
+				++iter;
+			}
+		}
+	}
+
 	void Layer::Input(float fDeltaTime)
 	{
-		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd;)
-		{
-			if (!(*iter)->IsActive())
-			{
-				iter = m_DrawList.erase(iter);
-				iterEnd = m_DrawList.end();
-				continue;
-			}
-
-			else if (!(*iter)->IsEnable())
-			{
-				++iter;
-				continue;
-			}
-
-			(*iter)->Input(fDeltaTime);
-			++iter;
-		}
+		ForEachActive(m_DrawList,      [&](const auto& p) { p->Input(fDeltaTime); });
+		ForEachActive(m_ComponentList, [&](const auto& p) { p->Input(fDeltaTime); });
 	}
 
 	void Layer::Update(float fDeltaTime)
@@ -152,127 +201,32 @@ namespace Engine
 			}
 		}
 
-		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd;)
-		{
-			if (!(*iter)->IsActive())
-			{
-				iter = m_DrawList.erase(iter);
-				iterEnd = m_DrawList.end();
-				continue;
-			}
-
-			else if (!(*iter)->IsEnable())
-			{
-				++iter;
-				continue;
-			}
-
-			(*iter)->Update(fDeltaTime);
-			++iter;
-		}
+		ForEachActive(m_DrawList,      [&](const auto& p) { p->Update(fDeltaTime); });
+		ForEachActive(m_ComponentList, [&](const auto& p) { p->Update(fDeltaTime); });
 	}
 
 	void Layer::FixedUpdate(float fDeltaTime)
 	{
-		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd;)
-		{
-			if (!(*iter)->IsActive())
-			{
-				iter = m_DrawList.erase(iter);
-				iterEnd = m_DrawList.end();
-				continue;
-			}
-
-			else if (!(*iter)->IsEnable())
-			{
-				++iter;
-				continue;
-			}
-
-			(*iter)->FixedUpdate(fDeltaTime);
-			++iter;
-		}
+		ForEachActive(m_DrawList,      [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
+		ForEachActive(m_ComponentList, [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
 	}
 
 	void Layer::Collision(float fDeltaTime)
 	{
-		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd;)
-		{
-			if (!(*iter)->IsActive())
-			{
-				iter = m_DrawList.erase(iter);
-				iterEnd = m_DrawList.end();
-				continue;
-			}
-
-			else if (!(*iter)->IsEnable())
-			{
-				++iter;
-				continue;
-			}
-
-			(*iter)->Collision(fDeltaTime);
-			++iter;
-		}
+		ForEachActive(m_DrawList,      [&](const auto& p) { p->Collision(fDeltaTime); });
+		ForEachActive(m_ComponentList, [&](const auto& p) { p->Collision(fDeltaTime); });
 	}
 
 	void Layer::PostUpdate(float fDeltaTime)
 	{
-		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd;)
-		{
-			if (!(*iter)->IsActive())
-			{
-				iter = m_DrawList.erase(iter);
-				iterEnd = m_DrawList.end();
-				continue;
-			}
-
-			else if (!(*iter)->IsEnable())
-			{
-				++iter;
-				continue;
-			}
-
-			(*iter)->PostUpdate(fDeltaTime);
-			++iter;
-		}
+		ForEachActive(m_DrawList,      [&](const auto& p) { p->PostUpdate(fDeltaTime); });
+		ForEachActive(m_ComponentList, [&](const auto& p) { p->PostUpdate(fDeltaTime); });
 	}
 
 	void Layer::PreDraw(float fDeltaTime)
 	{
-		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd;)
-		{
-			if (!(*iter)->IsActive())
-			{
-				iter = m_DrawList.erase(iter);
-				iterEnd = m_DrawList.end();
-				continue;
-			}
-
-			else if (!(*iter)->IsEnable())
-			{
-				++iter;
-				continue;
-			}
-
-			(*iter)->PreDraw(fDeltaTime);
-			++iter;
-		}
+		ForEachActive(m_DrawList,      [&](const auto& p) { p->PreDraw(fDeltaTime); });
+		ForEachActive(m_ComponentList, [&](const auto& p) { p->PreDraw(fDeltaTime); });
 	}
 
 	void Layer::Draw()

@@ -21,7 +21,7 @@ Engine::Cloth::Cloth(int iWidth, int iHeight, float fSpring, float fSpringShear,
 	, m_bSwitch(false)
 	, m_fWind(0.f)
 	, m_vWind()
-	, m_pCollider(CreateBindable<ColliderSphere>("ClothCollider"))
+	, m_pCollider(CreateComponent<ColliderSphere>("ClothCollider"))
 {
 	SetBindableType(BINDABLE_TYPE::CLOTH);
 
@@ -146,7 +146,8 @@ void Engine::Cloth::Load(FILE* pFile)
 	fread(&m_fWind, 4, 1, pFile);
 	fread(&m_vWind, 12, 1, pFile);
 
-	m_pCollider = std::static_pointer_cast<ColliderSphere>(FindChild("ClothCollider"));
+	// Phase B.4 — Collider migrated to Component; lookup via FindComponent.
+	m_pCollider = std::static_pointer_cast<ColliderSphere>(FindComponent("ClothCollider"));
 
 	assert(m_pCollider);
 

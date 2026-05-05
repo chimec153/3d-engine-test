@@ -2,6 +2,7 @@
 #include "NavMesh.h"
 #include "Transform.h"
 #include "../Scene/Scene.h"
+#include "../Scene/SceneManager.h"
 #include "Drawable.h"
 
 Engine::Agent::Agent()	:
@@ -10,11 +11,11 @@ Engine::Agent::Agent()	:
 	, m_iAgentIndex(-1)
 	, m_pCrowdParams(std::make_unique<dtCrowdAgentParams>())
 {
-	SetBindableType(BINDABLE_TYPE::AGENT);
+	SetComponentType(COMPONENT_TYPE::AGENT);
 }
 
 Engine::Agent::Agent(std::shared_ptr<Transform> pTransform, std::weak_ptr<NavMesh> pNavMesh, const Vector3& pos)	:
-	Bindable()
+	Component()
 	, m_pTransform(pTransform)
 	, m_pNavMesh(pNavMesh)
 	, m_iAgentIndex(-1)
@@ -28,11 +29,11 @@ Engine::Agent::Agent(std::shared_ptr<Transform> pTransform, std::weak_ptr<NavMes
 
 	m_iAgentIndex = CreateAgent(pos);
 
-	SetBindableType(BINDABLE_TYPE::AGENT);
+	SetComponentType(COMPONENT_TYPE::AGENT);
 }
 
 Engine::Agent::Agent(const Agent& agent)	:
-	Bindable(agent)
+	Component(agent)
 	, m_pTransform(nullptr)
 	, m_pNavMesh(agent.m_pNavMesh)
 	, m_iAgentIndex(-1)
@@ -119,11 +120,7 @@ void Engine::Agent::Update(float fDeltaTime)
 	}
 }
 
-void Engine::Agent::Bind()
-{
-}
-
-std::shared_ptr<Engine::Bindable> Engine::Agent::Clone()
+std::shared_ptr<Engine::Component> Engine::Agent::Clone()
 {
 	return std::make_shared<Agent>(*this);
 }
@@ -187,7 +184,10 @@ void Engine::Agent::Load(FILE* pFile)
 
 			fread(strTag.get(), 1, iLength, pFile);
 
-			std::shared_ptr<Bindable> pBindable = GetScene()->FindBindable(strTag.get());
+			// Phase B.4 — Component has no GetScene(); resolve via the
+			// SceneManager singleton instead.
+			Scene* pScene = SceneManager::GetInst()->GetScene();
+			std::shared_ptr<Bindable> pBindable = pScene ? pScene->FindBindable(strTag.get()) : nullptr;
 
 			if (pBindable)
 			{

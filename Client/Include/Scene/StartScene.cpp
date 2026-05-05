@@ -14,7 +14,7 @@ namespace Client
 
 	bool StartScene::Init()
 	{
-		std::shared_ptr<Engine::Camera> pCamera = CreateDrawable<Engine::Camera>("camera", FindLayer(DEFAULT_LAYER));
+		std::shared_ptr<Engine::Camera> pCamera = CreateComponent<Engine::Camera>("camera", FindLayer(DEFAULT_LAYER));
 
 		Engine::Graphics::GetInst()->SetCamera(pCamera);
 

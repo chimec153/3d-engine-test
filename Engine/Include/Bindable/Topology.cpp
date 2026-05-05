@@ -19,9 +19,19 @@ namespace Engine
 	{
 	}
 
+	D3D_PRIMITIVE_TOPOLOGY Topology::s_eBound = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+
+	void Topology::ResetBoundCache()
+	{
+		s_eBound = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+	}
+
 	void Topology::Bind()
 	{
+		if (m_eTopology == s_eBound)
+			return;
 		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(m_eTopology);
+		s_eBound = m_eTopology;
 	}
 
 	std::shared_ptr<Bindable> Topology::Clone()

@@ -32,9 +32,8 @@ namespace Engine
     public:
         virtual void Update(float fDeltaTime) override;
         virtual bool Collision(class Collider* pDest, float fDeltaTime) override;
-        virtual std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
         virtual void PreDraw(float) override;
-        virtual void Bind() override;
 
     public:
         virtual void Save(FILE* pFile) override;

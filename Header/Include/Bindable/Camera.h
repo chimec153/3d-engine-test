@@ -1,9 +1,13 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
 namespace Engine
 {
+    // Phase B.5 — Camera migrated from Drawable to Component. Camera doesn't
+    // render itself (PreDraw was empty). It owns a Transform component for
+    // its world placement and provides view/projection matrices to other
+    // systems. Layer drives lifecycle through m_ComponentList.
     class ENGINE_DLL Camera :
-        public Drawable
+        public Component
     {
         friend class Scene;
 
@@ -22,11 +26,9 @@ namespace Engine
         virtual ~Camera() override = default;
 
     private:
+        std::shared_ptr<class Transform> m_pTransform;
         Matrix matView;
         float   m_fSpeed;
-#ifdef _DEBUG
-        std::shared_ptr<class Drawable>    m_pDebugDrawable;
-#endif
         bool m_bControl;
         Matrix m_matProj;
         Matrix m_matVP;
@@ -50,6 +52,7 @@ namespace Engine
         const Vector3& CameraPosToWorldPos(const Vector2& vCameraPos)   const;
         const Vector3& ScreenPosToClipPos(const Vector2& vScreenPos)    const;
         void SetCameraType(CAMERA_TYPE eType);
+        CAMERA_TYPE GetCameraType() const noexcept { return m_eCameraType; }
 
     public:
         virtual bool Init() override;
@@ -57,9 +60,8 @@ namespace Engine
         virtual void Update(float fDeltaTime) override;
         virtual void Collision(float fDeltaTime) override;
         virtual void PostUpdate(float fDeltaTime) override;
-        virtual void PreDraw(float fDeltaTime) override;
-        virtual void Bind() override;
-        virtual std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
+        virtual std::shared_ptr<class Transform> GetTransform() const override { return m_pTransform; }
 
     public:
         virtual void Save(FILE* pFile) override;

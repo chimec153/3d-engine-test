@@ -140,7 +140,7 @@ bool Client::Attackable::Init()
 
 	sprintf_s(strHit, "hit%02d", rand() % 38);
 
-	m_pHitSound = CreateBindable<Engine::SoundBindable>("hitsound", strHit);
+	m_pHitSound = CreateComponent<Engine::SoundBindable>("hitsound", strHit);
 
 	return true;
 }

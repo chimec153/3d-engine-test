@@ -33,14 +33,14 @@ namespace Client
 
 	Inventory::Inventory(const std::string& strTexture) :
 		Engine::Image(strTexture)
-		, m_pCollider(CreateBindable<Engine::ColliderOBB>("inventory_body"))
+		, m_pCollider(CreateComponent<Engine::ColliderOBB>("inventory_body"))
 	{
 		m_vecItem.resize(INVENTORY_WIDTH * INVENTORY_HEIGHT);
 		m_vecEquip.resize(static_cast<int>(EQUIP_SLOT::END));
 
 		for (int i = 0; i < static_cast<int>(EQUIP_SLOT::END); ++i)
 		{
-			m_pEquipSlotCollider[i] = CreateBindable<Engine::ColliderOBB>("Equip_Slot" + std::to_string(i));
+			m_pEquipSlotCollider[i] = CreateComponent<Engine::ColliderOBB>("Equip_Slot" + std::to_string(i));
 
 			if (!m_pEquipSlotCollider[i])
 			{
@@ -107,7 +107,7 @@ namespace Client
 				pItemDrawable->FindAndAddBind<Engine::Mesh>(iter->second.strMesh);
 				pItemDrawable->Disable();
 
-				std::shared_ptr<Engine::ColliderOBB> pItemBody = pItemDrawable->CreateBindable<Engine::ColliderOBB>(iter->second.strMesh + "_body");
+				std::shared_ptr<Engine::ColliderOBB> pItemBody = pItemDrawable->CreateComponent<Engine::ColliderOBB>(iter->second.strMesh + "_body");
 
 				pItemBody->Disable();
 
@@ -142,7 +142,7 @@ namespace Client
 				m_pSwordParticle->CreateBindable<Engine::Texture>("particletexture", "Particle\\particle_00.png", TEXTURE_PATH);
 				m_pSwordParticle->StopEmit();
 
-				pItemDrawable->CreateBindable<Engine::SoundBindable>("weapon sound", iter->second.strSound);
+				pItemDrawable->CreateComponent<Engine::SoundBindable>("weapon sound", iter->second.strSound);
 
 				return true;
 			}
@@ -420,11 +420,12 @@ namespace Client
 	}
 	void Inventory::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
 	{
-		Engine::Bindable* pParent = pDest->GetParent();
+		// Phase B.4 — Collider's owner is its Drawable, accessed via GetOwner.
+		Engine::Drawable* pOwner = pDest->GetOwner();
 
-		if (typeid(*pParent) == typeid(ItemIcon))
+		if (pOwner && typeid(*pOwner) == typeid(ItemIcon))
 		{
-			if (static_cast<ItemIcon*>(pParent)->IsDrag())
+			if (static_cast<ItemIcon*>(pOwner)->IsDrag())
 			{
 				m_pCurrentEquipCollider = std::static_pointer_cast<Engine::ColliderOBB>(pSrc->shared_from_this());
 			}

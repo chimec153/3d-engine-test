@@ -178,6 +178,7 @@
     <ClCompile Include="Object\Player.cpp" />
     <ClCompile Include="Object\Trail.cpp" />
     <ClCompile Include="Object\Tree.cpp" />
+    <ClCompile Include="Object\TreeV2.cpp" />
     <ClCompile Include="Scene\GameScene.cpp" />
     <ClCompile Include="Scene\StartScene.cpp" />
     <ClCompile Include="UI\Inventory.cpp" />
@@ -191,6 +192,7 @@
     <ClInclude Include="Object\Player.h" />
     <ClInclude Include="Object\Trail.h" />
     <ClInclude Include="Object\Tree.h" />
+    <ClInclude Include="Object\TreeV2.h" />
     <ClInclude Include="Scene\GameScene.h" />
     <ClInclude Include="Scene\StartScene.h" />
     <ClInclude Include="UI\Inventory.h" />

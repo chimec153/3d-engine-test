@@ -411,9 +411,12 @@ namespace Client
 
 		if (pDrawable)
 		{
-			m_pSwordSound = std::static_pointer_cast<Engine::SoundBindable>(pDrawable->FindChild("weapon sound"));
+			// Phase B.4 — SoundBindable migrated to Component; look up
+			// via FindComponent rather than the old Bindable child-list.
+			m_pSwordSound = std::static_pointer_cast<Engine::SoundBindable>(pDrawable->FindComponent("weapon sound"));
 
-			m_pSwordBody = std::static_pointer_cast<Engine::ColliderOBB>(pDrawable->FindChild(Engine::BINDABLE_TYPE::COLLIDER_OBB));
+			// Phase B.4 — Collider migrated to Component; FindComponent.
+			m_pSwordBody = std::static_pointer_cast<Engine::ColliderOBB>(pDrawable->FindComponent(Engine::COMPONENT_TYPE::COLLIDER_OBB));
 
 			m_pSwordParticle = std::static_pointer_cast<Engine::Particle>(pDrawable->FindChild(pDrawable->GetTag() + " particle"));
 
@@ -478,7 +481,8 @@ namespace Client
 
 		const Engine::Vector3& vCross = pTerrainCollider->GetCross();
 
-		Engine::Terrain* pTerrain = static_cast<Engine::Terrain*>(pTerrainCollider->GetParent());
+		// Phase B.4 — Collider migrated to Component; owner via GetOwner.
+		Engine::Terrain* pTerrain = static_cast<Engine::Terrain*>(pTerrainCollider->GetOwner());
 
 		if (Engine::CInput::GetInst()->IsMouseButtonUp(Engine::CInput::MOUSE_TYPE::LEFT))
 		{
@@ -528,7 +532,8 @@ namespace Client
 	{
 		if (pDest->GetTag() == "frogclawbody")
 		{
-			Attackable* pAttacker = static_cast<Attackable*>(pDest->GetParent());
+			// Phase B.4 — Collider migrated to Component; owner via GetOwner.
+			Attackable* pAttacker = static_cast<Attackable*>(pDest->GetOwner());
 
 			if (pAttacker->Attack(this))
 			{
@@ -659,7 +664,7 @@ namespace Client
 		pAnimation->SetNextSequence("CharacterArmature|Sword_Slash", "CharacterArmature|Idle");
 		pAnimation->SetNextSequence("CharacterArmature|HitRecieve", "CharacterArmature|Idle");*/
 
-		m_pBody = CreateBindable<Engine::ColliderOBB>("PlayerBody");
+		m_pBody = CreateComponent<Engine::ColliderOBB>("PlayerBody");
 
 		m_pBody->SetScaleOffset({ 0.5f, 1.8f, 0.4f });
 
@@ -677,7 +682,7 @@ namespace Client
 
 		m_pCamera->GetTransform()->SetRelativeRotation(fAngle, PI, 0.f);
 
-		m_pCameraLine = m_pCamera->CreateBindable<Engine::ColliderLine>("cameraline");
+		m_pCameraLine = m_pCamera->CreateComponent<Engine::ColliderLine>("cameraline");
 
 		m_pCameraLine->SetCallBack(Engine::COLLISION_TYPE::STAY, this, &Player::CollisionCameraLine);
 		m_pCameraLine->SetCallBack(Engine::COLLISION_TYPE::LAST, this, &Player::CollisionCameraLineLast);
@@ -783,9 +788,9 @@ namespace Client
 
 		Engine::CInput::GetInst()->AddKey(DIK_LCONTROL);
 
-		m_pFootLSound = CreateBindable<Engine::SoundBindable>("step_rock_l", "step_rock_l");
+		m_pFootLSound = CreateComponent<Engine::SoundBindable>("step_rock_l", "step_rock_l");
 
-		m_pFootRSound = CreateBindable<Engine::SoundBindable>("step_rock_r", "step_rock_r");
+		m_pFootRSound = CreateComponent<Engine::SoundBindable>("step_rock_r", "step_rock_r");
 
 		std::shared_ptr<Engine::Notify> pRunLNotify = pAnimation->AddNotify("CharacterArmature|Run", "foot_l", 0.5f);
 

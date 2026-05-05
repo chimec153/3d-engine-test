@@ -183,7 +183,7 @@ namespace Engine
 		{
 			if (FAILED(DirectX::LoadFromWICFile(strFullPath, DirectX::WIC_FLAGS_NONE, nullptr, image)))
 			{
-				assert(false);
+				//assert(false);
 				return false;
 			}
 		}
@@ -454,17 +454,29 @@ namespace Engine
 		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(m_iSlot, 1, &pSRV);
 		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(m_iSlot, 1, &pSRV);
 		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(m_iSlot, 1, &pSRV);
+		if (m_iSlot >= 0 && m_iSlot < kMaxSlots) s_pBound[m_iSlot] = nullptr;
 	}
 
 	void Texture::Update(float fDeltaTime)
 	{
 	}
 
+	ID3D11ShaderResourceView* Texture::s_pBound[Texture::kMaxSlots] = {};
+
+	void Texture::ResetBoundCache()
+	{
+		for (int i = 0; i < kMaxSlots; ++i) s_pBound[i] = nullptr;
+	}
+
 	void Texture::Bind()
 	{
+		ID3D11ShaderResourceView* mine = *m_pSRV;
+		if (m_iSlot >= 0 && m_iSlot < kMaxSlots && s_pBound[m_iSlot] == mine)
+			return;
 		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(m_iSlot, 1, m_pSRV.GetAddressof());
 		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(m_iSlot, 1, m_pSRV.GetAddressof());
 		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(m_iSlot, 1, m_pSRV.GetAddressof());
+		if (m_iSlot >= 0 && m_iSlot < kMaxSlots) s_pBound[m_iSlot] = mine;
 	}
 
 	std::shared_ptr<Bindable> Texture::Clone()

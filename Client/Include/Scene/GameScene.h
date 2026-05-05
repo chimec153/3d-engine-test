@@ -17,5 +17,7 @@ namespace Client
             
     public:
         virtual bool Init() override;
+        virtual void Update(float dt) override;
+        virtual void Draw() override;
     };
 }

@@ -20,6 +20,12 @@ namespace Engine
         virtual std::shared_ptr<Bindable> Clone() override;
         void GetAndBind();
         void BindEnd();
+
+        // Sort-by-state cache — see VertexShader::ResetBoundCache.
+        static void ResetBoundCache();
+
+    private:
+        static D3D_PRIMITIVE_TOPOLOGY s_eBound;
     };
 
 }

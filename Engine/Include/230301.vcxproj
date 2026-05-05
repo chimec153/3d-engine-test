@@ -245,6 +245,7 @@
     <ClCompile Include="Bindable\VertexBuffer.cpp" />
     <ClCompile Include="Bindable\VertexShader.cpp" />
     <ClCompile Include="Collision\Collision.cpp" />
+    <ClCompile Include="Component\Component.cpp" />
     <ClCompile Include="Collision\CollisionManager.cpp" />
     <ClCompile Include="Core\Graphics.cpp" />
     <ClCompile Include="Core\PathManager.cpp" />
@@ -338,6 +339,7 @@
     <ClInclude Include="Bindable\VertexBuffer.h" />
     <ClInclude Include="Bindable\VertexShader.h" />
     <ClInclude Include="Collision\Collision.h" />
+    <ClInclude Include="Component\Component.h" />
     <ClInclude Include="Collision\CollisionManager.h" />
     <ClInclude Include="Core\Graphics.h" />
     <ClInclude Include="Core\Macro.h" />

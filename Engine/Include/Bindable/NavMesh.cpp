@@ -6,7 +6,7 @@
 #include "Transform.h"
 
 Engine::NavMesh::NavMesh(dtNavMeshCreateParams& tParams, float fAgentRadius, float fAgentHeight) :
-	Bindable()
+	Component()
 	, m_pNavMesh(dtAllocNavMesh())
 	, m_pNavMeshQuery(dtAllocNavMeshQuery())
 	, m_pNavData(nullptr)
@@ -42,13 +42,13 @@ Engine::NavMesh::NavMesh(dtNavMeshCreateParams& tParams, float fAgentRadius, flo
 
 	m_pMeshCreateParams->polyFlags = pPolyFlags;
 
-	SetBindableType(BINDABLE_TYPE::NAV_MESH);
+	SetComponentType(COMPONENT_TYPE::NAV_MESH);
 
 	CreateNavMesh(*m_pMeshCreateParams);
 }
 
 Engine::NavMesh::NavMesh() :
-	Bindable()
+	Component()
 	, m_pNavMesh(dtAllocNavMesh())
 	, m_pNavMeshQuery(dtAllocNavMeshQuery())
 	, m_pNavData(nullptr)
@@ -58,7 +58,7 @@ Engine::NavMesh::NavMesh() :
 	, m_pCrowd(dtAllocCrowd())
 	, m_pMeshCreateParams(std::make_unique<dtNavMeshCreateParams>())
 {
-	SetBindableType(BINDABLE_TYPE::NAV_MESH);
+	SetComponentType(COMPONENT_TYPE::NAV_MESH);
 }
 
 Engine::NavMesh::~NavMesh()
@@ -88,10 +88,6 @@ Engine::NavMesh::~NavMesh()
 		SAFE_DELETE_ARRAY(m_pMeshCreateParams->polys);
 		SAFE_DELETE_ARRAY(m_pMeshCreateParams->polyFlags);
 	}
-}
-
-void Engine::NavMesh::Bind()
-{
 }
 
 int Engine::NavMesh::CreateAgent(const Vector3& pos, dtCrowdAgentParams& tParams)
@@ -241,16 +237,25 @@ void Engine::NavMesh::CreateNavMesh(dtNavMeshCreateParams& tParams)
 
 std::shared_ptr<Engine::Agent> Engine::NavMesh::CreateAgent(const std::string& strTag, std::shared_ptr<Engine::Transform> pTransform, const Vector3& vPos)
 {
-	std::shared_ptr<Engine::Agent> pAgent = CreateBindable<Agent>(strTag, pTransform, std::static_pointer_cast<NavMesh>(std::shared_ptr<CRef>(weak_from_this())), vPos);
+	// Phase B.4 — Agent is now a Component, not a Bindable child of NavMesh.
+	// CreateBindable<Agent> path no longer compiles (Agent ∉ Bindable).
+	// We track Agents via m_AgentList (already authoritative); the old
+	// child-list registration was redundant.
+	std::shared_ptr<Engine::Agent> pAgent = std::make_shared<Agent>(
+		pTransform,
+		std::static_pointer_cast<NavMesh>(std::shared_ptr<CRef>(weak_from_this())),
+		vPos);
+	pAgent->SetTag(strTag);
+	pAgent->Init();
 
 	m_AgentList.push_back(pAgent);
 
 	return pAgent;
 }
 
-std::shared_ptr < Engine::Bindable > Engine::NavMesh::Clone()
+std::shared_ptr<Engine::Component> Engine::NavMesh::Clone()
 {
-	return std::shared_ptr<Bindable>();
+	return std::shared_ptr<Component>();
 }
 
 void Engine::NavMesh::Save(FILE* pFile)
@@ -333,13 +338,11 @@ void Engine::NavMesh::Load(FILE* pFile)
 
 	CreateNavMesh(*m_pMeshCreateParams);
 
-	std::vector<std::shared_ptr<Bindable>> vecAgent;
-
-	FindChilds(BINDABLE_TYPE::AGENT, vecAgent);
-
-	for (size_t i = 0; i < vecAgent.size(); ++i)
+	// Phase B.4 — Agents are now tracked via m_AgentList (Components),
+	// not the old Bindable child-list FindChilds(BINDABLE_TYPE::AGENT).
+	for (auto& pAgent : m_AgentList)
 	{
-		std::static_pointer_cast<Agent>(vecAgent[i])->SetNavMesh(std::static_pointer_cast<NavMesh>(std::shared_ptr<CRef>(weak_from_this())));
+		pAgent->SetNavMesh(std::static_pointer_cast<NavMesh>(std::shared_ptr<CRef>(weak_from_this())));
 	}
 }
 

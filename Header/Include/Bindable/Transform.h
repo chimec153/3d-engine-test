@@ -1,14 +1,21 @@
 #pragma once
 
 #include "../Types.h"
+#include "../Component/Component.h"
 
 namespace Engine
 {
     template <typename T>
     class ConstantBuffer;
 
+    // Phase B.3 — Transform migrated from Bindable to Component. Transform
+    // owns a constant buffer it uploads/binds, but it is fundamentally a
+    // CPU scene-graph node (position/rotation/scale + parent/child links),
+    // so it belongs on the Component side. Drawable now binds the
+    // transform CB explicitly during its render path instead of relying on
+    // child-list iteration finding a Bindable Transform.
     class ENGINE_DLL Transform :
-        public Bindable
+        public Component
     {
         friend class Drawable;
 
@@ -127,9 +134,13 @@ namespace Engine
     public:
         virtual void Update(float fDeltaTime) override;
         virtual void PostUpdate(float fDeltaTime) override;
-        virtual void Bind() override;
-        virtual std::shared_ptr<Bindable> Clone() override;
-        virtual void PostBind() override;
+        virtual std::shared_ptr<Component> Clone() override;
+
+        // Bind/PostBind are NOT virtual overrides anymore (Component has
+        // no Bind/PostBind interface). They're regular methods invoked
+        // directly by Drawable's render path.
+        void Bind();
+        void PostBind();
 
     public:
         virtual void Save(FILE* pFile) override;

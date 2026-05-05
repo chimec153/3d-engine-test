@@ -62,32 +62,30 @@ VS_Terrain_Out VS_Terrain(VSStandardIn input)
     
     float3 pos = input.pos;
     
+    // X uses Width, Z uses Height. Old code divided Z by Width too — works
+    // only for square terrains and creates skewed UVs otherwise.
     output.blend_uv.x = pos.x / g_iTerrainWidth;
-    output.blend_uv.y = 1.f - pos.z / g_iTerrainWidth;
-    
+    output.blend_uv.y = 1.f - pos.z / g_iTerrainHeight;
+
     float3 leftpos = input.pos;
     leftpos.x -= 1.f;
-    
-    float2 leftuv = leftpos.xz / g_iTerrainWidth;
-    leftuv.y = 1.f - leftuv.y;
-    
+
+    float2 leftuv = float2(leftpos.x / g_iTerrainWidth, 1.f - leftpos.z / g_iTerrainHeight);
+
     float3 rightpos = input.pos;
     rightpos.x += 1.f;
-    
-    float2 rightuv = rightpos.xz / g_iTerrainWidth;
-    rightuv.y = 1.f - rightuv.y;
-    
+
+    float2 rightuv = float2(rightpos.x / g_iTerrainWidth, 1.f - rightpos.z / g_iTerrainHeight);
+
     float3 uppos = input.pos;
     uppos.z += 1.f;
-    
-    float2 upuv = uppos.xz / g_iTerrainWidth;
-    upuv.y = 1.f - upuv.y;
-    
+
+    float2 upuv = float2(uppos.x / g_iTerrainWidth, 1.f - uppos.z / g_iTerrainHeight);
+
     float3 downpos = input.pos;
     downpos.z -= 1.f;
-    
-    float2 downuv = downpos.xz / g_iTerrainWidth;
-    downuv.y = 1.f - downuv.y;
+
+    float2 downuv = float2(downpos.x / g_iTerrainWidth, 1.f - downpos.z / g_iTerrainHeight);
     
     pos.y = g_HeightTexture.SampleLevel(g_sPoint, output.blend_uv, 0.f).r * 255.f;
     leftpos.y = g_HeightTexture.SampleLevel(g_sPoint, leftuv, 0.f).r * 255.f;
@@ -320,45 +318,51 @@ PSOut PS_NoTexture(VSOut input)
 PSOut PS_Terrain(VS_Terrain_Out input)
 {
     PSOut output;
-    
-    float3 normal = normalize(input.normal);
-    
-    float3 tangent = normalize(input.tangent.xyz);
-    
-    float3 bitangent = cross(normal, tangent) * input.tangent.w;
-    
-    int iTileIndex = (int) (input.blend_uv.x * g_iTerrainWidth) + (int) (g_iTerrainHeight * input.blend_uv.y) * g_iTerrainWidth;
-    
-    int iTileType = g_BlendTerrainTexture[iTileIndex];
-        
-    float3 vNormal = g_TerrainNormalTexture.Sample(g_sAnisotropic, float3(input.uv, iTileType)).xyz;
-        
-    float3 vTexture = g_TerrainTexture.Sample(g_sAnisotropic, float3(input.uv, iTileType)).xyz;
 
+    float3 normal = normalize(input.normal);
+
+    float3 tangent = normalize(input.tangent.xyz);
+
+    float3 bitangent = cross(normal, tangent) * input.tangent.w;
+
+    // Tile-index lookup. blend_uv may equal 1.0 exactly at the edge (VS uses
+    // 1.f - pos.z/Width which hits 1.0 when pos.z == 0), so clamp to avoid
+    // out-of-bounds reads into BlendTerrainTexture (StructuredBuffer<int>).
+    int x_idx = clamp((int) (input.blend_uv.x * g_iTerrainWidth),  0, g_iTerrainWidth  - 1);
+    int y_idx = clamp((int) (input.blend_uv.y * g_iTerrainHeight), 0, g_iTerrainHeight - 1);
+    int iTileIndex = y_idx * g_iTerrainWidth + x_idx;
+
+    // Tile type drives which slice of the Texture2DArray each sample reads.
+    // Guard against garbage / negative values (texture-array layer indexing
+    // wraps oddly otherwise).
+    int iTileType = max(0, g_BlendTerrainTexture[iTileIndex]);
+
+    float3 vNormal   = g_TerrainNormalTexture.Sample  (g_sAnisotropic, float3(input.uv, iTileType)).xyz;
+    float3 vTexture  = g_TerrainTexture.Sample        (g_sAnisotropic, float3(input.uv, iTileType)).xyz;
     float3 vEmissive = g_TerrainEmissiveTexture.Sample(g_sAnisotropic, float3(input.uv, iTileType)).xyz;
-        
     float3 vSpecular = g_TerrainSpecularTexture.Sample(g_sAnisotropic, float3(input.uv, iTileType)).xyz;
-    
+
     float3 N = normalize(vNormal * 2.f - 1.f);
-    
+
     output.value1.xyz = normalize(float3(
     tangent.x * N.x + bitangent.x * N.y + normal.x * N.z,
     tangent.y * N.x + bitangent.y * N.y + normal.y * N.z,
     tangent.z * N.x + bitangent.z * N.y + normal.z * N.z)) * 0.5f + 0.5f;
-        
+
     //output.value1.xyz = normalize(normal.xyz) * 0.5f + 0.5f;
-    
-    output.value0.xyz = g_vDiffuseColor.xyz * vTexture + g_vEmissiveColor.xyz * vEmissive;
-    
+
+    //output.value0.xyz = g_vDiffuseColor.xyz * vTexture + g_vEmissiveColor.xyz * vEmissive;
+    output.value0.xyz = g_vDiffuseColor.xyz * vTexture;
+
     output.value0.w = g_vMaterialRoughness.x;
     output.value1.w = g_vMaterialRoughness.y;
-    
+
     output.value2.xyz = vSpecular;
-    
+
     output.value2.w = g_fMaterialFraction;
-    
+
     output.value3.xyz = g_vSpecularColor.xyz;
-    
+
     return output;
 }
 
@@ -524,7 +528,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     float LDotH = max(dot(light, hdir),0.0);
     
-    float NDotV = max(dot(normal, view),0.0);
+    float NDotV = max(dot(normal, view), 0.0001);
     
     float3 reflect = 2.0 * (NDotV) * normal - view;
     
@@ -560,10 +564,18 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     //return float4(outgoingLight, 1.0);
     
-    float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
-    + (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
+    //float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
+    //+ (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
     
-    finalColor.xyz = ApplyFog(finalColor.xyz, mul(float4(viewPos, 1.f), g_matInvView).y, viewPos);
+    float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
+    + (1.f - materialFraction) * envColor);
+    
+    // ApplyFog needs world-space data for both args. Pass camera world Y
+    // (g_matInvView row 3 column = camera position) as eyePosY, and the
+    // world-space camera→pixel vector as eyeToPixel.
+    float3 worldPixelPos = mul(float4(viewPos, 1.f), g_matInvView).xyz;
+    float3 worldCamPos   = mul(float4(0.f, 0.f, 0.f, 1.f), g_matInvView).xyz;
+    finalColor.xyz = ApplyFog(finalColor.xyz, worldCamPos.y, worldPixelPos - worldCamPos);
     
     return finalColor;
     

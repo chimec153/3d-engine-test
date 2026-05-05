@@ -13,6 +13,7 @@
 #include "BindableManager.h"
 #include "../Render/RenderManager.h"
 #include "PointLight.h"
+#include "Collider.h"
 #include "ColliderSphere.h"
 #include "../Collision/CollisionManager.h"
 #include "PixelShader.h"
@@ -57,13 +58,21 @@ namespace Engine
 
 	Drawable::Drawable(const Drawable& drawable) :
 		Bindable(drawable)
-		, m_pTransform(std::static_pointer_cast<Transform>(FindChild(BINDABLE_TYPE::TRANSFORM)))
+		// Phase B.3 — Transform now lives in m_ComponentChildren, not the
+		// Bindable child list. Clone each component first, then look up
+		// our transform in the cloned list. Done before initializer-list
+		// fields below by hoisting into the body via member init order
+		// (m_ComponentChildren is declared AFTER m_pTransform, so the
+		// runtime cloning happens in the body).
+		, m_pTransform(nullptr)
 		, m_pMaterial(std::static_pointer_cast<Material>(FindChild(BINDABLE_TYPE::MATERIAL)))
 		, m_vecTexture(drawable.m_vecTexture)
 		, m_pMesh(std::static_pointer_cast<Mesh>(FindChild(BINDABLE_TYPE::MESH)))
 		, m_pVertexShader(drawable.m_pVertexShader)
 		, m_pPixelShader(drawable.m_pPixelShader)
-		, m_pCollider(std::static_pointer_cast<Collider>(FindChild(OBJECT_TYPE::COLLIDER)))
+		// Phase B.4 — Collider migrated to Component; resolved in body after
+		// component children are cloned (initializer order matters).
+		, m_pCollider(nullptr)
 		, m_pAnimation(std::static_pointer_cast<Animation>(FindChild(BINDABLE_TYPE::ANIMATION)))
 		, m_pAgent(drawable.m_pAgent ? std::static_pointer_cast<Agent>(drawable.m_pAgent->Clone()) : nullptr)
 		, m_tSphereInfo(drawable.m_tSphereInfo)
@@ -77,6 +86,28 @@ namespace Engine
 		, m_eRenderLayer(drawable.m_eRenderLayer)
 		, m_iInstanceKey(drawable.m_iInstanceKey)
 	{
+		// Phase B.3 — Bindable::Bindable(const&) cloned Bindable children
+		// only. Component children must be cloned here.
+		for (const auto& src : drawable.m_ComponentChildren)
+		{
+			auto cloned = src->Clone();
+			if (cloned)
+				m_ComponentChildren.push_back(std::static_pointer_cast<Component>(cloned));
+		}
+		m_pTransform = std::static_pointer_cast<Transform>(FindComponent(COMPONENT_TYPE::TRANSFORM));
+
+		// Phase B.4 — pull the cloned Collider out of m_ComponentChildren.
+		// Any of the four collider types qualifies; the Drawable's m_pCollider
+		// stores the base pointer.
+		for (const auto& pComp : m_ComponentChildren)
+		{
+			if (auto pColl = std::dynamic_pointer_cast<Collider>(pComp))
+			{
+				m_pCollider = pColl;
+				break;
+			}
+		}
+
 		SetTransform(m_pTransform);
 
 		if (m_pAnimation)
@@ -99,9 +130,12 @@ namespace Engine
 	{
 		m_pTransform = pTransform;
 
-		if (GetParent())
+		// Phase B.3 — Transform is now a Component, not a Bindable child.
+		// Parent's Transform comes from the parent Drawable's m_pTransform
+		// (accessible via GetTransform()), not from a child-list lookup.
+		if (auto* pParentDrawable = dynamic_cast<Drawable*>(GetParent()))
 		{
-			std::shared_ptr<Transform> pParentTransform = GetParent()->FindChild<Transform>();
+			std::shared_ptr<Transform> pParentTransform = pParentDrawable->GetTransform();
 
 			m_pTransform->SetParentTransform(pParentTransform.get());
 
@@ -111,12 +145,16 @@ namespace Engine
 			}
 		}
 
+		// For each child Drawable in our Bindable child list, link its
+		// Transform up to ours. Non-Drawable Bindables don't carry
+		// Transforms anymore (Transform is Drawable-owned via m_pTransform).
 		std::list<std::shared_ptr<Bindable>>::const_iterator iter = GetChildList().begin();
 		std::list<std::shared_ptr<Bindable>>::const_iterator iterEnd = GetChildList().end();
 
 		for (; iter != iterEnd; ++iter)
 		{
-			std::shared_ptr<Transform> pChildTransform = (*iter)->FindChild<Transform>();
+			auto* pChildDrawable = dynamic_cast<Drawable*>((*iter).get());
+			std::shared_ptr<Transform> pChildTransform = pChildDrawable ? pChildDrawable->GetTransform() : nullptr;
 
 			if (pChildTransform != nullptr)
 			{
@@ -176,9 +214,8 @@ namespace Engine
 		case BINDABLE_TYPE::MATERIAL:
 			SetMaterial(std::static_pointer_cast<Material>(bind));
 			break;
-		case BINDABLE_TYPE::TRANSFORM:
-			SetTransform(std::static_pointer_cast<Transform>(bind));
-			break;
+		// Phase B.3 — Transform migrated to Component. Adds for Transform
+		// flow through AddChild(shared_ptr<Component>) overload, not here.
 		case BINDABLE_TYPE::ANIMATION:
 			SetAnimation(std::static_pointer_cast<Animation>(bind));
 			break;
@@ -191,11 +228,32 @@ namespace Engine
 		__super::AddChild(bind);
 	}
 
+	namespace
+	{
+		// Phase B.3 — replacement for FindChilds<Transform>. Walks the
+		// Bindable subtree, picking up the m_pTransform of every Drawable
+		// encountered. Transform itself is no longer a Bindable child, so
+		// the old recursive Bindable lookup misses it; we descend into
+		// Drawables explicitly instead.
+		void GatherSubtreeDrawableTransforms(Bindable* root, std::vector<std::shared_ptr<Transform>>& out)
+		{
+			if (!root) return;
+			if (auto* pDrawable = dynamic_cast<Drawable*>(root))
+			{
+				if (auto t = pDrawable->GetTransform()) out.push_back(t);
+			}
+			for (const auto& child : root->GetChildList())
+			{
+				GatherSubtreeDrawableTransforms(child.get(), out);
+			}
+		}
+	}
+
 	void Drawable::AddDrawable(const std::shared_ptr<class Bindable>& pChild)
 	{
 		std::vector<std::shared_ptr<Transform>> vecChildTransform;
 
-		pChild->FindChilds<Transform>(vecChildTransform);
+		GatherSubtreeDrawableTransforms(pChild.get(), vecChildTransform);
 
 		for (int i = 0; i < static_cast<int>(vecChildTransform.size()); ++i)
 		{
@@ -459,14 +517,48 @@ namespace Engine
 		CollisionManager::GetInst()->AddDrawable(this);
 	}
 
+	namespace
+	{
+		// Phase B.2 — shared lifecycle iteration over Component children.
+		// Mirrors Bindable's pattern: drop inactive, skip disabled, dispatch
+		// to the named lifecycle method.
+		template <typename Fn>
+		void ForEachActiveComponent(std::list<std::shared_ptr<Component>>& list, Fn fn)
+		{
+			for (auto iter = list.begin(); iter != list.end();)
+			{
+				if (!(*iter)->IsActive())
+				{
+					iter = list.erase(iter);
+					continue;
+				}
+				if (!(*iter)->IsEnable())
+				{
+					++iter;
+					continue;
+				}
+				fn(*iter);
+				++iter;
+			}
+		}
+	}
+
 	void Drawable::Input(float fDeltaTime)
 	{
 		__super::Input(fDeltaTime);
+		ForEachActiveComponent(m_ComponentChildren, [&](const std::shared_ptr<Component>& p) { p->Input(fDeltaTime); });
 	}
 
 	void Drawable::Update(float fDeltaTime)
 	{
 		__super::Update(fDeltaTime);
+		ForEachActiveComponent(m_ComponentChildren, [&](const std::shared_ptr<Component>& p) { p->Update(fDeltaTime); });
+	}
+
+	void Drawable::FixedUpdate(float fDeltaTime)
+	{
+		__super::FixedUpdate(fDeltaTime);
+		ForEachActiveComponent(m_ComponentChildren, [&](const std::shared_ptr<Component>& p) { p->FixedUpdate(fDeltaTime); });
 	}
 
 	void Drawable::Collision(float fDeltaTime)
@@ -479,6 +571,13 @@ namespace Engine
 		}
 
 		__super::Collision(fDeltaTime);
+		ForEachActiveComponent(m_ComponentChildren, [&](const std::shared_ptr<Component>& p) { p->Collision(fDeltaTime); });
+	}
+
+	void Drawable::PostUpdate(float fDeltaTime)
+	{
+		__super::PostUpdate(fDeltaTime);
+		ForEachActiveComponent(m_ComponentChildren, [&](const std::shared_ptr<Component>& p) { p->PostUpdate(fDeltaTime); });
 	}
 
 	void Drawable::PreDraw(float fDeltaTime)
@@ -496,6 +595,83 @@ namespace Engine
 		RenderManager::GetInst()->AddDrawable(std::static_pointer_cast<Drawable>(shared_from_this()));
 
 		__super::PreDraw(fDeltaTime);
+		ForEachActiveComponent(m_ComponentChildren, [&](const std::shared_ptr<Component>& p) { p->PreDraw(fDeltaTime); });
+	}
+
+	void Drawable::AddChild(const std::shared_ptr<Component>& pComp)
+	{
+		assert(pComp != nullptr);
+		pComp->SetParent(nullptr); // Component parent is another Component; Drawable
+		// is currently a Bindable, not a Component. Future B.4+ work may
+		// promote Drawable to Component, at which point SetParent(this)
+		// becomes meaningful again. For now, components owned by a Drawable
+		// have a null component-parent.
+		pComp->SetOwner(this);
+		m_ComponentChildren.push_back(pComp);
+
+		// Phase B.3 — Transform special case: Drawable holds a direct
+		// reference (m_pTransform) and needs the parent/child Transform
+		// hierarchy linked. Mirrors the legacy AddChild(Bindable) behavior
+		// for BINDABLE_TYPE::TRANSFORM.
+		if (pComp->GetComponentType() == COMPONENT_TYPE::TRANSFORM)
+		{
+			SetTransform(std::static_pointer_cast<Transform>(pComp));
+		}
+		else if (auto pCompTransform = pComp->GetTransform())
+		{
+			// Phase B.5 — Components that own their own Transform (Camera,
+			// future Light) get hierarchy-linked to this Drawable's
+			// Transform so SetRelativePosition etc. work correctly.
+			pCompTransform->SetParentTransform(m_pTransform.get());
+			if (m_pTransform)
+				m_pTransform->AddChildTransform(pCompTransform.get());
+		}
+
+#ifdef _DEBUG
+		// Phase B.4 — Collider's debug visualization Drawable used to live
+		// in the Collider's own Bindable child list (when Collider was a
+		// Bindable). Now that Collider is a Component, re-parent the debug
+		// Drawable onto this owning Drawable's Bindable child list so the
+		// existing render path picks it up automatically (PreDraw chain →
+		// AddDrawable → drawn during the alpha pass with proper Transform
+		// linkage).
+		if (auto* pCollider = dynamic_cast<Collider*>(pComp.get()))
+		{
+			if (auto pDebug = pCollider->GetDebugDrawable())
+			{
+				AddChild(std::static_pointer_cast<Bindable>(pDebug));
+			}
+		}
+#endif
+	}
+
+	const std::list<std::shared_ptr<Component>>& Drawable::GetComponentList() const
+	{
+		return m_ComponentChildren;
+	}
+
+	std::shared_ptr<Component> Drawable::FindComponent(COMPONENT_TYPE eType) const
+	{
+		for (const auto& pComp : m_ComponentChildren)
+		{
+			if (pComp->GetComponentType() == eType)
+				return pComp;
+		}
+		return nullptr;
+	}
+
+	std::shared_ptr<Component> Drawable::FindComponent(const std::string& strTag) const
+	{
+		for (const auto& pComp : m_ComponentChildren)
+		{
+			if (pComp->GetTag() == strTag)
+				return pComp;
+
+			std::shared_ptr<Component> p = pComp->FindChild(strTag);
+			if (p)
+				return p;
+		}
+		return nullptr;
 	}
 
 	void Drawable::Bind()
@@ -533,6 +709,9 @@ namespace Engine
 
 	void Drawable::BindExceptShader()
 	{
+		// Phase B.3 — Transform is now Component-side; bind its CB explicitly.
+		if (m_pTransform) m_pTransform->Bind();
+
 		std::list<std::shared_ptr<Bindable>>::const_iterator iter = GetChildList().begin();
 		std::list<std::shared_ptr<Bindable>>::const_iterator iterEnd = GetChildList().end();
 
@@ -542,7 +721,6 @@ namespace Engine
 			{
 			case BINDABLE_TYPE::VERTEX_BUFFER:
 			case BINDABLE_TYPE::INDEX_BUFFER:
-			case BINDABLE_TYPE::TRANSFORM:
 			case BINDABLE_TYPE::INPUTLAYOUT:
 			case BINDABLE_TYPE::TOPOLOGY:
 				(*iter)->Bind();
@@ -557,6 +735,10 @@ namespace Engine
 
 	void Drawable::PostBindExceptShader()
 	{
+		// Phase B.3 — Transform's PostBind is part of the same render
+		// pair as its Bind (resets joint sequence SRV).
+		if (m_pTransform) m_pTransform->PostBind();
+
 		std::list<std::shared_ptr<Bindable>>::const_iterator iter = GetChildList().begin();
 		std::list<std::shared_ptr<Bindable>>::const_iterator iterEnd = GetChildList().end();
 
@@ -566,7 +748,6 @@ namespace Engine
 			{
 			case BINDABLE_TYPE::VERTEX_BUFFER:
 			case BINDABLE_TYPE::INDEX_BUFFER:
-			case BINDABLE_TYPE::TRANSFORM:
 			case BINDABLE_TYPE::INPUTLAYOUT:
 			case BINDABLE_TYPE::TOPOLOGY:
 				(*iter)->PostBind();
@@ -576,6 +757,9 @@ namespace Engine
 
 	void Drawable::PostBind()
 	{
+		// Phase B.3 — Transform PostBind explicitly.
+		if (m_pTransform) m_pTransform->PostBind();
+
 		const std::list<std::shared_ptr<Bindable>>& ChildList = GetChildList();
 
 		std::list<std::shared_ptr<Bindable>>::const_iterator iter = ChildList.begin();
@@ -594,6 +778,12 @@ namespace Engine
 
 	void Drawable::BindChild()
 	{
+		// Phase B.3 — Transform CB upload+bind happens here (was previously
+		// achieved via the Bindable child-list iteration below picking up a
+		// Transform Bindable — Transform is now a Component so we drive its
+		// Bind explicitly).
+		if (m_pTransform) m_pTransform->Bind();
+
 		const std::list<std::shared_ptr<Bindable>>& ChildList = GetChildList();
 
 		std::list<std::shared_ptr<Bindable>>::const_iterator iter = ChildList.begin();
@@ -990,17 +1180,14 @@ namespace Engine
 
 				fread(strTag.get(), 1, iLength, pFile);
 
-				std::shared_ptr<Agent> pAgent = std::static_pointer_cast<Agent>(GetScene()->FindBindable(strTag.get()));
-
-				if (pAgent)
-				{
-					m_pAgent = pAgent;
-				}
-
-				if (m_pAgent)
-				{
-					m_pAgent->SetTransform(GetTransform());
-				}
+				// Phase B.4 — Agent migrated to Component. Scene::FindBindable
+				// returns Bindable so it can no longer find an Agent. Old
+				// .scn files store the Agent's tag here; resolution by tag
+				// requires component-aware lookup which we haven't built yet
+				// (an upcoming Scene/SceneManager API). For now, drop the
+				// linkage on load — Agents created post-load via NavMesh
+				// CreateAgent + Drawable::SetAgent still work normally.
+				(void)strTag;
 			}
 		}
 	}

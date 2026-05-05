@@ -19,9 +19,20 @@ namespace Engine
 	{
 	}
 
+	ID3D11PixelShader* PixelShader::s_pBoundPS = nullptr;
+
+	void PixelShader::ResetBoundCache()
+	{
+		s_pBoundPS = nullptr;
+	}
+
 	void PixelShader::Bind()
 	{
-		Graphics::GetInst()->GetDeviceContext()->PSSetShader(*pPixelShader, nullptr, 0);
+		ID3D11PixelShader* mine = *pPixelShader;
+		if (mine == s_pBoundPS)
+			return;
+		Graphics::GetInst()->GetDeviceContext()->PSSetShader(mine, nullptr, 0);
+		s_pBoundPS = mine;
 	}
 
 	void PixelShader::GetAndBind()
@@ -33,7 +44,7 @@ namespace Engine
 
 	void PixelShader::PostBind()
 	{
-		Graphics::GetInst()->GetDeviceContext()->PSSetShader(nullptr, nullptr, 0);
+		// No-op — see VertexShader::PostBind for rationale.
 	}
 
 	std::shared_ptr<Bindable> PixelShader::Clone()

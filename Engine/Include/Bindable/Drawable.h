@@ -4,6 +4,7 @@
 #include "../Types.h"
 #include "../Core/Window.h"
 #include "Bindable.h"
+#include "../Component/Component.h"
 #include "FbxLoader.h"
 
 namespace Engine
@@ -35,6 +36,11 @@ namespace Engine
 		std::shared_ptr<class Agent>  m_pAgent;
 		RENDER_LAYER m_eRenderLayer;
 		size_t m_iInstanceKey;
+
+		// Phase B.2 — Component children list (sibling of Bindable
+		// children). Empty until Phase B.3+ migrations move types
+		// like Transform/Camera/Collider* off the Bindable hierarchy.
+		std::list<std::shared_ptr<Component>> m_ComponentChildren;
 
 	public:
 		void SetTransform(const std::shared_ptr<class Transform>& pTransform);
@@ -70,11 +76,54 @@ namespace Engine
 		virtual void Start() override;
 		virtual void Input(float fDeltaTime) override;
 		virtual void Update(float fDeltaTime) override;
+		virtual void FixedUpdate(float fDeltaTime) override;
 		virtual void Collision(float fDeltaTime) override;
+		virtual void PostUpdate(float fDeltaTime) override;
 		virtual void PreDraw(float fDeltaTime) override;
 		virtual void Bind() override;
 		virtual void DrawShadow();
 		virtual std::shared_ptr<Bindable> Clone();
+
+	public:
+		// Phase B.2 — Component children API. Overloaded names
+		// (AddChild/FindChild) for Component shared_ptr; type-distinct
+		// from the existing Bindable overloads, so callers pick the
+		// correct list automatically based on the argument type.
+		void AddChild(const std::shared_ptr<Component>& pComp);
+		const std::list<std::shared_ptr<Component>>& GetComponentList() const;
+		std::shared_ptr<Component> FindComponent(COMPONENT_TYPE eType) const;
+		std::shared_ptr<Component> FindComponent(const std::string& strTag) const;
+
+		// Component analogue of Bindable::CreateBindable. Constructs a
+		// Component subclass T, tags it, Init's it, and adds it to this
+		// Drawable's m_ComponentChildren via AddChild(Component) (which
+		// also wires SetOwner and Transform special-casing).
+		template <typename T, typename ...Args>
+		std::shared_ptr<T> CreateComponent(const std::string& strTag, Args... args)
+		{
+			std::shared_ptr<T> pComp = std::make_shared<T>(args...);
+			if (!pComp) return nullptr;
+			pComp->SetTag(strTag);
+			if (!pComp->Init())
+				return nullptr;
+			AddChild(std::static_pointer_cast<Component>(pComp));
+			return pComp;
+		}
+
+		template <typename T>
+		std::shared_ptr<T> FindComponent() const
+		{
+			for (const auto& pComp : m_ComponentChildren)
+			{
+				if (typeid(*pComp.get()) == typeid(T))
+					return std::static_pointer_cast<T>(pComp);
+
+				std::shared_ptr<T> p = pComp->FindChild<T>();
+				if (p)
+					return p;
+			}
+			return nullptr;
+		}
 
 	public:
 		void BindExceptShader();

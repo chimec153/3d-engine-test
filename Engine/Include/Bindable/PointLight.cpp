@@ -15,12 +15,24 @@
 namespace Engine
 {
 	PointLight::PointLight() :
-		Drawable()
+		Component()
 		, pPointCBuffer(StaticFindBindable<ConstantBuffer<POINTLIGHT>>("PointLightCBuffer"))
+		, tPointLight{}                  // zero-init: prevents garbage intensity/color
 		, matView(Matrix::matIdentity)
 		, matViewProject(Matrix::matIdentity)
 	{
-		SetBindableType(Engine::BINDABLE_TYPE::LIGHT);
+		SetComponentType(COMPONENT_TYPE::LIGHT);
+
+		// Sensible defaults — without these, GameScene-created lights that
+		// only call SetLightType end up with garbage in the cbuffer and the
+		// deferred PS_Multi sees C = garbage * garbage → screen-wide blowout.
+		tPointLight.color        = { 1.f, 1.f, 1.f, 1.f };
+		tPointLight.ambientColor = { 0.2f, 0.2f, 0.2f, 1.f };
+		tPointLight.dir          = { 0.3f, -0.7f, 0.5f };  // pointing down/forward
+		tPointLight.fIntensity   = 1.f;
+		tPointLight.fConstantAttenuation  = 1.f;
+		tPointLight.fLinearAttenuation    = 0.f;
+		tPointLight.fQuadraticAttenuation = 0.f;
 	}
 
 	void PointLight::SetLightType(LIGHT_TYPE eType)
@@ -135,7 +147,7 @@ namespace Engine
 		tPointLight.fConstantAttenuation = 1.f;
 		tPointLight.fLinearAttenuation = 0.045f;
 		tPointLight.fQuadraticAttenuation = 0.0075f;
-		tPointLight.fIntensity = 10.f;
+		tPointLight.fIntensity = 1.f;
 
 		tPointLight.eLightType = LIGHT_TYPE::POINT;
 
@@ -161,83 +173,12 @@ namespace Engine
 
 		Reset();
 
-		const std::shared_ptr<Drawable>& pChild = CreateBindable<Drawable>("sphere");
+		m_pTransform = std::make_shared<Transform>();
+		AddChild(m_pTransform);
 
-		if (pChild != nullptr)
-		{
-			std::string name = "Sphere";
-
-			name += std::to_string(8);
-
-			name += "_";
-
-			name += std::to_string(8);
-
-			//std::shared_ptr<VertexBuffer<VERTEX>> pVertexBuffer = StaticFindBindable<VertexBuffer<VERTEX>>(name);
-
-			//if (pVertexBuffer == nullptr)
-			//{
-			//	std::vector<VERTEX> vecVertex;
-
-			//	Sphere::CreateSphereVertex<VERTEX>(8, 8, vecVertex);
-
-			//	pVertexBuffer = StaticCreateBindable<VertexBuffer<VERTEX>>(name, &vecVertex[0], static_cast<int>(vecVertex.size()));
-			//}
-
-			//pChild->AddBind(pVertexBuffer);
-
-			//std::shared_ptr<IndexBuffer> pIndexBuffer = StaticFindBindable<IndexBuffer>(name);
-
-			//if (pIndexBuffer == nullptr)
-			//{
-			//	std::vector<unsigned int> vecIndex;
-
-			//	Sphere::CreateSphereIndex(8, 8, vecIndex);
-
-			//	pIndexBuffer = StaticCreateBindable<IndexBuffer>(name, vecIndex);
-			//}
-
-			//pChild->AddBind(pIndexBuffer);
-
-			//pChild->SetIndexBuffer(pIndexBuffer);
-
-			std::shared_ptr<VertexShader> pVertexShader = StaticFindBindable<VertexShader>("PointLightVS");
-
-			if (pVertexShader == nullptr)
-			{
-				pVertexShader = StaticCreateBindable<VertexShader>("VertexShader VS", TEXT("VertexShader.hlsl"), "VS");
-			}
-
-			pChild->AddChild(pVertexShader);
-
-			std::shared_ptr<PixelShader> pPixelShader = StaticFindBindable<PixelShader>("MultiPS");
-
-			if (pPixelShader == nullptr)
-			{
-				pPixelShader = StaticCreateBindable<PixelShader>("PixelShader PS_White", TEXT("PixelShader.hlsl"), "PS_White");
-			}
-
-			pChild->AddChild(pPixelShader);
-
-			pChild->FindAndAddBind<HullShader>("PointLightHS");
-
-			pChild->FindAndAddBind<DomainShader>("PointLightDS");
-
-			std::shared_ptr<InputLayout> pInputLayout = StaticFindBindable<InputLayout>("P");
-
-			if (pInputLayout == nullptr)
-			{
-				D3D11_INPUT_ELEMENT_DESC desc = { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 };
-
-				pInputLayout = StaticCreateBindable<InputLayout>("P", pVertexShader, &desc, static_cast<int>(sizeof(desc) / sizeof(D3D11_INPUT_ELEMENT_DESC)));
-			}
-
-			pChild->AddChild(pInputLayout);
-
-			pChild->AddChild(StaticFindBindable<Topology>("1ControlPointPatch"));
-		}
-
-		NotUseShadow();
+		// Phase B.7 — old code created a child "sphere" Drawable with
+		// VS/HS/DS/IL/Topology configured but never added a Mesh, so it
+		// never actually rendered. Removed as dead code.
 
 		return true;
 	}
@@ -299,13 +240,19 @@ namespace Engine
 	void PointLight::Bind()
 	{
 		pPointCBuffer->UpdateBuffer(tPointLight);
-
 		pPointCBuffer->Bind();
-
-		__super::Bind();
+		// Phase B.7 — Component has no Bind to delegate to. The CB upload
+		// + bind is the entire job for the deferred lighting pass.
 	}
 
-	std::shared_ptr<Bindable> PointLight::Clone()
+	void PointLight::PostBind()
+	{
+		// No-op for now — RenderManager calls this for symmetry with the
+		// old Drawable::Bind/PostBind pair, but light CB doesn't need a
+		// cleanup step.
+	}
+
+	std::shared_ptr<Component> PointLight::Clone()
 	{
 		return std::make_shared<PointLight>(*this);
 	}

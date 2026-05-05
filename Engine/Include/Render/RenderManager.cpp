@@ -34,6 +34,7 @@
 #include "../RenderV2/Demo.h"
 #include "../RenderV2/GpuResources.h"
 #include "../RenderV2/EngineShaderCB.h"
+#include <algorithm>
 
 namespace Engine
 {
@@ -706,13 +707,39 @@ namespace Engine
 	{
 		pMRT->SetTargets();
 
-		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[0].begin();
-		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[0].end();
+		// Invalidate the per-shader bound caches at pass entry — between
+		// passes the actual GPU state is whatever the previous pass left,
+		// which our trackers don't observe.
+		VertexShader::ResetBoundCache();
+		PixelShader::ResetBoundCache();
+		InputLayout::ResetBoundCache();
+		Topology::ResetBoundCache();
+		Sampler::ResetBoundCache();
+		Texture::ResetBoundCache();
 
-		for (; iter != iterEnd; ++iter)
+		// Sort-by-state: gather opaque drawables, order by VS / PS / Material
+		// pointer so adjacent draws share GPU state. Bind/PostBind machinery
+		// itself unchanged — this just improves call-order coherence.
+		// Alpha pass deliberately untouched (back-to-front depth order
+		// matters there).
+		std::vector<Drawable*> sorted;
+		sorted.reserve(m_RenderList[0].size());
+		for (const auto& d : m_RenderList[0])
+			sorted.push_back(d.get());
+
+		std::sort(sorted.begin(), sorted.end(), [](Drawable* a, Drawable* b)
 		{
-			(*iter)->Bind();
-		}
+			const auto* avs = a->GetVertexShader().get();
+			const auto* bvs = b->GetVertexShader().get();
+			if (avs != bvs) return avs < bvs;
+			const auto* aps = a->GetPixelShader().get();
+			const auto* bps = b->GetPixelShader().get();
+			if (aps != bps) return aps < bps;
+			return a->GetMaterial().get() < b->GetMaterial().get();
+		});
+
+		for (Drawable* d : sorted)
+			d->Bind();
 
 		RenderOpaqueInst();
 
@@ -754,6 +781,14 @@ namespace Engine
 
 	void RenderManager::RenderAlpha()
 	{
+		// Pass boundary — invalidate the VS/PS bound caches.
+		VertexShader::ResetBoundCache();
+		PixelShader::ResetBoundCache();
+		InputLayout::ResetBoundCache();
+		Topology::ResetBoundCache();
+		Sampler::ResetBoundCache();
+		Texture::ResetBoundCache();
+
 		m_pHDRTexture->ResetTargets();
 
 		m_pHDRTexture->SetTargets(pMRT->GetDSV());
@@ -1059,6 +1094,12 @@ namespace Engine
 		{
 			return;
 		}
+		VertexShader::ResetBoundCache();
+		PixelShader::ResetBoundCache();
+		InputLayout::ResetBoundCache();
+		Topology::ResetBoundCache();
+		Sampler::ResetBoundCache();
+		Texture::ResetBoundCache();
 
 		pMRT->SetDepthSRV(10);
 
@@ -1416,6 +1457,13 @@ namespace Engine
 #endif
 	void RenderManager::RenderUI()
 	{
+		VertexShader::ResetBoundCache();
+		PixelShader::ResetBoundCache();
+		InputLayout::ResetBoundCache();
+		Topology::ResetBoundCache();
+		Sampler::ResetBoundCache();
+		Texture::ResetBoundCache();
+
 		m_pAlphaBlend->Bind();
 
 		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::UI)].begin();

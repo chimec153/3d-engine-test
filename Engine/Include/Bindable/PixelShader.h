@@ -26,6 +26,11 @@ namespace Engine
         void GetAndBind();
         void BindEnd();
 
+        // See VertexShader::ResetBoundCache for rationale.
+        static void ResetBoundCache();
+
+    private:
+        static ID3D11PixelShader* s_pBoundPS;
     };
 
 }

@@ -188,6 +188,24 @@ namespace Engine
 		}
 	}
 
+	void ResourceManager::DumpRegisteredTags() const
+	{
+		::OutputDebugStringA("[ResourceManager] Skeletons:\n");
+		for (const auto& [tag, _] : m_mapSkeleton)
+		{
+			char buf[256];
+			sprintf_s(buf, "  '%s'\n", tag.c_str());
+			::OutputDebugStringA(buf);
+		}
+		::OutputDebugStringA("[ResourceManager] Sequences:\n");
+		for (const auto& [tag, _] : m_mapSequence)
+		{
+			char buf[256];
+			sprintf_s(buf, "  '%s'\n", tag.c_str());
+			::OutputDebugStringA(buf);
+		}
+	}
+
 	void ResourceManager::LoadSkeleton(const char* pFilePath, const std::string& strPathKey)
 	{
 		std::shared_ptr<Skeleton> pSkeleton = std::make_shared<Skeleton>();

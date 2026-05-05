@@ -361,12 +361,13 @@ namespace Engine
 
 			if (pLayer)
 			{
-				m_pMouse = std::static_pointer_cast<Mouse>(pLayer->FindDrawable("Mouse"));
+				// Phase B.6 — Mouse migrated to Component; lookup via FindComponent.
+				m_pMouse = std::static_pointer_cast<Mouse>(pLayer->FindComponent("Mouse"));
 			}
 
 			if (!m_pMouse)
 			{
-				m_pMouse = pScene->CreateDrawable<Mouse>("Mouse", SceneManager::GetInst()->GetScene()->FindLayer(DEFAULT_LAYER));
+				m_pMouse = pScene->CreateComponent<Mouse>("Mouse", SceneManager::GetInst()->GetScene()->FindLayer(DEFAULT_LAYER));
 			}
 		}
 	}

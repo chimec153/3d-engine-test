@@ -1,6 +1,5 @@
 #pragma once
-#include "Drawable.h"
-#include "ConstantBuffer.h"
+#include "../Component/Component.h"
 #include "ConstantBuffer.h"
 
 namespace Engine
@@ -15,8 +14,13 @@ namespace Engine
         float   fFar;
     }ORTHOINFO, * PORTHOINFO;
 
+    // Phase B.7 — PointLight migrated from Drawable to Component. PointLight
+    // doesn't render itself; deferred lighting reads its CB during the
+    // RenderLight pass (Multi VS/PS fullscreen quad). Bind/PostBind kept as
+    // regular methods (not Component overrides) since RenderManager calls
+    // them directly when iterating m_LightList.
     class ENGINE_DLL PointLight :
-        public Drawable
+        public Component
     {
         friend class Scene;
 
@@ -26,6 +30,7 @@ namespace Engine
         virtual ~PointLight() override = default;
 
     private:
+        std::shared_ptr<class Transform> m_pTransform;
         std::shared_ptr<ConstantBuffer<POINTLIGHT>> pPointCBuffer;
         POINTLIGHT  tPointLight;
         Matrix  matView;
@@ -60,8 +65,15 @@ namespace Engine
         virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
         virtual void PreDraw(float fDeltaTime) override;
-        virtual void Bind() override;
-        virtual std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
+        virtual std::shared_ptr<class Transform> GetTransform() const override { return m_pTransform; }
+
+        // Bind/PostBind are NOT virtual overrides anymore (Component has
+        // no Bind interface). RenderManager::RenderLight invokes these
+        // directly when iterating m_LightList — they update + bind the
+        // light's POINTLIGHT cbuffer for the deferred shading pass.
+        void Bind();
+        void PostBind();
 
     public:
         virtual void Save(FILE* pFile) override;

@@ -568,7 +568,15 @@ namespace Engine
 	{
 		Vector3 vCross;
 
-		if (CollisionSphereToSphere(pSrc->GetInfo(), pDest->GetInfo(), static_cast<Drawable*>(pSrc->GetParent())->GetTransform()->GetVelocity(), static_cast<Drawable*>(pDest->GetParent())->GetTransform()->GetVelocity(), fDeltaTime, vCross))
+		// Phase B.4 — Collider→Component, owners via GetOwner.
+		Drawable* pSrcOwner = pSrc->GetOwner();
+		Drawable* pDstOwner = pDest->GetOwner();
+		if (!pSrcOwner || !pDstOwner) return false;
+
+		Vector3 vSrcVel = pSrcOwner->GetTransform() ? pSrcOwner->GetTransform()->GetVelocity() : Vector3{};
+		Vector3 vDstVel = pDstOwner->GetTransform() ? pDstOwner->GetTransform()->GetVelocity() : Vector3{};
+
+		if (CollisionSphereToSphere(pSrc->GetInfo(), pDest->GetInfo(), vSrcVel, vDstVel, fDeltaTime, vCross))
 		{
 			pSrc->SetCross(vCross);
 			pDest->SetCross(vCross);

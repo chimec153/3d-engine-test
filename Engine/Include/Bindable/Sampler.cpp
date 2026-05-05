@@ -30,11 +30,22 @@ namespace Engine
 	{
 	}
 
+	ID3D11SamplerState* Sampler::s_pBound[Sampler::kMaxSlots] = {};
+
+	void Sampler::ResetBoundCache()
+	{
+		for (UINT i = 0; i < kMaxSlots; ++i) s_pBound[i] = nullptr;
+	}
+
 	void Sampler::Bind()
 	{
+		ID3D11SamplerState* mine = *m_pState;
+		if (m_iSlot < kMaxSlots && s_pBound[m_iSlot] == mine)
+			return;
 		Graphics::GetInst()->GetDeviceContext()->VSSetSamplers(m_iSlot, 1, m_pState.GetAddressof());
 		Graphics::GetInst()->GetDeviceContext()->PSSetSamplers(m_iSlot, 1, m_pState.GetAddressof());
 		Graphics::GetInst()->GetDeviceContext()->CSSetSamplers(m_iSlot, 1, m_pState.GetAddressof());
+		if (m_iSlot < kMaxSlots) s_pBound[m_iSlot] = mine;
 	}
 	std::shared_ptr<Bindable> Sampler::Clone()
 	{

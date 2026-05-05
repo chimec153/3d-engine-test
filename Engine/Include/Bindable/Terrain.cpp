@@ -128,10 +128,11 @@ namespace Engine
 
 		GetTris(_vecIndex);
 
-		std::shared_ptr<ColliderMesh> pCollider = FindChild<ColliderMesh>();
+		// Phase B.4 — Collider migrated to Component; lookup via FindComponent.
+		std::shared_ptr<ColliderMesh> pCollider = std::static_pointer_cast<ColliderMesh>(FindComponent(COMPONENT_TYPE::COLLIDER_MESH));
 
 		if (!pCollider) {
-			pCollider = CreateBindable<ColliderMesh>("TerrainCollider", vecPoint, _vecIndex);
+			pCollider = CreateComponent<ColliderMesh>("TerrainCollider", vecPoint, _vecIndex);
 		}
 		else {
 			pCollider->SetInfo(vecPoint, _vecIndex);
@@ -404,6 +405,13 @@ namespace Engine
 
 		m_pDecal->FindAndAddBind<Mesh>("Box");
 		m_pDecal->FindAndAddBind<Topology>("TriangleList");
+		// BrushDecal lacks a PixelShader — it only renders while the user
+		// is hovering the terrain in brush mode (CollisionStay enables it,
+		// CollisionEnd disables it). Without an initial Disable, it renders
+		// in the opaque pass on the very first frame inheriting the prior
+		// drawable's PS (PS_Terrain), triggering a VS-PS linkage error
+		// because DECAL_VS doesn't output VS_Terrain_Out's semantics.
+		m_pDecal->Disable();
 
 		return true;
 	}

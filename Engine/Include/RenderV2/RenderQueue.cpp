@@ -75,6 +75,8 @@ namespace Engine::RenderV2
 				curMatCB = cmd.materialCB;
 			}
 
+			if (cmd.preDraw) cmd.preDraw();
+
 			ctx.DrawIndexed(cmd.indexCount, cmd.startIndex, cmd.baseVertex);
 		}
 	}

@@ -508,6 +508,32 @@ namespace Engine
 
 			fread(&eType, 4, 1, pFile);
 
+			// Phase B.3 — Transform records in old save files. Transform
+			// is no longer a Bindable child; route the saved bytes into the
+			// owning Drawable's component-side Transform. Scene-load path
+			// constructs Drawables without calling Init (which is what
+			// usually creates the default Transform), so create one on
+			// demand if the loaded Drawable has none yet.
+			if (eType == BINDABLE_TYPE::TRANSFORM)
+			{
+				if (auto* pDrawable = dynamic_cast<Drawable*>(this))
+				{
+					std::shared_ptr<Transform> pT = pDrawable->GetTransform();
+					if (!pT)
+					{
+						pT = std::make_shared<Transform>();
+						pDrawable->AddChild(pT); // routes to AddChild(Component) → SetTransform
+					}
+					pT->Load(pFile);
+					continue;
+				}
+				// No owning Drawable — drop bytes by loading into a
+				// temporary so the file pointer advances correctly.
+				Transform tmp;
+				tmp.Load(pFile);
+				continue;
+			}
+
 			std::shared_ptr<Bindable> pBindable = CreateBindable(eType);
 
 			if (!pBindable)
@@ -574,7 +600,10 @@ namespace Engine
 		case Engine::BINDABLE_TYPE::MATERIAL:
 			return std::make_shared<Material>();
 		case Engine::BINDABLE_TYPE::TRANSFORM:
-			return std::make_shared<Transform>();
+			// Phase B.3 — Transform migrated to Component. Save records
+			// from old files are handled in Bindable::Load via a special
+			// case (apply to owning Drawable's existing transform).
+			return nullptr;
 		case Engine::BINDABLE_TYPE::INPUTLAYOUT:
 			return nullptr;
 		case Engine::BINDABLE_TYPE::TOPOLOGY:
@@ -584,21 +613,22 @@ namespace Engine
 		case Engine::BINDABLE_TYPE::TERRAIN:
 			return std::make_shared<Terrain>();
 		case Engine::BINDABLE_TYPE::COLLIDER_LINE:
-			return std::make_shared<ColliderLine>();
 		case Engine::BINDABLE_TYPE::COLLIDER_SPHERE:
-			return std::make_shared<ColliderSphere>();
 		case Engine::BINDABLE_TYPE::COLLIDER_MESH:
-			return std::make_shared<ColliderMesh>();
 		case Engine::BINDABLE_TYPE::COLLIDER_OBB:
-			return std::make_shared<ColliderOBB>();
+			// Phase B.4 — Collider hierarchy migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::ANIMATION:
 			return std::make_shared<Animation>();
 		case Engine::BINDABLE_TYPE::AGENT:
-			return std::make_shared<Agent>();
+			// Phase B.4 — Agent migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::NAV_MESH:
-			return std::make_shared<NavMesh>();
+			// Phase B.4 — NavMesh migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::LIGHT:
-			return std::make_shared<PointLight>();
+			// Phase B.7 — PointLight migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::PARTICLE:
 			return std::make_shared<Particle>();
 		case Engine::BINDABLE_TYPE::DECAL:
@@ -612,7 +642,8 @@ namespace Engine
 		case Engine::BINDABLE_TYPE::CLOTH:
 			return std::make_shared<Cloth>();
 		case Engine::BINDABLE_TYPE::CAMERA:
-			return std::make_shared<Camera>();
+			// Phase B.5 — Camera migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::DRAWABLE:
 			return std::make_shared<Drawable>();
 		case Engine::BINDABLE_TYPE::BLEND_STATE:
@@ -622,7 +653,8 @@ namespace Engine
 		case Engine::BINDABLE_TYPE::RASTERIZER_STATE:
 			return nullptr;
 		case Engine::BINDABLE_TYPE::MOUSE:
-			return std::make_shared<Mouse>();
+			// Phase B.6 — Mouse migrated to Component.
+			return nullptr;
 		default:
 			assert(false);
 		}

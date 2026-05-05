@@ -25,18 +25,26 @@ namespace Engine
 		, m_vEndOffset(0.f, 0.f, 1.f)
 	{
 #ifdef _DEBUG
-		std::shared_ptr<Drawable> pDebug = CreateBindable<Drawable>("Debug");
+		// Phase B.4 — Collider is a Component now, can't use CreateBindable
+		// (a Bindable method). Construct the debug drawable directly; it
+		// gets re-parented onto the owning Drawable when this Collider is
+		// attached via Drawable::AddChild(Component).
+		auto pDebug = std::make_shared<Drawable>();
+		pDebug->SetTag("Debug");
+		pDebug->Init();
 		pDebug->FindAndAddBind<VertexShader>("anisotropic_microfacet VS");
 		pDebug->FindAndAddBind<PixelShader>("DebugPS");
 		pDebug->FindAndAddBind<Mesh>("Line");
 		pDebug->FindAndAddBind<Topology>("LineList");
 		pDebug->FindAndAddBind<InputLayout>("TPNT");
-		
+
 		std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
 		pDebug->AddChild(pMaterial->Clone());
 		pDebug->NotUseShadow();
+
+		m_pDebugDrawable = pDebug;
 #endif
-		SetBindableType(Engine::BINDABLE_TYPE::COLLIDER_LINE);
+		SetComponentType(COMPONENT_TYPE::COLLIDER_LINE);
 		SetColliderType(COLLIDER_TYPE::LINE);
 	}
 
@@ -84,11 +92,14 @@ namespace Engine
 			m_tInfo.vDir = (m_vEndOffset - m_vStartOffset) / fLength;
 
 #ifdef _DEBUG
-			std::shared_ptr<Drawable> pDebug = std::static_pointer_cast<Drawable>(FindChild("Debug"));
-
-			pDebug->GetTransform()->SetRelativePosition(m_tInfo.vStart);
-			Vector3 vUp = Vector3(0.f, 0.5f, 0.5f).Normalize();
-			pDebug->GetTransform()->SetAxis(AXIS_TYPE::Z, m_tInfo.vDir, vUp);
+			// Phase B.4 — debug drawable is now a direct member, not a
+			// child. Use the cached pointer instead of FindChild lookup.
+			if (m_pDebugDrawable)
+			{
+				m_pDebugDrawable->GetTransform()->SetRelativePosition(m_tInfo.vStart);
+				Vector3 vUp = Vector3(0.f, 0.5f, 0.5f).Normalize();
+				m_pDebugDrawable->GetTransform()->SetAxis(AXIS_TYPE::Z, m_tInfo.vDir, vUp);
+			}
 #endif
 		}
 		else
@@ -96,12 +107,11 @@ namespace Engine
 			m_tInfo.vDir = 0.f;
 		}
 
-		Bindable* pParent = GetParent();
-
-		if (pParent)
+		// Phase B.4 — owning Drawable is held in Component::m_pOwner,
+		// set by Drawable::AddChild(Component).
+		if (Drawable* pOwner = GetOwner())
 		{
-			std::shared_ptr<Transform> pTransform = std::static_pointer_cast<Transform>(pParent->FindChild(BINDABLE_TYPE::TRANSFORM));
-
+			std::shared_ptr<Transform> pTransform = pOwner->GetTransform();
 			if (pTransform)
 			{
 				m_tInfo.vStart = pTransform->GetPosition();
@@ -133,23 +143,24 @@ namespace Engine
 	void ColliderLine::PreDraw(float fDeltaTime)
 	{
 #ifdef _DEBUG
-		std::shared_ptr<Drawable> pDebug = std::static_pointer_cast<Drawable>(FindChild("Debug"));
-
-		if (GetPrevColliderList().size())
+		// Phase B.4 — debug drawable is now a direct member; the owning
+		// Drawable's render path picks it up because it's been re-parented
+		// onto the owner's m_ChildList<Bindable>. We just update the
+		// per-frame collision-state color.
+		if (m_pDebugDrawable && m_pDebugDrawable->GetMaterial())
 		{
-			pDebug->GetMaterial()->SetDiffuseColor(1.f, 0.f, 0.f, 1.f);
-		}
-		else
-		{
-			pDebug->GetMaterial()->SetDiffuseColor(0.f, 1.f, 0.f, 1.f);
-		}
+			if (GetPrevColliderList().size())
+				m_pDebugDrawable->GetMaterial()->SetDiffuseColor(1.f, 0.f, 0.f, 1.f);
+			else
+				m_pDebugDrawable->GetMaterial()->SetDiffuseColor(0.f, 1.f, 0.f, 1.f);
 
-		pDebug->InViewFrustum();
+			m_pDebugDrawable->InViewFrustum();
+		}
 
 		__super::PreDraw(fDeltaTime);
 #endif
 	}
-	std::shared_ptr<Bindable> ColliderLine::Clone()
+	std::shared_ptr<Component> ColliderLine::Clone()
 	{
 		return std::make_shared<ColliderLine>(*this);
 	}

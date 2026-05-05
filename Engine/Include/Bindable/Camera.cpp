@@ -2,6 +2,7 @@
 #include "Transform.h"
 #include "../Input/Input.h"
 #include "../Core/Window.h"
+#include "../Core/Graphics.h"
 #ifdef _DEBUG
 #include "../Scene/SceneManager.h"
 #include "../Scene/Scene.h"
@@ -10,7 +11,7 @@
 namespace Engine
 {
 	Camera::Camera() :
-		Drawable()
+		Component()
 		, matView(Matrix::matIdentity)
 		, m_fSpeed(100.f)
 		, m_matProj(Matrix::matIdentity)
@@ -20,17 +21,13 @@ namespace Engine
 		, m_fRatio(Window::GetInst()->GetWidth() / static_cast<float>(Window::GetInst()->GetHeight()))
 		, m_fNear(0.5f)
 		, m_eCameraType(CAMERA_TYPE::NORMAL)
-#ifdef _DEBUG
-		//, m_pDebugDrawable(CreateDrawable<Drawable>("ViewFrustom"))
-#endif
 		, m_bControl(true)
 	{
-		SetBindableType(BINDABLE_TYPE::CAMERA);
-		Reset();
+		SetComponentType(COMPONENT_TYPE::CAMERA);
 	}
 
 	Camera::Camera(const Camera& cam)	:
-		Drawable(cam)
+		Component(cam)
 		, matView(cam.matView)
 		, m_fSpeed(cam.m_fSpeed)
 		, m_bControl(cam.m_bControl)
@@ -51,42 +48,28 @@ namespace Engine
 
 	void Camera::Reset()
 	{
-#ifdef _DEBUG
-		/*m_pDebugDrawable->FindAndAddBind<class InputLayout>("TPNT");
-		m_pDebugDrawable->FindAndAddBind<VertexBuffer>("ViewFrustom");
-		m_pDebugDrawable->FindAndAddBind<IndexBuffer>("ViewFrustomIndex");
-		m_pDebugDrawable->FindAndAddBind<VertexShader>("anisotropic_microfacet VS");
-		m_pDebugDrawable->FindAndAddBind<PixelShader>("DebugPS");
-		m_pDebugDrawable->FindAndAddBind<class Topology>("LineList");
-		m_pDebugDrawable->FindAndAddBind<class Material>("Brick");
-		m_pDebugDrawable->FindAndAddBind<class DepthStencilState>("DepthAlways");
-		m_pDebugDrawable->FindAndAddBind<class RasterizerState>("WireFrame");*/
-#endif
-
-		const std::shared_ptr<Transform>& pTransform = GetTransform();
-
-		if (pTransform == nullptr)
+		if (m_pTransform == nullptr)
 		{
 			return;
 		}
 
-		pTransform->SetPosition({ 0.f, 0.f, -25.f });
-		pTransform->SetRX(0.f);
-		pTransform->SetRY(0.f);
-		pTransform->SetRZ(0.f);
+		m_pTransform->SetPosition({ 0.f, 0.f, -25.f });
+		m_pTransform->SetRX(0.f);
+		m_pTransform->SetRY(0.f);
+		m_pTransform->SetRZ(0.f);
 	}
 
 	void Camera::UpdateView()
 	{
-		const std::shared_ptr<Transform>& pTransform = GetTransform();
+		if (!m_pTransform) return;
 
 		Matrix mat = Matrix::matIdentity;
 
-		mat.v[0] = pTransform->GetAxis(AXIS_TYPE::X);
-		mat.v[1] = pTransform->GetAxis(AXIS_TYPE::Y);
-		mat.v[2] = pTransform->GetAxis(AXIS_TYPE::Z);
+		mat.v[0] = m_pTransform->GetAxis(AXIS_TYPE::X);
+		mat.v[1] = m_pTransform->GetAxis(AXIS_TYPE::Y);
+		mat.v[2] = m_pTransform->GetAxis(AXIS_TYPE::Z);
 
-		const Vector3& vPosition = pTransform->GetPosition();
+		const Vector3& vPosition = m_pTransform->GetPosition();
 
 		mat.v[0].w = -static_cast<Vector3>(mat.v[0]).Dot(vPosition);
 		mat.v[1].w = -static_cast<Vector3>(mat.v[1]).Dot(vPosition);
@@ -105,7 +88,7 @@ namespace Engine
 
 	const Matrix& Camera::GetInvView() const noexcept
 	{
-		return GetTransform()->GetTransformMatrix();
+		return m_pTransform->GetTransformMatrix();
 	}
 
 	void Camera::SetProjectType(PROJECT_TYPE eType)
@@ -133,6 +116,14 @@ namespace Engine
 			return false;
 		}
 
+		// Create + own a Transform component. Adding via AddChild routes
+		// through Component's child list so the camera's transform
+		// participates in lifecycle (Update/etc.) properly.
+		m_pTransform = std::make_shared<Transform>();
+		AddChild(m_pTransform);
+
+		Reset();
+
 		if (!CInput::GetInst()->CreateAction(GetTag() + "_W", DIK_W))
 		{
 			return false;
@@ -153,8 +144,6 @@ namespace Engine
 
 	const Vector3& Camera::CameraPosToWorldPos(const Vector2& vCameraPos) const
 	{
-		const std::shared_ptr<Transform>& pTransform = GetTransform();
-
 		const Matrix& matProject = GetProjectMatrix();
 
 		Vector3 vViewPos = {};
@@ -164,7 +153,7 @@ namespace Engine
 		vViewPos.x = vCameraPos.x / matProject[0][0] * vViewPos.z;
 		vViewPos.y = vCameraPos.y / matProject[1][1] * vViewPos.z;
 
-		return pTransform->GetRotationTranslationMatrix().TransformCoord(vViewPos);
+		return m_pTransform->GetRotationTranslationMatrix().TransformCoord(vViewPos);
 	}
 
 	void Camera::Update(float fDeltaTime)
@@ -189,16 +178,7 @@ namespace Engine
 		__super::PostUpdate(fDeltaTime);
 	}
 
-	void Camera::PreDraw(float fDeltaTime)
-	{
-	}
-
-	void Camera::Bind()
-	{
-		__super::Bind();
-	}
-
-	std::shared_ptr<Bindable> Camera::Clone()
+	std::shared_ptr<Component> Camera::Clone()
 	{
 		return std::make_shared<Camera>(*this);
 	}
@@ -238,62 +218,38 @@ namespace Engine
 
 	void Camera::CameraMoveFront(float fDeltaTime)
 	{
-		if (!m_bControl)
-		{
-			return;
-		}
-
-		GetTransform()->AddPosition(GetTransform()->GetAxis(AXIS_TYPE::Z) * fDeltaTime * m_fSpeed);
+		if (!m_bControl) return;
+		m_pTransform->AddPosition(m_pTransform->GetAxis(AXIS_TYPE::Z) * fDeltaTime * m_fSpeed);
 	}
 
 	void Camera::CameraMoveBack(float fDeltaTime)
 	{
-		if (!m_bControl)
-		{
-			return;
-		}
-
-		GetTransform()->AddPosition(-GetTransform()->GetAxis(AXIS_TYPE::Z) * fDeltaTime * m_fSpeed);
+		if (!m_bControl) return;
+		m_pTransform->AddPosition(-m_pTransform->GetAxis(AXIS_TYPE::Z) * fDeltaTime * m_fSpeed);
 	}
 
 	void Camera::CameraMoveLeft(float fDeltaTime)
 	{
-		if (!m_bControl)
-		{
-			return;
-		}
-
-		GetTransform()->AddPosition(-GetTransform()->GetAxis(AXIS_TYPE::X) * fDeltaTime * m_fSpeed);
+		if (!m_bControl) return;
+		m_pTransform->AddPosition(-m_pTransform->GetAxis(AXIS_TYPE::X) * fDeltaTime * m_fSpeed);
 	}
 
 	void Camera::CameraMoveRight(float fDeltaTime)
 	{
-		if (!m_bControl)
-		{
-			return;
-		}
-
-		GetTransform()->AddPosition(GetTransform()->GetAxis(AXIS_TYPE::X) * fDeltaTime * m_fSpeed);
+		if (!m_bControl) return;
+		m_pTransform->AddPosition(m_pTransform->GetAxis(AXIS_TYPE::X) * fDeltaTime * m_fSpeed);
 	}
 
 	void Camera::CameraMoveUp(float fDeltaTime)
 	{
-		if (!m_bControl)
-		{
-			return;
-		}
-
-		GetTransform()->AddPosition(GetTransform()->GetAxis(AXIS_TYPE::Y) * fDeltaTime * m_fSpeed);
+		if (!m_bControl) return;
+		m_pTransform->AddPosition(m_pTransform->GetAxis(AXIS_TYPE::Y) * fDeltaTime * m_fSpeed);
 	}
 
 	void Camera::CameraMoveDown(float fDeltaTime)
 	{
-		if (!m_bControl)
-		{
-			return;
-		}
-
-		GetTransform()->AddPosition(GetTransform()->GetAxis(AXIS_TYPE::Y) * fDeltaTime * -m_fSpeed);
+		if (!m_bControl) return;
+		m_pTransform->AddPosition(m_pTransform->GetAxis(AXIS_TYPE::Y) * fDeltaTime * -m_fSpeed);
 	}
 
 	const Vector3& Camera::ScreenPosToClipPos(const Vector2& vScreenPos) const

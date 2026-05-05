@@ -44,6 +44,9 @@ namespace Engine
 		std::shared_ptr<Skeleton> FindSkeleton(const std::string& strTag)	const;
 		std::shared_ptr<Sequence> CreateSequence(const std::string& strTag);
 		std::shared_ptr<Sequence> FindSequence(const std::string& strTag)	const;
+
+		// Debug: dump registered skeleton / sequence tags to OutputDebugString.
+		void DumpRegisteredTags()	const;
 		std::shared_ptr<Animation> FindAnimation(const std::string& strTag)	const;
 		void LoadFile(const TCHAR* pFilePath, const std::string& strPathKey = MESH_PATH);
 		void LoadSkeleton(const char* pFilePath, const std::string& strPathKey = MESH_PATH);

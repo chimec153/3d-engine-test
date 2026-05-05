@@ -51,6 +51,16 @@ namespace Engine
 		virtual std::shared_ptr<Bindable> Clone() override;
 		virtual void PostBind() override;
 
+		// Sort-by-state cache — see VertexShader::ResetBoundCache. Tracks
+		// the SRV currently set at each slot (0..kMaxSlots-1). Texture
+		// binding sets VS+PS+CS at the same slot to the same SRV, so a
+		// single tracker per slot is sufficient.
+		static void ResetBoundCache();
+
+	private:
+		static constexpr int kMaxSlots = 64;
+		static ID3D11ShaderResourceView* s_pBound[kMaxSlots];
+
 	public:
 		virtual void Save(FILE* pFile) override;
 		virtual void Load(FILE* pFile) override;

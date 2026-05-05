@@ -24,7 +24,7 @@ namespace Client
 			return false;
 		}
 
-		std::shared_ptr<Engine::ColliderOBB> pItemCollider = CreateBindable<Engine::ColliderOBB>("itemcollider");
+		std::shared_ptr<Engine::ColliderOBB> pItemCollider = CreateComponent<Engine::ColliderOBB>("itemcollider");
 
 		if (!pItemCollider)
 		{

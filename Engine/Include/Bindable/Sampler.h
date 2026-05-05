@@ -19,6 +19,13 @@ namespace Engine
         virtual void Update(float fDeltaTime) override;
         virtual void Bind() override;
         virtual std::shared_ptr<Bindable> Clone() override;
+
+        // Sort-by-state cache — see VertexShader::ResetBoundCache.
+        static void ResetBoundCache();
+
+    private:
+        static constexpr UINT kMaxSlots = 8;
+        static ID3D11SamplerState* s_pBound[kMaxSlots];
     };
 
 }
