@@ -1,5 +1,5 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
 #include "FbxLoader.h"
 #include "../Animation/Notify.h"
 
@@ -8,8 +8,15 @@ namespace Engine
     template <typename T>
     class ConstantBuffer;
 
+    class Drawable;
+
+    // Phase E3 — Animation migrated from Bindable to Component. Animation
+    // is fundamentally a CPU sequencer that drives a compute-shader skinning
+    // pass. Bind/PostBind are NOT virtual overrides anymore (Component has
+    // no Bind interface) — they're regular methods invoked by the owning
+    // Drawable's render path.
     class ENGINE_DLL Animation :
-        public Bindable
+        public Component
     {
     public:
         typedef struct _tagSequenceInfo
@@ -106,9 +113,13 @@ namespace Engine
 
     public:
         virtual void Update(float fDeltaTime) override;
-        virtual void Bind() override;
-        virtual void PostBind() override;
-        virtual std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
+
+        // Bind/PostBind are NOT virtual overrides anymore — Drawable's
+        // render path calls these directly via its m_pAnimation reference
+        // (was previously called via Bindable child-list iteration).
+        void Bind();
+        void PostBind();
 
     public:
         virtual void Save(FILE* pFile) override;

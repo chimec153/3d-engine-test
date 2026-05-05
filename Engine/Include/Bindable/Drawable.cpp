@@ -73,7 +73,9 @@ namespace Engine
 		// Phase B.4 — Collider migrated to Component; resolved in body after
 		// component children are cloned (initializer order matters).
 		, m_pCollider(nullptr)
-		, m_pAnimation(std::static_pointer_cast<Animation>(FindChild(BINDABLE_TYPE::ANIMATION)))
+		// Phase E3 — Animation migrated to Component; resolved in body after
+		// component children are cloned.
+		, m_pAnimation(nullptr)
 		, m_pAgent(drawable.m_pAgent ? std::static_pointer_cast<Agent>(drawable.m_pAgent->Clone()) : nullptr)
 		, m_tSphereInfo(drawable.m_tSphereInfo)
 		, m_bInLightViewFrustum(drawable.m_bInLightViewFrustum)
@@ -95,6 +97,7 @@ namespace Engine
 				m_ComponentChildren.push_back(std::static_pointer_cast<Component>(cloned));
 		}
 		m_pTransform = std::static_pointer_cast<Transform>(FindComponent(COMPONENT_TYPE::TRANSFORM));
+		m_pAnimation = std::static_pointer_cast<Animation>(FindComponent(COMPONENT_TYPE::ANIMATION));
 
 		// Phase B.4 — pull the cloned Collider out of m_ComponentChildren.
 		// Any of the four collider types qualifies; the Drawable's m_pCollider
@@ -216,9 +219,7 @@ namespace Engine
 			break;
 		// Phase B.3 — Transform migrated to Component. Adds for Transform
 		// flow through AddChild(shared_ptr<Component>) overload, not here.
-		case BINDABLE_TYPE::ANIMATION:
-			SetAnimation(std::static_pointer_cast<Animation>(bind));
-			break;
+		// Phase E3 — Animation migrated to Component, same routing.
 		default:
 			break;
 		}
@@ -617,6 +618,12 @@ namespace Engine
 		{
 			SetTransform(std::static_pointer_cast<Transform>(pComp));
 		}
+		// Phase E3 — Animation special case: Drawable holds m_pAnimation
+		// and the render path explicitly invokes its Bind/PostBind.
+		else if (pComp->GetComponentType() == COMPONENT_TYPE::ANIMATION)
+		{
+			SetAnimation(std::static_pointer_cast<Animation>(pComp));
+		}
 		else if (auto pCompTransform = pComp->GetTransform())
 		{
 			// Phase B.5 — Components that own their own Transform (Camera,
@@ -759,6 +766,8 @@ namespace Engine
 	{
 		// Phase B.3 — Transform PostBind explicitly.
 		if (m_pTransform) m_pTransform->PostBind();
+		// Phase E3 — Animation PostBind explicitly.
+		if (m_pAnimation) m_pAnimation->PostBind();
 
 		const std::list<std::shared_ptr<Bindable>>& ChildList = GetChildList();
 
@@ -783,6 +792,12 @@ namespace Engine
 		// Transform Bindable — Transform is now a Component so we drive its
 		// Bind explicitly).
 		if (m_pTransform) m_pTransform->Bind();
+
+		// Phase E3 — Animation runs the skinning compute shader during Bind.
+		// Was previously triggered via the Bindable child-list iteration
+		// (Animation was a BIND-typed Bindable child); now it's a Component
+		// so we invoke explicitly via the cached m_pAnimation reference.
+		if (m_pAnimation) m_pAnimation->Bind();
 
 		const std::list<std::shared_ptr<Bindable>>& ChildList = GetChildList();
 
@@ -1084,7 +1099,7 @@ namespace Engine
 
 		std::shared_ptr<Mesh> pMesh = CreateBindable<Mesh>("mesh", strMesh, MESH_PATH);
 
-		std::shared_ptr<Animation> pAnimation = CreateBindable<Animation>("Animation");
+		std::shared_ptr<Animation> pAnimation = CreateComponent<Animation>("Animation");
 
 		std::shared_ptr<Sequence> pSequence = std::make_shared<Sequence>();
 
@@ -2028,7 +2043,7 @@ namespace Engine
 
 		if (tSkeleton.vecBone.size())
 		{
-			CreateBindable<class Animation>("Animation");
+			CreateComponent<class Animation>("Animation");
 
 			int iLodCount = loader.GetLODCount();
 

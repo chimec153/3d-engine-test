@@ -1,6 +1,7 @@
 #include "Layer.h"
 #include "../Bindable/Drawable.h"
 #include "../Component/Component.h"
+#include "../GameObject/GameObject.h"
 #include "../Core/PathManager.h"
 #include "../Scene/Scene.h"
 #include "../Thread/ThreadManager.h"
@@ -43,6 +44,38 @@ namespace Engine
 	{
 		pComp->Start();
 		m_ComponentList.push_back(pComp);
+	}
+
+	void Layer::AddGameObject(const std::shared_ptr<GameObject>& pObj)
+	{
+		pObj->Start();
+		m_GameObjectList.push_back(pObj);
+	}
+
+	const std::list<std::shared_ptr<GameObject>>& Layer::GetGameObjectList() const
+	{
+		return m_GameObjectList;
+	}
+
+	std::shared_ptr<GameObject> Layer::FindGameObject(const std::string& strTag) const
+	{
+		for (const auto& p : m_GameObjectList)
+		{
+			if (p->GetTag() == strTag) return p;
+		}
+		return nullptr;
+	}
+
+	void Layer::DeleteGameObject(std::shared_ptr<GameObject> pObj)
+	{
+		for (auto iter = m_GameObjectList.begin(); iter != m_GameObjectList.end(); ++iter)
+		{
+			if (*iter == pObj)
+			{
+				m_GameObjectList.erase(iter);
+				return;
+			}
+		}
 	}
 
 	void Layer::SetScene(Scene* pScene)
@@ -185,8 +218,9 @@ namespace Engine
 
 	void Layer::Input(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,      [&](const auto& p) { p->Input(fDeltaTime); });
-		ForEachActive(m_ComponentList, [&](const auto& p) { p->Input(fDeltaTime); });
+		ForEachActive(m_DrawList,       [&](const auto& p) { p->Input(fDeltaTime); });
+		ForEachActive(m_ComponentList,  [&](const auto& p) { p->Input(fDeltaTime); });
+		ForEachActive(m_GameObjectList, [&](const auto& p) { p->Input(fDeltaTime); });
 	}
 
 	void Layer::Update(float fDeltaTime)
@@ -201,32 +235,37 @@ namespace Engine
 			}
 		}
 
-		ForEachActive(m_DrawList,      [&](const auto& p) { p->Update(fDeltaTime); });
-		ForEachActive(m_ComponentList, [&](const auto& p) { p->Update(fDeltaTime); });
+		ForEachActive(m_DrawList,       [&](const auto& p) { p->Update(fDeltaTime); });
+		ForEachActive(m_ComponentList,  [&](const auto& p) { p->Update(fDeltaTime); });
+		ForEachActive(m_GameObjectList, [&](const auto& p) { p->Update(fDeltaTime); });
 	}
 
 	void Layer::FixedUpdate(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,      [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
-		ForEachActive(m_ComponentList, [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
+		ForEachActive(m_DrawList,       [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
+		ForEachActive(m_ComponentList,  [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
+		ForEachActive(m_GameObjectList, [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
 	}
 
 	void Layer::Collision(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,      [&](const auto& p) { p->Collision(fDeltaTime); });
-		ForEachActive(m_ComponentList, [&](const auto& p) { p->Collision(fDeltaTime); });
+		ForEachActive(m_DrawList,       [&](const auto& p) { p->Collision(fDeltaTime); });
+		ForEachActive(m_ComponentList,  [&](const auto& p) { p->Collision(fDeltaTime); });
+		ForEachActive(m_GameObjectList, [&](const auto& p) { p->Collision(fDeltaTime); });
 	}
 
 	void Layer::PostUpdate(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,      [&](const auto& p) { p->PostUpdate(fDeltaTime); });
-		ForEachActive(m_ComponentList, [&](const auto& p) { p->PostUpdate(fDeltaTime); });
+		ForEachActive(m_DrawList,       [&](const auto& p) { p->PostUpdate(fDeltaTime); });
+		ForEachActive(m_ComponentList,  [&](const auto& p) { p->PostUpdate(fDeltaTime); });
+		ForEachActive(m_GameObjectList, [&](const auto& p) { p->PostUpdate(fDeltaTime); });
 	}
 
 	void Layer::PreDraw(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,      [&](const auto& p) { p->PreDraw(fDeltaTime); });
-		ForEachActive(m_ComponentList, [&](const auto& p) { p->PreDraw(fDeltaTime); });
+		ForEachActive(m_DrawList,       [&](const auto& p) { p->PreDraw(fDeltaTime); });
+		ForEachActive(m_ComponentList,  [&](const auto& p) { p->PreDraw(fDeltaTime); });
+		ForEachActive(m_GameObjectList, [&](const auto& p) { p->PreDraw(fDeltaTime); });
 	}
 
 	void Layer::Draw()

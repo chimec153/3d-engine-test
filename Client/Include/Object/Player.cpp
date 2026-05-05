@@ -601,7 +601,7 @@ namespace Client
 		FindAndAddBind<Engine::PixelShader>(STANDARD_PS);
 		FindAndAddBind<Engine::DepthStencilState>("OutLineMask");
 
-		std::shared_ptr<Engine::Animation> pAnimation = CreateBindable<Engine::Animation>("PlayerAnimation");
+		std::shared_ptr<Engine::Animation> pAnimation = CreateComponent<Engine::Animation>("PlayerAnimation");
 
 		std::vector<std::string> vecSeq = {
 			"mixamo.com",

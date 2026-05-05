@@ -79,6 +79,9 @@
     <Filter Include="20. Component">
       <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef1234567890}</UniqueIdentifier>
     </Filter>
+    <Filter Include="21. GameObject">
+      <UniqueIdentifier>{b2c3d4e5-f6a7-8901-bcde-f12345678901}</UniqueIdentifier>
+    </Filter>
     <Filter Include="04. Bindable\08. Collider">
       <UniqueIdentifier>{a993c57b-c768-4156-9abd-abb244997be4}</UniqueIdentifier>
     </Filter>
@@ -314,6 +317,12 @@
     </ClCompile>
     <ClCompile Include="Component\Component.cpp">
       <Filter>20. Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Component\MeshRendererComponent.cpp">
+      <Filter>20. Component</Filter>
+    </ClCompile>
+    <ClCompile Include="GameObject\GameObject.cpp">
+      <Filter>21. GameObject</Filter>
     </ClCompile>
     <ClCompile Include="Bindable\ColliderLine.cpp">
       <Filter>04. Bindable\08. Collider</Filter>
@@ -628,6 +637,12 @@
     </ClInclude>
     <ClInclude Include="Component\Component.h">
       <Filter>20. Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Component\MeshRendererComponent.h">
+      <Filter>20. Component</Filter>
+    </ClInclude>
+    <ClInclude Include="GameObject\GameObject.h">
+      <Filter>21. GameObject</Filter>
     </ClInclude>
     <ClInclude Include="Bindable\ColliderLine.h">
       <Filter>04. Bindable\08. Collider</Filter>

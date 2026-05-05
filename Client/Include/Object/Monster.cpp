@@ -119,7 +119,7 @@ namespace Client
 
 		pFrogMesh->UsePaperBurn();
 
-		std::shared_ptr<Engine::Animation> pFrogAnimation = CreateBindable<Engine::Animation>("FrogAnimation");
+		std::shared_ptr<Engine::Animation> pFrogAnimation = CreateComponent<Engine::Animation>("FrogAnimation");
 
 		pFrogAnimation->FindAndAddSequence("FrogArmature|Frog_Idle");
 		pFrogAnimation->FindAndAddSequence("FrogArmature|Frog_Jump");

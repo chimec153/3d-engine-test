@@ -619,7 +619,8 @@ namespace Engine
 			// Phase B.4 — Collider hierarchy migrated to Component.
 			return nullptr;
 		case Engine::BINDABLE_TYPE::ANIMATION:
-			return std::make_shared<Animation>();
+			// Phase E3 — Animation migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::AGENT:
 			// Phase B.4 — Agent migrated to Component.
 			return nullptr;

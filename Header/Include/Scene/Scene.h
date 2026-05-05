@@ -74,6 +74,29 @@ namespace Engine
 			return pComp;
 		}
 
+		// Phase E1 — entity (GameObject / Actor) creation. Scene-level
+		// factory. The returned GameObject's Components are added by the
+		// caller via AddComponent<T>. Layer drives lifecycle.
+		template <typename T = class GameObject, typename ...Args>
+		std::shared_ptr<T> CreateGameObject(const std::string& strTag, const class std::shared_ptr<class Layer>& pLayer, Args... args)
+		{
+			std::shared_ptr<T> pObj = std::make_shared<T>(args...);
+
+			pObj->SetTag(strTag);
+
+			if (!pObj->Init())
+			{
+				return nullptr;
+			}
+
+			if (pLayer)
+			{
+				pLayer->AddGameObject(std::static_pointer_cast<class GameObject>(pObj));
+			}
+
+			return pObj;
+		}
+
 	public:
 
 		template <typename T, typename ...Args>

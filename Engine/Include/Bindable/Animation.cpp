@@ -13,7 +13,7 @@
 namespace Engine
 {
 	Animation::Animation() :
-		Bindable()
+		Component()
 		, m_pCurrentSequence(nullptr)
 		, m_pSkeleton(nullptr)
 		, m_pComputeShader(StaticFindBindable<ComputeShader>("Sequence"))
@@ -26,11 +26,11 @@ namespace Engine
 		, m_pBoneCBuffer(StaticFindBindable<ConstantBuffer<BONECBUFFER>>("Bone"))
 		, m_bStop(false)
 	{
-		SetBindableType(Engine::BINDABLE_TYPE::ANIMATION);
+		SetComponentType(COMPONENT_TYPE::ANIMATION);
 	}
 
 	Animation::Animation(const Animation& animation) :
-		Bindable(animation)
+		Component(animation)
 		, m_mapSequence()
 		, m_pCurrentSequence()
 		, m_pSkeleton(animation.m_pSkeleton)
@@ -418,8 +418,8 @@ namespace Engine
 
 	void Animation::Bind()
 	{
-		__super::Bind();
-
+		// Phase E3 — Component has no Bind to delegate to. Drawable's
+		// render path invokes this directly via m_pAnimation.
 		if (!m_pCurrentSequence)
 		{
 			return;
@@ -440,12 +440,11 @@ namespace Engine
 
 	void Animation::PostBind()
 	{
-		__super::PostBind();
-
+		// Phase E3 — Component has no PostBind to delegate to.
 		m_pMidBuffer->ResetSRV(30);
 	}
 
-	std::shared_ptr<Bindable> Animation::Clone()
+	std::shared_ptr<Component> Animation::Clone()
 	{
 		return std::make_shared<Animation>(*this);
 	}

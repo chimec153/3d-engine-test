@@ -1,0 +1,84 @@
+#pragma once
+#include "Component.h"
+#include "../Types.h"
+
+namespace Engine
+{
+	// Phase E2 — MeshRendererComponent extracts Drawable's rendering
+	// responsibility into a Component. A GameObject with this Component
+	// (plus a TransformComponent for placement) is a renderable entity
+	// without inheriting from Drawable.
+	//
+	// E2 scope: data + Bind/Draw/PostBind API that mirrors Drawable's
+	// existing render orchestration. Render-pipeline integration (RenderManager
+	// registration, sort-by-state, instancing) lands in E4 when game-class
+	// migrations actually create GameObjects with MeshRenderers.
+	class ENGINE_DLL MeshRendererComponent : public Component
+	{
+	public:
+		MeshRendererComponent();
+		MeshRendererComponent(const MeshRendererComponent& other);
+		virtual ~MeshRendererComponent() override = default;
+
+	private:
+		std::shared_ptr<class Mesh>                  m_pMesh;
+		std::shared_ptr<class VertexShader>          m_pVertexShader;
+		std::shared_ptr<class PixelShader>           m_pPixelShader;
+		std::shared_ptr<class Material>              m_pMaterial;
+		std::vector<std::shared_ptr<class Texture>>  m_vecTexture;
+		std::shared_ptr<class Animation>             m_pAnimation;
+
+		// Other Bindables a render needs (InputLayout, Topology,
+		// RasterizerState, DepthStencilState, etc.). Separate list — direct
+		// fields above are the "common" ones with named slots.
+		std::list<std::shared_ptr<class Bindable>>   m_OtherBindables;
+
+		RENDER_LAYER m_eRenderLayer;
+		size_t       m_iInstanceKey;
+
+	public:
+		// Direct accessors / mutators (mirror Drawable's existing API).
+		void SetMesh(const std::shared_ptr<class Mesh>& p);
+		const std::shared_ptr<class Mesh>& GetMesh() const;
+
+		void SetVertexShader(const std::shared_ptr<class VertexShader>& p);
+		const std::shared_ptr<class VertexShader>& GetVertexShader() const;
+
+		void SetPixelShader(const std::shared_ptr<class PixelShader>& p);
+		const std::shared_ptr<class PixelShader>& GetPixelShader() const;
+
+		void SetMaterial(const std::shared_ptr<class Material>& p);
+		const std::shared_ptr<class Material>& GetMaterial() const;
+
+		void AddTexture(const std::shared_ptr<class Texture>& p);
+		const std::vector<std::shared_ptr<class Texture>>& GetTextures() const;
+
+		void SetAnimation(const std::shared_ptr<class Animation>& p);
+		const std::shared_ptr<class Animation>& GetAnimation() const;
+
+		// Generic Bindable child (IL, Topology, RS, DSS, ConstantBuffer, ...).
+		// Routed by BINDABLE_TYPE: known kinds populate the named fields,
+		// others land in m_OtherBindables.
+		void AddBindable(const std::shared_ptr<class Bindable>& p);
+		std::shared_ptr<class Bindable> FindBindable(BINDABLE_TYPE eType) const;
+		const std::list<std::shared_ptr<class Bindable>>& GetOtherBindables() const;
+
+		void SetRenderLayer(RENDER_LAYER eLayer);
+		RENDER_LAYER GetRenderLayer() const;
+
+		size_t GetInstanceKey() const;
+		void   UpdateInstanceKey();
+
+	public:
+		// Render orchestration (mirrors Drawable's Bind / DrawShadow / etc.).
+		// Call sites: RenderManager render passes (post-E4 integration).
+		void Bind();
+		void BindExceptShader();
+		void PostBind();
+		void PostBindExceptShader();
+		void DrawShadow();
+
+	public:
+		virtual std::shared_ptr<Component> Clone() override;
+	};
+}
