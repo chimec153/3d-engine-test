@@ -1,117 +1,34 @@
 #include "Cone.h"
-#include "IndexBuffer.h"
-#include "VertexBuffer.h"
-#include "VertexShader.h"
-#include "PixelShader.h"
-#include "Transform.h"
-#include "InputLayout.h"
-#include "Topology.h"
-#include "Material.h"
-#include "BindableManager.h"
-#include "Mesh.h"
 
 namespace Engine
 {
-	Cone::Cone(int iBaseCount) :
-		Drawable()
+	Cone::Cone() :
+		Component()
 	{
-		std::string name = "Cone";
+		SetComponentType(COMPONENT_TYPE::NONE);
+	}
 
-		name += std::to_string(iBaseCount);
-
-		std::vector<unsigned int> vecIndex;
-
-		CreateConeIndex(iBaseCount, vecIndex);
-
-		std::shared_ptr<Mesh> pMesh = StaticFindBindable<Mesh>(name);
-
-		if (pMesh == nullptr)
-		{
-			std::vector<VertexColor> vecVertex;
-
-			CreateConeVertex<VertexColor>(iBaseCount, vecVertex);
-
-			SetNormals(vecVertex, vecIndex);
-
-			pMesh = StaticCreateBindable<Mesh>(name, vecVertex, vecIndex);
-		}
-
-		AddChild(pMesh);
-
-		std::shared_ptr<VertexShader> pVertexShader = StaticFindBindable<VertexShader>("VertexShader VS_Cone");
-
-		if (pVertexShader == nullptr)
-		{
-			pVertexShader = StaticCreateBindable<VertexShader>("VertexShader VS_Cone", TEXT("VertexShader.hlsl"), "VS_Cone");
-		}
-
-		AddChild(pVertexShader);
-
-		std::shared_ptr<PixelShader> pPixelShader = StaticFindBindable<PixelShader>("PixelShader PS_Cone");
-
-		if (pPixelShader == nullptr)
-		{
-			pPixelShader = StaticCreateBindable<PixelShader>("PixelShader PS_Cone", TEXT("PixelShader.hlsl"), "PS_Cone");
-		}
-
-		AddChild(pPixelShader);
-
-		D3D11_INPUT_ELEMENT_DESC desc[] = {
-			{"Color", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-			{"Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 16, D3D11_INPUT_PER_VERTEX_DATA, 0},
-			{"Normal", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 28, D3D11_INPUT_PER_VERTEX_DATA, 0},
-		};
-
-		std::shared_ptr<InputLayout> pInputLayoutCPN = StaticFindBindable<InputLayout>("CPN");
-
-		if (pInputLayoutCPN == nullptr)
-		{
-			pInputLayoutCPN = StaticCreateBindable<InputLayout>("CPN", pVertexShader, desc, static_cast<int>(sizeof(desc) / sizeof(D3D11_INPUT_ELEMENT_DESC)));
-		}
-
-		AddChild(pInputLayoutCPN);
-
-		FindAndAddBind<Topology>("TriangleList");
-
-		std::shared_ptr<Material> pMaterial = std::make_shared<Material>();
-
-		SetMaterial(pMaterial);
-
-		AddChild(pMaterial);
+	Cone::Cone(int /*iBaseCount*/) :
+		Component()
+	{
+		// Phase E5 — Drawable-era ctor created a Mesh / VertexShader /
+		// PixelShader / InputLayout (CPN) / Topology / Material and wired
+		// them via Drawable's child machinery. Stripped for the Component
+		// shell; reintroduce under MeshRendererComponent on a GameObject.
+		SetComponentType(COMPONENT_TYPE::NONE);
 	}
 
 	Cone::Cone(const Cone& cone) :
-		Drawable(cone)
+		Component(cone)
 	{
-		const std::shared_ptr<Transform>& pTransform = GetTransform();
-
-		if (pTransform != nullptr)
-		{
-			pTransform->SetRandomPosAndRotation();
-		}
-
-		const std::shared_ptr<Material>& pMaterial = GetMaterial();
-
-		if (pMaterial != nullptr)
-		{
-			pMaterial->SetRandomColor();
-		}
 	}
 
 	void Cone::Update(float fDeltaTime)
 	{
-		CheckRangeAndMove();
-
 		__super::Update(fDeltaTime);
 	}
 
-	void Cone::Bind()
-	{
-		__super::Bind();
-
-	}
-
-	std::shared_ptr<Bindable> Cone::Clone()
+	std::shared_ptr<Component> Cone::Clone()
 	{
 		return std::make_shared<Cone>(*this);
 	}

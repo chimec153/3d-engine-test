@@ -1,15 +1,18 @@
 #include "GameObject.h"
+#include "../Scene/Layer.h"
 
 namespace Engine
 {
 	GameObject::GameObject() :
 		m_pParent(nullptr)
+		, m_pLayer(nullptr)
 	{
 	}
 
 	GameObject::GameObject(const GameObject& other) :
 		CRef(other)
 		, m_pParent(nullptr)
+		, m_pLayer(other.m_pLayer)
 	{
 		// Components are deep-cloned so each entity has its own state.
 		for (const auto& p : other.m_Components)
@@ -22,8 +25,18 @@ namespace Engine
 
 	GameObject::~GameObject() = default;
 
+	Scene* GameObject::GetScene() const
+	{
+		return m_pLayer ? m_pLayer->GetScene() : nullptr;
+	}
+
 	void GameObject::AddComponent(const std::shared_ptr<Component>& pComp)
 	{
+		if (!pComp) return;
+		// Phase E5 — wire up owner so the Component can reach the entity
+		// via GetGameObjectOwner. Mirrors the templated AddComponent
+		// overload's behavior for pre-constructed Components.
+		pComp->SetGameObjectOwner(this);
 		m_Components.push_back(pComp);
 	}
 

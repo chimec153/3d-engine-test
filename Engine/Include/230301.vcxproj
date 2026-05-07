@@ -224,6 +224,7 @@
     <ClCompile Include="Bindable\InputLayout.cpp" />
     <ClCompile Include="Bindable\Material.cpp" />
     <ClCompile Include="Bindable\Mesh.cpp" />
+    <ClCompile Include="Bindable\MeshLoader.cpp" />
     <ClCompile Include="Bindable\Mouse.cpp" />
     <ClCompile Include="Bindable\NavMesh.cpp" />
     <ClCompile Include="Bindable\PaperBurn.cpp" />
@@ -320,6 +321,7 @@
     <ClInclude Include="Bindable\InputLayout.h" />
     <ClInclude Include="Bindable\Material.h" />
     <ClInclude Include="Bindable\Mesh.h" />
+    <ClInclude Include="Bindable\MeshLoader.h" />
     <ClInclude Include="Bindable\Mouse.h" />
     <ClInclude Include="Bindable\NavMesh.h" />
     <ClInclude Include="Bindable\PaperBurn.h" />

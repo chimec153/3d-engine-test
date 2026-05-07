@@ -34,7 +34,111 @@
 #include "../RenderV2/Demo.h"
 #include "../RenderV2/GpuResources.h"
 #include "../RenderV2/EngineShaderCB.h"
+#include "../Component/MeshRendererComponent.h"
+#include "../GameObject/GameObject.h"
+#include "../Bindable/Decal.h"
+#include "../Bindable/Particle.h"
+#include "../Bindable/PaperBurn.h"
 #include <algorithm>
+
+namespace
+{
+	// Phase E5 — render a single MeshRendererComponent solo. Mirrors the
+	// per-MR loop body in RenderOpaque/RenderAlpha — extracted into a
+	// helper so the bucket-iteration code can fall back to it cleanly.
+	void RenderSoloMR(const std::shared_ptr<Engine::MeshRendererComponent>& pMR)
+	{
+		if (!pMR) return;
+		Engine::GameObject* pOwner = pMR->GetGameObjectOwner();
+		std::shared_ptr<Engine::Transform> pTr =
+			pOwner ? pOwner->GetComponent<Engine::Transform>() : nullptr;
+		if (pTr) pTr->Bind();
+		pMR->Bind();
+		if (pMR->GetMesh()) pMR->GetMesh()->Draw();
+		pMR->PostBind();
+		if (pTr) pTr->PostBind();
+	}
+
+	// Phase E5 — true DrawInstanced fast path for a homogeneous bucket
+	// (all members share Mesh/VS/PS/Material; none have Animation or
+	// decorator Components like PaperBurn that bind per-instance state).
+	// Returns true if the instanced draw was issued; false means the
+	// caller must fall back to RenderSoloMR for each member.
+	bool TryRenderInstancedBucket(const std::list<std::shared_ptr<Engine::MeshRendererComponent>>& bucket)
+	{
+		if (bucket.size() < 2) return false;
+
+		const auto& pFirst = bucket.front();
+		if (!pFirst || !pFirst->GetMesh() || !pFirst->GetVertexShader())
+			return false;
+
+		// Animation / decorator components break shared-state instancing
+		// (per-instance bone palette, per-instance PaperBurn CB, etc.).
+		if (pFirst->GetAnimation()) return false;
+		if (auto* pOwner = pFirst->GetGameObjectOwner())
+		{
+			for (const auto& pSibling : pOwner->GetComponentList())
+			{
+				if (pSibling.get() == pFirst.get()) continue;
+				// PaperBurn is the only RenderBind-overriding decorator
+				// today; conservatively bail on any non-trivial sibling.
+				if (std::dynamic_pointer_cast<Engine::PaperBurn>(pSibling))
+					return false;
+			}
+		}
+
+		auto pInstVS = Engine::StaticFindBindable<Engine::VertexShader>(
+			pFirst->GetVertexShader()->GetTag() + "Inst");
+		if (!pInstVS) return false;
+		auto pInstIL = pInstVS->GetInstInputLayout();
+		if (!pInstIL) return false;
+		const int iInstSize = pInstIL->GetInstSize();
+		if (iInstSize <= 0) return false;
+
+		// Build per-instance data buffer.
+		const int iCount = static_cast<int>(bucket.size());
+		std::vector<char> data(static_cast<size_t>(iInstSize) * iCount, 0);
+		int idx = 0;
+		for (const auto& pMR : bucket)
+		{
+			if (pMR) pMR->GetInstData(&data[idx * iInstSize], iInstSize);
+			++idx;
+		}
+
+		D3D11_BUFFER_DESC desc = {};
+		desc.ByteWidth = static_cast<UINT>(iInstSize) * iCount;
+		desc.Usage = D3D11_USAGE_IMMUTABLE;
+		desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		D3D11_SUBRESOURCE_DATA initData = {};
+		initData.pSysMem = data.data();
+
+		Engine::CPtr<ID3D11Buffer> pInstBuffer;
+		HRESULT hr = Engine::Graphics::GetInst()->GetDevice()->CreateBuffer(
+			&desc, &initData, &pInstBuffer);
+		if (FAILED(hr)) return false;
+
+		// Bind shared GPU state from the first MR (consistent across the
+		// bucket since GetInstanceKey hashes Mesh/VS/PS/Material/Anim).
+		pInstIL->Bind();
+		pInstVS->Bind();
+		if (pFirst->GetPixelShader()) pFirst->GetPixelShader()->Bind();
+		if (pFirst->GetMaterial())    pFirst->GetMaterial()->Bind();
+		for (const auto& tex : pFirst->GetTextures()) if (tex) tex->Bind();
+		for (const auto& b : pFirst->GetOtherBindables())
+		{
+			if (b && (b->GetObjectType() == Engine::OBJECT_TYPE::BIND ||
+			          b->GetObjectType() == Engine::OBJECT_TYPE::COLLIDER))
+				b->Bind();
+		}
+
+		pFirst->GetMesh()->DrawInst(iCount, iInstSize, pInstBuffer);
+
+		if (pFirst->GetPixelShader()) pFirst->GetPixelShader()->PostBind();
+		if (pFirst->GetMaterial())    pFirst->GetMaterial()->PostBind();
+		pInstVS->PostBind();
+		return true;
+	}
+}
 
 namespace Engine
 {
@@ -71,6 +175,35 @@ namespace Engine
 		m_LightList[static_cast<int>(pLight->GetLightType())].push_back(pLight);
 	}
 
+	void RenderManager::AddMeshRenderer(const std::shared_ptr<MeshRendererComponent>& pMR)
+	{
+		if (!pMR) return;
+		int iLayer = static_cast<int>(pMR->GetRenderLayer());
+		assert(iLayer >= 0 && iLayer < static_cast<int>(RENDER_LAYER::END));
+		m_mapMeshInstance[iLayer][pMR->GetInstanceKey()].push_back(pMR);
+	}
+
+	void RenderManager::AddDecalComponent(const std::shared_ptr<Decal>& pDecal)
+	{
+		if (!pDecal) return;
+		m_DecalList.push_back(pDecal);
+	}
+
+	void RenderManager::AddParticle(const std::shared_ptr<Particle>& pParticle)
+	{
+		if (!pParticle) return;
+		int iLayer = static_cast<int>(pParticle->GetRenderLayer());
+		assert(iLayer >= 0 && iLayer < static_cast<int>(RENDER_LAYER::END));
+		m_ParticleList[iLayer].push_back(pParticle);
+	}
+
+	void RenderManager::AddCustomRender(RENDER_LAYER eLayer, std::function<void()> renderFn)
+	{
+		int iLayer = static_cast<int>(eLayer);
+		assert(iLayer >= 0 && iLayer < static_cast<int>(RENDER_LAYER::END));
+		m_CustomRenderList[iLayer].push_back(std::move(renderFn));
+	}
+
 	void RenderManager::SetHDRWhiteSqr(float fWhiteSqr)
 	{
 		m_tHDRCBuffer.fLumWhiteSqr = fWhiteSqr;
@@ -78,141 +211,14 @@ namespace Engine
 		m_pHDRCBuffer->UpdateBuffer(m_tHDRCBuffer);
 	}
 
-	void RenderManager::AddDrawable(const std::shared_ptr<Drawable>& pDrawable)
-	{
-		size_t iKey = pDrawable->GetInstanceKey();
-
-		const std::shared_ptr<VertexShader>& pVertexShader = pDrawable->GetVertexShader();
-
-		const std::shared_ptr<PixelShader>& pPixelShader = pDrawable->GetPixelShader();
-
-		const std::shared_ptr<Mesh>& pMesh = pDrawable->GetMesh();
-
-		int iLayer = static_cast<int>(pDrawable->GetRenderLayer());
-
-		if (pVertexShader && pPixelShader)
-		{
-			const std::vector<std::shared_ptr<Texture>>& vecTexture = pDrawable->GetTextures();
-
-			if (pDrawable->IsInViewFrustum())
-			{
-				if (pDrawable->UseInstance())
-				{
-					assert(iLayer >= 0 && iLayer < static_cast<int>(RENDER_LAYER::END));
-					std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[iLayer].find(iKey);
-
-					if (iter == m_mapInstance[iLayer].end())
-					{
-						const std::shared_ptr<InputLayout>& pInputLayout = pDrawable->FindChild<InputLayout>();
-
-						std::shared_ptr<InputLayout> pInstInputLayout = pVertexShader->GetInstInputLayout() ? pVertexShader->GetInstInputLayout() : (StaticFindBindable<InputLayout>((pInputLayout ? pInputLayout->GetTag() : std::string()) + "_Inst"));
-
-						if (pInstInputLayout)
-						{
-							const std::shared_ptr<VertexShader>& pInstVertexShader = StaticFindBindable<VertexShader>(pVertexShader->GetTag() + "Inst");
-
-							const std::shared_ptr<VertexShader>& pInstShadowVertexShader = StaticFindBindable<VertexShader>(pVertexShader->GetTag() + "InstShadow");
-
-							const std::shared_ptr<PixelShader>& pInstPixelShader = StaticFindBindable<PixelShader>(pPixelShader->GetTag() + "Inst");
-
-							std::shared_ptr<RenderInstancing> pRenderInstancing = std::make_shared<RenderInstancing>(pMesh, pInstInputLayout,
-								pInstVertexShader, pInstShadowVertexShader, pInstPixelShader, pInstInputLayout ? pInstInputLayout->GetInstSize() : 0, vecTexture);
-
-							pRenderInstancing->SetTag((pMesh ? pMesh->GetTag() : std::string()) +
-								pVertexShader->GetTag() + pPixelShader->GetTag());
-
-							pRenderInstancing->AddDrawable(pDrawable);
-
-							std::shared_ptr<RasterizerState> pRasterizerState = std::static_pointer_cast<RasterizerState>(pDrawable->FindChild(BINDABLE_TYPE::RASTERIZER_STATE));
-
-							if (pRasterizerState)
-							{
-								pRenderInstancing->SetRasterizerState(pRasterizerState);
-							}
-
-							std::shared_ptr<Animation> pAnimation = pDrawable->GetAnimation();
-
-							if (pAnimation)
-							{
-								pRenderInstancing->CreateBoneBuffer(pAnimation->GetSequences());
-
-								pRenderInstancing->SetSkeleton(pAnimation->GetSkeleton());
-							}
-
-							m_mapInstance[iLayer].insert(std::make_pair(iKey, pRenderInstancing));
-						}
-						else
-						{
-							m_RenderList[iLayer].push_back(pDrawable);
-						}
-					}
-					else
-					{
-						iter->second->AddDrawable(pDrawable);
-					}
-				}
-				else
-				{
-					m_RenderList[iLayer].push_back(pDrawable);
-				}
-			}
-
-			if (pDrawable->IsInLightViewfFrustum())
-			{
-				std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapShadowInstance.find(iKey);
-
-				if (iter == m_mapShadowInstance.end())
-				{
-					const std::shared_ptr<InputLayout>& pInputLayout = pDrawable->FindChild<InputLayout>();
-
-					const std::shared_ptr<InputLayout>& pInstInputLayout = pVertexShader->GetInstInputLayout() ? pVertexShader->GetInstInputLayout() : (StaticFindBindable<InputLayout>((pInputLayout ? pInputLayout->GetTag() : std::string()) + "_Inst"));
-
-					const std::shared_ptr<VertexShader>& pInstVertexShader = StaticFindBindable<VertexShader>(pVertexShader->GetTag() + "Inst");
-
-					const std::shared_ptr<VertexShader>& pInstShadowVertexShader = StaticFindBindable<VertexShader>(pVertexShader->GetTag() + "InstShadow");
-
-					const std::shared_ptr<PixelShader>& pInstPixelShader = StaticFindBindable<PixelShader>(pPixelShader->GetTag() + "Inst");
-
-					const std::vector<std::shared_ptr<Texture>>& vecTexture = pDrawable->GetTextures();
-
-					if (pInstInputLayout)
-					{
-						std::shared_ptr<RenderInstancing> pRenderInstancing = std::make_shared<RenderInstancing>(pMesh, pInstInputLayout,
-							pInstVertexShader, pInstShadowVertexShader, pInstPixelShader, pInstInputLayout->GetInstSize(), vecTexture);
-
-						pRenderInstancing->AddDrawable(pDrawable);
-
-						std::shared_ptr<Animation> pAnimation = pDrawable->GetAnimation();
-
-						if (pAnimation)
-						{
-							pRenderInstancing->SetSkeleton(pAnimation->GetSkeleton());
-
-							pRenderInstancing->CreateBoneBuffer(pAnimation->GetSequences());
-						}
-
-						m_mapShadowInstance.insert(std::make_pair(iKey, pRenderInstancing));
-					}
-				}
-				else
-				{
-					iter->second->AddDrawable(pDrawable);
-				}
-			}
-		}
-		else
-		{
-			if (pDrawable->IsInViewFrustum())
-			{
-				m_RenderList[iLayer].push_back(pDrawable);
-			}
-
-			if (pDrawable->IsInLightViewfFrustum())
-			{
-				m_ShadowList.push_back(pDrawable);
-			}
-		}
-	}
+	// Phase E5 — RenderManager::AddDrawable removed. With all 25 Drawable
+	// subclasses migrated to Component / GameObject, no live runtime path
+	// creates a Drawable instance; Drawable::PreDraw no longer self-
+	// registers here, so this function had no callers. The render passes
+	// still iterate m_RenderList[layer] / m_ShadowList / m_mapInstance,
+	// but those containers stay empty in a clean run — they'll be removed
+	// outright in the final E7 cleanup along with the Drawable class
+	// itself.
 
 	float RenderManager::GetHDRMidGray() const
 	{
@@ -520,58 +526,11 @@ namespace Engine
 
 	void RenderManager::Update(float fDeltaTime)
 	{
-		for (int i = 0; i < static_cast<int>(RENDER_LAYER::END); ++i)
-		{
-			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[i].begin();
-			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[i].end();
-
-			for (; iter != iterEnd; ++iter)
-			{
-				if (iter->second->GetCount() < 5)
-				{
-					const std::list<std::shared_ptr<Drawable>>& RenderList = iter->second->GetRenderList();
-
-					std::list<std::shared_ptr<Drawable>>::const_iterator iterR = RenderList.begin();
-					std::list<std::shared_ptr<Drawable>>::const_iterator iterREnd = RenderList.end();
-
-					for (; iterR != iterREnd; ++iterR)
-					{
-						m_RenderList[i].push_back(*iterR);
-					}
-
-					iter->second->Clear();
-				}
-				else
-				{
-					iter->second->Update();
-				}
-			}
-		}
-
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterS = m_mapShadowInstance.begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterSEnd = m_mapShadowInstance.end();
-
-		for (; iterS != iterSEnd; ++iterS)
-		{
-			if (iterS->second->GetCount() < 5)
-			{
-				const std::list<std::shared_ptr<Drawable>>& DrawableList = iterS->second->GetRenderList();
-
-				std::list<std::shared_ptr<Drawable>>::const_iterator iterD = DrawableList.begin();
-				std::list<std::shared_ptr<Drawable>>::const_iterator iterDEnd = DrawableList.end();
-
-				for (; iterD != iterDEnd; ++iterD)
-				{
-					m_ShadowList.push_back(*iterD);
-				}
-
-				iterS->second->Clear();
-			}
-			else
-			{
-				iterS->second->Update();
-			}
-		}
+		// Phase E5 — Drawable instancing maps removed. No live RenderInstancing
+		// instances exist anymore (RenderManager::AddDrawable was the only
+		// populator and it has been deleted). Component-side rendering paths
+		// (MeshRenderer / Decal / Particle / CustomRender) handle their own
+		// per-frame state.
 
 		m_tDownScaleCBuffer.fAdaptation = fDeltaTime;// std::max(fDeltaTime / 0.016f, 1.f);
 
@@ -580,30 +539,8 @@ namespace Engine
 
 	void RenderManager::PreRender()
 	{
-		for (int i = 0; i < static_cast<int>(RENDER_LAYER::END); ++i)
-		{
-			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[i].begin();
-			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[i].end();
-
-			for (; iter != iterEnd; ++iter)
-			{
-				if (iter->second->GetCount() > 4)
-				{
-					iter->second->PreRender();
-				}
-			}
-		}
-
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterS = m_mapShadowInstance.begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterSEnd = m_mapShadowInstance.end();
-
-		for (; iterS != iterSEnd; ++iterS)
-		{
-			if (iterS->second->GetCount() > 4)
-			{
-				iterS->second->PreRender();
-			}
-		}
+		// Phase E5 — Drawable instancing PreRender removed (no live
+		// instances).
 	}
 
 	void RenderManager::SetBloomScale(float fScale)
@@ -717,31 +654,21 @@ namespace Engine
 		Sampler::ResetBoundCache();
 		Texture::ResetBoundCache();
 
-		// Sort-by-state: gather opaque drawables, order by VS / PS / Material
-		// pointer so adjacent draws share GPU state. Bind/PostBind machinery
-		// itself unchanged — this just improves call-order coherence.
-		// Alpha pass deliberately untouched (back-to-front depth order
-		// matters there).
-		std::vector<Drawable*> sorted;
-		sorted.reserve(m_RenderList[0].size());
-		for (const auto& d : m_RenderList[0])
-			sorted.push_back(d.get());
+		// Phase E5 — Drawable sort-by-state path removed. No live Drawable
+		// instances populate m_RenderList[OPACUE] anymore. Sort-by-state
+		// will be reintroduced on the MeshRenderer Component pass below
+		// when render-state diversity warrants it.
 
-		std::sort(sorted.begin(), sorted.end(), [](Drawable* a, Drawable* b)
+		// Phase E5 — MeshRenderer opaque render via instance buckets.
+		// For each instance-key bucket, try the DrawInstanced fast path;
+		// fall back to per-MR solo rendering when the bucket has Animation /
+		// decorator Components / no "Inst" shader variant.
+		for (auto& kv : m_mapMeshInstance[static_cast<int>(RENDER_LAYER::OPACUE)])
 		{
-			const auto* avs = a->GetVertexShader().get();
-			const auto* bvs = b->GetVertexShader().get();
-			if (avs != bvs) return avs < bvs;
-			const auto* aps = a->GetPixelShader().get();
-			const auto* bps = b->GetPixelShader().get();
-			if (aps != bps) return aps < bps;
-			return a->GetMaterial().get() < b->GetMaterial().get();
-		});
-
-		for (Drawable* d : sorted)
-			d->Bind();
-
-		RenderOpaqueInst();
+			auto& bucket = kv.second;
+			if (TryRenderInstancedBucket(bucket)) continue;
+			for (const auto& pMR : bucket) RenderSoloMR(pMR);
+		}
 
 		pMRT->ResetTargets();
 	}
@@ -755,16 +682,7 @@ namespace Engine
 
 	void RenderManager::RenderOpaqueInst()
 	{
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iter = m_mapInstance[0].begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterEnd = m_mapInstance[0].end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			if (iter->second->GetCount())
-			{
-				iter->second->Render();
-			}
-		}
+		// Phase E5 — Drawable opaque instancing removed (m_mapInstance gone).
 	}
 
 	float RenderManager::GetBloomScale() const
@@ -807,23 +725,19 @@ namespace Engine
 			{
 				(*iterL)->Bind();
 
-				std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::ALPHA)].begin();
-				std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::ALPHA)].end();
+				// Phase E5 — Drawable iterate / instancing removed (no live
+				// Drawable instances).
 
-				for (; iter != iterEnd; ++iter)
+				// Component-side particle pass for ALPHA layer.
+				for (const auto& pParticle : m_ParticleList[static_cast<int>(RENDER_LAYER::ALPHA)])
 				{
-					(*iter)->Bind();
+					if (pParticle) pParticle->Bind();
 				}
 
-				std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterI = m_mapInstance[static_cast<int>(RENDER_LAYER::ALPHA)].begin();
-				std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterIEnd = m_mapInstance[static_cast<int>(RENDER_LAYER::ALPHA)].end();
-
-				for (; iterI != iterIEnd; ++iterI)
+				// Generic Component render callbacks for ALPHA layer.
+				for (const auto& fn : m_CustomRenderList[static_cast<int>(RENDER_LAYER::ALPHA)])
 				{
-					if (iterI->second->GetCount())
-					{
-						iterI->second->Render();
-					}
+					if (fn) fn();
 				}
 			}
 
@@ -932,35 +846,11 @@ namespace Engine
 
 		pShadowPixelShader->Bind();
 
-		std::list<std::shared_ptr<Drawable>>::iterator iter = m_ShadowList.begin();
-		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_ShadowList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			if ((*iter)->GetAnimation())
-			{
-				pAnimShadowVertexShader->Bind();
-			}
-			else
-			{
-				pShadowVertexShader->Bind();
-			}
-
-			(*iter)->DrawShadow();
-		}
-
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterI = m_mapShadowInstance.begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterIEnd = m_mapShadowInstance.end();
-
-		for (; iterI != iterIEnd; ++iterI)
-		{
-			if (!iterI->second->GetCount())
-			{
-				continue;
-			}
-
-			iterI->second->RenderShadow();
-		}
+		// Phase E5 — Drawable shadow iterate / instancing removed (no
+		// live Drawable instances). Shadow pass for MeshRenderer Components
+		// is a follow-up — currently no Component-side shadow registration
+		// exists; reintroduce when the engine wants character shadows on
+		// the GameObject path.
 
 		pShadowVertexShader->PostBind();
 
@@ -1060,23 +950,11 @@ namespace Engine
 
 		m_pNoDepthRead->Bind();
 
-		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::DECAL)].begin();
-		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::DECAL)].end();
-
-		for (; iter != iterEnd; ++iter)
+		// Phase E5 — Drawable iterate / instancing removed (no live
+		// Drawable instances). Component-side decal pass:
+		for (const auto& pDecal : m_DecalList)
 		{
-			(*iter)->Bind();
-		}
-
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterI = m_mapInstance[static_cast<int>(RENDER_LAYER::DECAL)].begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterIEnd = m_mapInstance[static_cast<int>(RENDER_LAYER::DECAL)].end();
-
-		for (; iterI != iterIEnd; ++iterI)
-		{
-			if (iterI->second->GetCount() > 0)
-			{
-				iterI->second->Render();
-			}
+			if (pDecal) pDecal->Bind();
 		}
 
 		m_pNoDepthRead->PostBind();
@@ -1107,7 +985,17 @@ namespace Engine
 
 		m_pCullFront->Bind();
 
+		// Phase E5 — SkyBox is a Component now; bind owner Transform CB
+		// (the WVP matrix the skybox shader expects) before SkyBox::Bind,
+		// which mirrors the MeshRendererComponent render path.
+		GameObject* pSkyBoxOwner = m_pSkyBox->GetGameObjectOwner();
+		std::shared_ptr<Transform> pSkyBoxTr =
+			pSkyBoxOwner ? pSkyBoxOwner->GetComponent<Transform>() : nullptr;
+		if (pSkyBoxTr) pSkyBoxTr->Bind();
+
 		m_pSkyBox->Bind();
+
+		if (pSkyBoxTr) pSkyBoxTr->PostBind();
 
 		m_pCullFront->PostBind();
 
@@ -1133,17 +1021,13 @@ namespace Engine
 
 	void RenderManager::Clear()
 	{
+		m_DecalList.clear();
+
 		for (int i = 0; i < static_cast<int>(RENDER_LAYER::END); ++i)
 		{
-			m_RenderList[i].clear();
-
-			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterR = m_mapInstance[i].begin();
-			std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterREnd = m_mapInstance[i].end();
-
-			for (; iterR != iterREnd; ++iterR)
-			{
-				iterR->second->Clear();
-			}
+			m_mapMeshInstance[i].clear();
+			m_ParticleList[i].clear();
+			m_CustomRenderList[i].clear();
 		}
 
 		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
@@ -1151,15 +1035,8 @@ namespace Engine
 			m_LightList[i].clear();
 		}
 
-		m_ShadowList.clear();
-
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterS = m_mapShadowInstance.begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterSEnd = m_mapShadowInstance.end();
-
-		for (; iterS != iterSEnd; ++iterS)
-		{
-			iterS->second->Clear();
-		}
+		// Phase E5 — m_RenderList<Drawable>, m_ShadowList, m_mapInstance,
+		// m_mapShadowInstance removed; clearing them is no longer needed.
 
 		m_pHDRTexture->Clear();
 
@@ -1276,12 +1153,18 @@ namespace Engine
 
 		pDepthBuffer[static_cast<int>(LIGHT_TYPE::DIRECTIONAL)]->SetDepthSRV(15);
 
-		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::BLUR)].begin();
-		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::BLUR)].end();
-
-		for (; iter != iterEnd; ++iter)
+		// Phase E5 — Drawable iterate removed (no live instances).
+		// Component-side particle pass for BLUR layer.
+		for (const auto& pParticle : m_ParticleList[static_cast<int>(RENDER_LAYER::BLUR)])
 		{
-			(*iter)->Bind();
+			if (pParticle) pParticle->Bind();
+		}
+
+		// Phase E5 — generic Component render callbacks for BLUR layer
+		// (used by Client::Trail and any future custom Component).
+		for (const auto& fn : m_CustomRenderList[static_cast<int>(RENDER_LAYER::BLUR)])
+		{
+			if (fn) fn();
 		}
 
 		pDepthBuffer[static_cast<int>(LIGHT_TYPE::DIRECTIONAL)]->ResetSRV(15);
@@ -1466,24 +1349,9 @@ namespace Engine
 
 		m_pAlphaBlend->Bind();
 
-		std::list<std::shared_ptr<Drawable>>::iterator iter = m_RenderList[static_cast<int>(RENDER_LAYER::UI)].begin();
-		std::list<std::shared_ptr<Drawable>>::iterator iterEnd = m_RenderList[static_cast<int>(RENDER_LAYER::UI)].end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			(*iter)->Bind();
-		}
-
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterI = m_mapInstance[static_cast<int>(RENDER_LAYER::UI)].begin();
-		std::unordered_map<size_t, std::shared_ptr<RenderInstancing>>::iterator iterIEnd = m_mapInstance[static_cast<int>(RENDER_LAYER::UI)].end();
-
-		for (; iterI != iterIEnd; ++iterI)
-		{
-			if (iterI->second->GetCount())
-			{
-				iterI->second->Render();
-			}
-		}
+		// Phase E5 — Drawable iterate / instancing removed (no live
+		// Drawable instances). Future UI Component-side render pass
+		// would hook in here (none active yet — UI hierarchy is dead).
 
 		m_pAlphaBlend->PostBind();
 	}

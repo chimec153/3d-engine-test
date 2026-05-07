@@ -1,6 +1,11 @@
 #include "Terrain.h"
 #include "Mesh.h"
 #include "BindableManager.h"
+#include "ConstantBuffer.h"
+#include "Texture.h"
+#include "VertexShader.h"
+#include "PixelShader.h"
+#include "Material.h"
 #include "../Core/Graphics.h"
 #include "ColliderMesh.h"
 #include "InputLayout.h"
@@ -8,13 +13,25 @@
 #include "../Input/Input.h"
 #include "Transform.h"
 #include "Decal.h"
+#include "Drawable.h"  // For SetNormals/SetTangent static helpers
 #include "../Shader/StructuredBuffer.h"
+#include "../Component/MeshRendererComponent.h"
 
 namespace Engine
 {
+	void TerrainBindHook::RenderBind()
+	{
+		if (auto* pT = static_cast<Terrain*>(GetGameObjectOwner()))
+			pT->RenderBind();
+	}
+	void TerrainBindHook::RenderUnbind()
+	{
+		if (auto* pT = static_cast<Terrain*>(GetGameObjectOwner()))
+			pT->RenderUnbind();
+	}
+
 	Terrain::Terrain() :
-		Drawable()
-		, m_pMesh(nullptr)
+		m_pMesh(nullptr)
 		, m_pTerrainCBuffer(StaticFindBindable<ConstantBuffer<TERRAINCBUFFER>>("Terrain"))
 		, m_pHeightMap(nullptr)
 		, m_bEditting(false)
@@ -22,7 +39,6 @@ namespace Engine
 		, m_pDecal()
 		, m_bEraseMode(false)
 	{
-		SetBindableType(BINDABLE_TYPE::TERRAIN);
 	}
 
 	void Terrain::CreateTerrain(int iWidth, int iHeight)
@@ -34,13 +50,16 @@ namespace Engine
 
 		CreateVertexAndIndex(m_vecVertex, m_vecIndex, iWidth, iHeight);
 
-		SetNormals(m_vecVertex, m_vecIndex);
+		Drawable::SetNormals(m_vecVertex, m_vecIndex);
 
-		SetTangent(m_vecVertex, m_vecIndex);
+		Drawable::SetTangent(m_vecVertex, m_vecIndex);
 
-		m_pMesh = CreateBindable<Mesh>("terrainmesh", m_vecVertex, m_vecIndex);
+		m_pMesh = StaticCreateBindable<Mesh>("terrainmesh", m_vecVertex, m_vecIndex);
+		if (m_pMeshRenderer) m_pMeshRenderer->SetMesh(m_pMesh);
 
-		GetBoundingSphere(m_vecVertex);
+		// Bounding-sphere computation used to write Drawable instance state;
+		// for the Component shell that data isn't tracked, so the call is
+		// dropped (collision-side bounding handled separately).
 
 		CreateMeshCollider();
 	}
@@ -54,27 +73,36 @@ namespace Engine
 
 	void Terrain::CreateTerrainTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
-		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 20));
+		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 20);
+		m_vecTexture.push_back(pTex);
+		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
 	}
 
 	void Terrain::CreateTerrainNormalTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
-		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 21));
+		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 21);
+		m_vecTexture.push_back(pTex);
+		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
 	}
 
 	void Terrain::CreateTerrainSpecularTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
-		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 22));
+		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 22);
+		m_vecTexture.push_back(pTex);
+		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
 	}
 
 	void Terrain::CreateTerrainEmissiveTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
-		m_vecTexture.push_back(CreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 23));
+		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 23);
+		m_vecTexture.push_back(pTex);
+		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
 	}
 
 	void Terrain::CreateHeightMap(const std::string& strTag, const TCHAR* pFilePath)
 	{
-		m_pHeightMap = CreateBindable<Texture>(strTag, pFilePath, TEXTURE_PATH, 16, D3D11_CPU_ACCESS_WRITE, D3D11_USAGE_DYNAMIC);
+		m_pHeightMap = StaticCreateBindable<Texture>(strTag, pFilePath, TEXTURE_PATH, 16, D3D11_CPU_ACCESS_WRITE, D3D11_USAGE_DYNAMIC);
+		if (m_pMeshRenderer && m_pHeightMap) m_pMeshRenderer->AddBindable(m_pHeightMap);
 
 		DirectX::ScratchImage* pImage = m_pHeightMap->GetImage();
 
@@ -128,11 +156,10 @@ namespace Engine
 
 		GetTris(_vecIndex);
 
-		// Phase B.4 — Collider migrated to Component; lookup via FindComponent.
 		std::shared_ptr<ColliderMesh> pCollider = std::static_pointer_cast<ColliderMesh>(FindComponent(COMPONENT_TYPE::COLLIDER_MESH));
 
 		if (!pCollider) {
-			pCollider = CreateComponent<ColliderMesh>("TerrainCollider", vecPoint, _vecIndex);
+			pCollider = AddComponent<ColliderMesh>("TerrainCollider", vecPoint, _vecIndex);
 		}
 		else {
 			pCollider->SetInfo(vecPoint, _vecIndex);
@@ -211,7 +238,7 @@ namespace Engine
 
 			Vector3 vResult = (u * s + v * t) + Vector3(m_vecVertex[iLeftTopIndex].pos.x, static_cast<float>(m_vecHeight[iLeftTopIndex]), m_vecVertex[iLeftTopIndex].pos.z);
 
-			return GetTransform()->GetTransformMatrix().TransformCoord(vResult).y;
+			return m_pTransform->GetTransformMatrix().TransformCoord(vResult).y;
 		}
 		else
 		{
@@ -225,7 +252,7 @@ namespace Engine
 
 			Vector3 vResult = (u * s + v * t) + Vector3(m_vecVertex[iRightBottomIndex].pos.x, static_cast<float>(m_vecHeight[iRightBottomIndex]), m_vecVertex[iRightBottomIndex].pos.z);
 
-			return GetTransform()->GetTransformMatrix().TransformCoord(vResult).y;
+			return m_pTransform->GetTransformMatrix().TransformCoord(vResult).y;
 		}
 
 		return 0.0f;
@@ -305,7 +332,8 @@ namespace Engine
 
 	Vector3 Terrain::GetTerrainLocalPos(const Vector3& vPos)	const
 	{
-		std::shared_ptr<Transform> pTransform = GetTransform();
+		std::shared_ptr<Transform> pTransform = m_pTransform;
+		if (!pTransform) return vPos;
 
 		return (Matrix::TranslateFromVector(-pTransform->GetPosition()) * pTransform->GetRotationMatrix().Transpose() * Matrix::Scaling(1.f / pTransform->GetScale())).TransformCoord(vPos);
 	}
@@ -388,45 +416,54 @@ namespace Engine
 			return false;
 		}
 
-		FindAndAddBind<InputLayout>("Standard");
-		FindAndAddBind<VertexShader>("anisotropic_microfacet VS_Terrain");
-		FindAndAddBind<PixelShader>("anisotropic_microfacet PS_Terrain");
-		FindAndAddBind<Topology>("TriangleList");
-		std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
+		// Phase E5 — assemble the entity from Components.
+		m_pTransform    = AddComponent<Transform>("transform");
+		m_pMeshRenderer = AddComponent<MeshRendererComponent>("mesh_renderer");
+		m_pBindHook     = AddComponent<TerrainBindHook>("terrain_bind_hook");
 
-		if (pMaterial)
+		if (m_pMeshRenderer)
 		{
-			pMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
+			m_pMeshRenderer->AddBindable(StaticFindBindable<InputLayout>("Standard"));
+			m_pMeshRenderer->SetVertexShader(StaticFindBindable<VertexShader>("anisotropic_microfacet VS_Terrain"));
+			m_pMeshRenderer->SetPixelShader(StaticFindBindable<PixelShader>("anisotropic_microfacet PS_Terrain"));
+			m_pMeshRenderer->AddBindable(StaticFindBindable<Topology>("TriangleList"));
 
-			AddChild(pMaterial);
+			std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
+			if (pMaterial)
+				m_pMeshRenderer->SetMaterial(std::static_pointer_cast<Material>(pMaterial->Clone()));
 		}
 
-		m_pDecal = CreateBindable<Decal>("BrushDecal");
+		// Brush Decal Component (already a Component as of E5 Decal migration).
+		m_pDecal = AddComponent<Decal>("BrushDecal");
 
-		m_pDecal->FindAndAddBind<Mesh>("Box");
-		m_pDecal->FindAndAddBind<Topology>("TriangleList");
-		// BrushDecal lacks a PixelShader — it only renders while the user
-		// is hovering the terrain in brush mode (CollisionStay enables it,
-		// CollisionEnd disables it). Without an initial Disable, it renders
-		// in the opaque pass on the very first frame inheriting the prior
-		// drawable's PS (PS_Terrain), triggering a VS-PS linkage error
-		// because DECAL_VS doesn't output VS_Terrain_Out's semantics.
-		m_pDecal->Disable();
+		if (m_pDecal)
+		{
+			m_pDecal->SetMesh(StaticFindBindable<Mesh>("Box"));
+			m_pDecal->SetTopology(StaticFindBindable<Topology>("TriangleList"));
+			// BrushDecal lacks a PixelShader — it only renders while the
+			// user is hovering the terrain in brush mode (CollisionStay
+			// enables it, CollisionEnd disables it). Disable on init so
+			// nothing draws until the brush is actually hovered.
+			m_pDecal->Disable();
+		}
 
 		return true;
 	}
 
-	void Terrain::Bind()
+	void Terrain::RenderBind()
 	{
-		m_pTileTypeBuffer->SetSRV(24);
+		if (m_pTileTypeBuffer) m_pTileTypeBuffer->SetSRV(24);
 
-		m_pTerrainCBuffer->UpdateBuffer(m_tTerrainBuffer);
+		if (m_pTerrainCBuffer)
+		{
+			m_pTerrainCBuffer->UpdateBuffer(m_tTerrainBuffer);
+			m_pTerrainCBuffer->Bind();
+		}
+	}
 
-		m_pTerrainCBuffer->Bind();
-
-		__super::Bind();
-
-		m_pTileTypeBuffer->ResetSRV(24);
+	void Terrain::RenderUnbind()
+	{
+		if (m_pTileTypeBuffer) m_pTileTypeBuffer->ResetSRV(24);
 	}
 	void Terrain::Save(FILE* pFile)
 	{
@@ -486,7 +523,7 @@ namespace Engine
 
 			fread(strTexture.get(), 1, iLength, pFile);
 
-			m_pHeightMap = std::static_pointer_cast<Texture>(FindChild(strTexture.get()));
+			m_pHeightMap = StaticFindBindable<Texture>(strTexture.get());
 		}
 
 		CreateTerrain(m_tTerrainBuffer.m_iWidth, m_tTerrainBuffer.m_iHeight);
@@ -499,7 +536,7 @@ namespace Engine
 			{
 				Vector3 vCross = pSrc->GetCross();
 
-				std::shared_ptr<Transform> pTransform = GetTransform();
+				std::shared_ptr<Transform> pTransform = m_pTransform;
 
 				vCross -= pTransform->GetPosition();
 
@@ -645,14 +682,9 @@ namespace Engine
 
 		if (m_pBrushTexture)
 		{
-			std::shared_ptr<Bindable> pTexture = m_pDecal->FindChild(BINDABLE_TYPE::TEXTURE);
-
-			if (pTexture)
-			{
-				m_pDecal->DeleteChild(pTexture);
-			}
-
-			m_pDecal->AddChild(m_pBrushTexture);
+			// Phase E5 — texture is now a named slot on the Decal Component
+			// (no more Bindable child-list lookup / delete / add).
+			m_pDecal->SetTexture(m_pBrushTexture);
 
 			std::shared_ptr<Transform> pDecalTransform = m_pDecal->GetTransform();
 

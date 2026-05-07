@@ -1,13 +1,18 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
+#include "../Types.h"
 namespace Engine
 {
+    // Phase E5 — Cone migrated from Drawable to Component shell. Currently
+    // dead at runtime. Static CreateConeVertex / CreateConeIndex helpers
+    // are preserved for future GameObject + MeshRenderer setups.
     class ENGINE_DLL Cone :
-        public Drawable
+        public Component
     {
         friend class Scene;
 
     public:
+        Cone();
         Cone(int iBaseCount);
         Cone(const Cone& cone);
     public:
@@ -15,8 +20,7 @@ namespace Engine
 
     public:
         virtual void Update(float fDeltaTime) override;
-        virtual void Bind() override;
-        virtual  std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
 
     public:
         template <typename T>
@@ -27,11 +31,6 @@ namespace Engine
             tVertex.pos.x = 0.f;
             tVertex.pos.y = 1.f;
             tVertex.pos.z = 0.f;
-
-            /* tVertex.r = 1.f;
-             tVertex.g = 0.f;
-             tVertex.b = 0.f;
-             tVertex.a = 1.f;*/
 
             tVertex.r = 1.f;
             tVertex.g = 1.f;
@@ -48,10 +47,6 @@ namespace Engine
                 tVertex.pos.y = 0.f;
                 tVertex.pos.z = sinf(PI * 2.f / iBaseCount * i) / 2.f;
 
-                /*tVertex.r = 0.f;
-                tVertex.g = 0.f;
-                tVertex.b = 1.f;
-                tVertex.a = 1.f;*/
                 tVertex.r = 1.f;
                 tVertex.g = 1.f;
                 tVertex.b = 1.f;

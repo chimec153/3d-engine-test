@@ -1,12 +1,15 @@
 #pragma once
-#include "Bindable.h"
+#include "../Component/Component.h"
 namespace Engine
 {
     template <typename T>
     class ConstantBuffer;
 
+    // Phase E5 — PaperBurn migrated from Bindable to Component. The owner
+    // (e.g. Attackable) is responsible for calling Bind() during its own
+    // Bind path (Component has no virtual Bind interface).
     class ENGINE_DLL PaperBurn :
-        public Bindable
+        public Component
     {
     public:
         enum class PAPER_BURN_STAGE
@@ -53,8 +56,18 @@ namespace Engine
 
     public:
         virtual void Update(float fDeltaTime) override;
-        virtual void Bind() override;
-        virtual std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
+
+        // Bind is NOT a virtual override — Component has no Bind interface.
+        // Called explicitly by the owning Drawable's render path (legacy)
+        // or via RenderBind() below for GameObject-hosted MeshRenderers.
+        void Bind();
+
+        // Phase E5 — RenderBind override forwards to the existing Bind so
+        // GameObject-hosted Attackable/Player/etc. get paper-burn applied
+        // automatically during their MeshRenderer pass (between Transform
+        // bind and Mesh::Draw).
+        virtual void RenderBind() override { Bind(); }
 
     public:
         virtual void Save(FILE* pFile) override;

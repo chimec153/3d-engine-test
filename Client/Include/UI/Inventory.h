@@ -53,11 +53,15 @@ namespace Client
         static std::map<int, ITEMINFO>   s_mapItemTexture;
         static std::vector<Engine::Vector2>   s_mapEquipPosition;
     private:
+        // Phase E5 — pItemDrawable removed (was the Drawable hosting the
+        // item's mesh/material/colliders; created in AddItem which has
+        // been stubbed because Inventory's GameScene construction is
+        // commented out). Reintroduce as shared_ptr<GameObject> when the
+        // inventory UI is rebuilt under the GameObject path.
         typedef struct _tagItemIconInfo
         {
             std::shared_ptr<ItemIcon> pItemIcon;
             PITEMINFO pInfo;
-            std::shared_ptr<Drawable> pItemDrawable;
 
             _tagItemIconInfo() :
                 pItemIcon()

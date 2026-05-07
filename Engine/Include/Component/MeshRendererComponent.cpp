@@ -5,6 +5,9 @@
 #include "../Bindable/Material.h"
 #include "../Bindable/Texture.h"
 #include "../Bindable/Animation.h"
+#include "../Bindable/Transform.h"
+#include "../Render/RenderManager.h"
+#include "../GameObject/GameObject.h"
 
 namespace Engine
 {
@@ -115,6 +118,37 @@ namespace Engine
 	RENDER_LAYER MeshRendererComponent::GetRenderLayer() const { return m_eRenderLayer; }
 	size_t MeshRendererComponent::GetInstanceKey() const { return m_iInstanceKey; }
 
+	void MeshRendererComponent::GetInstData(char* pData, int iSize) const
+	{
+		// Mirrors Drawable::GetInstData layout so existing "_Inst" input
+		// layouts (which expect 192-byte transform block + 44-byte
+		// material block) continue to work without shader changes.
+		GameObject* pOwner = GetGameObjectOwner();
+		if (!pOwner) return;
+		std::shared_ptr<Transform> pTransform = pOwner->GetComponent<Transform>();
+		if (!pTransform) return;
+
+		const TRANSFORMBUFFER& tBuffer = pTransform->GetBuffer();
+
+		memcpy_s(pData, iSize, &tBuffer, 192);
+		pData += 192;
+		iSize -= 192;
+		if (iSize <= 0) return;
+
+		std::shared_ptr<Material> pMaterial = m_pMaterial;
+		if (!pMaterial && m_pMesh) pMaterial = m_pMesh->GetMaterial();
+		if (!pMaterial) return;
+
+		const MATERIAL& material = pMaterial->GetMaterial();
+		memcpy_s(pData, iSize, &material.diffuseColor, 16);
+		pData += 16; iSize -= 16;
+		memcpy_s(pData, iSize, &material.specularColor, 16);
+		pData += 16; iSize -= 16;
+		memcpy_s(pData, iSize, &material.vRoughness, 8);
+		pData += 8; iSize -= 8;
+		memcpy_s(pData, iSize, &material.fFraction, 4);
+	}
+
 	void MeshRendererComponent::UpdateInstanceKey()
 	{
 		std::hash<std::string> hs;
@@ -153,6 +187,20 @@ namespace Engine
 				break;
 			}
 		}
+
+		// Phase E5 — invoke RenderBind on every sibling Component of the
+		// owning GameObject (skipping ourselves). Lets "decorator"
+		// Components like PaperBurn participate in the mesh draw without
+		// the MeshRenderer needing to know their concrete types. Default
+		// RenderBind on Component is no-op, so this loop is cheap.
+		if (GameObject* pOwner = GetGameObjectOwner())
+		{
+			for (const auto& pSibling : pOwner->GetComponentList())
+			{
+				if (pSibling.get() != this)
+					pSibling->RenderBind();
+			}
+		}
 	}
 
 	void MeshRendererComponent::BindExceptShader()
@@ -177,6 +225,19 @@ namespace Engine
 
 	void MeshRendererComponent::PostBind()
 	{
+		// Phase E5 — symmetric to Bind's sibling-RenderBind iteration:
+		// invoke RenderUnbind on every sibling Component of the owning
+		// GameObject so they can release SRVs / unbind the state they
+		// installed in RenderBind.
+		if (GameObject* pOwner = GetGameObjectOwner())
+		{
+			for (const auto& pSibling : pOwner->GetComponentList())
+			{
+				if (pSibling.get() != this)
+					pSibling->RenderUnbind();
+			}
+		}
+
 		if (m_pVertexShader) m_pVertexShader->PostBind();
 		if (m_pPixelShader)  m_pPixelShader->PostBind();
 		if (m_pMaterial)     m_pMaterial->PostBind();
@@ -213,6 +274,16 @@ namespace Engine
 		// Animation final-buffer cleanup, if present, mirrors Drawable's path.
 		// Skipping for E2 minimal — full parity will be checked when
 		// MeshRenderer is wired into the render pipeline in E4.
+	}
+
+	void MeshRendererComponent::PreDraw(float /*fDeltaTime*/)
+	{
+		// Phase E4 — self-register with RenderManager every frame so the
+		// owning GameObject's mesh renders. Mirrors Drawable::PreDraw's
+		// AddDrawable. View-frustum culling not yet wired here — first-pass
+		// always-register; refine in a later phase.
+		auto pMR = std::dynamic_pointer_cast<MeshRendererComponent>(shared_from_this());
+		if (pMR) RenderManager::GetInst()->AddMeshRenderer(pMR);
 	}
 
 	std::shared_ptr<Component> MeshRendererComponent::Clone()

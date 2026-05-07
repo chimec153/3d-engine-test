@@ -57,16 +57,11 @@ namespace Engine
 
 		if (m_pSound)
 		{
-			// Phase B.4 — Component's owner is the attached Drawable.
-			// Set by Drawable::AddChild(shared_ptr<Component>) when this
-			// sound was added to the entity.
-			if (Drawable* pOwner = GetOwner())
+			// Phase E5 — host transform via the host-agnostic helper.
+			std::shared_ptr<Transform> pTransform = GetHostTransform();
+			if (pTransform)
 			{
-				std::shared_ptr<Transform> pTransform = pOwner->GetTransform();
-				if (pTransform)
-				{
-					m_pSound->SetPosition(pTransform->GetPosition(), pTransform->GetVelocity());
-				}
+				m_pSound->SetPosition(pTransform->GetPosition(), pTransform->GetVelocity());
 			}
 		}
 	}

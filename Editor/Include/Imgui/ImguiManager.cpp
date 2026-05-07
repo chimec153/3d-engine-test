@@ -4,6 +4,11 @@
 #include "Core/Graphics.h"
 #include "Input/Input.h"
 #include "Core/Window.h"
+// Phase E7 — BindableManager.h must come before headers that use the
+// `friend class BindableManager<X>` non-template-form declaration
+// (InputLayout, Topology, RasterizerState, etc.). Engine + Client builds
+// happen to satisfy this transitively; Editor's unity build doesn't.
+#include "Bindable/BindableManager.h"
 #include "Scene/Layer.h"
 #include "Bindable/Drawable.h"
 #include "Core/PathManager.h"
@@ -20,7 +25,6 @@
 #include "Bindable/Topology.h"
 #include "Bindable/ConstantBuffer.h"
 #include "Bindable/Bindable.h"
-#include "Bindable/BindableManager.h"
 #include "Navigation/Detour/DetourNavMeshBuilder.h"
 #include "Navigation/Detour/DetourNavMesh.h"
 #include "Navigation/Detour/DetourNavMeshQuery.h"
@@ -33,6 +37,8 @@
 #include "Input/Input.h"
 #include "../Object/Player.h"
 #include "Bindable/Animation.h"
+#include "GameObject/GameObject.h"
+#include "Component/MeshRendererComponent.h"
 #include "Animation/Sequence.h"
 #include "Animation/Skeleton.h"
 #include "Bindable/PointLight.h"
@@ -512,33 +518,46 @@ namespace Editor
 			vecIndexAll.push_back(vecIndex);
 		}
 
-		std::shared_ptr<Engine::Drawable> pNavigation = pScene->CreateDrawable<Engine::Drawable>("Navigation", pScene->FindLayer(DEFAULT_LAYER));
+		// Phase E7 — Navigation migrated from Drawable to GameObject. Mesh /
+		// shaders / material now live on a MeshRendererComponent; ColliderMesh
+		// and NavMesh are sibling Components on the same GameObject.
+		std::shared_ptr<Engine::GameObject> pNavigation =
+			pScene->CreateGameObject<Engine::GameObject>("Navigation", pScene->FindLayer(DEFAULT_LAYER));
 
 		if (!pNavigation)
 		{
 			return;
 		}
 
-		std::shared_ptr<Engine::ColliderMesh> pColliderMesh = pNavigation->CreateComponent<Engine::ColliderMesh>("ColliderMesh");
+		pNavigation->AddComponent<Engine::Transform>("transform");
 
+		std::shared_ptr<Engine::MeshRendererComponent> pMR =
+			pNavigation->AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
+
+		std::shared_ptr<Engine::ColliderMesh> pColliderMesh =
+			pNavigation->AddComponent<Engine::ColliderMesh>("ColliderMesh");
 		pColliderMesh->SetInfo(vecPoint, vecTris);
 
-		pNavigation->CreateBindable<Engine::Mesh>("NavMesh", vecVertexAll, vecIndexAll);
+		std::shared_ptr<Engine::Mesh> pNavMeshGeometry =
+			Engine::StaticCreateBindable<Engine::Mesh>("NavMesh", vecVertexAll, vecIndexAll);
 
-		pNavigation->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSNoSkin");
-		pNavigation->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoTexture");
-		pNavigation->FindAndAddBind<Engine::InputLayout>("Standard");
-		pNavigation->FindAndAddBind<Engine::Topology>("TriangleList");
+		if (pMR)
+		{
+			pMR->SetMesh(pNavMeshGeometry);
+			pMR->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>("anisotropic_microfacet VSNoSkin"));
+			pMR->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>("anisotropic_microfacet PS_NoTexture"));
+			pMR->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
+			pMR->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
 
-		std::shared_ptr<Engine::Material> pMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
-
-		pNavigation->AddChild(pMaterial->Clone());
+			std::shared_ptr<Engine::Material> pMaterial =
+				Engine::StaticFindBindable<Engine::Material>("Material");
+			if (pMaterial)
+				pMR->SetMaterial(std::static_pointer_cast<Engine::Material>(pMaterial->Clone()));
+		}
 
 		m_pNavMesh = CreateNavMesh(vecPoint, vecTris, vMax, vMin);
-
 		m_pNavMesh->SetTag("NavigationMesh");
-
-		pNavigation->AddChild(m_pNavMesh);
+		pNavigation->AddComponent(std::static_pointer_cast<Engine::Component>(m_pNavMesh));
 
 		pColliderMesh->SetCallBack(Engine::COLLISION_TYPE::STAY, this, &ImguiManager::CollisionStay);
 	}
@@ -723,12 +742,12 @@ namespace Editor
 		{
 			Engine::Collider* pNavOwner = nullptr;
 
-			if ((pSrc->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pSrc->GetTag() == "MouseLine"))
+			if ((pSrc->GetComponentType() == Engine::COMPONENT_TYPE::COLLIDER_LINE && pSrc->GetTag() == "MouseLine"))
 			{
 				pNavOwner = pDest;
 			}
 
-			else if (pDest->GetBindableType() == Engine::BINDABLE_TYPE::COLLIDER_LINE && pDest->GetTag() == "MouseLine")
+			else if (pDest->GetComponentType() == Engine::COMPONENT_TYPE::COLLIDER_LINE && pDest->GetTag() == "MouseLine")
 			{
 				pNavOwner = pSrc;
 			}
@@ -745,38 +764,31 @@ namespace Editor
 
 					sprintf_s(strPlayer, "Player_%d", static_cast<int>(m_PlayerList.size()));
 
-					std::shared_ptr<Player> pPlayer = std::static_pointer_cast<Player>(pScene->CreateCloneDrawable(strPlayer, "Player", pLayer, Engine::SCENE_TYPE::CURRENT));
+					// Phase E7 — Player is a GameObject; spawn directly via
+					// CreateGameObject. The old CreateCloneDrawable path
+					// depended on a "Player" prototype that was never
+					// registered, so this is the first time the editor-side
+					// agent spawn actually creates a live entity.
+					std::shared_ptr<Player> pPlayer = pScene->CreateGameObject<Player>(strPlayer, pLayer);
 
-					if (pPlayer)
+					if (pPlayer && m_pNavMesh)
 					{
-						Engine::Bindable* pParent = pNavOwner->GetParent();
-
-						if (pParent)
-						{
-							// Phase B.4 — NavMesh migrated to Component; resolve via FindComponent
-							// on the parent (assumed Drawable, which owns NavMesh as a Component).
-							auto* pParentDrawable = dynamic_cast<Engine::Drawable*>(pParent);
-							std::shared_ptr<Engine::NavMesh> pNavMesh = pParentDrawable
-								? std::static_pointer_cast<Engine::NavMesh>(pParentDrawable->FindComponent(Engine::COMPONENT_TYPE::NAV_MESH))
-								: nullptr;
-
-							if (pNavMesh)
-							{
-								pPlayer->SetAgent(pNavMesh->CreateAgent(strPlayer, pPlayer->GetTransform(), pSrc->GetCross()));
-							}
-						}
+						// Phase E7 — NavMesh is the editor's own member (set
+						// in CreateNavMesh / LoadNavMesh); resolve directly
+						// instead of walking back through the Collider's
+						// parent. Sidesteps Component::GetParent vs Bindable
+						// type mismatch and works regardless of whether the
+						// nav-host entity is still a Drawable or a GameObject.
+						pPlayer->SetAgent(m_pNavMesh->CreateAgent(strPlayer, pPlayer->GetTransform(), pSrc->GetCross()));
 					}
 
 					m_PlayerList.push_back(pPlayer);
 				}
 				else
 				{
-					std::list<std::shared_ptr<Player>>::const_iterator iter = m_PlayerList.begin();
-					std::list<std::shared_ptr<Player>>::const_iterator iterEnd = m_PlayerList.end();
-
-					for (; iter != iterEnd; ++iter)
+					for (const auto& pPlayer : m_PlayerList)
 					{
-						(*iter)->Move(pSrc->GetCross());
+						if (pPlayer) pPlayer->Move(pSrc->GetCross());
 					}
 				}
 			}
@@ -812,31 +824,29 @@ namespace Editor
 
 		switch (eDrawableType)
 		{
-		case Engine::BINDABLE_TYPE::TRANSFORM:
-			TransformBuffer_ImGuiWindow(std::static_pointer_cast<Engine::Transform>(pDrawable));
-			break;
 		case Engine::BINDABLE_TYPE::MESH:
 			Mesh_ImGuiWindow(std::static_pointer_cast<Engine::Mesh>(pDrawable));
 			break;
 		case Engine::BINDABLE_TYPE::TERRAIN:
-			Terrain_ShowImguiWindow(std::static_pointer_cast<Engine::Terrain>(pDrawable));
+			// Phase E7 — Terrain migrated out of the Bindable hierarchy; the
+			// downcast no longer compiles. The TERRAIN enum entry stays for
+			// legacy serialized scenes but the editor inspector hook is dead.
 			break;
 		case Engine::BINDABLE_TYPE::MATERIAL:
 			Material_ImGuiWindow(std::static_pointer_cast<Engine::Material>(pDrawable));
 			break;
+		case Engine::BINDABLE_TYPE::TRANSFORM:
 		case Engine::BINDABLE_TYPE::LIGHT:
-			PointLight_ImGuiWindow(std::static_pointer_cast<Engine::PointLight>(pDrawable));
-			break;
 		case Engine::BINDABLE_TYPE::ANIMATION:
-		{
-			Animation_ImGuiWindow(std::static_pointer_cast<Engine::Animation>(pDrawable));
-			break;
-		}
 		case Engine::BINDABLE_TYPE::PARTICLE:
-			Particle_ShowImGuiImage(std::static_pointer_cast<Engine::Particle>(pDrawable));
-			break;
 		case Engine::BINDABLE_TYPE::CLOTH:
-			Cloth_ShowImguiWindow(std::static_pointer_cast<Engine::Cloth>(pDrawable));
+			// Phase E7 — these types migrated from Bindable to Component (or
+			// to GameObject). pDrawable here is shared_ptr<Bindable>, so
+			// downcasting to the new Component-derived class no longer
+			// compiles. The editor inspector for these needs to be rewritten
+			// against the GameObject's component list; until then, fall
+			// through to the generic CRef inspector.
+			CRef_ImGuiWindow(pDrawable);
 			break;
 		default:
 			CRef_ImGuiWindow(pDrawable);
@@ -914,7 +924,8 @@ namespace Editor
 					pDrawable->FindAndAddBind<Engine::Material>(strBindable);
 					break;
 				case Engine::BINDABLE_TYPE::TRANSFORM:
-					pDrawable->FindAndAddBind<Engine::Transform>(strBindable);
+					// Phase E7 — Transform migrated to Component; the
+					// "add a Transform Bindable" UI no longer applies.
 					break;
 				case Engine::BINDABLE_TYPE::INPUTLAYOUT:
 					pDrawable->FindAndAddBind<Engine::InputLayout>(strBindable);
@@ -1789,33 +1800,11 @@ namespace Editor
 			return;
 		}
 
-		static int iCurrent = -1;
-
-		const std::list<std::shared_ptr<Engine::Bindable>>& DrawList = pLayer->GetDrawList();
-
-		std::vector<const char*> vecName(DrawList.size());
-
-		std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = DrawList.begin();
-		std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iterEnd = DrawList.end();
-
-		for (int i = 0; iter != iterEnd; ++iter, ++i)
-		{
-			vecName[i] = (*iter)->GetTag().c_str();
-		}
-
-		if (vecName.size())
-		{
-			ImGui::ListBox("Draw List", &iCurrent, &vecName[0], static_cast<int>(vecName.size()));
-		}
-
-		if (iCurrent >= 0 && iCurrent < DrawList.size())
-		{
-			std::list<std::shared_ptr<Engine::Bindable>>::const_iterator iter = DrawList.begin();
-
-			std::advance(iter, iCurrent);
-
-			Drawable_ShowImGuiWindow(*iter);
-		}
+		// Phase E7 — Layer's m_DrawList of Bindable-typed entities is gone;
+		// the per-drawable list-and-inspect UI moves into a future
+		// GameObject inspector (the Layer's m_GameObjectList walks would
+		// produce roughly the same shape). For now this panel keeps the
+		// FBX/OBJ import + NavMesh build buttons that still apply.
 
 		static char strName[MAX_PATH] = {};
 

@@ -1,13 +1,21 @@
 #pragma once
 
-#include "../Bindable/Drawable.h"
+#include "../Component/Component.h"
+#include "../Types.h"
 
 namespace Engine
 {
+    template <typename T> class ConstantBuffer;
+
+    // Phase E5 — UIControl migrated from Drawable to Component shell.
+    // Currently dead at runtime (the GameScene creation paths for the
+    // UI hierarchy are commented out). Subclasses (Frame, Gauge, Image)
+    // follow the same Component-shell pattern.
     class ENGINE_DLL UIControl :
-        public Drawable
+        public Component
     {
     public:
+        UIControl();
         UIControl(const std::string& strTexture);
         UIControl(const UIControl& control);
         virtual ~UIControl() override = default;
@@ -26,6 +34,6 @@ namespace Engine
     public:
         virtual bool Init() override;
         virtual void Update(float fDelatTime) override;
-        virtual void Bind() override;
+        virtual std::shared_ptr<Component> Clone() override;
     };
 }

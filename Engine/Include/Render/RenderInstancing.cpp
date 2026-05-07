@@ -217,25 +217,11 @@ namespace Engine
 			std::list<std::shared_ptr<JointSocket>>::const_iterator iterS = SocketList.begin();
 			std::list<std::shared_ptr<JointSocket>>::const_iterator iterSEnd = SocketList.end();
 
-			for (; iterS != iterSEnd; ++iterS)
-			{
-				std::shared_ptr<Drawable> pDrawable = (*iterS)->GetDrawable();
-
-				if (!pDrawable) {
-					continue;
-				}
-
-				pDrawable->SetInstID(i);
-				pDrawable->SetParentJointCount(m_tBoneCBuffer.iMaxJoint);
-
-				RenderInstancing* pInstancing = pDrawable->GetInstancing();
-
-				if (!pInstancing) {
-					continue;
-				}
-
-				pInstancing->SetJointSocketBuffer(m_pFinalBuffer);
-			}
+			// Phase E5 — JointSocket no longer holds a Drawable target;
+			// per-socket instancing wiring is dead since RenderInstancing
+			// itself only fed by RenderManager::AddDrawable which has been
+			// removed (no live Drawable instances).
+			(void)iterS; (void)iterSEnd;
 
 		}
 

@@ -1,12 +1,16 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
+#include "../Types.h"
 namespace Engine
 {
+    // Phase E5 — Box migrated from Drawable to Component shell. Currently
+    // dead at runtime. Static vertex/index data and CreateTextureVertex<T>
+    // / GetTextureIndex helpers are preserved for future GameObject +
+    // MeshRenderer setups that want a unit cube.
     class ENGINE_DLL Box :
-        public Drawable
+        public Component
     {
         friend class Scene;
-        friend class Drawable;
 
     public:
         Box();
@@ -20,8 +24,7 @@ namespace Engine
 
     public:
         virtual void Update(float fDeltaTime) override;
-        virtual void Bind() override;
-        virtual  std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
 
     public:
         void SetDefaultVertexAndIndex();

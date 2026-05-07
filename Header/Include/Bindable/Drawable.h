@@ -295,6 +295,28 @@ namespace Engine
 		virtual void Load(FILE* pFile) override;
 		void Parse(const char* pResult);
 
+		// Phase E5 — static loader bridge for non-Drawable code (Component-
+		// based GameObjects). Internally uses a temporary Drawable to drive
+		// the existing Load() pipeline, then extracts the populated resource
+		// slots so they can be installed into a MeshRendererComponent.
+		struct LoadedMeshResources
+		{
+			std::shared_ptr<Mesh>                       pMesh;
+			std::shared_ptr<Material>                   pMaterial;
+			std::vector<std::shared_ptr<class Texture>> vecTexture;
+		};
+		static LoadedMeshResources LoadObjResources(const TCHAR* pFileName, const std::string& strPathKey = MESH_PATH);
+
+		// Phase E5 — load an .obj/.fbx and install all Bindable children
+		// (Mesh / Material / Texture / VS / PS / IL / Topology / etc.) onto
+		// the target MeshRendererComponent via its AddBindable router. This
+		// is the recommended path for game classes migrating off the
+		// Drawable hierarchy — Drawable::Load adds default shaders and
+		// pipeline state that the MeshRenderer pass needs to actually draw.
+		static void LoadIntoMeshRenderer(const TCHAR* pFileName,
+			const std::string& strPathKey,
+			const std::shared_ptr<class MeshRendererComponent>& pTarget);
+
 	public:
 		typedef struct _tagMaterialInfo
 		{

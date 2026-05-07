@@ -1,11 +1,14 @@
 #include "Component.h"
+#include "../Bindable/Drawable.h"
+#include "../Bindable/Transform.h"
+#include "../GameObject/GameObject.h"
 
 namespace Engine
 {
 	Component::Component() :
 		m_eComponentType(COMPONENT_TYPE::NONE)
 		, m_pParent(nullptr)
-		, m_pOwner(nullptr)
+		, m_pGameObjectOwner(nullptr)
 	{
 	}
 
@@ -13,7 +16,7 @@ namespace Engine
 		CRef(comp)
 		, m_eComponentType(comp.m_eComponentType)
 		, m_pParent(nullptr)
-		, m_pOwner(nullptr)
+		, m_pGameObjectOwner(nullptr)
 	{
 		for (const auto& pChild : comp.m_ChildList)
 		{
@@ -45,14 +48,20 @@ namespace Engine
 		m_pParent = pParent;
 	}
 
-	Drawable* Component::GetOwner() const
+	GameObject* Component::GetGameObjectOwner() const
 	{
-		return m_pOwner;
+		return m_pGameObjectOwner;
 	}
 
-	void Component::SetOwner(Drawable* pOwner)
+	void Component::SetGameObjectOwner(GameObject* pOwner)
 	{
-		m_pOwner = pOwner;
+		m_pGameObjectOwner = pOwner;
+	}
+
+	std::shared_ptr<Transform> Component::GetHostTransform() const
+	{
+		if (m_pGameObjectOwner) return m_pGameObjectOwner->GetComponent<Transform>();
+		return nullptr;
 	}
 
 	const std::list<std::shared_ptr<Component>>& Component::GetChildList() const

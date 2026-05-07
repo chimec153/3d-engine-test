@@ -184,15 +184,14 @@ void Engine::Agent::Load(FILE* pFile)
 
 			fread(strTag.get(), 1, iLength, pFile);
 
-			// Phase B.4 — Component has no GetScene(); resolve via the
-			// SceneManager singleton instead.
-			Scene* pScene = SceneManager::GetInst()->GetScene();
-			std::shared_ptr<Bindable> pBindable = pScene ? pScene->FindBindable(strTag.get()) : nullptr;
-
-			if (pBindable)
-			{
-				SetTransform(std::static_pointer_cast<Drawable>(pBindable)->GetTransform());
-			}
+			// Phase E7 — Scene::FindBindable + Drawable host lookup are gone.
+			// The owner Transform should be re-attached by the GameObject
+			// load path (Layer/Scene scene-graph format is being redesigned);
+			// for now we just consume the tag bytes and leave the transform
+			// unset. Live Agents are constructed in NavMesh::CreateAgent
+			// with a Transform arg, so this Load branch only matters for
+			// legacy serialized scenes.
+			(void)strTag;
 		}
 	}
 }

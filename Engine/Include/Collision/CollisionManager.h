@@ -247,7 +247,7 @@ namespace Engine
 		float fAcutenessThreshold;
 
 	public:
-		void AddDrawable(class Drawable* pDrawable);
+		// Phase E5 — AddDrawable removed (no live Drawable instances).
 		void AddCollider(class Collider* pCollider);
 		void VisibleTest(CAMERA_TYPE eType);
 		PSPACE CreateChildSpace(SPACE* pParent, int iIndex)	const;

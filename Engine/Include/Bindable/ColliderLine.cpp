@@ -107,11 +107,9 @@ namespace Engine
 			m_tInfo.vDir = 0.f;
 		}
 
-		// Phase B.4 — owning Drawable is held in Component::m_pOwner,
-		// set by Drawable::AddChild(Component).
-		if (Drawable* pOwner = GetOwner())
+		// Phase E5 — host transform via the host-agnostic helper.
 		{
-			std::shared_ptr<Transform> pTransform = pOwner->GetTransform();
+			std::shared_ptr<Transform> pTransform = GetHostTransform();
 			if (pTransform)
 			{
 				m_tInfo.vStart = pTransform->GetPosition();

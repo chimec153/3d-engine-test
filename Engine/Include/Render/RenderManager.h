@@ -45,10 +45,38 @@ namespace Engine
 
 	private:
 		std::list<class std::shared_ptr<class PointLight>>	m_LightList[static_cast<int>(LIGHT_TYPE::END)];
-		std::list<class std::shared_ptr<class Drawable>>	m_RenderList[static_cast<int>(RENDER_LAYER::END)];
-		std::list<class std::shared_ptr<class Drawable>>	m_ShadowList;
-		std::unordered_map<size_t, class std::shared_ptr<class RenderInstancing>>	m_mapInstance[static_cast<int>(RENDER_LAYER::END)];
-		std::unordered_map<size_t, class std::shared_ptr<class RenderInstancing>>	m_mapShadowInstance;
+		// Phase E5 — m_RenderList<Drawable>, m_ShadowList, m_mapInstance,
+		// m_mapShadowInstance removed. With AddDrawable gone (E5) and all
+		// game classes migrated to GameObject + MeshRendererComponent,
+		// these structures stayed empty and only added boilerplate.
+		// Phase E5 — MeshRenderer instancing buckets. GameObjects with a
+		// MeshRendererComponent self-register here every PreDraw, keyed
+		// by GetInstanceKey so render passes can collapse duplicate-state
+		// entities into a single DrawInstanced call when the bucket size
+		// warrants it AND the "Inst" shader / input-layout variants are
+		// registered. When the conditions don't hold (per-instance
+		// Animation, decorator components like PaperBurn, missing Inst
+		// variants), the bucket is rendered as individual draws.
+		std::unordered_map<size_t, std::list<class std::shared_ptr<class MeshRendererComponent>>> m_mapMeshInstance[static_cast<int>(RENDER_LAYER::END)];
+
+		// Phase E5 — Decal Component registration path. Replaces the
+		// Drawable-subclass Decal that auto-registered into m_RenderList[DECAL].
+		// Cleared each frame.
+		std::list<class std::shared_ptr<class Decal>> m_DecalList;
+
+		// Phase E5 — Particle Component registration path. Replaces the
+		// Drawable-subclass Particle that auto-registered into
+		// m_RenderList[layer]. Indexed by RENDER_LAYER (currently ALPHA
+		// and BLUR are the consumers). Cleared each frame.
+		std::list<class std::shared_ptr<class Particle>> m_ParticleList[static_cast<int>(RENDER_LAYER::END)];
+
+		// Phase E5 — Generic per-layer render callback list. Any Component
+		// (Engine-side or Client-side) can register a Bind-callback for
+		// the given layer; the corresponding render pass invokes them in
+		// registration order. Lets us avoid RenderManager depending on
+		// downstream component types like Client::Trail. Cleared each
+		// frame.
+		std::list<std::function<void()>> m_CustomRenderList[static_cast<int>(RENDER_LAYER::END)];
 
 	private:
 		std::shared_ptr<class MRT> pMRT;
@@ -138,7 +166,14 @@ namespace Engine
 
 	public:
 		void AddLight(const std::shared_ptr<PointLight>& pLight);
-		void AddDrawable(const std::shared_ptr<Drawable>& pDrawable);
+		void AddMeshRenderer(const std::shared_ptr<class MeshRendererComponent>& pMR);
+		void AddDecalComponent(const std::shared_ptr<class Decal>& pDecal);
+		void AddParticle(const std::shared_ptr<class Particle>& pParticle);
+		// Phase E5 — generic Component render callback for the given layer.
+		// Used by Client-side components (Trail, etc.) so RenderManager
+		// doesn't need to know their concrete types.
+		void AddCustomRender(RENDER_LAYER eLayer, std::function<void()> renderFn);
+		// Phase E5 — AddDrawable removed (no more live Drawable instances).
 		std::shared_ptr<class MRT> GetMRT()	const;
 		std::shared_ptr<MRT> GetDepthBuffer(LIGHT_TYPE eType)	const;
 		std::shared_ptr<MRT> GetDecalMRT()	const;

@@ -1,6 +1,7 @@
 #include "Inventory.h"
 #include "../Client.h"
 #include "ItemIcon.h"
+#include "../Object/Attackable.h"
 #include "Bindable/Transform.h"
 #include "Bindable/ColliderOBB.h"
 #include "Scene/Scene.h"
@@ -57,97 +58,20 @@ namespace Client
 			m_pEquipSlotCollider[i]->SetCallBack(Engine::COLLISION_TYPE::LAST, this, &Inventory::CollisionEnd);
 		}
 
-		NotUseInstance();
+		// Phase E5 — NotUseInstance was a Drawable method; UI hierarchy is
+		// now Component-based and instancing is irrelevant for dead UI code.
 	}
 
-	bool Inventory::AddItem(int iItemID)
+	bool Inventory::AddItem(int /*iItemID*/)
 	{
-		std::map<int, ITEMINFO>::iterator iter = s_mapItemTexture.find(iItemID);
-
-		if (iter == s_mapItemTexture.end())
-		{
-			return false;
-		}
-
-		for (int i = 0; i < m_vecItem.size(); ++i)
-		{
-			if (!m_vecItem[i])
-			{
-				m_vecItem[i] = std::make_unique<ITEMICONINFO>();
-
-				m_vecItem[i]->pItemIcon = CreateBindable<ItemIcon>("itemicon", iter->second.strIcon);
-
-				if (!m_vecItem[i]->pItemIcon)
-				{
-					return false;
-				}					
-
-				m_vecItem[i]->pItemIcon->SetOwner(std::static_pointer_cast<Engine::UIControl>(std::shared_ptr(weak_from_this())));
-
-				std::shared_ptr<Engine::Transform> pItemIconTransform = m_vecItem[i]->pItemIcon->GetTransform();
-
-				if (!pItemIconTransform)
-				{
-					return false;
-				}
-
-				pItemIconTransform->SetRelativePosition(35.f * (i % INVENTORY_WIDTH) + 6.f, 35.f * (INVENTORY_HEIGHT - i / INVENTORY_WIDTH - 1) + 8.f, 0.f);
-
-				m_vecItem[i]->pInfo = &iter->second;
-
-				std::shared_ptr<Engine::Drawable> pItemDrawable = GetScene()->CreateDrawable<Attackable>(iter->second.strMesh, GetScene()->FindLayer(DEFAULT_LAYER), 50, 20, 25);
-
-				m_vecItem[i]->pItemDrawable = pItemDrawable;
-
-				pItemDrawable->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSNoSkin");
-				pItemDrawable->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
-				pItemDrawable->FindAndAddBind<Engine::Topology>("TriangleList");
-				pItemDrawable->FindAndAddBind<Engine::InputLayout>("Standard");
-				pItemDrawable->FindAndAddBind<Engine::DepthStencilState>("OutLineMask");
-				pItemDrawable->FindAndAddBind<Engine::Mesh>(iter->second.strMesh);
-				pItemDrawable->Disable();
-
-				std::shared_ptr<Engine::ColliderOBB> pItemBody = pItemDrawable->CreateComponent<Engine::ColliderOBB>(iter->second.strMesh + "_body");
-
-				pItemBody->Disable();
-
-				pItemBody->SetScaleOffset({ 0.175f, 1.1f, 0.175f });
-				pItemBody->SetAxisOffset({ 0.f, 0.4f, 0.f });
-
-				std::shared_ptr<Engine::Material> pSrcMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
-
-				pItemDrawable->AddChild(pSrcMaterial->Clone());
-
-				std::shared_ptr<Engine::Particle> m_pSwordParticle = pItemDrawable->CreateBindable<Engine::Particle>(iter->second.strMesh + " particle", 4096);
-
-				std::shared_ptr<Engine::Transform> pSwordParticleTransform = m_pSwordParticle->GetTransform();
-
-				if (pSwordParticleTransform)
-				{
-					pSwordParticleTransform->SetRelativePosition(0.f, 1.f, 0.f);
-				}
-				m_pSwordParticle->SetStartSize({ 0.04f, 0.04f });
-				m_pSwordParticle->SetEndSize({ 0.04f, 0.04f });
-				m_pSwordParticle->SetMaxCreatePosition({ 0.f, 0.f, 0.f });
-				m_pSwordParticle->SetMinCreatePosition({ 0.f, 0.f, 0.f });
-				m_pSwordParticle->SetStartColor(Engine::White);
-				m_pSwordParticle->SetEndColor({ 1.f,0.f, 0.f, 0.f });
-				m_pSwordParticle->SetMaxParticleCount(4096);
-				m_pSwordParticle->SetAccelaration({ 0.f, -1.f, 0.f });
-				m_pSwordParticle->SetVelocity({ -1.f, -1.f, -1.f });
-				m_pSwordParticle->SetMaxVelocity({ 1.f, 1.f, 1.f });
-				m_pSwordParticle->SetEmitTime(0.001f);
-				m_pSwordParticle->SetMaxLifeTime(2.f);
-				m_pSwordParticle->SetRenderLayer(Engine::RENDER_LAYER::BLUR);
-				m_pSwordParticle->CreateBindable<Engine::Texture>("particletexture", "Particle\\particle_00.png", TEXTURE_PATH);
-				m_pSwordParticle->StopEmit();
-
-				pItemDrawable->CreateComponent<Engine::SoundBindable>("weapon sound", iter->second.strSound);
-
-				return true;
-			}
-		}
-
+		// Phase E5 — Inventory's Drawable-era item-spawn body relied on
+		// Drawable methods (CreateBindable / FindAndAddBind / GetScene /
+		// Drawable::AddChild for material) that don't exist on the
+		// Component-based UI hierarchy. Inventory itself is dead at runtime
+		// (the GameScene CreateDrawable<Inventory> call has been commented
+		// out for some time). Stubbed for compile-only; reintroduce under
+		// a GameObject + UI-Component setup once the UI render path is
+		// rebuilt on top of MeshRenderer/AddCustomRender.
 		return false;
 	}
 	int Inventory::GetEquipItem(EQUIP_SLOT eSlot) const
@@ -288,98 +212,26 @@ namespace Client
 			}
 		}
 	}
-	void Inventory::UpdateEquipSlot(int iSlot)
+	void Inventory::UpdateEquipSlot(int /*iSlot*/)
 	{
-		std::shared_ptr<Player> pPlayer = std::static_pointer_cast<Player>(GetScene()->FindBindable("player"));
-
-		if (m_vecEquip[iSlot])
-		{
-			m_vecEquip[iSlot]->pItemIcon->GetTransform()->SetRelativePosition(s_mapEquipPosition[iSlot].x - 16.f, s_mapEquipPosition[iSlot].y - 16.f, 0.f);
-
-			m_vecEquip[iSlot]->pItemDrawable->Enable();
-
-			switch (static_cast<EQUIP_SLOT>(iSlot))
-			{
-			case Client::Inventory::EQUIP_SLOT::HEAD:
-				break;
-			case Client::Inventory::EQUIP_SLOT::BODY:
-			{
-				Engine::ResourceManager::GetInst()->Play_Sound("leather_inventory");
-
-				pPlayer->ChangeArmorMesh(m_vecEquip[iSlot]->pItemDrawable);
-			}
-				break;
-			case Client::Inventory::EQUIP_SLOT::LEG:
-				break;
-			case Client::Inventory::EQUIP_SLOT::FOOT:
-				break;
-			case Client::Inventory::EQUIP_SLOT::HAND_RIGHT:
-			{
-				Engine::ResourceManager::GetInst()->Play_Sound("metal-clash");
-
-				pPlayer->ChangeWeaponMesh(m_vecEquip[iSlot]->pItemDrawable);
-
-				switch (m_vecEquip[iSlot]->pInfo->eWeaponType)
-				{
-				case WEAPON_TYPE::FIST:
-					break;
-				case WEAPON_TYPE::SWORD:
-					pPlayer->SetUpperBodyState(Player::PLAYER_UPPER_BODY_STATE::GUN_IDLE);
-					break;
-				case WEAPON_TYPE::GUN:
-					break;
-				case WEAPON_TYPE::END:
-					break;
-				default:
-					break;
-				}
-
-				m_pWeaponUIRenderer->SetTarget(pPlayer->GetWeapon());
-			}
-				break;
-			case Client::Inventory::EQUIP_SLOT::HAND_LEFT:
-				break;
-			}
-		}
-		else
-		{
-
-			switch (static_cast<EQUIP_SLOT>(iSlot))
-			{
-			case Client::Inventory::EQUIP_SLOT::HEAD:
-				break;
-			case Client::Inventory::EQUIP_SLOT::BODY:
-			{
-				Engine::ResourceManager::GetInst()->Play_Sound("leather_inventory");
-
-				pPlayer->ChangeArmorMesh(nullptr);
-			}
-			break;
-			case Client::Inventory::EQUIP_SLOT::LEG:
-				break;
-			case Client::Inventory::EQUIP_SLOT::FOOT:
-				break;
-			case Client::Inventory::EQUIP_SLOT::HAND_RIGHT:
-			{
-				Engine::ResourceManager::GetInst()->Play_Sound("metal-clash");
-
-				pPlayer->ChangeWeaponMesh(nullptr);
-
-				m_pWeaponUIRenderer->SetTarget(pPlayer->GetWeapon());
-			}
-			break;
-			case Client::Inventory::EQUIP_SLOT::HAND_LEFT:
-				break;
-			}
-		}
+		// Phase E5 — Inventory is now a UI Component; the body below
+		// relied on Drawable-era APIs (GetScene on `this`, Drawable*
+		// equip targets, Player::ChangeArmorMesh / ChangeWeaponMesh).
+		// Stubbed for compile-only — Inventory is dead at runtime
+		// (GameScene CreateDrawable<Inventory> is commented out).
 	}
 	void Inventory::UpdateInventory(int iIndex)
 	{
 		if (m_vecItem[iIndex])
 		{
-			m_vecItem[iIndex]->pItemIcon->GetTransform()->SetRelativePosition(35.f * (iIndex % INVENTORY_WIDTH) + 6.f, 35.f * (INVENTORY_HEIGHT - iIndex / INVENTORY_WIDTH - 1) + 8.f, 0.f);
+			if (m_vecItem[iIndex]->pItemIcon)
+			{
+				if (auto pTr = m_vecItem[iIndex]->pItemIcon->GetTransform())
+					pTr->SetRelativePosition(35.f * (iIndex % INVENTORY_WIDTH) + 6.f, 35.f * (INVENTORY_HEIGHT - iIndex / INVENTORY_WIDTH - 1) + 8.f, 0.f);
+			}
 
-			m_vecItem[iIndex]->pItemDrawable->Disable();
+			// Phase E5 — pItemDrawable field removed; reintroduce as
+			// GameObject when the inventory UI is rebuilt.
 		}
 	}
 	void Inventory::ToggleInventory(float)
@@ -400,36 +252,24 @@ namespace Client
 			return false;
 		}
 
-		std::shared_ptr<Engine::UIRenderer> pUIRenderer = CreateBindable<Engine::UIRenderer>("uirenderer");
+		// Phase E5 — UIRenderer migrated to Component; created via
+		// CreateComponent now. The IL/Topology/VS/PS/DSS resources used to
+		// be attached as Bindable children of the UIRenderer-as-Drawable;
+		// they belong on a paired MeshRenderer in any future GameObject-
+		// hosted UI pipeline. (Inventory itself is currently dead at
+		// runtime — the GameScene CreateDrawable<Inventory> call is
+		// commented out — so this Init body only needs to compile.)
+		std::shared_ptr<Engine::UIRenderer> pUIRenderer = CreateComponent<Engine::UIRenderer>("uirenderer");
 
-		pUIRenderer->FindAndAddBind<Engine::InputLayout>("Standard");
-		pUIRenderer->FindAndAddBind<Engine::Topology>("TriangleList");
-		pUIRenderer->FindAndAddBind<Engine::VertexShader>(STANDARD_ANIM_VS);
-		pUIRenderer->FindAndAddBind<Engine::PixelShader>("AlphaNoUVNoShadowPS");
-		pUIRenderer->FindAndAddBind<Engine::DepthStencilState>("NoDepth");
-
-		m_pWeaponUIRenderer = CreateBindable<Engine::UIRenderer>("uirenderer_weapon");
-
-		m_pWeaponUIRenderer->FindAndAddBind<Engine::InputLayout>("Standard");
-		m_pWeaponUIRenderer->FindAndAddBind<Engine::Topology>("TriangleList");
-		m_pWeaponUIRenderer->FindAndAddBind<Engine::VertexShader>(STANDARD_ANIM_VS);
-		m_pWeaponUIRenderer->FindAndAddBind<Engine::PixelShader>("AlphaNoUVNoShadowPS");
-		m_pWeaponUIRenderer->FindAndAddBind<Engine::DepthStencilState>("NoDepth");
+		m_pWeaponUIRenderer = CreateComponent<Engine::UIRenderer>("uirenderer_weapon");
 
 		return true;
 	}
 	void Inventory::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
 	{
-		// Phase B.4 — Collider's owner is its Drawable, accessed via GetOwner.
-		Engine::Drawable* pOwner = pDest->GetOwner();
-
-		if (pOwner && typeid(*pOwner) == typeid(ItemIcon))
-		{
-			if (static_cast<ItemIcon*>(pOwner)->IsDrag())
-			{
-				m_pCurrentEquipCollider = std::static_pointer_cast<Engine::ColliderOBB>(pSrc->shared_from_this());
-			}
-		}
+		// Phase E5 — ItemIcon is a Component now (not a Drawable). The
+		// drag-snap-to-equip logic relied on casting the collider's
+		// Drawable owner to ItemIcon — disabled for the dead UI path.
 	}
 	void Inventory::CollisionEnd(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
 	{

@@ -34,11 +34,9 @@ namespace Client
 
 	bool GameScene::Init()
 	{
-		{
-			std::shared_ptr<Engine::Drawable> pPlayer = CreateDrawable<Engine::Drawable>("player", FindLayer(DEFAULT_LAYER));
-
-			pPlayer->Load(TEXT("Walking.fbx"));
-		}
+		// Phase E5 — preload Walking.fbx mesh data into BindableManager
+		// via the static loader bridge (was: temp Drawable + Drawable::Load).
+		Engine::Drawable::LoadObjResources(TEXT("Walking.fbx"));
 
 		Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Walking.mesh", MESH_PATH);
 		//Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
@@ -168,24 +166,24 @@ namespace Client
 
 		AddLayer(DEFAULT_LAYER);
 
-		if (auto pTerrain = CreateDrawable<Engine::Terrain>("Terrain", FindLayer(DEFAULT_LAYER)))
+		// Phase E5 — Terrain is a GameObject now.
+		if (auto pTerrain = CreateGameObject<Engine::Terrain>("Terrain", FindLayer(DEFAULT_LAYER)))
 		{
 			pTerrain->CreateHeightMap("terrain", TEXT("terraintest.bmp"));
 			pTerrain->CreateTerrainTexture("TerrainDiffuse", vecTexture);
 			pTerrain->CreateTerrainNormalTexture("TerrainNormal", vecNormalTexture);
 			pTerrain->CreateTerrainSpecularTexture("TerrainSpecular", vecSpecularTexture);
 
-			std::shared_ptr<Engine::Material> pSrcMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
+			// Phase E5 — Terrain is a GameObject; Material is set on the
+			// MeshRendererComponent instead of via Drawable's SetMaterial.
+			// The MeshRenderer was already given a default material in
+			// Terrain::Init; the call here used to overwrite shininess.
+			// Re-introduce when MeshRenderer exposes a Material accessor
+			// that lets external setup override its existing material
+			// without a re-init round trip.
 
-			auto pNewMaterial = std::static_pointer_cast<Engine::Material>(pSrcMaterial->Clone());
-			pNewMaterial->SetShininess(1.f);
-			pTerrain->SetMaterial(pNewMaterial);
-			pTerrain->AddChild(pNewMaterial);
-
-			// Phase B.4 — Collider migrated to Component; query via FindComponent
-			// on the Drawable owner.
-			auto pTerrainDrawable = std::static_pointer_cast<Engine::Drawable>(pTerrain);
-			std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = std::static_pointer_cast<Engine::ColliderMesh>(pTerrainDrawable->FindComponent(Engine::COMPONENT_TYPE::COLLIDER_MESH));
+			// Collider lookup via the GameObject's FindComponent.
+			std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = std::static_pointer_cast<Engine::ColliderMesh>(pTerrain->FindComponent(Engine::COMPONENT_TYPE::COLLIDER_MESH));
 		}
 
 		if (std::shared_ptr<Engine::Camera> pCamera = CreateComponent<Engine::Camera>("Camera", FindLayer(DEFAULT_LAYER)))
@@ -204,9 +202,10 @@ namespace Client
 
 		pUIInventoryCamera->SetProjectType(Engine::Camera::PROJECT_TYPE::PERSPECTIVE);
 
-		std::shared_ptr<Player> pPlayer = CreateDrawable<Player>("player", FindLayer(DEFAULT_LAYER), 100, 10, 15);
+		// Phase E5 — Player is a GameObject now.
+		std::shared_ptr<Player> pPlayer = CreateGameObject<Player>("player", FindLayer(DEFAULT_LAYER), 100, 10, 15);
 
-		pPlayer->AddChild(pUIInventoryCamera);
+		pPlayer->AddComponent(pUIInventoryCamera);
 
 		std::shared_ptr<Engine::Transform> pInventoryCameraTransform = pUIInventoryCamera->GetTransform();
 

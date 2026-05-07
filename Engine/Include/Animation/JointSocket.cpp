@@ -10,7 +10,6 @@ namespace Engine
 		, m_vScale(1.f, 1.f, 1.f)
 		, m_vPosition()
 		, m_vRotation(0.f, 0.f, 0.f)
-		, m_pDrawable(nullptr)
 	{
 		UpdateJointMatrix();
 	}
@@ -35,9 +34,9 @@ namespace Engine
 		return m_matJoint;
 	}
 
-	void JointSocket::SetDrawable(std::shared_ptr<Drawable> pDrawable)
+	void JointSocket::SetTransformTarget(std::shared_ptr<Transform> pTransform)
 	{
-		m_pDrawable = pDrawable;
+		m_pTargetTransform = pTransform;
 	}
 
 	void JointSocket::SetScale(const Vector3& vScale)
@@ -89,11 +88,12 @@ namespace Engine
 
 	void JointSocket::Update(std::shared_ptr<class StructuredBuffer> pBuffer, const Matrix& matParent)
 	{
-		if (m_pDrawable)
-		{
-			std::shared_ptr<Transform> pTransform = m_pDrawable->GetTransform();
+		// Phase E5 — Transform target only. Drawable fallback removed
+		// (no more Drawable instances exist live).
+		std::shared_ptr<Transform> pTransform = m_pTargetTransform;
 
-			if (pTransform)
+		if (pTransform)
+		{
 			{
 				Matrix matSRT;
 
@@ -130,10 +130,6 @@ namespace Engine
 	const Vector3& JointSocket::GetRotation() const
 	{
 		return m_vRotation;
-	}
-	std::shared_ptr<class Drawable> JointSocket::GetDrawable() const
-	{
-		return m_pDrawable;
 	}
 	void JointSocket::Save(FILE* pFile)
 	{

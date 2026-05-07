@@ -9,17 +9,17 @@ namespace Engine
 	{
 	}
 	Engine::PaperBurn::PaperBurn(std::shared_ptr<class Texture> pTexture) :
-		Bindable()
+		Component()
 		, m_pPaperBurnTexture(pTexture)
 		, m_pCBuffer(StaticFindBindable<ConstantBuffer<PAPERBURNCBUFFER>>("PaperBurn"))
 		, m_bStart(false)
 		, m_bCalled()
 	{
-		SetBindableType(BINDABLE_TYPE::PAPERBURN);
+		SetComponentType(COMPONENT_TYPE::PAPERBURN);
 	}
 
 	Engine::PaperBurn::PaperBurn(const PaperBurn& paper) :
-		Bindable(paper)
+		Component(paper)
 		, m_pPaperBurnTexture(paper.m_pPaperBurnTexture)
 		, m_tCBuffer(paper.m_tCBuffer)
 		, m_pCBuffer(paper.m_pCBuffer)
@@ -153,7 +153,7 @@ namespace Engine
 		m_pCBuffer->Bind();
 	}
 
-	std::shared_ptr<Bindable> Engine::PaperBurn::Clone()
+	std::shared_ptr<Component> Engine::PaperBurn::Clone()
 	{
 		return std::make_shared<PaperBurn>(*this);
 	}
@@ -171,7 +171,10 @@ namespace Engine
 		fread(&m_tCBuffer, sizeof(PAPERBURNCBUFFER), 1, pFile);
 		fread(&m_bStart, 1, 1, pFile);
 
-		m_pPaperBurnTexture = std::static_pointer_cast<Texture>(FindChild(BINDABLE_TYPE::TEXTURE));
+		// Phase E5 — PaperBurn no longer has Bindable child-list lookup
+		// (it's a Component now). Texture is fetched from BindableManager
+		// by the well-known "PaperBurn" tag (mirrors the constructor path).
+		m_pPaperBurnTexture = StaticFindBindable<Texture>("PaperBurn");
 		m_pCBuffer = StaticFindBindable<ConstantBuffer<PAPERBURNCBUFFER>>("PaperBurn");
 	}
 }

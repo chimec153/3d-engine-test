@@ -92,10 +92,9 @@ namespace Engine
 
 		m_tInfo.vCenter = m_vOffset;
 
-		// Phase B.4 — owning Drawable via Component::GetOwner.
-		if (Drawable* pOwner = GetOwner())
+		// Phase E5 — host transform via the host-agnostic helper.
 		{
-			std::shared_ptr<Transform> pTransform = pOwner->GetTransform();
+			std::shared_ptr<Transform> pTransform = GetHostTransform();
 			if (pTransform)
 			{
 				m_tInfo.vCenter += pTransform->GetPosition();

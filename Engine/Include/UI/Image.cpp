@@ -2,6 +2,10 @@
 
 namespace Engine
 {
+	Image::Image()
+	{
+	}
+
 	Image::Image(const std::string& strTexture, const Vector2& vUVStart, const Vector2& vUVEnd) :
 		UIControl(strTexture)
 		, m_vStart(vUVStart)
@@ -9,8 +13,10 @@ namespace Engine
 	{
 		SetStartUV(vUVStart);
 		SetEndUV(vUVEnd);
-
-		SetBindableType(BINDABLE_TYPE::UI_IMAGE);
 	}
 
+	std::shared_ptr<Component> Image::Clone()
+	{
+		return std::make_shared<Image>(*this);
+	}
 }

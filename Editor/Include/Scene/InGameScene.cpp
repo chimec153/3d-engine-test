@@ -1,10 +1,10 @@
 #include "InGameScene.h"
 #include "../Imgui/ImguiManager.h"
+#include "../Object/Player.h"
 #include "Bindable/Camera.h"
 #include "Bindable/PointLight.h"
 #include "Bindable/Transform.h"
 #include "Scene/Scene.h"
-#include "../Object/Player.h"
 #include "Bindable/Terrain.h"
 #include "Bindable/ColliderMesh.h"
 #include "Bindable/Particle.h"
@@ -118,9 +118,12 @@ namespace Editor
 
 		AddLayer(DEFAULT_LAYER);
 
-		std::shared_ptr<Engine::Drawable> pPlayer = CreateDrawable<Engine::Drawable>("player", FindLayer(DEFAULT_LAYER));
-
-		pPlayer->Load(TEXT("Walking.fbx"));
+		// Phase E7 — Editor::Player is a GameObject; its Init wires up the
+		// "Medieval" Mesh (registered above via StaticCreateBindable) along
+		// with Walking.skel and the standard VS/PS/IL/Topology. Replaces the
+		// previous CreateDrawable<Drawable>("player") + pPlayer->Load(...fbx)
+		// path that ingested the FBX every Init.
+		std::shared_ptr<Player> pPlayer = CreateGameObject<Player>("player", FindLayer(DEFAULT_LAYER));
 
 		/*std::shared_ptr<Engine::Drawable> pItemDrawable = CreateDrawable<Engine::Drawable>("testDrawable", FindLayer(DEFAULT_LAYER));
 

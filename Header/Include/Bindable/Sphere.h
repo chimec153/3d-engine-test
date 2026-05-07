@@ -1,12 +1,18 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
+#include "../Types.h"
 namespace Engine
 {
+    // Phase E5 — Sphere migrated from Drawable to Component shell.
+    // Currently dead at runtime (only referenced by the Editor's broken
+    // Player.h). Static CreateSphereVertex / CreateSphereIndex helpers
+    // are preserved for future GameObject + MeshRenderer setups.
     class ENGINE_DLL Sphere :
-        public Drawable
+        public Component
     {
         friend class Scene;
     public:
+        Sphere();
         Sphere(int iRings, int iSector);
         Sphere(const Sphere& sphere);
         virtual ~Sphere() override;
@@ -25,8 +31,7 @@ namespace Engine
         virtual bool Init() override;
         virtual void Input(float) override;
         virtual void Update(float fDeltaTime) override;
-        virtual void Bind();
-        virtual std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
 
     public:
         void CollisionEnter(class Collider* pSrc, class Collider* pDest, float fDeltaTime);

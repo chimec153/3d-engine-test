@@ -1,149 +1,49 @@
 #include "Sphere.h"
-#include "VertexShader.h"
-#include "PixelShader.h"
-#include "InputLayout.h"
-#include "VertexBuffer.h"
-#include "IndexBuffer.h"
-#include "Transform.h"
-#include "ConstantBuffer.h"
-#include "Topology.h"
-#include "Material.h"
-#include "../Shader/ShaderManager.h"
-#include "BindableManager.h"
-#include "ColliderSphere.h"
 #include "Collider.h"
-#include "Mesh.h"
-#include "Drawable.h"
+#include "Transform.h"
 #include "../Input/Input.h"
 
 namespace Engine
 {
-	Sphere::Sphere(int iRings, int iSector) :
-		Drawable()
+	Sphere::Sphere() :
+		Component()
+		, m_fSpeed(8.f)
+		, m_vDir(static_cast<float>(rand()), static_cast<float>(rand()), static_cast<float>(rand()))
+	{
+		m_vDir.Normalize();
+		SetComponentType(COMPONENT_TYPE::NONE);
+	}
+
+	Sphere::Sphere(int /*iRings*/, int /*iSector*/) :
+		Component()
 		, m_fSpeed(8.f)
 		, m_vDir(static_cast<float>(rand()), static_cast<float>(rand()), static_cast<float>(rand()))
 	{
 		m_vDir.Normalize();
 
-		FindAndAddBind<VertexShader>("anisotropic_microfacet VSNoSkin");
-		FindAndAddBind<PixelShader>("anisotropic_microfacet PS_NoTexture");
-		FindAndAddBind<InputLayout>("Standard");
-
-		std::string name = "Sphere";
-
-		name += std::to_string(iRings);
-
-		name += "_";
-
-		name += std::to_string(iSector);
-
-		std::vector<unsigned int> vecIndex;
-
-		CreateSphereIndex(iRings, iSector, vecIndex);
-
-		std::shared_ptr<Mesh> pMesh = StaticFindBindable<Mesh>(name);
-
-		if (pMesh == nullptr)
-		{
-			std::vector<VertexStandard> vecVertex;
-
-			CreateSphereVertex<VertexStandard>(iRings, iSector, vecVertex);
-
-			GetSphereVertexTexcoord(iRings, iSector, vecVertex);
-
-			for (size_t i = 0; i < vecVertex.size(); ++i)
-			{
-				vecVertex[i].normal = vecVertex[i].pos / vecVertex[i].pos.Length();
-
-				const Vector3& vCross = vecVertex[i].normal.Cross(Engine::Vector3::Axis[static_cast<int>(AXIS_TYPE::Y)]);
-
-				float fCrossLength = vCross.Length();
-
-				if (!fCrossLength)
-				{
-					vecVertex[i].tangent = vecVertex[i].normal.Cross(Engine::Vector3::Axis[static_cast<int>(AXIS_TYPE::X)]).Normalize();
-				}
-				else
-				{
-					vecVertex[i].tangent = vCross / fCrossLength;
-				}
-				vecVertex[i].uv.x = atan2(vecVertex[i].normal.x, vecVertex[i].normal.z) / (2.f * PI) + 0.5f;
-				vecVertex[i].uv.y = vecVertex[i].normal.y * 0.5f + 0.5f;
-			}
-
-			SetBoundingSphereInfo(GetBoundingSphere(vecVertex));
-
-			pMesh = StaticCreateBindable<Mesh>(name, vecVertex, vecIndex);
-		}
-
-		AddChild(pMesh);
-
-		FindAndAddBind<Topology>("TriangleList");
-
-		std::shared_ptr<Material> pMaterial = std::make_shared<Material>();
-
-		SetMaterial(pMaterial);
-
-		AddChild(pMaterial);
+		// Phase E5 — Drawable-era ctor wired VS/PS/IL/Topology + built a
+		// per-(rings,sector) sphere Mesh + Material via Drawable's child
+		// API. Stripped for the Component shell; reintroduce under
+		// MeshRendererComponent on a GameObject.
+		SetComponentType(COMPONENT_TYPE::NONE);
 	}
 
 	Sphere::Sphere(const Sphere& sphere) :
-		Drawable(sphere)
+		Component(sphere)
 		, m_fSpeed(3.f)
 		, m_vDir(static_cast<float>(rand()), static_cast<float>(rand()), static_cast<float>(rand()))
 	{
 		m_vDir.Normalize();
-
-		const std::shared_ptr<Transform>& pTransform = GetTransform();
-
-		if (pTransform != nullptr)
-		{
-			//pTransform->SetRandomPosAndRotation();
-		}
-		const std::shared_ptr<Material>& pMaterial = GetMaterial();
-
-		if (pMaterial != nullptr)
-		{
-			pMaterial->SetRandomColor();
-		}
-
-		//int iSize = rand() % 6 + 5;
-
-		//const std::shared_ptr<ColliderSphere>& pCollider = std::static_pointer_cast<ColliderSphere>(FindChild("ColliderSphere"));
-
-		//if (pCollider)
-		//{
-		//	pCollider->SetCallBack(COLLISION_TYPE::BEGIN, this, &Sphere::CollisionEnter);
-		//	pCollider->SetRadius(iSize / 2.f);
-		//}
-
-		//GetTransform()->SetScale({ static_cast<float>(iSize),static_cast<float>(iSize), static_cast<float>(iSize) });
-
 	}
 
 	Sphere::~Sphere()
 	{
 	}
 
-	float Engine::Sphere::GetSpeed() const
-	{
-		return m_fSpeed;
-	}
-
-	const Vector3& Engine::Sphere::GetDir() const
-	{
-		return m_vDir;
-	}
-
-	void Engine::Sphere::SetSpeed(float fSpeed)
-	{
-		m_fSpeed = fSpeed;
-	}
-
-	void Engine::Sphere::SetDir(const Vector3& vDir)
-	{
-		m_vDir = vDir;
-	}
+	float Sphere::GetSpeed() const           { return m_fSpeed; }
+	const Vector3& Sphere::GetDir() const    { return m_vDir; }
+	void Sphere::SetSpeed(float fSpeed)      { m_fSpeed = fSpeed; }
+	void Sphere::SetDir(const Vector3& vDir) { m_vDir = vDir; }
 
 	bool Sphere::Init()
 	{
@@ -157,78 +57,68 @@ namespace Engine
 
 	void Sphere::Input(float fDeltaTime)
 	{
+		// Phase E5 — input drove the owning Drawable's Transform via the
+		// Drawable-side GetTransform(). For the Component shell we read
+		// the owner GameObject's Transform if present.
+		std::shared_ptr<Transform> pTransform;
+		if (auto* pOwner = GetGameObjectOwner())
+			pTransform = pOwner->GetComponent<Transform>();
+
+		if (!pTransform) return;
+
 		if (CInput::GetInst()->IsKey(CInput::KEY_STATE::PRESS, DIK_LEFTARROW))
-		{
-			GetTransform()->AddX(fDeltaTime * m_fSpeed);
-		}
+			pTransform->AddX(fDeltaTime * m_fSpeed);
 
 		if (CInput::GetInst()->IsKey(CInput::KEY_STATE::PRESS, DIK_RIGHTARROW))
-		{
-			GetTransform()->AddX(-fDeltaTime * m_fSpeed);
-		}
+			pTransform->AddX(-fDeltaTime * m_fSpeed);
 
 		if (CInput::GetInst()->IsKey(CInput::KEY_STATE::PRESS, DIK_UPARROW))
-		{
-			GetTransform()->AddZ(fDeltaTime * m_fSpeed);
-		}
+			pTransform->AddZ(fDeltaTime * m_fSpeed);
 
 		if (CInput::GetInst()->IsKey(CInput::KEY_STATE::PRESS, DIK_DOWNARROW))
-		{
-			GetTransform()->AddZ(-fDeltaTime * m_fSpeed);
-		}
+			pTransform->AddZ(-fDeltaTime * m_fSpeed);
 	}
 
 	void Sphere::Update(float fDeltaTime)
 	{
-		//Drawable::CheckRangeAndMove();
-
-		//GetTransform()->AddPosition(m_vDir * m_fSpeed * fDeltaTime);
-
 		__super::Update(fDeltaTime);
 	}
 
-	void Sphere::Bind()
-	{
-		__super::Bind();
-	}
-
-	std::shared_ptr<Bindable> Sphere::Clone()
+	std::shared_ptr<Component> Sphere::Clone()
 	{
 		return std::make_shared<Sphere>(*this);
 	}
 
-	void Sphere::CollisionEnter(Collider* pSrc, Collider* pDest, float fDeltaTime)
+	void Sphere::CollisionEnter(Collider* pSrc, Collider* pDest, float /*fDeltaTime*/)
 	{
 		switch (pDest->GetColliderType())
 		{
 		case COLLIDER_TYPE::SPHERE:
 		{
-			// Phase B.4 — Collider migrated to Component. Owning Drawable
-			// via Component::GetOwner.
-			Drawable* pSrcOwner = pSrc->GetOwner();
-			if (pSrcOwner && pSrcOwner->GetTransform())
+			// Phase E5 — Sphere is dead Engine primitive. Use the
+			// Component's host-agnostic Transform helper.
+			std::shared_ptr<Transform> pSrcTr = pSrc->GetHostTransform();
+			if (pSrcTr)
 			{
-				const Vector3& vNormal = (pSrcOwner->GetTransform()->GetPosition() - pSrc->GetCross()).Normalize();
+				const Vector3& vNormal = (pSrcTr->GetPosition() - pSrc->GetCross()).Normalize();
 				m_vDir = m_vDir - m_vDir.Dot(vNormal) * 2.f * vNormal;
 			}
 		}
 		break;
 		}
-
 	}
 
 	void Sphere::CreateSphereIndex(int iRings, int iSectors, std::vector<unsigned int>& vecIndex)
-		// 2 , 4
 	{
 		for (int i = 0; i < iSectors; ++i)
-		{																					//		0
-			vecIndex.push_back(0);															//		3	
-			vecIndex.push_back((i + 1) % iSectors + 1);										//	4		2
-			vecIndex.push_back(i + 1);														//		1
-		}																					//		7	
-																							//	8		6
-		for (int j = 0; j < iRings - 1; ++j)												//		5
-		{																					//		9
+		{
+			vecIndex.push_back(0);
+			vecIndex.push_back((i + 1) % iSectors + 1);
+			vecIndex.push_back(i + 1);
+		}
+
+		for (int j = 0; j < iRings - 1; ++j)
+		{
 			for (int i = 0; i < iSectors; ++i)
 			{
 				vecIndex.push_back(j * iSectors + i + 1);

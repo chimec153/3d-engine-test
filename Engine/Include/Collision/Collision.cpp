@@ -568,13 +568,14 @@ namespace Engine
 	{
 		Vector3 vCross;
 
-		// Phase B.4 — Collider→Component, owners via GetOwner.
-		Drawable* pSrcOwner = pSrc->GetOwner();
-		Drawable* pDstOwner = pDest->GetOwner();
-		if (!pSrcOwner || !pDstOwner) return false;
+		// Phase E5 — host transform via the Component's host-agnostic
+		// helper (Drawable owner first, GameObject owner fallback).
+		std::shared_ptr<Transform> pSrcTr = pSrc->GetHostTransform();
+		std::shared_ptr<Transform> pDstTr = pDest->GetHostTransform();
+		if (!pSrcTr || !pDstTr) return false;
 
-		Vector3 vSrcVel = pSrcOwner->GetTransform() ? pSrcOwner->GetTransform()->GetVelocity() : Vector3{};
-		Vector3 vDstVel = pDstOwner->GetTransform() ? pDstOwner->GetTransform()->GetVelocity() : Vector3{};
+		Vector3 vSrcVel = pSrcTr->GetVelocity();
+		Vector3 vDstVel = pDstTr->GetVelocity();
 
 		if (CollisionSphereToSphere(pSrc->GetInfo(), pDest->GetInfo(), vSrcVel, vDstVel, fDeltaTime, vCross))
 		{

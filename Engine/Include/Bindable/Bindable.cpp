@@ -611,7 +611,8 @@ namespace Engine
 		case Engine::BINDABLE_TYPE::MESH:
 			return nullptr;
 		case Engine::BINDABLE_TYPE::TERRAIN:
-			return std::make_shared<Terrain>();
+			// Phase E5 — Terrain migrated to GameObject.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::COLLIDER_LINE:
 		case Engine::BINDABLE_TYPE::COLLIDER_SPHERE:
 		case Engine::BINDABLE_TYPE::COLLIDER_MESH:
@@ -631,17 +632,23 @@ namespace Engine
 			// Phase B.7 — PointLight migrated to Component.
 			return nullptr;
 		case Engine::BINDABLE_TYPE::PARTICLE:
-			return std::make_shared<Particle>();
+			// Phase E5 — Particle migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::DECAL:
-			return std::make_shared<Decal>();
+			// Phase E5 — Decal migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::PAPERBURN:
-			return std::make_shared<PaperBurn>();
+			// Phase E5 — PaperBurn migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::FLUID:
-			return std::make_shared<Fluid>();
+			// Phase E5 — Fluid migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::SKYBOX:
-			return std::make_shared<SkyBox>();
+			// Phase E5 — SkyBox migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::CLOTH:
-			return std::make_shared<Cloth>();
+			// Phase E5 — Cloth migrated to Component.
+			return nullptr;
 		case Engine::BINDABLE_TYPE::CAMERA:
 			// Phase B.5 — Camera migrated to Component.
 			return nullptr;

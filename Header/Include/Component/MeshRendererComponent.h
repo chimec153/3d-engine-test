@@ -69,6 +69,15 @@ namespace Engine
 		size_t GetInstanceKey() const;
 		void   UpdateInstanceKey();
 
+		// Phase E5 — per-instance data writer used by RenderManager's
+		// MeshRenderer instancing path. Writes the host GameObject's
+		// TRANSFORMBUFFER (matWorld / matWorldView / matWorldViewProject
+		// = 192 bytes) followed by material data (diffuse / specular /
+		// roughness / fraction = 44 bytes). Layout mirrors the legacy
+		// Drawable::GetInstData so the same "_Inst" input-layout convention
+		// continues to work.
+		void GetInstData(char* pData, int iSize) const;
+
 	public:
 		// Render orchestration (mirrors Drawable's Bind / DrawShadow / etc.).
 		// Call sites: RenderManager render passes (post-E4 integration).
@@ -79,6 +88,7 @@ namespace Engine
 		void DrawShadow();
 
 	public:
+		virtual void PreDraw(float fDeltaTime) override;
 		virtual std::shared_ptr<Component> Clone() override;
 	};
 }

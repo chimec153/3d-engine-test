@@ -2,6 +2,7 @@
 #include "../Animation/Sequence.h"
 #include "../Animation/Skeleton.h"
 #include "../Animation/JointSocket.h"
+#include "../GameObject/GameObject.h"
 #include "BindableManager.h"
 #include "../Bindable/ComputeShader.h"
 #include "../Bindable/Drawable.h"
@@ -20,7 +21,6 @@ namespace Engine
 		, m_pPostProcessShader(StaticFindBindable<ComputeShader>("PostProcess"))
 		, m_pMidBuffer()
 		, m_pIKCBuffer(StaticFindBindable<ConstantBuffer<IKCBUFFER>>("IK"))
-		, m_pOwner(nullptr)
 		, m_fRate(1.f)
 		, m_pAdditiveSequence(nullptr)
 		, m_pBoneCBuffer(StaticFindBindable<ConstantBuffer<BONECBUFFER>>("Bone"))
@@ -40,7 +40,6 @@ namespace Engine
 		, m_pFinalBuffer(m_pSkeleton ? std::make_shared<StructuredBuffer>(m_pSkeleton->GetBoneCount(), static_cast<int>(sizeof(Matrix))) : nullptr)
 		, m_pPoseBuffer(m_pSkeleton ? std::make_shared<StructuredBuffer>(m_pSkeleton->GetBoneCount(), static_cast<int>(sizeof(Matrix))) : nullptr)
 		, m_pIKCBuffer(animation.m_pIKCBuffer)
-		, m_pOwner(nullptr)
 		, m_fRate(animation.m_fRate)
 		, m_pAdditiveSequence()
 		, m_pBoneCBuffer(animation.m_pBoneCBuffer)
@@ -178,11 +177,19 @@ namespace Engine
 		m_bStop = false;
 	}
 
-	std::shared_ptr<JointSocket> Animation::AddSocket(int iJointIndex, const std::shared_ptr<Drawable>& pDrawable)
+	std::shared_ptr<JointSocket> Animation::AddSocket(int iJointIndex, const std::shared_ptr<GameObject>& pGameObject)
 	{
+		// Phase E5 — pull the target Transform Component off the GameObject
+		// and store it directly on the JointSocket. The GameObject's
+		// own lifecycle (driven by Layer::m_GameObjectList) keeps the
+		// Transform alive — we don't need a strong ref on the entity here.
 		std::shared_ptr<JointSocket> pJointSocket = std::make_shared<JointSocket>();
 
-		pJointSocket->SetDrawable(pDrawable);
+		if (pGameObject)
+		{
+			std::shared_ptr<Transform> pTr = pGameObject->GetComponent<Transform>();
+			pJointSocket->SetTransformTarget(pTr);
+		}
 
 		AddSocket(iJointIndex, pJointSocket);
 
@@ -273,7 +280,9 @@ namespace Engine
 
 		pNotify = std::make_shared<Notify>();
 
-		pNotify->SetOwner(m_pOwner);
+		// Phase E5 — Animation::m_pOwner removed; Notify owner Bindable*
+		// is now null. Most notify callbacks ignore that arg anyway.
+		pNotify->SetOwner(nullptr);
 
 		pNotify->SetTag(strNotify);
 
@@ -405,14 +414,21 @@ namespace Engine
 			}
 		}
 
-		std::list<std::shared_ptr<JointSocket>>::iterator iter = m_SocketList.begin();
-		std::list<std::shared_ptr<JointSocket>>::iterator iterEnd = m_SocketList.end();
+		// Phase E5 — host transform from the GameObject owner only.
+		// Drawable hosts gone (m_pOwner field removed).
+		std::shared_ptr<Transform> pHostTransform;
+		if (auto* pGO = GetGameObjectOwner())
+			pHostTransform = pGO->GetComponent<Transform>();
 
-		for (; iter != iterEnd; ++iter)
+		if (pHostTransform)
 		{
-			std::shared_ptr<Transform> pTransform = m_pOwner->GetTransform();
+			std::list<std::shared_ptr<JointSocket>>::iterator iter = m_SocketList.begin();
+			std::list<std::shared_ptr<JointSocket>>::iterator iterEnd = m_SocketList.end();
 
-			(*iter)->Update(m_pPoseBuffer, pTransform->GetTransformMatrix());
+			for (; iter != iterEnd; ++iter)
+			{
+				(*iter)->Update(m_pPoseBuffer, pHostTransform->GetTransformMatrix());
+			}
 		}
 	}
 
@@ -938,10 +954,7 @@ namespace Engine
 
 		pInfo->vPosition = vPos;
 	}
-	void Animation::SetOwner(Drawable* pOwner)
-	{
-		m_pOwner = pOwner;
-	}
+	// Phase E5 — Animation::SetOwner removed (no Drawable hosts).
 	void Animation::SetTime(float fTime)
 	{
 		if (!m_pCurrentSequence)

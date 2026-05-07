@@ -2,10 +2,15 @@
 #include "UIControl.h"
 namespace Engine
 {
+    // Phase E5 — Frame is a UIControl-derived Component shell. The
+    // 9-slice tiling logic in the previous Drawable-era Bind() relied
+    // on Drawable methods (BindChild / GetTransform / GetTextures) and
+    // has been stripped for the shell migration.
     class ENGINE_DLL Frame :
         public UIControl
     {
     public:
+        Frame();
         Frame(const std::string& strTexture);
         virtual ~Frame() override = default;
 
@@ -22,6 +27,6 @@ namespace Engine
         void SetYEnd(int fY);
 
     public:
-        virtual void Bind() override;
+        virtual std::shared_ptr<Component> Clone() override;
     };
 }

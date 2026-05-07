@@ -131,11 +131,10 @@ void Engine::ColliderOBB::PostUpdate(float fDeltaTime)
 {
 	__super::PostUpdate(fDeltaTime);
 
-	// Phase B.4 — owning Drawable via Component::GetOwner instead of
-	// the old Bindable parent-chain lookup.
-	if (Drawable* pOwner = GetOwner())
+	// Phase E5 — host transform via the host-agnostic helper (works for
+	// both Drawable and GameObject hosts).
 	{
-		std::shared_ptr<Transform> pTransform = pOwner->GetTransform();
+		std::shared_ptr<Transform> pTransform = GetHostTransform();
 
 		if (pTransform)
 		{

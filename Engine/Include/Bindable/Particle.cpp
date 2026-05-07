@@ -2,7 +2,6 @@
 #include "ComputeShader.h"
 #include "ConstantBuffer.h"
 #include "BindableManager.h"
-#include "ConstantBuffer.h"
 #include "../Shader/StructuredBuffer.h"
 #include "VertexShader.h"
 #include "GeometryShader.h"
@@ -12,17 +11,26 @@
 #include "BlendState.h"
 #include "DepthStencilState.h"
 #include "Transform.h"
+#include "Texture.h"
+#include "../Core/Graphics.h"
+#include "../Render/RenderManager.h"
 
 namespace Engine
 {
 	Particle::Particle()	:
 		m_tCBuffer(0)
+		, m_fElapsedTime(0.f)
+		, m_fEmitMaxTime(1.f)
 		, m_bStopEmit(false)
+		, m_iPrevCreateGroupOffset(0)
 		, m_iEmitCount(-1)
+		, m_eRenderLayer(RENDER_LAYER::ALPHA)
 	{
+		SetComponentType(COMPONENT_TYPE::NONE);
 	}
+
 	Particle::Particle(int iMaxCount)	:
-		Drawable()
+		Component()
 		, m_pVS(StaticFindBindable<VertexShader>("ParticleVS"))
 		, m_pGS(StaticFindBindable<GeometryShader>("ParticleGS"))
 		, m_pPS(StaticFindBindable<PixelShader>("ParticlePS"))
@@ -37,18 +45,51 @@ namespace Engine
 		, m_bStopEmit(false)
 		, m_iPrevCreateGroupOffset(0)
 		, m_iEmitCount(-1)
+		, m_eRenderLayer(RENDER_LAYER::ALPHA)
 	{
-		SetRenderLayer(RENDER_LAYER::ALPHA);
-		SetBindableType(BINDABLE_TYPE::PARTICLE);
-		FindAndAddBind<Topology>("PointList");
+		SetComponentType(COMPONENT_TYPE::NONE);
 #ifdef _DEBUG
 		m_vecPrevAlive.resize(m_tCBuffer.iMaxParticleCount);
 #endif
 	}
 
+	Particle::Particle(const Particle& other) :
+		Component(other)
+		, m_pVS(other.m_pVS)
+		, m_pGS(other.m_pGS)
+		, m_pPS(other.m_pPS)
+		, m_pCS(other.m_pCS)
+		, m_tCBuffer(other.m_tCBuffer)
+		, m_pBuffer(other.m_pBuffer)
+		, m_pSystemBuffer(other.m_pSystemBuffer)
+		, m_pParticleCBuffer(other.m_pParticleCBuffer)
+		, m_fElapsedTime(other.m_fElapsedTime)
+		, m_fEmitMaxTime(other.m_fEmitMaxTime)
+		, m_pBlendState(other.m_pBlendState)
+		, m_pTexture(other.m_pTexture)
+		, m_pTransform(other.m_pTransform)
+		, m_bStopEmit(other.m_bStopEmit)
+		, m_iPrevCreateGroupOffset(other.m_iPrevCreateGroupOffset)
+		, m_iEmitCount(other.m_iEmitCount)
+		, m_eRenderLayer(other.m_eRenderLayer)
+	{
+	}
+
+	bool Particle::Init()
+	{
+		if (!__super::Init()) return false;
+
+		// Per-instance Transform — Particle owns its emitter anchor.
+		if (!m_pTransform) m_pTransform = std::make_shared<Transform>();
+
+		return true;
+	}
+
 	void Particle::Update(float fDeltaTime)
 	{
 		__super::Update(fDeltaTime);
+
+		if (m_pTransform) m_pTransform->Update(fDeltaTime);
 
 		m_fElapsedTime += fDeltaTime;
 
@@ -70,7 +111,7 @@ namespace Engine
 			m_iEmitCount -= iCreateCount;
 		}
 
-		GetTransform()->Bind();
+		if (m_pTransform) m_pTransform->Bind();
 
 		m_pParticleCBuffer->UpdateBuffer(m_tCBuffer);
 
@@ -107,67 +148,25 @@ namespace Engine
 		m_pSystemBuffer->ResetUAV(3);
 
 		m_pBuffer->ResetUAV(2);
+	}
 
-#ifdef _DEBUG
-		/*std::vector<PARTICLE> vecParticle(m_tCBuffer.iMaxParticleCount);
+	void Particle::PreDraw(float fDeltaTime)
+	{
+		__super::PreDraw(fDeltaTime);
 
-		m_pBuffer->ReadBuffer(&vecParticle[0], 0, sizeof(PARTICLE) * m_tCBuffer.iMaxParticleCount);
-
-		std::vector<int> vecPostCreateCount(iGroupCount);
-
-		int iBirthCount = 0;
-
-		int iLiveCount = 0;
-
-		int iDeathCount = 0;
-
-		int iDeadCount = 0;
-
-		m_pSystemBuffer->ReadBuffer(&vecPostCreateCount[0], 0, 4 * iGroupCount);
-
-		int iPostCreateCount = 0;
-
-		for (int i = 0; i < iGroupCount; ++i)
-		{
-			iPostCreateCount += vecPostCreateCount[i];
-		}
-
-		for (int i = 0; i < m_tCBuffer.iMaxParticleCount; ++i)
-		{
-			if (vecParticle[i].alive)
-			{
-				if (!m_vecPrevAlive[i])
-				{
-					++iBirthCount;
-					m_vecPrevAlive[i] = true;
-				}
-
-				++iLiveCount;
-			}
-			else if(m_vecPrevAlive[i])
-			{
-				++iDeathCount;
-				++iDeadCount;
-				m_vecPrevAlive[i] = false;
-			}
-			else
-			{
-				++iDeadCount;
-			}
-		}
-
-		TCHAR strDebug[MAX_PATH] = {};
-
-		_stprintf_s(strDebug, TEXT("Create Count: %d, birth count: %d, death count: %d, live: %d, dead: %d, total: %d\n"), 
-			iCreateCount - iPostCreateCount, iBirthCount, iDeathCount, iLiveCount, iDeadCount, iLiveCount + iDeadCount);
-
-		OutputDebugString(strDebug);*/
-#endif
+		// Phase E5 — self-register with RenderManager so the alpha (or blur)
+		// pass renders this emitter alongside Drawables in m_RenderList.
+		auto pSelf = std::dynamic_pointer_cast<Particle>(shared_from_this());
+		if (pSelf) RenderManager::GetInst()->AddParticle(pSelf);
 	}
 
 	void Particle::Bind()
 	{
-		__super::Bind();
+		// Transform CB binding (mirrors the old Drawable-era BindChild path
+		// that Drawable::BindChild ran for us).
+		if (m_pTransform) m_pTransform->Bind();
+
+		if (m_pTexture) m_pTexture->Bind();
 
 		m_pBuffer->SetSRV(40);
 
@@ -206,6 +205,13 @@ namespace Engine
 		m_pPS->PostBind();
 
 		m_pBuffer->ResetSRV(40);
+
+		if (m_pTransform) m_pTransform->PostBind();
+	}
+
+	std::shared_ptr<Component> Particle::Clone()
+	{
+		return std::make_shared<Particle>(*this);
 	}
 
 	void Particle::Save(FILE* pFile)
@@ -229,83 +235,22 @@ namespace Engine
 		m_pSystemBuffer = std::make_shared<StructuredBuffer>(1, 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS);
 	}
 
-	void Particle::SetStartColor(const Vector4& vColor)
-	{
-		m_tCBuffer.vStartColor = vColor;
-	}
-
-	void Particle::SetEndColor(const Vector4& vColor)
-	{
-		m_tCBuffer.vEndColor = vColor;
-	}
-
-	void Particle::SetVelocity(const Vector3& vVelocity)
-	{
-		m_tCBuffer.vVelocity = vVelocity;
-	}
-
-	void Particle::SetAccelaration(const Vector3& vAccel)
-	{
-		m_tCBuffer.vAccelation = vAccel;
-	}
-
-	void Particle::SetMaxLifeTime(float fMaxTime)
-	{
-		m_tCBuffer.fMaxLifeTime = fMaxTime;
-	}
-
-	void Particle::SetMaxParticleCount(int iMaxCount)
-	{
-		m_tCBuffer.iMaxParticleCount = iMaxCount;
-	}
-
-	void Particle::SetMaxCreatePosition(const Vector3& vEnd)
-	{
-		m_tCBuffer.vMaximumPosition = vEnd;
-	}
-
-	void Particle::SetMinCreatePosition(const Vector3& vStart)
-	{
-		m_tCBuffer.vMinimumPosition = vStart;
-	}
-	void Particle::SetEmitTime(float fEmitTime)
-	{
-		m_fEmitMaxTime = fEmitTime;
-	}
-	void Particle::SetStartSize(const Vector2& vSize)
-	{
-		m_tCBuffer.vStartSize = vSize;
-	}
-	void Particle::SetEndSize(const Vector2& vSize)
-	{
-		m_tCBuffer.vEndSize = vSize;
-	}
-	void Particle::SetMaxFrame(int iFrame)
-	{
-		m_tCBuffer.iMaxFrame = iFrame;
-	}
-	void Particle::SetFrameWidth(int iWidth)
-	{
-		m_tCBuffer.iFrameWidth = iWidth;
-	}
-	void Particle::SetFrameHeight(int iHeight)
-	{
-		m_tCBuffer.iFrameHeight = iHeight;
-	}
-	void Particle::SetMaxVelocity(const Vector3& vMaxVelocity)
-	{
-		m_tCBuffer.vMaxVelocity = vMaxVelocity;
-	}
-	void Particle::StopEmit()
-	{
-		m_bStopEmit = true;
-	}
-	void Particle::ResumeEmit()
-	{
-		m_bStopEmit = false;
-	}
-	void Particle::AddEmitCount(int iCount)
-	{
-		m_iEmitCount += iCount;
-	}
+	void Particle::SetStartColor(const Vector4& vColor)         { m_tCBuffer.vStartColor = vColor; }
+	void Particle::SetEndColor(const Vector4& vColor)           { m_tCBuffer.vEndColor = vColor; }
+	void Particle::SetVelocity(const Vector3& vVelocity)        { m_tCBuffer.vVelocity = vVelocity; }
+	void Particle::SetAccelaration(const Vector3& vAccel)       { m_tCBuffer.vAccelation = vAccel; }
+	void Particle::SetMaxLifeTime(float fMaxTime)               { m_tCBuffer.fMaxLifeTime = fMaxTime; }
+	void Particle::SetMaxParticleCount(int iMaxCount)           { m_tCBuffer.iMaxParticleCount = iMaxCount; }
+	void Particle::SetMaxCreatePosition(const Vector3& vEnd)    { m_tCBuffer.vMaximumPosition = vEnd; }
+	void Particle::SetMinCreatePosition(const Vector3& vStart)  { m_tCBuffer.vMinimumPosition = vStart; }
+	void Particle::SetEmitTime(float fEmitTime)                 { m_fEmitMaxTime = fEmitTime; }
+	void Particle::SetStartSize(const Vector2& vSize)           { m_tCBuffer.vStartSize = vSize; }
+	void Particle::SetEndSize(const Vector2& vSize)             { m_tCBuffer.vEndSize = vSize; }
+	void Particle::SetMaxFrame(int iFrame)                      { m_tCBuffer.iMaxFrame = iFrame; }
+	void Particle::SetFrameWidth(int iWidth)                    { m_tCBuffer.iFrameWidth = iWidth; }
+	void Particle::SetFrameHeight(int iHeight)                  { m_tCBuffer.iFrameHeight = iHeight; }
+	void Particle::SetMaxVelocity(const Vector3& vMaxVelocity)  { m_tCBuffer.vMaxVelocity = vMaxVelocity; }
+	void Particle::StopEmit()                                   { m_bStopEmit = true; }
+	void Particle::ResumeEmit()                                 { m_bStopEmit = false; }
+	void Particle::AddEmitCount(int iCount)                     { m_iEmitCount += iCount; }
 }

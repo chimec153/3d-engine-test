@@ -2,6 +2,12 @@
 #include "Thread.h"
 namespace Engine
 {
+    class GameObject;
+
+    // Phase E7 — LoadingThread now produces a GameObject populated with a
+    // Transform + MeshRendererComponent (the MR is filled with the loaded
+    // mesh / material / textures + default shaders and pipeline state via
+    // MeshLoader::LoadInto). Replaces the previous Drawable-typed result.
     class ENGINE_DLL LoadingThread :
         public Thread
     {
@@ -11,12 +17,11 @@ namespace Engine
 
     private:
         TCHAR m_strFullPath[MAX_PATH];
-        std::shared_ptr<class Drawable> m_pDrawable;
+        std::shared_ptr<GameObject> m_pGameObject;
 
     public:
-        std::shared_ptr<class Drawable> GetDrawable()   const;
+        const std::shared_ptr<GameObject>& GetGameObject() const;
         void SetFullPath(const TCHAR* pFullPath);
-        void SetDrawable(std::shared_ptr<class Drawable> pDrawable);
 
     public:
         virtual void Run() override;

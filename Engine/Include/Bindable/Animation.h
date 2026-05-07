@@ -64,7 +64,10 @@ namespace Engine
         std::shared_ptr<class StructuredBuffer> m_pPoseBuffer;
         std::vector<IKINFO>  m_vecIKInfo;
         std::shared_ptr<class ConstantBuffer<IKCBUFFER>> m_pIKCBuffer;
-        Drawable* m_pOwner;
+        // Phase E5 — Animation::m_pOwner (Drawable*) removed. Animation
+        // is a Component now and reaches its host Transform via the
+        // Component-side GetGameObjectOwner() in Update(). Drawable
+        // hosts no longer exist live.
         float   m_fRate;
         PSEQUENCEINFO m_pAdditiveSequence;
         std::shared_ptr<class ConstantBuffer<BONECBUFFER>> m_pBoneCBuffer;
@@ -76,7 +79,10 @@ namespace Engine
         void AddSequance(const std::string& strTag, const std::vector<FbxLoader::FBXBONEKEYFRAME>& vecPose);
         std::shared_ptr<Sequence> FindAndAddSequence(const std::string& strTag);
         void ChangeSequence(const std::string& strTag);
-        std::shared_ptr<class JointSocket> AddSocket(int iJointIndex, const std::shared_ptr<Drawable>& pDrawable);
+        // Phase E5 — Drawable overload removed (no more live Drawable
+        // instances). GameObject is the only target type now; AddSocket
+        // extracts its Transform Component into the JointSocket.
+        std::shared_ptr<class JointSocket> AddSocket(int iJointIndex, const std::shared_ptr<class GameObject>& pGameObject);
         std::shared_ptr<class Sequence> GetCurrentSequence()    const;
         std::shared_ptr<class Sequence> GetAdditiveSequence()    const;
         const std::list<std::shared_ptr<class JointSocket>>& GetSocketList()  const;
@@ -94,7 +100,7 @@ namespace Engine
         std::shared_ptr<StructuredBuffer> GetFinalBuffer()  const;
         void AddIkInfo(int iJointIndex, int iRootIndex);
         void SetIkPosition(int iIndex, const Vector3& vPos);
-        void SetOwner(Drawable* pOwner);
+        // Phase E5 — SetOwner removed (Drawable hosts gone).
         void SetTime(float fTime);
         float GetRate() const;
         void SetRate(float fRate);

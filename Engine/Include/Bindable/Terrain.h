@@ -1,18 +1,52 @@
 #pragma once
-#include "Drawable.h"
+#include "../GameObject/GameObject.h"
+#include "../Component/Component.h"
+#include "../Types.h"
 
 namespace Engine
 {
     class StructuredBuffer;
+    template <typename T> class ConstantBuffer;
+    class Texture;
+    class Mesh;
+    class Transform;
+    class MeshRendererComponent;
+    class Decal;
+    class Collider;
+    class Terrain;
+
+    // Phase E5 — small Component that bridges a Terrain GameObject's
+    // per-frame SRV / CB bind into the MeshRenderer pass via the
+    // RenderBind / RenderUnbind hooks. Sits as a sibling of the
+    // MeshRendererComponent on the Terrain GameObject.
+    class ENGINE_DLL TerrainBindHook : public Component
+    {
+    public:
+        TerrainBindHook() = default;
+        virtual ~TerrainBindHook() override = default;
+
+    public:
+        virtual void RenderBind() override;
+        virtual void RenderUnbind() override;
+        virtual std::shared_ptr<Component> Clone() override
+        {
+            return std::make_shared<TerrainBindHook>(*this);
+        }
+    };
 
     class ENGINE_DLL Terrain :
-        public Drawable
+        public GameObject
     {
     public:
         Terrain();
         virtual ~Terrain() override = default;
 
     private:
+        // Phase E5 — Components on this GameObject.
+        std::shared_ptr<Transform>             m_pTransform;
+        std::shared_ptr<MeshRendererComponent> m_pMeshRenderer;
+        std::shared_ptr<TerrainBindHook>       m_pBindHook;
+
         std::shared_ptr<Mesh>   m_pMesh;
         std::vector<std::shared_ptr<Texture>> m_vecTexture;
         std::shared_ptr<ConstantBuffer<TERRAINCBUFFER>> m_pTerrainCBuffer;
@@ -51,12 +85,21 @@ namespace Engine
         void SetTileType(const Vector3& vWorldPos, int iTileType);
         int GetTileType(const Vector3& vWorldPos)   const;
 
+        // Convenience accessor for callers (Player, Inventory, etc.) that
+        // used to reach in via Drawable::GetTransform.
+        std::shared_ptr<Transform> GetTransform() const { return m_pTransform; }
+
+        // Phase E5 — invoked by TerrainBindHook (sibling Component) right
+        // before / after the MeshRenderer's draw. SRV bind then unbind
+        // around Mesh::Draw.
+        void RenderBind();
+        void RenderUnbind();
+
     private:
         void CreateVertexAndIndex(std::vector<VertexStandard>& vecVertex, std::vector<unsigned int>& vecIndex, int iWidth, int iHeight);
 
     public:
         virtual bool Init() override;
-        virtual void Bind() override;
 
     public:
         virtual void Save(FILE* pFile) override;

@@ -1,19 +1,23 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
+#include "../Types.h"
 namespace Engine
 {
     template <typename T>
     class ConstantBuffer;
 
-    template <typename T>
-    class ConstantBuffer;
-
+    // Phase E5 — Particle migrated from Drawable to Component. Owns its
+    // own Transform (the particle emitter's anchor) and the GPU resources
+    // that the simulation/render path depends on. Self-registers with
+    // RenderManager via PreDraw; rendered alongside m_RenderList[layer]
+    // by the alpha / blur passes.
     class ENGINE_DLL Particle :
-        public Drawable
+        public Component
     {
     public:
         Particle();
         Particle(int iMaxCount);
+        Particle(const Particle& other);
         virtual ~Particle() override = default;
 
     private:
@@ -28,9 +32,12 @@ namespace Engine
         float   m_fElapsedTime;
         float   m_fEmitMaxTime;
         std::shared_ptr<class BlendState>   m_pBlendState;
+        std::shared_ptr<class Texture>      m_pTexture;
+        std::shared_ptr<class Transform>    m_pTransform;
         bool m_bStopEmit;
         int m_iPrevCreateGroupOffset;
         int m_iEmitCount;
+        RENDER_LAYER m_eRenderLayer;
 #ifdef _DEBUG
         std::vector<bool> m_vecPrevAlive;
 #endif
@@ -55,13 +62,29 @@ namespace Engine
         void ResumeEmit();
         void AddEmitCount(int iCount);
 
+        void SetTexture(const std::shared_ptr<class Texture>& p) { m_pTexture = p; }
+        std::shared_ptr<class Texture> GetTexture() const { return m_pTexture; }
+
+        void SetRenderLayer(RENDER_LAYER eLayer) { m_eRenderLayer = eLayer; }
+        RENDER_LAYER GetRenderLayer() const { return m_eRenderLayer; }
+
+        // Override Component::GetTransform — Particle owns its own
+        // Transform (the emitter anchor).
+        virtual std::shared_ptr<class Transform> GetTransform() const override { return m_pTransform; }
+
     public:
+        virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
-        virtual void Bind() override;
+        virtual void PreDraw(float fDeltaTime) override;
+        virtual std::shared_ptr<Component> Clone() override;
+
+        // Bind is NOT a virtual override — Component has no Bind interface.
+        // Self-contained bind+draw called from RenderManager's alpha / blur
+        // passes via the Component-side particle list.
+        void Bind();
 
     public:
         virtual void Save(FILE* pFile) override;
         virtual void Load(FILE* pFile) override;
-
     };
 }

@@ -14,8 +14,6 @@
 
 namespace Engine
 {
-	std::unordered_map<std::string, std::shared_ptr<Bindable>> Scene::m_mapProtoType[static_cast<int>(SCENE_TYPE::END)] = {};
-
 	Scene::Scene()
 	{
 	}
@@ -66,10 +64,9 @@ namespace Engine
 
 	void Scene::Clear()
 	{
-		for (int i = 0; i < static_cast<int>(SCENE_TYPE::END); ++i)
-		{
-			m_mapProtoType[i].clear();
-		}
+		// Phase E7 — m_mapProtoType registry removed; nothing scene-static
+		// to clear here today. Per-scene state lives on m_LayerList +
+		// m_v2DrawableList and is destroyed with the Scene instance.
 	}
 
 	bool Scene::Init()
@@ -418,54 +415,10 @@ namespace Engine
 		LoadFromFullPath(strFullPath);
 	}
 
-	std::shared_ptr<Bindable> Scene::FindBindable(const std::string& strTag) const
-	{
-		std::list<std::shared_ptr<Layer>>::const_iterator iter = m_LayerList.begin();
-		std::list<std::shared_ptr<Layer>>::const_iterator iterEnd = m_LayerList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			std::shared_ptr<Bindable> pBindable = (*iter)->FindDrawable(strTag);
-
-			if (pBindable)
-			{
-				return pBindable;
-			}
-		}
-
-		return std::shared_ptr<Bindable>();
-	}
+	// Phase E7 — Scene::FindBindable removed. Its only implementation walked
+	// each Layer's m_DrawList via Layer::FindDrawable, both of which are
+	// gone now. No live callers existed; bindable lookups today go through
+	// the BindableManager (StaticFindBindable<T>) instead.
 
 
-	ENGINE_DLL std::shared_ptr<Bindable> Scene::FindProtoType(const std::string& strTag, SCENE_TYPE eSceneType)
-	{
-		std::unordered_map<std::string, std::shared_ptr<Bindable>>::iterator iter = m_mapProtoType[static_cast<int>(eSceneType)].find(strTag);
-
-		if (iter == m_mapProtoType[static_cast<int>(eSceneType)].end())
-		{
-			return std::shared_ptr<Bindable>();
-		}
-
-		return iter->second;
-	}
-
-	std::shared_ptr<Bindable> Scene::CreateCloneDrawable(const std::string& strTag, const std::string& strProto, const class std::shared_ptr<Layer>& pLayer, SCENE_TYPE eSceneType)
-	{
-		const std::shared_ptr<Bindable>& pProtoType = FindProtoType(strProto, eSceneType);
-
-		if (pProtoType == nullptr)
-		{
-			return nullptr;
-		}
-
-		const std::shared_ptr<Bindable>& pClone = pProtoType->Clone();
-
-		pClone->SetTag(strTag);
-
-		pLayer->AddDrawable(pClone);
-
-		pClone->SetScene(this);
-
-		return pClone;
-	}
 }

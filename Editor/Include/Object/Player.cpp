@@ -1,137 +1,61 @@
 #include "Player.h"
-#include "Player.h"
-#include "Bindable/NavMesh.h"
-#include "Bindable/Agent.h"
-#include "Core/Window.h"
+#include "Bindable/Mesh.h"
 #include "Bindable/Transform.h"
 #include "Bindable/Animation.h"
-#include "Animation/Sequence.h"
-#include "Animation/Skeleton.h"
-#include "Bindable/Mesh.h"
-#include "Animation/JointSocket.h"
+#include "Bindable/Agent.h"
+#include "Bindable/VertexShader.h"
+#include "Bindable/PixelShader.h"
 #include "Bindable/InputLayout.h"
 #include "Bindable/Topology.h"
-#include "Bindable/ColliderLine.h"
-#include "Bindable/Sphere.h"
-#include "Scene/SceneManager.h"
-#include "Bindable/BlendState.h"
-#include "Bindable/PaperBurn.h"
-#include "Scene/Scene.h"
+#include "Bindable/BindableManager.h"
+#include "Animation/Skeleton.h"
+#include "Component/MeshRendererComponent.h"
 
 namespace Editor
 {
-	Player::Player() :
-		Drawable()
-#ifdef _DEBUG
-		, m_pSphere()
-#endif
-	{
-		CreateBindable<Engine::Animation>("anim");
+    Player::Player() = default;
 
-		std::shared_ptr<Engine::Mesh> pMesh = CreateBindable<Engine::Mesh>("Medieval", "Walking.mesh", MESH_PATH);
+    bool Player::Init()
+    {
+        if (!__super::Init()) return false;
 
-		std::shared_ptr<Engine::Sequence> pSequence = std::make_shared<Engine::Sequence>();
+        m_pTransform    = AddComponent<Engine::Transform>("transform");
+        m_pMeshRenderer = AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
+        m_pAnimation    = AddComponent<Engine::Animation>("anim");
 
-		if (pSequence)
-		{
-			pSequence->LoadFromPath("MedievalCharacterArmature_Idle_Neutral.seq", MESH_PATH);
-		}
+        std::shared_ptr<Engine::Mesh> pMesh =
+            Engine::StaticFindBindable<Engine::Mesh>("Medieval");
 
-		std::shared_ptr<Engine::Sequence> pWalkSequence = std::make_shared<Engine::Sequence>();
+        std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
+        pSkeleton->LoadFromPath("Walking.skel", MESH_PATH);
+        if (m_pAnimation) m_pAnimation->SetSkeleton(pSkeleton);
 
-		if (pWalkSequence)
-		{
-			pWalkSequence->LoadFromPath("MedievalCharacterArmature_Sword_Slash.seq", MESH_PATH);
+        if (m_pMeshRenderer)
+        {
+            m_pMeshRenderer->SetMesh(pMesh);
+            m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_VS));
+            m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>("AlphaNoUVPS"));
+            m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
+            m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
+            m_pMeshRenderer->SetAnimation(m_pAnimation);
+        }
+        return true;
+    }
 
-			pWalkSequence->UseRootMotion();
+    void Player::SetAgent(const std::shared_ptr<Engine::Agent>& pAgent)
+    {
+        m_pAgent = pAgent;
+        if (m_pAgent)
+        {
+            // Agent was already constructed by NavMesh::CreateAgent with our
+            // Transform; attach as a Component so its Update fires each frame
+            // and drives the GameObject along the navmesh path.
+            AddComponent(std::static_pointer_cast<Engine::Component>(m_pAgent));
+        }
+    }
 
-			pWalkSequence->Loop();
-
-			for (int i = 0; i < 65; ++i)
-			{
-				pWalkSequence->SetBlendFactor(i, 1.f);
-			}
-		}
-
-		std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
-
-		if (pSkeleton)
-		{
-			pSkeleton->LoadFromPath("Walking.skel", MESH_PATH);
-			GetAnimation()->SetSkeleton(pSkeleton);
-		}
-
-		//GetAnimation()->AddSequance("idle", pSequence);
-		//GetAnimation()->AddSequance("attack", pWalkSequence);
-
-		//GetAnimation()->SetAdditiveSequence("attack");
-
-		FindAndAddBind<Engine::VertexShader>(STANDARD_VS);
-		FindAndAddBind<Engine::PixelShader>("AlphaNoUVPS");
-		//FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
-		FindAndAddBind<Engine::InputLayout>("Standard");
-		FindAndAddBind<Engine::Topology>("TriangleList");
-	}
-
-	Player::Player(const Player& player) :
-		Drawable(player)
-		, m_pFootLineCollider()
-#ifdef _DEBUG
-		, m_pSphere()
-#endif
-	{
-		Engine::Scene* pScene = Engine::SceneManager::GetInst()->GetScene();
-
-		std::shared_ptr<Engine::Drawable> pSword = pScene->CreateDrawable<Engine::Drawable>("sword", pScene->FindLayer(DEFAULT_LAYER));
-
-		pSword->Load(TEXT("UltimateRPGItemsBundle\\Sword\\Sword.fbx"), MESH_PATH);
-		pSword->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSNoSkin");
-		pSword->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal");
-		pSword->FindAndAddBind<Engine::Topology>("TriangleList");
-		pSword->FindAndAddBind<Engine::InputLayout>("Standard");
-
-		std::shared_ptr<Engine::Material> pSrcMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
-
-		pSword->AddChild(pSrcMaterial->Clone());
-
-		GetAnimation()->AddSocket(40, pSword);
-	}
-
-	bool Player::Init()
-	{
-		if (!__super::Init())
-		{
-			return false;
-		}
-
-		return true;
-	}
-
-	void Player::Update(float fDeltaTime)
-	{
-		__super::Update(fDeltaTime);
-
-		if (GetAgent() && GetAnimation())
-		{
-			const Engine::Vector3& vVelocity = GetAgent()->GetAgentVelocity();
-
-			if (vVelocity.Length() < epsilon)
-			{
-				//ChangeSequence("idle");
-			}
-			else
-			{
-				//ChangeSequence("walk");
-			}
-		}
-	}
-
-	void Player::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
-	{
-	}
-
-	std::shared_ptr<Engine::Bindable> Player::Clone()
-	{
-		return std::make_shared<Player>(*this);
-	}
+    void Player::Move(const Engine::Vector3& vPos)
+    {
+        if (m_pAgent) m_pAgent->SetTargetPos(vPos);
+    }
 }

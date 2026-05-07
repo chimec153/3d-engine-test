@@ -1,22 +1,4 @@
 #include "Box.h"
-#include <Windows.h>
-#include "Transform.h"
-#include <DirectXMath.h>
-#include "Transform.h"
-#include "InputLayout.h"
-#include "VertexShader.h"
-#include "PixelShader.h"
-#include "Topology.h"
-#include "ConstantBuffer.h"
-#include "IndexBuffer.h"
-#include "VertexBuffer.h"
-#include "../Core/Window.h"
-#include "Texture.h"
-#include "Sampler.h"
-#include "Material.h"
-#include "FbxLoader.h"
-#include "BindableManager.h"
-#include "Mesh.h"
 
 namespace Engine
 {
@@ -31,17 +13,6 @@ namespace Engine
 		{0.f, 0.f, 0.f, 0.f, 0.5f, -0.5f, -0.5f,	0.f, 0.f, 0.f, 1.f, 1.f},
 		{0.f, 0.f, 0.f, 0.f, -0.5f, -0.5f, -0.5f,	0.f, 0.f, 0.f, 0.f, 1.f},
 	};
-	//std::vector<VertexTexture> Box::vertex =
-	//{
-	//	{0.f, 0.f, 0.f, 0.f, 1.f, 1.f, 1.f,		0.f, 0.f, 0.f, 0.f, 0.f},
-	//	{0.f, 0.f, 0.f, 0.f, 0.f, 1.f, 1.f,		0.f, 0.f, 0.f, 1.f, 0.f},
-	//	{0.f, 0.f, 0.f, 0.f, 1.f, 0.f, 1.f,		0.f, 0.f, 0.f, 0.f, 1.f},
-	//	{0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 1.f,	0.f, 0.f, 0.f, 1.f, 1.f},
-	//	{0.f, 0.f, 0.f, 0.f, 1.f, 1.f, 0.f,		0.f, 0.f, 0.f, 1.f, 0.f},
-	//	{0.f, 0.f, 0.f, 0.f, 0.f, 1.f, 0.f,	0.f, 0.f, 0.f, 0.f, 0.f},
-	//	{0.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f,	0.f, 0.f, 0.f, 1.f, 1.f},
-	//	{0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f,	0.f, 0.f, 0.f, 0.f, 1.f},
-	//};
 
 	std::vector<unsigned int> Box::index =
 	{
@@ -60,13 +31,17 @@ namespace Engine
 	};
 
 	Box::Box() :
-		Drawable()
+		Component()
 	{
-		FindAndAddBind<Topology>("TriangleList");
+		// Phase E5 — Drawable-era ctor attached a Topology to the bindable
+		// child list. Component shells skip GPU-resource setup; the cube
+		// vertex/index data plus the static helpers below are still here
+		// for future GameObject + MeshRenderer use.
+		SetComponentType(COMPONENT_TYPE::NONE);
 	}
 
 	Box::Box(const Box& box) :
-		Drawable(box)
+		Component(box)
 	{
 	}
 
@@ -79,39 +54,22 @@ namespace Engine
 		__super::Update(fDeltaTime);
 	}
 
-	void Box::Bind()
-	{
-		__super::Bind();
-	}
-
-	std::shared_ptr<Bindable> Box::Clone()
+	std::shared_ptr<Component> Box::Clone()
 	{
 		return std::make_shared<Box>(*this);
 	}
 
 	void Box::SetDefaultVertexAndIndex()
 	{
-		std::shared_ptr<Mesh> pMesh = StaticFindBindable<Mesh>("box");
-
-		if (pMesh == nullptr)
-		{
-			std::vector<VertexTexture> vecVertex = vertex;
-
-			SetNormals<VertexTexture>(vertex, index);
-
-			SetTangent(vertex, index);
-
-			pMesh = StaticCreateBindable<Mesh>("box", vertex, index);
-		}
-
-		AddChild(pMesh);
+		// Phase E5 — Drawable's child machinery is gone. Future use should
+		// build a Mesh via Engine::StaticCreateBindable<Mesh>(...) and
+		// install it in the GameObject's MeshRendererComponent slot.
 	}
 
 	void Box::SetTextureVertexAndIndex()
 	{
-		Load(TEXT("nano_textured\\nanosuit.obj"));
-
-		FindAndAddBind<Sampler>("Anisotropic");
+		// Phase E5 — used to call Drawable::Load(...) + FindAndAddBind<Sampler>;
+		// stripped for the Component shell. Reintroduce under MeshRenderer.
 	}
 
 	std::vector<unsigned int> Box::GetTextureIndex()

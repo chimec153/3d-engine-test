@@ -6,140 +6,168 @@
 #include "../Core/Graphics.h"
 #include "Camera.h"
 #include "Transform.h"
+#include "Mesh.h"
+#include "VertexShader.h"
+#include "PixelShader.h"
+#include "Topology.h"
+#include "Texture.h"
+#include "../Render/RenderManager.h"
 
-Engine::Decal::Decal()	:
-	m_pCBuffer(StaticFindBindable<ConstantBuffer<DECALCBUFFER>>("Decal"))
-	, m_bFadeStart(false)
+namespace Engine
 {
-	m_tCBuffer.fMaxFadeTime = 1.f;
-
-	SetBindableType(BINDABLE_TYPE::DECAL);
-	SetRenderLayer(RENDER_LAYER::DECAL);
-
-	NotUseShadow();
-}
-
-Engine::Decal::Decal(const Decal& decal)	:
-	Drawable(decal)
-	, m_tCBuffer(decal.m_tCBuffer)
-	, m_pCBuffer(decal.m_pCBuffer)
-	, m_bFadeStart(decal.m_bFadeStart)
-{
-}
-
-void Engine::Decal::SetMaxFadeTime(float fMax)
-{
-	m_tCBuffer.fMaxFadeTime = fMax;
-}
-
-void Engine::Decal::SetFadeStartTime(float fStart)
-{
-	m_tCBuffer.fFadeStartTime = fStart;
-}
-
-void Engine::Decal::StartFade()
-{
-	m_bFadeStart = true;
-}
-
-void Engine::Decal::GetInstData(char* pData, int iSize) const
-{
-	std::shared_ptr<Transform> pTransform = GetTransform();
-
-	memcpy_s(pData, iSize, &pTransform->GetBuffer().matWorldViewProject, 64);
-	memcpy_s(pData + 64, iSize - 64, &m_tCBuffer.matInvWorldView, 64);
-
-	std::shared_ptr<Material> pMaterial = GetMaterial();
-
-	if (pMaterial)
+	Decal::Decal() :
+		m_tCBuffer{}
+		, m_pCBuffer(StaticFindBindable<ConstantBuffer<DECALCBUFFER>>("Decal"))
+		, m_bFadeStart(false)
+		, m_eRenderLayer(RENDER_LAYER::DECAL)
 	{
-		const MATERIAL& tMaterial = pMaterial->GetMaterial();
+		m_tCBuffer.fMaxFadeTime = 1.f;
 
-		memcpy_s(pData + 128, iSize - 128, &tMaterial.diffuseColor, 16);
-		memcpy_s(pData + 144, iSize - 144, &tMaterial.specularColor, 16);
-		memcpy_s(pData + 160, iSize - 160, &tMaterial.emissiveColor, 16);
-		memcpy_s(pData + 176, iSize - 176, &tMaterial.vRoughness, 8);
-		memcpy_s(pData + 184, iSize - 184, &tMaterial.fFraction, 4);
+		SetComponentType(COMPONENT_TYPE::NONE);
 	}
 
-	memcpy_s(pData + 188, iSize - 188, &m_tCBuffer.fFadeStartTime, 4);
-	memcpy_s(pData + 192, iSize - 192, &m_tCBuffer.fMaxFadeTime, 4);
-	memcpy_s(pData + 196, iSize - 196, &m_tCBuffer.fFadeTime, 4);
-}
-
-bool Engine::Decal::Init()
-{
-	if (!__super::Init())
+	Decal::Decal(const Decal& decal) :
+		Component(decal)
+		, m_tCBuffer(decal.m_tCBuffer)
+		, m_pCBuffer(decal.m_pCBuffer)
+		, m_bFadeStart(decal.m_bFadeStart)
+		, m_pTransform(decal.m_pTransform)
+		, m_pMesh(decal.m_pMesh)
+		, m_pVS(decal.m_pVS)
+		, m_pPS(decal.m_pPS)
+		, m_pTopology(decal.m_pTopology)
+		, m_pInputLayout(decal.m_pInputLayout)
+		, m_pTexture(decal.m_pTexture)
+		, m_pMaterial(decal.m_pMaterial)
+		, m_eRenderLayer(decal.m_eRenderLayer)
 	{
-		return false;
 	}
 
-	FindAndAddBind<VertexShader>(DECAL_VS);
-	FindAndAddBind<InputLayout>(STANDARD_INPUT_LAYOUT);
+	void Decal::SetMaxFadeTime(float fMax) { m_tCBuffer.fMaxFadeTime = fMax; }
+	void Decal::SetFadeStartTime(float fStart) { m_tCBuffer.fFadeStartTime = fStart; }
+	void Decal::StartFade() { m_bFadeStart = true; }
 
-	std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
+	void Decal::SetMesh(const std::shared_ptr<Mesh>& p) { m_pMesh = p; }
+	void Decal::SetVertexShader(const std::shared_ptr<VertexShader>& p) { m_pVS = p; }
+	void Decal::SetPixelShader(const std::shared_ptr<PixelShader>& p) { m_pPS = p; }
+	void Decal::SetTopology(const std::shared_ptr<Topology>& p) { m_pTopology = p; }
+	void Decal::SetInputLayout(const std::shared_ptr<InputLayout>& p) { m_pInputLayout = p; }
+	void Decal::SetTexture(const std::shared_ptr<Texture>& p) { m_pTexture = p; }
+	void Decal::SetMaterial(const std::shared_ptr<Material>& p) { m_pMaterial = p; }
 
-	AddChild(pMaterial->Clone());
-
-	return true;
-}
-
-void Engine::Decal::Update(float fDeltaTime)
-{
-	__super::Update(fDeltaTime);
-}
-
-void Engine::Decal::PostUpdate(float fDeltaTime)
-{
-	__super::PostUpdate(fDeltaTime);
-
-	if (m_bFadeStart)
+	bool Decal::Init()
 	{
-		m_tCBuffer.fFadeTime += fDeltaTime;
+		if (!__super::Init()) return false;
 
-		if (m_tCBuffer.fMaxFadeTime < m_tCBuffer.fFadeTime)
+		// Resolve well-known shared resources via BindableManager.
+		// Pixel shader is intentionally NOT defaulted — different decal
+		// instances (terrain brush vs. blood decal) use different PSs.
+		if (!m_pVS)          m_pVS          = StaticFindBindable<VertexShader>(DECAL_VS);
+		if (!m_pInputLayout) m_pInputLayout = StaticFindBindable<InputLayout>(STANDARD_INPUT_LAYOUT);
+
+		// Per-instance Material clone (matches the old Drawable-era ctor).
+		if (!m_pMaterial)
 		{
-			m_tCBuffer.fFadeTime = m_tCBuffer.fMaxFadeTime;
+			std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
+			if (pMaterial) m_pMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
 		}
+
+		// Per-instance Transform owned by this decal Component.
+		if (!m_pTransform) m_pTransform = std::make_shared<Transform>();
+
+		return true;
 	}
 
-	std::shared_ptr<Transform> pTransform = GetTransform();
+	void Decal::Update(float fDeltaTime)
+	{
+		__super::Update(fDeltaTime);
 
-	m_tCBuffer.matInvWorldView = Graphics::GetInst()->GetCamera()->GetInvView() * Matrix::TranslateFromVector(-pTransform->GetPosition()) * pTransform->GetRotationMatrix().Transpose() * Matrix::Scaling(1.f / pTransform->GetScale());
+		if (m_pTransform) m_pTransform->Update(fDeltaTime);
+	}
 
-	m_tCBuffer.matInvWorldView.Transpose();
-}
+	void Decal::PostUpdate(float fDeltaTime)
+	{
+		__super::PostUpdate(fDeltaTime);
 
-void Engine::Decal::Bind()
-{
-	m_pCBuffer->UpdateBuffer(m_tCBuffer);
+		if (m_bFadeStart)
+		{
+			m_tCBuffer.fFadeTime += fDeltaTime;
 
-	m_pCBuffer->Bind();
+			if (m_tCBuffer.fMaxFadeTime < m_tCBuffer.fFadeTime)
+			{
+				m_tCBuffer.fFadeTime = m_tCBuffer.fMaxFadeTime;
+			}
+		}
 
-	__super::Bind();
-}
+		if (!m_pTransform) return;
 
-void Engine::Decal::Save(FILE* pFile)
-{
-	__super::Save(pFile);
+		m_pTransform->PostUpdate(fDeltaTime);
 
-	fwrite(&m_tCBuffer.fFadeTime, 4, 1, pFile);
-	fwrite(&m_tCBuffer.fMaxFadeTime, 4, 1, pFile);
-	fwrite(&m_tCBuffer.fFadeStartTime, 4, 1, pFile);
-	fwrite(&m_bFadeStart, 1, 1, pFile);
-}
+		std::shared_ptr<Camera> pCamera = Graphics::GetInst()->GetCamera();
+		if (!pCamera) return;
 
-void Engine::Decal::Load(FILE* pFile)
-{
-	__super::Load(pFile);
+		m_tCBuffer.matInvWorldView =
+			pCamera->GetInvView()
+			* Matrix::TranslateFromVector(-m_pTransform->GetPosition())
+			* m_pTransform->GetRotationMatrix().Transpose()
+			* Matrix::Scaling(1.f / m_pTransform->GetScale());
 
-	fread(&m_tCBuffer.fFadeTime, 4, 1, pFile);
-	fread(&m_tCBuffer.fMaxFadeTime, 4, 1, pFile);
-	fread(&m_tCBuffer.fFadeStartTime, 4, 1, pFile);
-	fread(&m_bFadeStart, 1, 1, pFile);
-}
+		m_tCBuffer.matInvWorldView.Transpose();
+	}
 
-std::shared_ptr<Engine::Bindable> Engine::Decal::Clone()
-{
-	return std::make_shared<Decal>(*this);
+	void Decal::PreDraw(float fDeltaTime)
+	{
+		__super::PreDraw(fDeltaTime);
+
+		// Phase E5 — self-register with RenderManager so the decal pass
+		// renders this instance. Mirrors MeshRendererComponent's pattern.
+		auto pSelf = std::dynamic_pointer_cast<Decal>(shared_from_this());
+		if (pSelf) RenderManager::GetInst()->AddDecalComponent(pSelf);
+	}
+
+	void Decal::Bind()
+	{
+		if (!m_pCBuffer) return;
+
+		m_pCBuffer->UpdateBuffer(m_tCBuffer);
+		m_pCBuffer->Bind();
+
+		if (m_pTransform)    m_pTransform->Bind();
+		if (m_pVS)           m_pVS->Bind();
+		if (m_pPS)           m_pPS->Bind();
+		if (m_pTopology)     m_pTopology->Bind();
+		if (m_pInputLayout)  m_pInputLayout->Bind();
+		if (m_pMaterial)     m_pMaterial->Bind();
+		if (m_pTexture)      m_pTexture->Bind();
+
+		if (m_pMesh) m_pMesh->Draw();
+
+		if (m_pVS)        m_pVS->PostBind();
+		if (m_pPS)        m_pPS->PostBind();
+		if (m_pMaterial)  m_pMaterial->PostBind();
+		if (m_pTransform) m_pTransform->PostBind();
+	}
+
+	std::shared_ptr<Component> Decal::Clone()
+	{
+		return std::make_shared<Decal>(*this);
+	}
+
+	void Decal::Save(FILE* pFile)
+	{
+		__super::Save(pFile);
+
+		fwrite(&m_tCBuffer, sizeof(DECALCBUFFER), 1, pFile);
+		fwrite(&m_bFadeStart, 1, 1, pFile);
+	}
+
+	void Decal::Load(FILE* pFile)
+	{
+		__super::Load(pFile);
+
+		fread(&m_tCBuffer, sizeof(DECALCBUFFER), 1, pFile);
+		fread(&m_bFadeStart, 1, 1, pFile);
+
+		m_pCBuffer = StaticFindBindable<ConstantBuffer<DECALCBUFFER>>("Decal");
+	}
 }

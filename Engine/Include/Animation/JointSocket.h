@@ -16,7 +16,10 @@ namespace Engine
         Vector3 m_vPosition;
         Vector3 m_vRotation;
         Matrix m_matJoint;
-        std::shared_ptr<class Drawable> m_pDrawable;
+        // Phase E5 — Transform target. Lifetime is the responsibility of
+        // the owning entity (typically a GameObject) which keeps the
+        // Transform Component alive.
+        std::shared_ptr<class Transform> m_pTargetTransform;
 
 
     public:
@@ -24,7 +27,7 @@ namespace Engine
         void UpdateJointMatrix();
         int GetParentIndex()    const;
         const Matrix& GetJoint()    const;
-        void SetDrawable(std::shared_ptr<Drawable> pDrawable);
+        void SetTransformTarget(std::shared_ptr<class Transform> pTransform);
         void SetScale(const Vector3& vScale);
         void SetScale(float x, float y, float z);
         void SetPosition(const Vector3& vPos);
@@ -36,7 +39,6 @@ namespace Engine
         const Vector3& GetScale()  const;
         const Vector3& GetPosition()    const;
         const Vector3& GetRotation()   const;
-        std::shared_ptr<class Drawable> GetDrawable()   const;
 
     public:
         virtual void Save(FILE* pFile) override;

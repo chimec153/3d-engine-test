@@ -1,12 +1,18 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
+#include "../Types.h"
 namespace Engine
 {
+    // Phase E5 — Quad migrated from Drawable to Component shell. Currently
+    // dead at runtime (no live construction path). The static
+    // CreateQuadVertex<T> helper is preserved as a utility for future
+    // GameObject + MeshRenderer setups that want a unit quad.
     class ENGINE_DLL Quad :
-        public Drawable
+        public Component
     {
         friend class Scene;
     public:
+        Quad();
         Quad(const TCHAR* pFileName);
         Quad(const Quad& quad);
     public:
@@ -14,8 +20,7 @@ namespace Engine
 
     public:
         virtual void Update(float fDeltaTime) override;
-        virtual void Bind() override;
-        virtual std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
 
     public:
         template <typename T>

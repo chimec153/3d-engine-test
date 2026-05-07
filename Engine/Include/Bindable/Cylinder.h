@@ -1,22 +1,26 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
+#include "../Types.h"
 namespace Engine
 {
+    // Phase E5 — Cylinder migrated from Drawable to Component shell.
+    // Currently dead at runtime. Static CreateCylinderVertex /
+    // CreateCylinderIndex helpers are preserved.
     class ENGINE_DLL Cylinder :
-        public Drawable
+        public Component
     {
         friend class Scene;
 
     public:
-        Cylinder(int iCount = 8);
+        Cylinder();
+        Cylinder(int iCount);
         Cylinder(const Cylinder& cylinder);
     public:
         virtual ~Cylinder() override = default;
 
     public:
         virtual void Update(float fDeltaTime) override;
-        virtual void Bind() override;
-        virtual std::shared_ptr<Bindable> Clone() override;
+        virtual std::shared_ptr<Component> Clone() override;
 
     public:
         template <typename T>

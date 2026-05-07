@@ -14,11 +14,19 @@
 #include "Attackable.h"
 #include "Bindable/Particle.h"
 #include "Bindable/SoundBindable.h"
+#include "Bindable/VertexShader.h"
+#include "Bindable/PixelShader.h"
+#include "Bindable/BindableManager.h"
+#include "Bindable/Drawable.h"
+#include "Component/MeshRendererComponent.h"
 
 namespace Client
 {
 	Monster::Monster(int iMaxHP, int iAttackMin, int iAttackMax) :
-		Attackable(iMaxHP, iAttackMin, iAttackMax)
+		m_iInitHP(iMaxHP)
+		, m_iInitAttackMin(iAttackMin)
+		, m_iInitAttackMax(iAttackMax)
+		, m_eState(MONSTER_STATE::IDLE)
 	{
 	}
 
@@ -78,22 +86,24 @@ namespace Client
 
 		m_eState = eState;
 
+		if (!m_pAnimation) return false;
+
 		switch (m_eState)
 		{
 		case MONSTER_STATE::IDLE:
-			GetAnimation()->ChangeSequence("FrogArmature|Frog_Idle");
+			m_pAnimation->ChangeSequence("FrogArmature|Frog_Idle");
 			break;
 		case MONSTER_STATE::RUN:
-			GetAnimation()->ChangeSequence("FrogArmature|Frog_Jump");
+			m_pAnimation->ChangeSequence("FrogArmature|Frog_Jump");
 			break;
 		case MONSTER_STATE::ATTACK:
-			GetAnimation()->ChangeSequence("FrogArmature|Frog_Attack");
+			m_pAnimation->ChangeSequence("FrogArmature|Frog_Attack");
 			break;
 		case MONSTER_STATE::HIT:
-			GetAnimation()->ChangeSequence("FrogArmature|Frog_Jump");
+			m_pAnimation->ChangeSequence("FrogArmature|Frog_Jump");
 			break;
 		case MONSTER_STATE::DIE:
-			GetAnimation()->ChangeSequence("FrogArmature|Frog_Death");
+			m_pAnimation->ChangeSequence("FrogArmature|Frog_Death");
 			if (m_pClawBody)
 			{
 				m_pClawBody->InActivate();
@@ -115,86 +125,125 @@ namespace Client
 			return false;
 		}
 
-		std::shared_ptr<Engine::Mesh> pFrogMesh = FindAndAddBind<Engine::Mesh>("Frog");
+		// Phase E5 — assemble entity from Components.
+		m_pTransform     = AddComponent<Engine::Transform>("transform");
+		m_pMeshRenderer  = AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
+		m_pAnimation     = AddComponent<Engine::Animation>("FrogAnimation");
+		m_pAttackable    = AddComponent<Attackable>("attackable",
+			m_iInitHP, m_iInitAttackMin, m_iInitAttackMax);
 
-		pFrogMesh->UsePaperBurn();
-
-		std::shared_ptr<Engine::Animation> pFrogAnimation = CreateComponent<Engine::Animation>("FrogAnimation");
-
-		pFrogAnimation->FindAndAddSequence("FrogArmature|Frog_Idle");
-		pFrogAnimation->FindAndAddSequence("FrogArmature|Frog_Jump");
-		pFrogAnimation->FindAndAddSequence("FrogArmature|Frog_Attack");
-
-		pFrogAnimation->SetLoop("FrogArmature|Frog_Attack");
-		pFrogAnimation->SetLoop("FrogArmature|Frog_Jump");
-
-		pFrogAnimation->FindAndAddSequence("FrogArmature|Frog_Death");
-
-		pFrogAnimation->SetSkeleton("Frog");
-
-		FindAndAddBind<Engine::VertexShader>(STANDARD_ANIM_VS);
-		FindAndAddBind<Engine::PixelShader>(STANDARD_SOLID_PS);
-		FindAndAddBind<Engine::Topology>("TriangleList");
-		FindAndAddBind<Engine::InputLayout>("Standard");
-
-		GetAnimation()->GetCurrentSequence()->Loop();
-
-		GetTransform()->SetScale(0.25f, 0.25f, 0.25f);
-		GetTransform()->SetPosition(5.f, 30.f, 5.f);
-
-		std::shared_ptr<Engine::Bindable> pTerrain = GetScene()->FindBindable("Terrain");
-
-		if (pTerrain)
+		// Mesh + shaders + IL + Topology — install via the static slots
+		// directly (this monster's frog mesh is preregistered in scene
+		// init; not loaded from .obj here).
+		if (m_pMeshRenderer)
 		{
-			// Phase B.4 — NavMesh is now a Component, not a Bindable child.
-			// Terrain is a Drawable, so it owns the NavMesh in m_ComponentChildren.
-			auto pTerrainDrawable = std::static_pointer_cast<Engine::Drawable>(pTerrain);
-			std::shared_ptr<Engine::NavMesh> pNavMesh = std::static_pointer_cast<Engine::NavMesh>(pTerrainDrawable->FindComponent(Engine::COMPONENT_TYPE::NAV_MESH));
-
-			if (pNavMesh)
+			std::shared_ptr<Engine::Mesh> pFrogMesh = Engine::StaticFindBindable<Engine::Mesh>("Frog");
+			if (pFrogMesh)
 			{
-				m_pAgent = pNavMesh->CreateAgent(GetTag() + "agent", GetTransform(), GetTransform()->GetPosition());
+				pFrogMesh->UsePaperBurn();
+				m_pMeshRenderer->SetMesh(pFrogMesh);
+			}
+
+			m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_ANIM_VS));
+			m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>(STANDARD_SOLID_PS));
+			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
+			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
+
+			m_pMeshRenderer->SetAnimation(m_pAnimation);
+		}
+
+		if (m_pAnimation)
+		{
+			m_pAnimation->FindAndAddSequence("FrogArmature|Frog_Idle");
+			m_pAnimation->FindAndAddSequence("FrogArmature|Frog_Jump");
+			m_pAnimation->FindAndAddSequence("FrogArmature|Frog_Attack");
+
+			m_pAnimation->SetLoop("FrogArmature|Frog_Attack");
+			m_pAnimation->SetLoop("FrogArmature|Frog_Jump");
+
+			m_pAnimation->FindAndAddSequence("FrogArmature|Frog_Death");
+
+			m_pAnimation->SetSkeleton("Frog");
+
+			if (auto pCurr = m_pAnimation->GetCurrentSequence())
+				pCurr->Loop();
+		}
+
+		if (m_pTransform)
+		{
+			m_pTransform->SetScale(0.25f, 0.25f, 0.25f);
+			m_pTransform->SetPosition(5.f, 30.f, 5.f);
+		}
+
+		// Phase E5 — Terrain is a GameObject now; look it up in the layer.
+		std::shared_ptr<Engine::Layer> pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
+		std::shared_ptr<Engine::GameObject> pTerrainObj =
+			pLayer ? pLayer->FindGameObject("Terrain") : nullptr;
+
+		if (pTerrainObj)
+		{
+			std::shared_ptr<Engine::NavMesh> pNavMesh =
+				std::static_pointer_cast<Engine::NavMesh>(pTerrainObj->FindComponent(Engine::COMPONENT_TYPE::NAV_MESH));
+
+			if (pNavMesh && m_pTransform)
+			{
+				m_pAgent = pNavMesh->CreateAgent(GetTag() + "agent", m_pTransform, m_pTransform->GetPosition());
 			}
 		}
 
-		m_pBody = CreateComponent<Engine::ColliderSphere>(GetTag() + "body");
+		m_pBody = AddComponent<Engine::ColliderSphere>(GetTag() + "body");
+		if (m_pBody)
+		{
+			m_pBody->SetRadius(0.5f);
+			m_pBody->SetOffset({ 0.f, 0.25f, 0.f });
+			m_pBody->SetCallBack(Engine::COLLISION_TYPE::BEGIN, this, &Monster::CollisionEnter);
+		}
 
-		m_pBody->SetRadius(0.5f);
+		// Phase E5 — Claw is now a GameObject. JointSocket holds the
+		// claw's Transform Component directly via the new AddSocket
+		// GameObject overload, so the claw doesn't have to be a Drawable.
+		std::shared_ptr<Engine::GameObject> pClaw =
+			GetScene()->CreateGameObject<>("Claw", GetScene()->FindLayer(DEFAULT_LAYER));
+		pClaw->AddComponent<Engine::Transform>("transform");
+		pClaw->AddComponent<Attackable>("attackable", 30, 5, 10);
 
-		m_pBody->SetOffset({ 0.f, 0.25f, 0.f });
-
-		m_pBody->SetCallBack(Engine::COLLISION_TYPE::BEGIN, this, &Monster::CollisionEnter);
-
-		std::shared_ptr<Attackable> pClaw = GetScene()->CreateDrawable<Attackable>("Claw", GetScene()->FindLayer(DEFAULT_LAYER), 30, 5, 10);
-
-		m_pClawBody = pClaw->CreateComponent<Engine::ColliderOBB>(GetTag() + "clawbody");
+		m_pClawBody = pClaw->AddComponent<Engine::ColliderOBB>(GetTag() + "clawbody");
 
 		m_pClawBody->SetScaleOffset({ 0.2f, 0.1f, 0.2f });
 
-		std::shared_ptr<Engine::JointSocket> pSocket = GetAnimation()->AddSocket(5, pClaw);
+		if (m_pAnimation)
+		{
+			std::shared_ptr<Engine::JointSocket> pSocket = m_pAnimation->AddSocket(5, pClaw);
+			if (pSocket) pSocket->SetPosition({ 0.f, 0.f, 1.f });
 
-		pSocket->SetPosition({ 0.f, 0.f, 1.f });
+			std::shared_ptr<Engine::Notify> pDieNotify = m_pAnimation->AddNotify("FrogArmature|Frog_Death", "PaperBurn", 0.8f);
 
-		std::shared_ptr<Engine::Notify> pDieNotify = pFrogAnimation->AddNotify("FrogArmature|Frog_Death", "PaperBurn", 0.8f);
+			pDieNotify->SetCallBack(
+				[this](int, float, Engine::Bindable*)
+				{
+					if (m_pAttackable)
+					{
+						m_pAttackable->StartPaperBurn();
+						if (auto pParticle = m_pAttackable->GetParticle())
+							pParticle->StopEmit();
+					}
+				}
+			);
+		}
 
-		pDieNotify->SetCallBack(
-			[this](int, float, Engine::Bindable*) 
-			{
-				StartPaperBurn();
-				GetParticle()->StopEmit();
-			}
-		);
+		m_pAttackSound = pClaw->AddComponent<Engine::SoundBindable>("attack sound", "melee sound");
 
-		m_pAttackSound = pClaw->CreateComponent<Engine::SoundBindable>("attack sound", "melee sound");
+		if (m_pAnimation)
+		{
+			std::shared_ptr<Engine::Notify> pAttackNotify = m_pAnimation->AddNotify("FrogArmature|Frog_Attack", "Attack", 0.5f);
 
-		std::shared_ptr<Engine::Notify> pAttackNotify = pFrogAnimation->AddNotify("FrogArmature|Frog_Attack", "Attack", 0.5f);
-
-		pAttackNotify->SetCallBack(
-			[this](int, float, Engine::Bindable*)
-			{
-				m_pAttackSound->Play();
-			}
-		);
+			pAttackNotify->SetCallBack(
+				[this](int, float, Engine::Bindable*)
+				{
+					if (m_pAttackSound) m_pAttackSound->Play();
+				}
+			);
+		}
 
 		return true;
 	}
@@ -203,15 +252,21 @@ namespace Client
 	{
 		__super::Update(fDeltaTime);
 
-		std::shared_ptr<Engine::Drawable> pPlayer = std::static_pointer_cast<Engine::Drawable>(GetScene()->FindBindable("player"));
+		// Phase E5 — Player is a GameObject now; lookup via the layer's
+		// FindGameObject and use Player's GetTransform helper.
+		std::shared_ptr<Engine::Layer> pPlayerLayer = GetScene()->FindLayer(DEFAULT_LAYER);
+		std::shared_ptr<Engine::GameObject> pPlayer =
+			pPlayerLayer ? pPlayerLayer->FindGameObject("player") : nullptr;
 
-		if (pPlayer)
+		if (pPlayer && m_pTransform)
 		{
-			std::shared_ptr<Engine::Transform> pPlayerTransform = pPlayer->GetTransform();
+			std::shared_ptr<Engine::Transform> pPlayerTransform =
+				pPlayer->GetComponent<Engine::Transform>();
+			if (!pPlayerTransform) return;
 
 			const Engine::Vector3& vPlayerPos = pPlayerTransform->GetPosition();
 
-			const Engine::Vector3& vPos = GetTransform()->GetPosition();
+			const Engine::Vector3& vPos = m_pTransform->GetPosition();
 
 			float fTargetDist = (vPos - vPlayerPos).Length();
 
@@ -219,21 +274,19 @@ namespace Client
 			{
 				SetState(MONSTER_STATE::ATTACK);
 
-				m_pAgent->SetTargetPos(vPos);
+				if (m_pAgent) m_pAgent->SetTargetPos(vPos);
 			}
-
 			else if (fTargetDist < 10.f)
 			{
 				SetState(MONSTER_STATE::RUN);
 
-				m_pAgent->SetTargetPos(vPlayerPos);
+				if (m_pAgent) m_pAgent->SetTargetPos(vPlayerPos);
 			}
-
 			else
 			{
 				SetState(MONSTER_STATE::IDLE);
 
-				m_pAgent->SetTargetPos(vPos);
+				if (m_pAgent) m_pAgent->SetTargetPos(vPos);
 			}
 		}
 		else
@@ -261,18 +314,21 @@ namespace Client
 			break;
 		}
 	}
+
 	void Monster::CollisionEnter(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
 	{
 		if (pDest->GetTag() == "sword_body")
 		{
-			// Phase B.4 — Collider migrated to Component; use GetOwner.
-			Attackable* pWeapon = static_cast<Attackable*>(pDest->GetOwner());
+			// Phase E5 — attacker is GameObject-hosted (Drawable hosts gone).
+			std::shared_ptr<Attackable> pWeapon;
+			if (Engine::GameObject* pAttackerOwner = pDest->GetGameObjectOwner())
+				pWeapon = pAttackerOwner->GetComponent<Attackable>();
 
-			if (pWeapon->Attack(this))
+			if (pWeapon && pWeapon->Attack(m_pAttackable.get()))
 			{
 				SetState(MONSTER_STATE::DIE);
 
-				m_pAgent->InActivate();
+				if (m_pAgent) m_pAgent->InActivate();
 			}
 			else
 			{
@@ -280,5 +336,4 @@ namespace Client
 			}
 		}
 	}
-
 }

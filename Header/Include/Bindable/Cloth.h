@@ -1,9 +1,16 @@
 #pragma once
-#include "Drawable.h"
+#include "../Component/Component.h"
 namespace Engine
 {
+    // Phase E5 — Cloth migrated from Drawable to Component. Currently
+    // unused at runtime (no live construction path); kept as a usable
+    // shell for future GameObject-based cloth simulation. Mesh creation
+    // and collider sync are preserved; GPU resource setup that used to
+    // live in the constructor (shaders/topology/IL/RS via Drawable's
+    // FindAndAddBind) has been dropped — those belong on a paired
+    // MeshRendererComponent on the same GameObject.
     class ENGINE_DLL Cloth :
-        public Drawable
+        public Component
     {
     public:
         Cloth();
@@ -39,6 +46,7 @@ namespace Engine
 
     public:
         virtual void FixedUpdate(float fDeltaTime) override;
+        virtual std::shared_ptr<Component> Clone() override;
 
     public:
         virtual void Save(FILE* pFile) override;

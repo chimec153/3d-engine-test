@@ -1,34 +1,43 @@
 #pragma once
-#include "Bindable\Drawable.h"
+#include "GameObject\GameObject.h"
+
 namespace Engine
 {
     class Agent;
     class Animation;
-    class ColliderLine;
+    class Transform;
+    class MeshRendererComponent;
 }
+
 namespace Editor
 {
-    class Player :
-        public Engine::Drawable
+    // Phase E7 — Player migrated from Drawable to GameObject. Editor uses
+    // this as a navmesh-following test agent: ImguiManager spawns one
+    // (CreateGameObject<Player>) on a navmesh click, attaches an Agent
+    // Component pointing at the click target, and the Agent's Update
+    // walks the GameObject along the path.
+    class Player : public Engine::GameObject
     {
     public:
         Player();
-        Player(const Player& player);
-        virtual ~Player() = default;
+        virtual ~Player() override = default;
 
     private:
-        std::shared_ptr<Engine::ColliderLine> m_pFootLineCollider[2];
-#ifdef _DEBUG
-        std::shared_ptr<Engine::Sphere> m_pSphere[2];
-#endif
+        std::shared_ptr<Engine::Transform>             m_pTransform;
+        std::shared_ptr<Engine::MeshRendererComponent> m_pMeshRenderer;
+        std::shared_ptr<Engine::Animation>             m_pAnimation;
+        std::shared_ptr<Engine::Agent>                 m_pAgent;
+
     public:
         virtual bool Init() override;
-        virtual void Update(float fDeltaTime) override;
 
     public:
-        void CollisionStay(class Engine::Collider* pSrc, class Engine::Collider* pDest, float fDeltaTime);
+        // Editor-side accessors mirroring Drawable's old API surface that
+        // ImguiManager calls into.
+        void SetAgent(const std::shared_ptr<Engine::Agent>& pAgent);
+        const std::shared_ptr<Engine::Agent>& GetAgent() const { return m_pAgent; }
+        void Move(const Engine::Vector3& vPos);
 
-    public:
-        virtual std::shared_ptr<Bindable> Clone() override;
+        std::shared_ptr<Engine::Transform> GetTransform() const { return m_pTransform; }
     };
 }

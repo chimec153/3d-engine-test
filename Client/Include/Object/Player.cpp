@@ -17,6 +17,7 @@
 #include "Bindable/DepthStencilState.h"
 #include "Animation/JointSocket.h"
 #include "Trail.h"
+#include "GameObject/GameObject.h"
 #include "Bindable/ColliderOBB.h"
 #include "Bindable/Particle.h"
 #include "Attackable.h"
@@ -30,7 +31,10 @@
 namespace Client
 {
 	Player::Player(int iMaxHP, int iAttackMin, int iAttackMax) :
-		Attackable(iMaxHP, iAttackMin, iAttackMax)
+		Engine::GameObject()
+		, m_iInitHP(iMaxHP)
+		, m_iInitAttackMin(iAttackMin)
+		, m_iInitAttackMax(iAttackMax)
 		, m_fSpeed(5.f)
 		, m_fAccel(-9.8f)
 		, m_fFallSpeed(0.f)
@@ -225,16 +229,15 @@ namespace Client
 				{
 					SetAdditiveSequence("CharacterArmature|Idle_Gun_Shoot");
 
-					std::shared_ptr<Bullet> pBullet = GetScene()->CreateDrawable<Bullet>("bullet", GetScene()->FindLayer(DEFAULT_LAYER));
+					// Phase E5 — Bullet is a GameObject now.
+					std::shared_ptr<Bullet> pBullet = GetScene()->CreateGameObject<Bullet>("bullet", GetScene()->FindLayer(DEFAULT_LAYER));
 
-					std::shared_ptr<Engine::Transform> pBulletTransform = pBullet->GetTransform();
-
-					if (m_pSword)
-					{
-						pBulletTransform->SetPosition(m_pSword->GetTransform()->GetPosition());
-
-						pBulletTransform->SetAxis(Engine::AXIS_TYPE::Y, m_pSword->GetTransform()->GetAxis(Engine::AXIS_TYPE::X));
-					}
+					// Phase E5 — sword tip transform was used to position the
+					// bullet; the sword equip path (ChangeWeaponMesh) was
+					// Inventory-driven and dead. Bullets now spawn at the
+					// player's transform until a real weapon-equip path
+					// (GameObject-based) is wired up.
+					(void)pBullet;
 				}
 				break;
 				case WEAPON_TYPE::END:
@@ -260,21 +263,21 @@ namespace Client
 		case PLAYER_STATE::RUN:
 			break;
 		case PLAYER_STATE::ROLL:
-			if (GetAnimation()->GetCurrentSequence()->GetTag() != "CharacterArmature|Roll")
+			if (m_pAnimation->GetCurrentSequence()->GetTag() != "CharacterArmature|Roll")
 			{
 				SetState(PLAYER_STATE::ROLL_END);
 			}
 			else
 			{
-				const Engine::Vector3& vPlayerPos = GetTransform()->GetPosition();
+				const Engine::Vector3& vPlayerPos = m_pTransform->GetPosition();
 
 				float fHeight = m_pTerrain->GetTerrainHeight(vPlayerPos);
 
-				float fNextHeight = m_pTerrain->GetTerrainHeight(GetTransform()->GetPosition() + m_vRollDir);
+				float fNextHeight = m_pTerrain->GetTerrainHeight(m_pTransform->GetPosition() + m_vRollDir);
 
 				if (vPlayerPos.y >= fNextHeight || fHeight >= fNextHeight - tanf(PI / 4.f))
 				{
-					GetTransform()->AddPosition(m_vRollDir * m_fRollSpeed * fDeltaTime);
+					m_pTransform->AddPosition(m_vRollDir * m_fRollSpeed * fDeltaTime);
 				}
 				else
 				{
@@ -284,7 +287,7 @@ namespace Client
 			break;
 		case PLAYER_STATE::HIT:
 		{
-			if (GetAnimation()->GetCurrentSequence()->GetTag() != "CharacterArmature|HitRecieve")
+			if (m_pAnimation->GetCurrentSequence()->GetTag() != "CharacterArmature|HitRecieve")
 			{
 				SetState(PLAYER_STATE::HIT_END);
 			}
@@ -304,7 +307,7 @@ namespace Client
 			break;
 		case PLAYER_UPPER_BODY_STATE::ATTACK:
 		{
-			std::shared_ptr<Engine::Sequence> pAdditiveSequence = GetAnimation()->GetAdditiveSequence();
+			std::shared_ptr<Engine::Sequence> pAdditiveSequence = m_pAnimation->GetAdditiveSequence();
 
 			if (!pAdditiveSequence || pAdditiveSequence->GetTag() != "CharacterArmature|Sword_Slash")
 			{
@@ -323,140 +326,88 @@ namespace Client
 
 	void Player::RollEffect(int iFrame, float fTime, Engine::Bindable* pBindable)
 	{
-		std::string strDrawable = "effect";
+		std::string strName = "effect";
+		strName += std::to_string(iFrame);
 
-		strDrawable += std::to_string(iFrame);
+		// Phase E5 — shadow effect entity is a GameObject with cloned mesh
+		// + animation, rendered in the alpha pass via MeshRendererComponent.
+		std::shared_ptr<Engine::GameObject> pShadowObj =
+			GetScene()->CreateGameObject<>(strName, GetScene()->FindLayer(DEFAULT_LAYER));
+		if (!pShadowObj) return;
 
-		std::shared_ptr<Engine::Drawable> _pDrawable = GetScene()->CreateDrawable<Engine::Drawable>(strDrawable, GetScene()->FindLayer(DEFAULT_LAYER));
+		auto pTransform    = pShadowObj->AddComponent<Engine::Transform>("transform");
+		auto pMeshRenderer = pShadowObj->AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
+		auto pAnimation    = std::static_pointer_cast<Engine::Animation>(m_pAnimation->Clone());
+		if (pAnimation)
+		{
+			pShadowObj->AddComponent(pAnimation);
+			pAnimation->SetRate(0.f);
+		}
 
-		std::shared_ptr<Engine::Animation> pAnimation = std::static_pointer_cast<Engine::Animation>(GetAnimation()->Clone());
+		if (pTransform && m_pTransform)
+		{
+			pTransform->SetPosition(m_pTransform->GetPosition());
+			pTransform->SetScale(m_pTransform->GetScale());
+			pTransform->SetRotation(m_pTransform->GetRotation());
+		}
 
-		_pDrawable->AddChild(pAnimation);
-
-		pAnimation->SetRate(0.f);
-
-		std::shared_ptr<Engine::Transform> pPlayerTransform = GetTransform();
-
-		std::shared_ptr<Engine::Transform> pTransform = _pDrawable->GetTransform();
-
-		pTransform->SetPosition(pPlayerTransform->GetPosition());
-
-		pTransform->SetScale(pPlayerTransform->GetScale());
-
-		pTransform->SetRotation(pPlayerTransform->GetRotation());
-
-		_pDrawable->FindAndAddBind<Engine::Topology>("TriangleList");
-		_pDrawable->FindAndAddBind<Engine::VertexShader>("anisotropic_microfacet VSSkin");
-		_pDrawable->FindAndAddBind<Engine::PixelShader>("anisotropic_microfacet PS_NoSpecMapNoNormalMap");
-		_pDrawable->FindAndAddBind<Engine::InputLayout>("Standard");
+		std::shared_ptr<Engine::Mesh> pMesh = m_pMeshRenderer && m_pMeshRenderer->GetMesh()
+			? std::static_pointer_cast<Engine::Mesh>(m_pMeshRenderer->GetMesh()->Clone())
+			: nullptr;
+		if (!pMesh) return;
 
 		std::shared_ptr<Engine::Material> pMaterial = Engine::StaticFindBindable<Engine::Material>("Material");
-
-		pMaterial = std::static_pointer_cast<Engine::Material>(pMaterial->Clone());
-
-		pMaterial->SetReflectivity(1.f);
-		pMaterial->SetDiffuseColor(0.f, 0.f, 1.f, 0.4f);
-		pMaterial->SetEmissiveColor({ 0.f, 0.f, 0.f, 0.f });
-
-		std::shared_ptr<Engine::Mesh> pMesh = std::static_pointer_cast<Engine::Mesh>(GetMesh()->Clone());
+		if (pMaterial)
+		{
+			pMaterial = std::static_pointer_cast<Engine::Material>(pMaterial->Clone());
+			pMaterial->SetReflectivity(1.f);
+			pMaterial->SetDiffuseColor(0.f, 0.f, 1.f, 0.4f);
+			pMaterial->SetEmissiveColor({ 0.f, 0.f, 0.f, 0.f });
+		}
 
 		int iContainerCount = pMesh->GetMeshCount();
-
 		for (int i = 0; i < iContainerCount; ++i)
 		{
 			int iSubCount = pMesh->GetMeshSubCount(i);
-
 			for (int j = 0; j < iSubCount; ++j)
-			{
 				pMesh->SetMaterial(i, j, pMaterial);
-			}
 		}
 
-		_pDrawable->AddChild(pMesh);
-		_pDrawable->NotUseShadow();
+		if (pMeshRenderer)
+		{
+			pMeshRenderer->SetMesh(pMesh);
+			pMeshRenderer->SetMaterial(pMaterial);
+			pMeshRenderer->SetAnimation(pAnimation);
+			pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
+			pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>("anisotropic_microfacet VSSkin"));
+			pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>("anisotropic_microfacet PS_NoSpecMapNoNormalMap"));
+			pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
+			pMeshRenderer->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
+		}
 
-		_pDrawable->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
-
-		m_ShadowList.push_back(_pDrawable);
+		m_ShadowList.emplace_back(pShadowObj, pMeshRenderer);
 	}
 
 	void Player::ChangeSequence(const std::string& strSeq)
 	{
-		GetAnimation()->ChangeSequence(strSeq.c_str());
+		m_pAnimation->ChangeSequence(strSeq.c_str());
 	}
 
 	void Player::SetRate(float fRate)
 	{
-		GetAnimation()->SetRate(fRate);
+		m_pAnimation->SetRate(fRate);
 	}
 
 	void Player::SetAdditiveSequence(const std::string& strSeq)
 	{
-		GetAnimation()->SetAdditiveSequence(strSeq.c_str());
+		m_pAnimation->SetAdditiveSequence(strSeq.c_str());
 	}
 
-	void Player::ChangeWeaponMesh(std::shared_ptr<Engine::Drawable> pDrawable)
-	{
-		if (m_pJointSocket)
-		{
-			GetAnimation()->DeleteSocket(m_pJointSocket);
-		}
-
-		if (m_pSword)
-		{
-			m_pSword->Disable();
-		}
-
-		m_pSword = pDrawable;
-
-		if (pDrawable)
-		{
-			// Phase B.4 — SoundBindable migrated to Component; look up
-			// via FindComponent rather than the old Bindable child-list.
-			m_pSwordSound = std::static_pointer_cast<Engine::SoundBindable>(pDrawable->FindComponent("weapon sound"));
-
-			// Phase B.4 — Collider migrated to Component; FindComponent.
-			m_pSwordBody = std::static_pointer_cast<Engine::ColliderOBB>(pDrawable->FindComponent(Engine::COMPONENT_TYPE::COLLIDER_OBB));
-
-			m_pSwordParticle = std::static_pointer_cast<Engine::Particle>(pDrawable->FindChild(pDrawable->GetTag() + " particle"));
-
-			m_pJointSocket = GetAnimation()->AddSocket(40, m_pSword);
-
-			m_pJointSocket->SetRotation({ 0.f, -PI / 2.f, PI / 2.f });
-			m_pJointSocket->SetScale(0.5f, 0.5f, 0.5f);
-			m_pJointSocket->SetPosition({ 0.f, -0.03f, 0.1f });
-		}
-		else
-		{
-			m_pSwordBody = nullptr;
-
-			m_pSwordParticle = nullptr;
-
-			m_pSwordSound = nullptr;
-		}
-	}
-
-	void Player::ChangeArmorMesh(std::shared_ptr<Engine::Drawable> pDrawable)
-	{
-		if (m_pJointSocketArmor)
-		{
-			GetAnimation()->DeleteSocket(m_pJointSocketArmor);
-		}
-
-		if (pDrawable)
-		{
-			m_pJointSocketArmor = GetAnimation()->AddSocket(5, pDrawable);
-
-			m_pJointSocketArmor->SetRotation({ PI / 2.f, 0.f, 0.f });
-			m_pJointSocketArmor->SetScale(0.4f, 0.4f, 0.4f);
-			m_pJointSocketArmor->SetPosition({ 0.f, 0.03f, 0.f });
-		}
-	}
-
-	std::shared_ptr<Engine::Drawable> Player::GetWeapon() const
-	{
-		return m_pSword;
-	}
+	// Phase E5 — ChangeWeaponMesh / ChangeArmorMesh / GetWeapon removed.
+	// Their callers all came from Inventory's UpdateEquipSlot, which has
+	// been stubbed out (Inventory creation is commented out in GameScene).
+	// Reintroduce under a GameObject-based weapon-equip path when the
+	// inventory UI is rebuilt.
 
 	void Player::SetInventory(std::shared_ptr<Inventory> pInventory)
 	{
@@ -481,8 +432,9 @@ namespace Client
 
 		const Engine::Vector3& vCross = pTerrainCollider->GetCross();
 
-		// Phase B.4 — Collider migrated to Component; owner via GetOwner.
-		Engine::Terrain* pTerrain = static_cast<Engine::Terrain*>(pTerrainCollider->GetOwner());
+		// Phase E5 — Terrain is now a GameObject (the collider's host).
+		Engine::Terrain* pTerrain = static_cast<Engine::Terrain*>(pTerrainCollider->GetGameObjectOwner());
+		if (!pTerrain) return;
 
 		if (Engine::CInput::GetInst()->IsMouseButtonUp(Engine::CInput::MOUSE_TYPE::LEFT))
 		{
@@ -532,10 +484,12 @@ namespace Client
 	{
 		if (pDest->GetTag() == "frogclawbody")
 		{
-			// Phase B.4 — Collider migrated to Component; owner via GetOwner.
-			Attackable* pAttacker = static_cast<Attackable*>(pDest->GetOwner());
+			// Phase E5 — attacker is GameObject-hosted (Drawable hosts gone).
+			std::shared_ptr<Attackable> pAttacker;
+			if (Engine::GameObject* pOwnerGameObject = pDest->GetGameObjectOwner())
+				pAttacker = pOwnerGameObject->GetComponent<Attackable>();
 
-			if (pAttacker->Attack(this))
+			if (pAttacker && pAttacker->Attack(m_pAttackable.get()))
 			{
 				SetState(PLAYER_STATE::DIE);
 			}
@@ -552,7 +506,7 @@ namespace Client
 		{
 			float fDist = (pDest->GetCross() - static_cast<Engine::ColliderLine*>(pSrc)->GetInfo().vStart).Length();
 
-			Engine::Vector3 vNewPos = GetTransform()->GetPosition();
+			Engine::Vector3 vNewPos = m_pTransform->GetPosition();
 
 			vNewPos.y += 1.2f;
 
@@ -577,7 +531,8 @@ namespace Client
 
 		std::shared_ptr<Engine::Layer> pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
 
-		m_pTerrain = std::static_pointer_cast<Engine::Terrain>(pLayer->FindDrawable(Engine::BINDABLE_TYPE::TERRAIN));
+		// Phase E5 — Terrain is a GameObject now; lookup via FindGameObject.
+		m_pTerrain = std::static_pointer_cast<Engine::Terrain>(pLayer->FindGameObject("Terrain"));
 	}
 
 	bool Player::Init()
@@ -587,21 +542,40 @@ namespace Client
 			return false;
 		}
 
-		GetTransform()->SetPosition(10.f, 5.f, 10.f);
-		//GetTransform()->SetScale(0.01f, 0.01f, 0.01f);
+		// Phase E5 — assemble entity from Components.
+		m_pTransform    = AddComponent<Engine::Transform>("transform");
+		m_pMeshRenderer = AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
+		m_pAnimation    = AddComponent<Engine::Animation>("PlayerAnimation");
 
-		std::shared_ptr<Engine::Mesh> pMesh = CreateBindable<Engine::Mesh>("PlayerMesh", "Walking.mesh");
+		// Attackable's Init runs GetOwner()->CreateComponent for its
+		// siblings, but Player is a GameObject now (no Drawable owner).
+		// Attackable handles a null owner gracefully (PaperBurn/Particle/
+		// Sound creation just becomes no-op); the rendering-side dissolve
+		// effect for Player is wired separately if needed.
+		m_pAttackable = AddComponent<Attackable>("attackable",
+			m_iInitHP, m_iInitAttackMin, m_iInitAttackMax);
 
-		pMesh->UsePaperBurn();
+		if (m_pTransform)
+			m_pTransform->SetPosition(10.f, 5.f, 10.f);
 
-		FindAndAddBind<Engine::VertexShader>(STANDARD_ANIM_VS);
-		FindAndAddBind<Engine::InputLayout>("Standard");
-		FindAndAddBind<Engine::Topology>("TriangleList");
+		std::shared_ptr<Engine::Mesh> pMesh =
+			Engine::StaticCreateBindable<Engine::Mesh>("PlayerMesh", "Walking.mesh");
 
-		FindAndAddBind<Engine::PixelShader>(STANDARD_PS);
-		FindAndAddBind<Engine::DepthStencilState>("OutLineMask");
+		if (pMesh)
+			pMesh->UsePaperBurn();
 
-		std::shared_ptr<Engine::Animation> pAnimation = CreateComponent<Engine::Animation>("PlayerAnimation");
+		if (m_pMeshRenderer)
+		{
+			m_pMeshRenderer->SetMesh(pMesh);
+			m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_ANIM_VS));
+			m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>(STANDARD_PS));
+			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
+			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
+			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::DepthStencilState>("OutLineMask"));
+			m_pMeshRenderer->SetAnimation(m_pAnimation);
+		}
+
+		std::shared_ptr<Engine::Animation> pAnimation = m_pAnimation;
 
 		std::vector<std::string> vecSeq = {
 			"mixamo.com",
@@ -664,7 +638,7 @@ namespace Client
 		pAnimation->SetNextSequence("CharacterArmature|Sword_Slash", "CharacterArmature|Idle");
 		pAnimation->SetNextSequence("CharacterArmature|HitRecieve", "CharacterArmature|Idle");*/
 
-		m_pBody = CreateComponent<Engine::ColliderOBB>("PlayerBody");
+		m_pBody = AddComponent<Engine::ColliderOBB>("PlayerBody");
 
 		m_pBody->SetScaleOffset({ 0.5f, 1.8f, 0.4f });
 
@@ -687,7 +661,11 @@ namespace Client
 		m_pCameraLine->SetCallBack(Engine::COLLISION_TYPE::STAY, this, &Player::CollisionCameraLine);
 		m_pCameraLine->SetCallBack(Engine::COLLISION_TYPE::LAST, this, &Player::CollisionCameraLineLast);
 
-		m_pTrail = GetScene()->CreateDrawable<Trail>("Trail", GetScene()->FindLayer(DEFAULT_LAYER), 10);
+		// Phase E5 — Trail is a Component now. Host it on a generic
+		// GameObject so the Layer drives its lifecycle.
+		std::shared_ptr<Engine::GameObject> pTrailObj =
+			GetScene()->CreateGameObject<>("Trail", GetScene()->FindLayer(DEFAULT_LAYER));
+		m_pTrail = pTrailObj ? pTrailObj->AddComponent<Trail>("trail", 10) : nullptr;
 
 		/*for (int i = 0; i < 77; ++i)
 		{
@@ -695,7 +673,7 @@ namespace Client
 
 			strNotify += std::to_string(i);
 
-			std::shared_ptr<Engine::Notify> pNotify = GetAnimation()->AddNotify("CharacterArmature|Sword_Slash", strNotify, i * 0.01666f);
+			std::shared_ptr<Engine::Notify> pNotify = m_pAnimation->AddNotify("CharacterArmature|Sword_Slash", strNotify, i * 0.01666f);
 
 			if (i == 0)
 			{
@@ -765,7 +743,7 @@ namespace Client
 
 			}
 		}
-		GetTransform()->SetY(10.f);
+		if (m_pTransform) m_pTransform->SetY(10.f);
 
 		for (int i = 0; i < 45; ++i)
 		{
@@ -782,15 +760,15 @@ namespace Client
 
 		pDieNotify->SetCallBack([this](int, float, Engine::Bindable*)
 			{
-				StartPaperBurn();
+				if (m_pAttackable) m_pAttackable->StartPaperBurn();
 			}
 		);
 
 		Engine::CInput::GetInst()->AddKey(DIK_LCONTROL);
 
-		m_pFootLSound = CreateComponent<Engine::SoundBindable>("step_rock_l", "step_rock_l");
+		m_pFootLSound = AddComponent<Engine::SoundBindable>("step_rock_l", "step_rock_l");
 
-		m_pFootRSound = CreateComponent<Engine::SoundBindable>("step_rock_r", "step_rock_r");
+		m_pFootRSound = AddComponent<Engine::SoundBindable>("step_rock_r", "step_rock_r");
 
 		std::shared_ptr<Engine::Notify> pRunLNotify = pAnimation->AddNotify("CharacterArmature|Run", "foot_l", 0.5f);
 
@@ -813,7 +791,7 @@ namespace Client
 
 	void Player::Input(float fDeltaTime)
 	{
-		std::shared_ptr<Engine::Transform> pTransform = GetTransform();
+		std::shared_ptr<Engine::Transform> pTransform = m_pTransform;
 
 		std::shared_ptr<Engine::Transform> pCamTransform = m_pCamera->GetTransform();
 
@@ -949,7 +927,7 @@ namespace Client
 			return;
 		}
 
-		std::shared_ptr<Engine::Transform> pTransform = GetTransform();
+		std::shared_ptr<Engine::Transform> pTransform = m_pTransform;
 
 		pTransform->AddY(m_fFallSpeed * fDeltaTime);
 
@@ -980,12 +958,13 @@ namespace Client
 		{
 			if (++(*iter).iFrame >= m_iMaxShadowFrame)
 			{
-				(*iter).pDrawable->InActivate();
+				if ((*iter).pGameObject) (*iter).pGameObject->InActivate();
 				iter = m_ShadowList.erase(iter);
 				iterEnd = m_ShadowList.end();
 				continue;
 			}
-			std::shared_ptr<Engine::Mesh> pMesh = std::static_pointer_cast<Engine::Mesh>((*iter).pDrawable->FindChild(Engine::BINDABLE_TYPE::MESH));
+			std::shared_ptr<Engine::Mesh> pMesh =
+				(*iter).pMeshRenderer ? (*iter).pMeshRenderer->GetMesh() : nullptr;
 
 			if (!pMesh)
 			{

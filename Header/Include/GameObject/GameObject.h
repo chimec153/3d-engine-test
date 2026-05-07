@@ -31,6 +31,12 @@ namespace Engine
 		GameObject* m_pParent;
 		std::list<GameObject*> m_Children;
 
+		// Phase E5 — Layer back-pointer. Set by Scene::CreateGameObject
+		// before Init runs and by Layer::AddGameObject (idempotently). Lets
+		// game-class GameObjects reach Layer/Scene the way Drawable
+		// subclasses used to via Drawable::GetScene().
+		class Layer* m_pLayer;
+
 	public:
 		// Construct a Component subclass T, add it to this GameObject, and
 		// return the typed pointer. The Component's Init() runs after
@@ -40,6 +46,7 @@ namespace Engine
 		{
 			auto pComp = std::make_shared<T>(args...);
 			pComp->SetTag(strTag);
+			pComp->SetGameObjectOwner(this);
 			m_Components.push_back(std::static_pointer_cast<Component>(pComp));
 			if (!pComp->Init())
 				return nullptr;
@@ -83,6 +90,12 @@ namespace Engine
 		GameObject* GetParent() const;
 		void SetParent(GameObject* pParent);
 		const std::list<GameObject*>& GetChildren() const;
+
+		// Phase E5 — Layer / Scene access for game-class code that used to
+		// reach the Scene via Drawable::GetScene().
+		class Layer* GetLayer() const { return m_pLayer; }
+		void SetLayer(class Layer* pLayer) { m_pLayer = pLayer; }
+		class Scene* GetScene() const;
 
 	public:
 		virtual bool Init();

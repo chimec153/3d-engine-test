@@ -1,5 +1,4 @@
 #include "Layer.h"
-#include "../Bindable/Drawable.h"
 #include "../Component/Component.h"
 #include "../GameObject/GameObject.h"
 #include "../Core/PathManager.h"
@@ -29,17 +28,6 @@ namespace Engine
 		return m_iZOrder;
 	}
 
-	void Layer::AddDrawable(const std::shared_ptr<Bindable>& pDrawable)
-	{
-		pDrawable->SetLayer(this);
-
-		pDrawable->SetScene(m_pScene);
-
-		pDrawable->Start();
-
-		m_DrawList.push_back(pDrawable);
-	}
-
 	void Layer::AddComponent(const std::shared_ptr<Component>& pComp)
 	{
 		pComp->Start();
@@ -48,6 +36,12 @@ namespace Engine
 
 	void Layer::AddGameObject(const std::shared_ptr<GameObject>& pObj)
 	{
+		// Phase E5 — wire up layer back-pointer (idempotent: Scene's
+		// CreateGameObject already does this pre-Init so the GameObject's
+		// Init/components can call GetScene; this catches the case where
+		// AddGameObject is invoked outside of CreateGameObject).
+		pObj->SetLayer(this);
+
 		pObj->Start();
 		m_GameObjectList.push_back(pObj);
 	}
@@ -81,11 +75,6 @@ namespace Engine
 	void Layer::SetScene(Scene* pScene)
 	{
 		m_pScene = pScene;
-	}
-
-	const std::list<class std::shared_ptr<class Bindable>>& Layer::GetDrawList() const
-	{
-		return m_DrawList;
 	}
 
 	const std::list<std::shared_ptr<Component>>& Layer::GetComponentList() const
@@ -129,68 +118,6 @@ namespace Engine
 		return m_pLoadingThread;
 	}
 
-	std::shared_ptr<Bindable> Layer::FindDrawable(const std::string& strTag) const
-	{
-		std::list<std::shared_ptr<Bindable>>::const_iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::const_iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			if ((*iter)->GetTag() == strTag)
-			{
-				return *iter;
-			}
-
-			std::shared_ptr<Bindable> pChild = (*iter)->FindChild(strTag);
-
-			if (pChild)
-			{
-				return pChild;
-			}
-		}
-
-		return std::shared_ptr<Bindable>();
-	}
-
-	std::shared_ptr<Bindable> Layer::FindDrawable(BINDABLE_TYPE eType) const
-	{
-		std::list<std::shared_ptr<Bindable>>::const_iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::const_iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			if ((*iter)->GetBindableType() == eType)
-			{
-				return *iter;
-			}
-
-			std::shared_ptr<Bindable> pChild = (*iter)->FindChild(eType);
-
-			if (pChild)
-			{
-				return pChild;
-			}
-		}
-
-		return std::shared_ptr<Bindable>();
-	}
-
-	void Layer::DeleteDrawable(std::shared_ptr<Bindable> pDrawable)
-	{
-		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			if (*iter == pDrawable)
-			{
-				m_DrawList.erase(iter);
-
-				return;
-			}
-		}
-	}
-
 	namespace
 	{
 		// Phase B.5 — shared lifecycle iteration over a typed list. Same
@@ -218,7 +145,6 @@ namespace Engine
 
 	void Layer::Input(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,       [&](const auto& p) { p->Input(fDeltaTime); });
 		ForEachActive(m_ComponentList,  [&](const auto& p) { p->Input(fDeltaTime); });
 		ForEachActive(m_GameObjectList, [&](const auto& p) { p->Input(fDeltaTime); });
 	}
@@ -229,41 +155,40 @@ namespace Engine
 		{
 			if (m_pLoadingThread->IsFinish())
 			{
-				AddDrawable(m_pLoadingThread->GetDrawable());
+				// Phase E7 — LoadingThread now produces a GameObject (with
+				// MeshRendererComponent populated by MeshLoader) instead of
+				// a Drawable.
+				if (auto pObj = m_pLoadingThread->GetGameObject())
+					AddGameObject(pObj);
 
 				m_pLoadingThread = nullptr;
 			}
 		}
 
-		ForEachActive(m_DrawList,       [&](const auto& p) { p->Update(fDeltaTime); });
 		ForEachActive(m_ComponentList,  [&](const auto& p) { p->Update(fDeltaTime); });
 		ForEachActive(m_GameObjectList, [&](const auto& p) { p->Update(fDeltaTime); });
 	}
 
 	void Layer::FixedUpdate(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,       [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
 		ForEachActive(m_ComponentList,  [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
 		ForEachActive(m_GameObjectList, [&](const auto& p) { p->FixedUpdate(fDeltaTime); });
 	}
 
 	void Layer::Collision(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,       [&](const auto& p) { p->Collision(fDeltaTime); });
 		ForEachActive(m_ComponentList,  [&](const auto& p) { p->Collision(fDeltaTime); });
 		ForEachActive(m_GameObjectList, [&](const auto& p) { p->Collision(fDeltaTime); });
 	}
 
 	void Layer::PostUpdate(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,       [&](const auto& p) { p->PostUpdate(fDeltaTime); });
 		ForEachActive(m_ComponentList,  [&](const auto& p) { p->PostUpdate(fDeltaTime); });
 		ForEachActive(m_GameObjectList, [&](const auto& p) { p->PostUpdate(fDeltaTime); });
 	}
 
 	void Layer::PreDraw(float fDeltaTime)
 	{
-		ForEachActive(m_DrawList,       [&](const auto& p) { p->PreDraw(fDeltaTime); });
 		ForEachActive(m_ComponentList,  [&](const auto& p) { p->PreDraw(fDeltaTime); });
 		ForEachActive(m_GameObjectList, [&](const auto& p) { p->PreDraw(fDeltaTime); });
 	}
@@ -297,21 +222,16 @@ namespace Engine
 
 		fwrite(&m_iZOrder, 4, 1, pFile);
 
-		int iBindableCount = static_cast<int>(m_DrawList.size());
-
-		fwrite(&iBindableCount, 4, 1, pFile);
-
-		std::list<std::shared_ptr<Bindable>>::iterator iter = m_DrawList.begin();
-		std::list<std::shared_ptr<Bindable>>::iterator iterEnd = m_DrawList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			BINDABLE_TYPE eType = (*iter)->GetBindableType();
-
-			fwrite(&eType, 4, 1, pFile);
-
-			(*iter)->Save(pFile);
-		}
+		// Phase E7 — Drawable serialization removed. m_DrawList no longer
+		// holds live entities (game classes migrated to GameObject), so
+		// iterating it would always write zero. The "count = 0" placeholder
+		// stays so existing .scn files saved before the migration can still
+		// be read past this Layer header without going off-rails. GameObject
+		// serialization is intentionally not added here — scenes are
+		// reauthored from code today; a proper entity-graph format will be
+		// designed when scene-from-disk gets reintroduced.
+		const int iEntityCount = 0;
+		fwrite(&iEntityCount, 4, 1, pFile);
 	}
 	void Layer::Load(FILE* pFile)
 	{
@@ -319,47 +239,12 @@ namespace Engine
 
 		fread(&m_iZOrder, 4, 1, pFile);
 
-		int iBindableCount = 0;
-
-		fread(&iBindableCount, 4, 1, pFile);
-
-		for (int i = 0; i < iBindableCount; ++i)
-		{
-			BINDABLE_TYPE eType = BINDABLE_TYPE::NONE;
-
-			fread(&eType, 4, 1, pFile);
-
-			std::shared_ptr<Bindable> pBindable = Bindable::CreateBindable(eType);
-
-			if (!pBindable)
-			{
-				int iLength = 0;
-
-				fread(&iLength, 4, 1, pFile);
-
-				if (iLength)
-				{
-					std::unique_ptr<char[]> strBind = std::make_unique<char[]>(iLength + 1);
-
-					strBind[iLength] = 0;
-
-					fread(strBind.get(), 1, iLength, pFile);
-
-					pBindable = Bindable::FindBindable(eType, strBind.get());
-				}
-			}
-			else
-			{
-				pBindable->SetScene(m_pScene);
-
-				pBindable->SetLayer(this);
-
-				pBindable->Load(pFile);
-			}
-
-			assert(pBindable);
-
-			AddDrawable(pBindable);
-		}
+		// Phase E7 — match Save: read the count placeholder and bail.
+		// Old scene files with non-zero counts can no longer be parsed
+		// (Drawable construction path was the only consumer); any such
+		// files need to be re-saved with the new (empty) format.
+		int iEntityCount = 0;
+		fread(&iEntityCount, 4, 1, pFile);
+		assert(iEntityCount == 0 && "Legacy Drawable-serialized scene; resave with the post-migration engine.");
 	}
 }

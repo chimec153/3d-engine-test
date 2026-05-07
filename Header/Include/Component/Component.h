@@ -24,6 +24,7 @@ namespace Engine
 		MOUSE,
 		JOINT_SOCKET,
 		LIGHT,
+		PAPERBURN,
 		END
 	};
 
@@ -39,20 +40,25 @@ namespace Engine
 		Component* m_pParent;
 		std::list<std::shared_ptr<Component>> m_ChildList;
 
-		// The Drawable this Component is attached to. Set by
-		// Drawable::AddChild(shared_ptr<Component>). Null until then,
-		// or for Components that aren't owned by a Drawable. Components
-		// that need Transform/render-side context (e.g. SoundBindable
-		// reading owner position) read this.
-		class Drawable* m_pOwner;
+		// Phase E5 — Drawable owner field removed (no live Drawable
+		// hosts remain). GameObject is the only host type now.
+		class GameObject* m_pGameObjectOwner;
 
 	public:
 		void SetComponentType(COMPONENT_TYPE eType);
 		COMPONENT_TYPE GetComponentType() const;
 		Component* GetParent() const;
 		void SetParent(Component* pParent);
-		class Drawable* GetOwner() const;
-		void SetOwner(class Drawable* pOwner);
+		// Phase E5 — Drawable GetOwner/SetOwner removed.
+		class GameObject* GetGameObjectOwner() const;
+		void SetGameObjectOwner(class GameObject* pOwner);
+
+		// Phase E5 — host-agnostic Transform accessor. Resolves the
+		// Drawable owner's Transform first, falls back to the GameObject
+		// owner's Transform Component. Lets Components (colliders, sound,
+		// animation, etc.) reach the host transform regardless of whether
+		// they're attached to a Drawable or a GameObject.
+		std::shared_ptr<class Transform> GetHostTransform() const;
 		const std::list<std::shared_ptr<Component>>& GetChildList() const;
 		virtual void AddChild(const std::shared_ptr<Component>& pChild);
 		std::shared_ptr<Component> FindChild(COMPONENT_TYPE eType) const;
@@ -121,6 +127,20 @@ namespace Engine
 		// hierarchy up at AddChild time. Default returns nullptr (most
 		// Components don't have an independent transform).
 		virtual std::shared_ptr<class Transform> GetTransform() const { return nullptr; }
+
+		// Phase E5 — Render-time GPU bind hook for "decorator" Components
+		// (e.g., PaperBurn) that piggyback on a sibling MeshRenderer's draw.
+		// Invoked by MeshRendererComponent::Bind on every sibling Component
+		// of the owning GameObject right before the mesh draw. Default is
+		// no-op; only a few Components (PaperBurn, future shader-effect
+		// components) override.
+		virtual void RenderBind() {}
+
+		// Symmetric counterpart to RenderBind — invoked by
+		// MeshRendererComponent::PostBind / Drawable::PostBind after the
+		// mesh draw so a Component can release SRV slots / unbind state
+		// it set up in RenderBind. Default no-op.
+		virtual void RenderUnbind() {}
 
 	public:
 		virtual void Save(FILE* pFile) override;

@@ -2,6 +2,9 @@
 #include "Mesh.h"
 #include "BindableManager.h"
 #include "ColliderSphere.h"
+#include "Drawable.h"  // Phase E5 — for the static SetNormals/SetTangent
+                       // template utilities only; Cloth itself is now a
+                       // Component, not a Drawable.
 
 Engine::Cloth::Cloth()
 {
@@ -23,27 +26,17 @@ Engine::Cloth::Cloth(int iWidth, int iHeight, float fSpring, float fSpringShear,
 	, m_vWind()
 	, m_pCollider(CreateComponent<ColliderSphere>("ClothCollider"))
 {
-	SetBindableType(BINDABLE_TYPE::CLOTH);
+	SetComponentType(COMPONENT_TYPE::NONE);
 
 	m_vecPosition.resize(m_iWidth * m_iHeight);
 	m_vecPrevPosition.resize(m_iWidth * m_iHeight);
 	m_vecVelocity.resize(m_iWidth * m_iHeight);
 	m_vecForce.resize(m_iWidth * m_iHeight);
 
-	FindAndAddBind<class Topology>("TriangleList");
-	FindAndAddBind<class InputLayout>(STANDARD_INPUT_LAYOUT);
-	FindAndAddBind<VertexShader>("anisotropic_microfacet VSNoSkin");
-	FindAndAddBind<PixelShader>("anisotropic_microfacet PS_NoSpecMapNoNormalMap");
-
-	std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
-
-	AddChild(pMaterial->Clone());
-
-#ifdef _DEBUG
-	FindAndAddBind<RasterizerState>("CullNone");
-#else
-	FindAndAddBind<RasterizerState>("CullNone");
-#endif
+	// Phase E5 — GPU resources (Topology / InputLayout / Shaders / Material
+	// / RS) are no longer set up here. A future GameObject-hosted Cloth
+	// will pair this Component with a MeshRendererComponent that owns
+	// those slots; the cloth simulation only owns its dynamic Mesh.
 
 	Ready();
 }
@@ -146,8 +139,10 @@ void Engine::Cloth::Load(FILE* pFile)
 	fread(&m_fWind, 4, 1, pFile);
 	fread(&m_vWind, 12, 1, pFile);
 
-	// Phase B.4 — Collider migrated to Component; lookup via FindComponent.
-	m_pCollider = std::static_pointer_cast<ColliderSphere>(FindComponent("ClothCollider"));
+	// Phase B.4 — Collider migrated to Component; lookup via FindChild.
+	// (Cloth itself is now a Component as of E5; FindComponent was the
+	// Drawable-side wrapper that no longer applies.)
+	m_pCollider = std::static_pointer_cast<ColliderSphere>(FindChild("ClothCollider"));
 
 	assert(m_pCollider);
 
@@ -298,16 +293,17 @@ void Engine::Cloth::UpdatePosition(float fDeltaTime)
 		m_vecVelocity[i] = (vecNewPosition[i].pos - vecCurrentPosition[i].pos) / fDeltaTime;
 	}
 
-	SetNormals(vecNewPosition, m_vecIndex);
+	Drawable::SetNormals(vecNewPosition, m_vecIndex);
 
-	SetTangent(vecNewPosition, m_vecIndex);
+	Drawable::SetTangent(vecNewPosition, m_vecIndex);
 
-	const Engine::Vector4& vSphere = GetBoundingSphere<VertexStandard>(vecNewPosition);
+	// Phase E5 — bounding-sphere recompute used to come from Drawable's
+	// instance method (which writes Drawable-only state). Dropped for the
+	// Component shell; future re-enablement should compute via the static
+	// Drawable::StaticGetBoundingSphere overload or a dedicated utility.
 
-	m_pCollider->SetRadius(vSphere.w);
-	m_pCollider->SetOffset(vSphere);
-
-	m_pMesh->SetVertexBuffer(0, &vecNewPosition[0], static_cast<int>(sizeof(VertexStandard) * vecNewPosition.size()));
+	if (m_pMesh)
+		m_pMesh->SetVertexBuffer(0, &vecNewPosition[0], static_cast<int>(sizeof(VertexStandard) * vecNewPosition.size()));
 }
 
 void Engine::Cloth::CreateVertexAndIndex()
@@ -340,13 +336,18 @@ void Engine::Cloth::CreateVertexAndIndex()
 		}
 	}
 
-	SetNormals(vecVertex, m_vecIndex);
+	Drawable::SetNormals(vecVertex, m_vecIndex);
 
-	SetTangent(vecVertex, m_vecIndex);
+	Drawable::SetTangent(vecVertex, m_vecIndex);
 
 	GetPrevVertexs() = vecVertex;
 
-	m_pMesh = CreateBindable<Mesh>("ClothMesh", vecVertex, m_vecIndex, D3D11_USAGE_DYNAMIC);
+	m_pMesh = StaticCreateBindable<Mesh>("ClothMesh", vecVertex, m_vecIndex, D3D11_USAGE_DYNAMIC);
+}
+
+std::shared_ptr<Engine::Component> Engine::Cloth::Clone()
+{
+	return std::make_shared<Cloth>(*this);
 }
 
 std::vector<Engine::VertexStandard>& Engine::Cloth::GetCurrentVertexs()

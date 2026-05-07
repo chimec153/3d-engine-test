@@ -71,91 +71,11 @@ namespace Engine
 	{
 	}
 
-	void CollisionManager::AddDrawable(class Drawable* pDrawable)
-	{
-		const std::shared_ptr<class Transform>& pTransform = pDrawable->GetTransform();
-
-		if (!pTransform)
-		{
-			return;
-		}
-
-		int iType = static_cast<int>(pTransform->GetCameraType());
-
-		SPACE* pPrevSpace = m_tChannel[iType].FindSpaceAndErase(pDrawable);
-
-		if (pPrevSpace)
-		{
-			std::list<Drawable*>::iterator iter = pPrevSpace->DrawableList.begin();
-			std::list<Drawable*>::iterator iterEnd = pPrevSpace->DrawableList.end();
-
-			for (; iter != iterEnd; ++iter)
-			{
-				if (*iter == pDrawable)
-				{
-					pPrevSpace->DrawableList.erase(iter);
-					break;
-				}
-			}
-
-			if (!pPrevSpace->GetTotalDrawableCount() && pPrevSpace->bDelete)
-			{
-				if (pPrevSpace->pParent)
-				{
-					for (int i = 0; i < 8; ++i)
-					{
-						if (pPrevSpace->pParent->pChild[i].get() == pPrevSpace)
-						{
-							pPrevSpace->pParent->pChild[i] = nullptr;
-							break;
-						}
-					}
-				}
-			}
-		}
-
-		Vector4 vSphereInfo = pDrawable->GetSphereInfo();
-
-		vSphereInfo = pTransform->GetTransformMatrix().TransformCoord({ vSphereInfo.x, vSphereInfo.y, vSphereInfo.z });
-
-		SPACE* _pSpace = m_tChannel[iType].m_pSpace;
-
-		while (_pSpace->fSize > 64.f)
-		{
-			bool bLeft = _pSpace->IsLeft(vSphereInfo);
-
-			if (bLeft && _pSpace->IsRight(vSphereInfo))
-			{
-				break;
-			}
-
-			bool bBottom = _pSpace->IsBottom(vSphereInfo);
-
-			if (bBottom && _pSpace->IsTop(vSphereInfo))
-			{
-				break;
-			}
-
-			bool bNear = _pSpace->IsNear(vSphereInfo);
-
-			if (bNear && _pSpace->IsFar(vSphereInfo))
-			{
-				break;
-			}
-
-			int iIndex = 4 * !bLeft + static_cast<int>(SPACE_DIR::LTN) * !bBottom + !bNear;
-
-			if (!_pSpace->pChild[iIndex])
-			{
-				CreateChildSpace(_pSpace, iIndex);
-			}
-
-			_pSpace = _pSpace->pChild[iIndex].get();
-		}
-
-		_pSpace->DrawableList.push_back(pDrawable);
-		m_tChannel[iType].m_mapDrawable.insert(std::make_pair(pDrawable, _pSpace));
-	}
+	// Phase E5 — CollisionManager::AddDrawable removed. With no live
+	// Drawable instances, this spatial-hashing path was always empty.
+	// Collider Components self-register every frame via AddCollider
+	// (Collider::Collision callsite); pair checks happen in the
+	// Collision/Update loop without needing a Drawable index.
 
 	void CollisionManager::AddCollider(Collider* pCollider)
 	{

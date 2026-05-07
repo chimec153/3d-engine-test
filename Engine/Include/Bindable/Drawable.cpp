@@ -1,5 +1,6 @@
 #include "Drawable.h"
 #include "Bindable.h"
+#include "../Component/MeshRendererComponent.h"
 #include "../Core/Graphics.h"
 #include "Transform.h"
 #include "IndexBuffer.h"
@@ -113,10 +114,8 @@ namespace Engine
 
 		SetTransform(m_pTransform);
 
-		if (m_pAnimation)
-		{
-			m_pAnimation->SetOwner(this);
-		}
+		// Phase E5 — Animation::SetOwner removed; the Animation Component
+		// reaches its host Transform via Component::GetGameObjectOwner.
 
 		if (m_pAgent)
 		{
@@ -396,10 +395,7 @@ namespace Engine
 	{
 		m_pAnimation = pAnimation;
 
-		if (m_pAnimation)
-		{
-			m_pAnimation->SetOwner(this);
-		}
+		// Phase E5 — Animation::SetOwner removed (no Drawable hosts).
 
 		UpdateInstanceKey();
 	}
@@ -515,7 +511,9 @@ namespace Engine
 
 	void Drawable::Start()
 	{
-		CollisionManager::GetInst()->AddDrawable(this);
+		// Phase E5 — CollisionManager::AddDrawable removed (no live
+		// Drawable instances remain). Collider Components self-register
+		// each frame via Collider::Collision → AddCollider.
 	}
 
 	namespace
@@ -566,11 +564,8 @@ namespace Engine
 	{
 		m_bInViewFrustum = true;
 
-		if (m_pTransform && m_pTransform->GetVelocity() != 0.f)
-		{
-			CollisionManager::GetInst()->AddDrawable(this);
-		}
-
+		// Phase E5 — CollisionManager::AddDrawable removed (no live
+		// Drawable instances remain).
 		__super::Collision(fDeltaTime);
 		ForEachActiveComponent(m_ComponentChildren, [&](const std::shared_ptr<Component>& p) { p->Collision(fDeltaTime); });
 	}
@@ -593,7 +588,13 @@ namespace Engine
 			UpdateInLightViewFrustum();
 		}
 
-		RenderManager::GetInst()->AddDrawable(std::static_pointer_cast<Drawable>(shared_from_this()));
+		// Phase E5 — auto-registration with RenderManager removed. No
+		// Drawable instances live in the runtime path anymore (all 25
+		// subclasses migrated to Component / GameObject; the only callers
+		// of Drawable directly are dead-code or commented-out paths).
+		// RenderManager's m_RenderList / m_ShadowList stay empty as a
+		// result; their iteration code is preserved as a no-op until the
+		// final E7 cleanup deletes Drawable.
 
 		__super::PreDraw(fDeltaTime);
 		ForEachActiveComponent(m_ComponentChildren, [&](const std::shared_ptr<Component>& p) { p->PreDraw(fDeltaTime); });
@@ -602,12 +603,9 @@ namespace Engine
 	void Drawable::AddChild(const std::shared_ptr<Component>& pComp)
 	{
 		assert(pComp != nullptr);
-		pComp->SetParent(nullptr); // Component parent is another Component; Drawable
-		// is currently a Bindable, not a Component. Future B.4+ work may
-		// promote Drawable to Component, at which point SetParent(this)
-		// becomes meaningful again. For now, components owned by a Drawable
-		// have a null component-parent.
-		pComp->SetOwner(this);
+		pComp->SetParent(nullptr);
+		// Phase E5 — SetOwner(Drawable*) removed. No live Drawable hosts
+		// exist anymore; Drawable::AddChild(Component) is dead path.
 		m_ComponentChildren.push_back(pComp);
 
 		// Phase B.3 — Transform special case: Drawable holds a direct
@@ -764,6 +762,14 @@ namespace Engine
 
 	void Drawable::PostBind()
 	{
+		// Phase E5 — symmetric to BindChild's RenderBind iteration:
+		// release SRV slots / unbind state installed by Component
+		// children's RenderBind via their RenderUnbind hook.
+		for (const auto& pComp : m_ComponentChildren)
+		{
+			if (pComp) pComp->RenderUnbind();
+		}
+
 		// Phase B.3 — Transform PostBind explicitly.
 		if (m_pTransform) m_pTransform->PostBind();
 		// Phase E3 — Animation PostBind explicitly.
@@ -813,6 +819,15 @@ namespace Engine
 				(*iter)->Bind();
 				break;
 			}
+		}
+
+		// Phase E5 — invoke RenderBind on every Component child. Mirrors
+		// the MeshRendererComponent pattern so "decorator" Components like
+		// PaperBurn participate in the draw automatically (default
+		// Component::RenderBind is no-op, so this loop is cheap).
+		for (const auto& pComp : m_ComponentChildren)
+		{
+			if (pComp) pComp->RenderBind();
 		}
 	}
 
@@ -1063,6 +1078,43 @@ namespace Engine
 	void Drawable::OutLightViewFrustum()
 	{
 		m_bInLightViewFrustum = false;
+	}
+
+	Drawable::LoadedMeshResources Drawable::LoadObjResources(const TCHAR* pFileName, const std::string& strPathKey)
+	{
+		// Phase E5 — temporary Drawable drives the existing Load() pipeline
+		// (file parsing + Bindable child population + BindableManager
+		// registration). After Load returns we copy the resource shared_ptrs
+		// out; the temp Drawable goes out of scope, but each resource stays
+		// alive via the returned LoadedMeshResources and via BindableManager.
+		auto pTemp = std::make_shared<Drawable>();
+		pTemp->Load(pFileName, strPathKey);
+
+		LoadedMeshResources r;
+		r.pMesh     = pTemp->GetMesh();
+		r.pMaterial = pTemp->GetMaterial();
+		r.vecTexture = pTemp->GetTextures();
+		return r;
+	}
+
+	void Drawable::LoadIntoMeshRenderer(const TCHAR* pFileName,
+		const std::string& strPathKey,
+		const std::shared_ptr<MeshRendererComponent>& pTarget)
+	{
+		if (!pTarget) return;
+
+		// Drive the existing parse + child population pipeline on a temp
+		// Drawable, then route every Bindable child through the
+		// MeshRenderer's AddBindable (which dispatches by BINDABLE_TYPE
+		// into the right slot — Mesh / VS / PS / Material / Texture — and
+		// drops the rest into m_OtherBindables for IL / Topology / RS).
+		auto pTemp = std::make_shared<Drawable>();
+		pTemp->Load(pFileName, strPathKey);
+
+		for (const auto& pChild : pTemp->GetChildList())
+		{
+			if (pChild) pTarget->AddBindable(pChild);
+		}
 	}
 
 	void Drawable::Load(const TCHAR* pFileName, const std::string& strPathKey)

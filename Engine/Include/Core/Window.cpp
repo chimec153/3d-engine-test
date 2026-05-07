@@ -216,7 +216,7 @@ namespace Engine
 			return false;
 		}
 
-		// °æ·Î °ü¸®ÀÚ ÃÊ±âÈ­
+		// ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ê±ï¿½È­
 		if (!CPathManager::GetInst()->Init())
 		{
 			return false;
@@ -234,19 +234,19 @@ namespace Engine
 			return false;
 		}
 
-		// ÀÔ·Â ÃÊ±âÈ­
+		// ï¿½Ô·ï¿½ ï¿½Ê±ï¿½È­
 		if (!CInput::GetInst()->Init(hInst, m_hWnd))
 		{
 			return false;
 		}
 
-		// ¸®¼Ò½º °ü¸®ÀÚ ÃÊ±âÈ­ (»ç¿îµå)
+		// ï¿½ï¿½ï¿½Ò½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ê±ï¿½È­ (ï¿½ï¿½ï¿½ï¿½)
 		if (!ResourceManager::GetInst()->Init())
 		{
 			return false;
 		}
 
-		// ¼ÎÀÌ´õ °ü¸®ÀÚ ÃÊ±âÈ­
+		// ï¿½ï¿½ï¿½Ì´ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ê±ï¿½È­
 		if (!ShaderManager::GetInst()->Init())
 		{
 			return false;
@@ -267,18 +267,13 @@ namespace Engine
 		CInput::GetInst()->AddKey(DIK_ESCAPE);
 
 		Scene* pCurrentScene = SceneManager::GetInst()->GetScene(SCENE_TYPE::CURRENT);
+		(void)pCurrentScene;
 
-#ifdef _DEBUG
-		const std::shared_ptr<Drawable>& pLine = pCurrentScene->CreateProtoType<Drawable>("Line", SCENE_TYPE::CURRENT);
-
-		pLine->NotUseInstance();
-		pLine->FindAndAddBind<VertexShader>("anisotropic_microfacet VS");
-		pLine->FindAndAddBind<PixelShader>("DebugPS");
-		pLine->FindAndAddBind<Topology>("LineStrip");
-		pLine->FindAndAddBind<DepthStencilState>("DepthAlways");
-		pLine->FindAndAddBind<InputLayout>("TPNT");
-		pLine->FindAndAddBind<Material>("Material");
-#endif
+		// Phase E7 â€” DEBUG "Line" prototype removed. The only consumer was
+		// CollisionManager's space/portal debug block (CollisionManager.h),
+		// which has been commented out since the Drawable migration began.
+		// Debug colliders today create their own Drawable inline (see
+		// ColliderLine.cpp), bypassing this prototype path entirely.
 
 		return true;
 	}

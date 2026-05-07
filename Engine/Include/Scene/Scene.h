@@ -29,27 +29,10 @@ namespace Engine
 		const std::list<std::shared_ptr<RenderV2::Drawable>>& GetV2Drawables() const { return m_v2DrawableList; }
 
 	public:
-		template <typename T, typename ...Args>
-		std::shared_ptr<T> CreateDrawable(const std::string& strTag, const class std::shared_ptr<class Layer>& pLayer, Args... args)
-		{
-			std::shared_ptr<T> pDrawable = std::make_shared<T>(args...);
-
-			pDrawable->SetTag(strTag);
-
-			pDrawable->SetScene(this);
-
-			if (!pDrawable->Init())
-			{
-				return nullptr;
-			}
-
-			if (pLayer)
-			{
-				pLayer->AddDrawable(pDrawable);
-			}
-
-			return pDrawable;
-		}
+		// Phase E7 — CreateDrawable<T> removed. All entities now go through
+		// CreateGameObject<T> (defined below); Component-only registration
+		// uses CreateComponent<T>. The Drawable-typed factory had no live
+		// callers after the Editor migration finished.
 
 		// Phase B.5 — Component-side analogue of CreateDrawable. Used to
 		// register top-level Components (Camera, Light controller, etc.) on
@@ -84,6 +67,13 @@ namespace Engine
 
 			pObj->SetTag(strTag);
 
+			// Phase E5 — set layer back-pointer BEFORE Init runs so the
+			// GameObject's Init / its Components' Init can reach the Scene
+			// via GetScene() (mirrors Drawable::GetScene access from the
+			// Drawable era).
+			if (pLayer)
+				pObj->SetLayer(pLayer.get());
+
 			if (!pObj->Init())
 			{
 				return nullptr;
@@ -98,37 +88,13 @@ namespace Engine
 		}
 
 	public:
-
-		template <typename T, typename ...Args>
-		static std::shared_ptr<T> CreateProtoType(const std::string& strTag, Args... args, SCENE_TYPE eSceneType = SCENE_TYPE::CURRENT)
-		{
-			std::shared_ptr<T> pDrawable = std::static_pointer_cast<T>(FindProtoType(strTag, eSceneType));
-
-			if (pDrawable != nullptr)
-			{
-				return nullptr;
-			}
-
-			pDrawable = std::make_shared<T>(args...);
-
-			pDrawable->SetTag(strTag);
-
-			if (!pDrawable->Init())
-			{
-				return nullptr;
-			}
-
-			m_mapProtoType[static_cast<int>(eSceneType)].insert(std::make_pair(strTag, pDrawable));
-
-			return pDrawable;
-		}
-
-		static std::shared_ptr<class Bindable> FindProtoType(const std::string& strTag, SCENE_TYPE eSceneType);
-
-		std::shared_ptr<class Bindable> CreateCloneDrawable(const std::string& strTag, const std::string& strProto, const class std::shared_ptr<class Layer>& pLayer, SCENE_TYPE eSceneType = SCENE_TYPE::CURRENT);
+		// Phase E7 — CreateProtoType / FindProtoType / CreateCloneDrawable
+		// and the static m_mapProtoType registry are removed. The clone-
+		// from-prototype path was Drawable-typed and last used by the
+		// editor's "Player" navmesh-spawn UI, which now spawns GameObjects
+		// directly via CreateGameObject.
 
 	private:
-		static std::unordered_map<std::string, std::shared_ptr<class Bindable>> m_mapProtoType[static_cast<int>(SCENE_TYPE::END)];
 
 	public:
 		static void Clear();
@@ -152,9 +118,6 @@ namespace Engine
 		void LoadFromFullPath(const char* pFullPath);
 		void SaveFromFullPath(const TCHAR* pFullPath);
 		void LoadFromFullPath(const TCHAR* pFullPath);
-
-	public:
-		std::shared_ptr<Bindable> FindBindable(const std::string& strTag)	const;
 	};
 
 }
