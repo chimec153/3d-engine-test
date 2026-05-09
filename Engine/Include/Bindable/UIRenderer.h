@@ -26,7 +26,13 @@ namespace Engine
 
     public:
         void SetCamera(std::shared_ptr<class Camera> pCamera);
-        void SetTarget(std::shared_ptr<class Drawable> pTarget);
+        // Phase E7 — SetTarget(Drawable) replaced by individual setters
+        // since the Drawable type is gone. Sole live caller path
+        // (Inventory) is currently commented out anyway; this keeps the
+        // shape ready for a GameObject-based revival.
+        void SetTarget(std::shared_ptr<class Transform> pTransform,
+                       std::shared_ptr<class Mesh> pMesh,
+                       std::shared_ptr<class Animation> pAnimation);
 
         void SetRenderLayer(RENDER_LAYER eLayer) { m_eRenderLayer = eLayer; }
         RENDER_LAYER GetRenderLayer() const { return m_eRenderLayer; }

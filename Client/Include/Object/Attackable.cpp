@@ -4,7 +4,6 @@
 #include "Bindable/Particle.h"
 #include "Bindable/Texture.h"
 #include "Bindable/SoundBindable.h"
-#include "Bindable/Drawable.h"
 #include "GameObject/GameObject.h"
 
 namespace

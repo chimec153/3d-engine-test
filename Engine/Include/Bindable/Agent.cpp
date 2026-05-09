@@ -3,7 +3,6 @@
 #include "Transform.h"
 #include "../Scene/Scene.h"
 #include "../Scene/SceneManager.h"
-#include "Drawable.h"
 
 Engine::Agent::Agent()	:
 	m_pTransform()

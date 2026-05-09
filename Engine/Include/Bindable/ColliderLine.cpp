@@ -1,7 +1,6 @@
 #include "ColliderLine.h"
 #include "../Collision/Collision.h"
 #include "ColliderSphere.h"
-#include "Drawable.h"
 #include "Transform.h"
 #include "ColliderMesh.h"
 #include "ColliderOBB.h"
@@ -24,26 +23,8 @@ namespace Engine
 		, m_vStartOffset()
 		, m_vEndOffset(0.f, 0.f, 1.f)
 	{
-#ifdef _DEBUG
-		// Phase B.4 — Collider is a Component now, can't use CreateBindable
-		// (a Bindable method). Construct the debug drawable directly; it
-		// gets re-parented onto the owning Drawable when this Collider is
-		// attached via Drawable::AddChild(Component).
-		auto pDebug = std::make_shared<Drawable>();
-		pDebug->SetTag("Debug");
-		pDebug->Init();
-		pDebug->FindAndAddBind<VertexShader>("anisotropic_microfacet VS");
-		pDebug->FindAndAddBind<PixelShader>("DebugPS");
-		pDebug->FindAndAddBind<Mesh>("Line");
-		pDebug->FindAndAddBind<Topology>("LineList");
-		pDebug->FindAndAddBind<InputLayout>("TPNT");
-
-		std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
-		pDebug->AddChild(pMaterial->Clone());
-		pDebug->NotUseShadow();
-
-		m_pDebugDrawable = pDebug;
-#endif
+		// Phase E7 — debug visualization Drawable removed (no live host
+		// to re-parent it onto post-Phase E5).
 		SetComponentType(COMPONENT_TYPE::COLLIDER_LINE);
 		SetColliderType(COLLIDER_TYPE::LINE);
 	}
@@ -90,17 +71,6 @@ namespace Engine
 		if (fLength)
 		{
 			m_tInfo.vDir = (m_vEndOffset - m_vStartOffset) / fLength;
-
-#ifdef _DEBUG
-			// Phase B.4 — debug drawable is now a direct member, not a
-			// child. Use the cached pointer instead of FindChild lookup.
-			if (m_pDebugDrawable)
-			{
-				m_pDebugDrawable->GetTransform()->SetRelativePosition(m_tInfo.vStart);
-				Vector3 vUp = Vector3(0.f, 0.5f, 0.5f).Normalize();
-				m_pDebugDrawable->GetTransform()->SetAxis(AXIS_TYPE::Z, m_tInfo.vDir, vUp);
-			}
-#endif
 		}
 		else
 		{
@@ -140,23 +110,9 @@ namespace Engine
 
 	void ColliderLine::PreDraw(float fDeltaTime)
 	{
-#ifdef _DEBUG
-		// Phase B.4 — debug drawable is now a direct member; the owning
-		// Drawable's render path picks it up because it's been re-parented
-		// onto the owner's m_ChildList<Bindable>. We just update the
-		// per-frame collision-state color.
-		if (m_pDebugDrawable && m_pDebugDrawable->GetMaterial())
-		{
-			if (GetPrevColliderList().size())
-				m_pDebugDrawable->GetMaterial()->SetDiffuseColor(1.f, 0.f, 0.f, 1.f);
-			else
-				m_pDebugDrawable->GetMaterial()->SetDiffuseColor(0.f, 1.f, 0.f, 1.f);
-
-			m_pDebugDrawable->InViewFrustum();
-		}
-
+		// Phase E7 — debug visualization removed; only the base PreDraw
+		// remains.
 		__super::PreDraw(fDeltaTime);
-#endif
 	}
 	std::shared_ptr<Component> ColliderLine::Clone()
 	{

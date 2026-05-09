@@ -258,28 +258,20 @@
     <ClCompile Include="Render\MRT.cpp">
       <Filter>09. Render\01. MRT</Filter>
     </ClCompile>
-    <ClCompile Include="RenderV2\D3D11Context.cpp">
       <Filter>10. RenderV2</Filter>
     </ClCompile>
-    <ClCompile Include="RenderV2\Demo.cpp">
       <Filter>10. RenderV2</Filter>
     </ClCompile>
-    <ClCompile Include="RenderV2\GpuResources.cpp">
       <Filter>10. RenderV2</Filter>
     </ClCompile>
-    <ClCompile Include="RenderV2\RenderQueue.cpp">
       <Filter>10. RenderV2</Filter>
     </ClCompile>
-    <ClCompile Include="RenderV2\Drawables\Box.cpp">
       <Filter>10. RenderV2\Drawables</Filter>
     </ClCompile>
-    <ClCompile Include="RenderV2\Drawables\Quad.cpp">
       <Filter>10. RenderV2\Drawables</Filter>
     </ClCompile>
-    <ClCompile Include="RenderV2\Drawables\Sphere.cpp">
       <Filter>10. RenderV2\Drawables</Filter>
     </ClCompile>
-    <ClCompile Include="RenderV2\Drawables\Mesh.cpp">
       <Filter>10. RenderV2\Drawables</Filter>
     </ClCompile>
     <ClCompile Include="Bindable\Box.cpp">
@@ -557,49 +549,34 @@
     <ClInclude Include="Render\MRT.h">
       <Filter>09. Render\01. MRT</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\Component.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\D3D11Context.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\Demo.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\DrawCommand.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\GpuResource.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\GpuResources.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\RenderContext.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\RenderProxy.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\RenderQueue.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\Drawable.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\EngineShaderCB.h">
       <Filter>10. RenderV2</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\Drawables\Box.h">
       <Filter>10. RenderV2\Drawables</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\Drawables\Quad.h">
       <Filter>10. RenderV2\Drawables</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\Drawables\Sphere.h">
       <Filter>10. RenderV2\Drawables</Filter>
     </ClInclude>
-    <ClInclude Include="RenderV2\Drawables\Mesh.h">
       <Filter>10. RenderV2\Drawables</Filter>
     </ClInclude>
     <ClInclude Include="Bindable\Box.h">

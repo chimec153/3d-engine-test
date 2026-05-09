@@ -20,9 +20,6 @@ namespace Engine
     private:
         Vector3 m_vOffset;
         SPHERECOLLIDERINFO  m_tInfo;
-#ifdef _DEBUG
-        std::shared_ptr<class Material>    m_pDebugMaterial;
-#endif
 
     public:
         const SPHERECOLLIDERINFO& GetInfo() const;

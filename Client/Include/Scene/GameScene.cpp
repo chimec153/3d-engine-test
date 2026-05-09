@@ -23,8 +23,7 @@
 #include "Render/RenderManager.h"
 #include "Core/PathManager.h"
 #include "Bindable/PointLight.h"
-#include "RenderV2/Drawables/Mesh.h"
-#include "../Object/TreeV2.h"
+#include "Bindable/MeshLoader.h"
 
 namespace Client
 {
@@ -34,9 +33,11 @@ namespace Client
 
 	bool GameScene::Init()
 	{
-		// Phase E5 — preload Walking.fbx mesh data into BindableManager
-		// via the static loader bridge (was: temp Drawable + Drawable::Load).
-		Engine::Drawable::LoadObjResources(TEXT("Walking.fbx"));
+		// Phase E7 — preload Walking.fbx mesh data into BindableManager via
+		// the MeshLoader facade. Drawable's loader bridge has been retired;
+		// MeshLoader::Load drives the same parser pipeline without a temp
+		// Drawable, and the parsed Bindables register in BindableManager.
+		Engine::MeshLoader::Load(TEXT("Walking.fbx"));
 
 		Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Walking.mesh", MESH_PATH);
 		//Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
@@ -307,29 +308,9 @@ namespace Client
 		Engine::RenderManager::GetInst()->SetFogDensity(0.005f);    // was 0.03 — 농도 약하게
 		Engine::RenderManager::GetInst()->SetFogHeightFallOff(0.001f);
 
-		// Phase 4 — first V2 drawable in Client. Mesh::Init applies the
-		// FBX orientation flip internally; just position next to the
-		// legacy player for side-by-side comparison.
-		ID3D11Device* device = Engine::Graphics::GetInst()->GetDevice();
-		auto v2Mesh = std::make_shared<Engine::RenderV2::Drawables::Mesh>();
-		// Skeleton tag = "Walking", sequence tag = "mixamo.com" (verified
-		// via ResourceManager::DumpRegisteredTags during a prior run).
-		if (v2Mesh->Init(device, L"Walking.fbx", "Walking", "mixamo.com"))
-		{
-			v2Mesh->SetPosition({ 5.0f, 0.0f, 0.0f });
-			v2Mesh->SetScale(1.0f);
-			AddV2Drawable(v2Mesh);
-		}
-
-		// Phase 5 — first migrated Client object on V2. TreeV2 takes the
-		// asset path as a parameter so the caller controls the model.
-		// Falls back silently (no AddV2Drawable) if the asset is missing.
-		auto v2Tree = std::make_shared<Client::TreeV2>();
-		if (v2Tree->Init(device, L"SmallCampingBundle\\Tree\\Tree.obj"))
-		{
-			v2Tree->SetPosition({ -5.0f, 0.0f, 0.0f });
-			AddV2Drawable(v2Tree);
-		}
+		// Phase E7 — RenderV2 retired. The sort-by-state benefit it provided
+		// will be reintroduced as additions to the V1 render path; the
+		// parallel V2 demos (v2Mesh, TreeV2) and their integration are gone.
 
 		return true;
 	}

@@ -15,10 +15,6 @@ namespace Engine
         Vector3 m_vOffset;
         Vector3 m_vScaleOffset;
         Vector3 m_vAxisOffset;
-#ifdef _DEBUG
-        std::shared_ptr<Material> m_pDebugMaterial;
-        std::shared_ptr<Transform> m_pDebugTransform;
-#endif
 
     public:
         void SetAxis(AXIS_TYPE eType, const Vector3& vAxis);

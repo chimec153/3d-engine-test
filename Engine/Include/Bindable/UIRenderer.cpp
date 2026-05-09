@@ -4,7 +4,6 @@
 #include "Animation.h"
 #include "PointLight.h"
 #include "Camera.h"
-#include "Drawable.h"
 #include "../Render/RenderManager.h"
 
 namespace Engine
@@ -31,20 +30,13 @@ namespace Engine
 		m_pCamera = pCamera;
 	}
 
-	void UIRenderer::SetTarget(std::shared_ptr<Drawable> pTarget)
+	void UIRenderer::SetTarget(std::shared_ptr<Transform> pTransform,
+	                           std::shared_ptr<Mesh> pMesh,
+	                           std::shared_ptr<Animation> pAnimation)
 	{
-		if (pTarget)
-		{
-			m_pParentTransform = pTarget->GetTransform();
-			m_pParentMesh = pTarget->GetMesh();
-			m_pParentAnimation = pTarget->GetAnimation();
-		}
-		else
-		{
-			m_pParentTransform = nullptr;
-			m_pParentMesh = nullptr;
-			m_pParentAnimation = nullptr;
-		}
+		m_pParentTransform = pTransform;
+		m_pParentMesh = pMesh;
+		m_pParentAnimation = pAnimation;
 	}
 
 	bool UIRenderer::Init()

@@ -1,5 +1,4 @@
 #include "Component.h"
-#include "../Bindable/Drawable.h"
 #include "../Bindable/Transform.h"
 #include "../GameObject/GameObject.h"
 

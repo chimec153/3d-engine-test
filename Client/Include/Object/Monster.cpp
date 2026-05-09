@@ -17,7 +17,6 @@
 #include "Bindable/VertexShader.h"
 #include "Bindable/PixelShader.h"
 #include "Bindable/BindableManager.h"
-#include "Bindable/Drawable.h"
 #include "Component/MeshRendererComponent.h"
 
 namespace Client

@@ -8,6 +8,11 @@ namespace Engine
     template <typename T>
     class ConstantBuffer;
 
+    // Phase E7 — forward decl. Drawable.h used to include Camera.h
+    // transitively; with that include path retired, Transform.h declares
+    // Camera up front so consumers don't need to know to bring it in.
+    class Camera;
+
     // Phase B.3 — Transform migrated from Bindable to Component. Transform
     // owns a constant buffer it uploads/binds, but it is fundamentally a
     // CPU scene-graph node (position/rotation/scale + parent/child links),

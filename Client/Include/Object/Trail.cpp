@@ -7,8 +7,7 @@
 #include "Bindable/Mesh.h"
 #include "Bindable/Material.h"
 #include "Bindable/Transform.h"
-#include "Bindable/Drawable.h"  // Phase E5 — for Drawable::SetNormals/SetTangent
-                                 // static template utilities only.
+#include "Bindable/MeshUtils.h"  // Phase E7 — SetNormals/SetTangent extracted from Drawable.
 #include "Bindable/BindableManager.h"
 #include "Render/RenderManager.h"
 
@@ -89,8 +88,8 @@ namespace Client
 		m_vecVertex[0].pos = vTop;
 		m_vecVertex[1].pos = vBottom;
 
-		Engine::Drawable::SetNormals(m_vecVertex, m_vecIndex);
-		Engine::Drawable::SetTangent(m_vecVertex, m_vecIndex);
+		Engine::MeshUtils::SetNormals(m_vecVertex, m_vecIndex);
+		Engine::MeshUtils::SetTangent(m_vecVertex, m_vecIndex);
 
 		if (m_pMesh)
 			m_pMesh->SetVertexBuffer(0, &m_vecVertex[0], static_cast<int>(sizeof(Engine::VertexStandard) * m_vecVertex.size()));

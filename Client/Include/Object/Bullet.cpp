@@ -4,7 +4,7 @@
 #include "Bindable/Mesh.h"
 #include "Bindable/Material.h"
 #include "Bindable/Texture.h"
-#include "Bindable/Drawable.h"
+#include "Bindable/MeshLoader.h"
 #include "Component/MeshRendererComponent.h"
 
 namespace Client
@@ -23,13 +23,12 @@ namespace Client
 		m_pTransform = AddComponent<Engine::Transform>("transform");
 		m_pMeshRenderer = AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
 
-		// Load .obj and install Mesh / Material / Texture / VS / PS / IL /
-		// Topology / etc. into the MeshRenderer in one shot. Replaces the
-		// old Drawable::Load(...) call that populated the Drawable's
-		// Bindable child list (the children Drawable::Bind iterated for
-		// rendering) — same pipeline state, just routed into a Component
-		// instead of a Drawable subclass.
-		Engine::Drawable::LoadIntoMeshRenderer(TEXT("Bullet\\Bullet.obj"), MESH_PATH, m_pMeshRenderer);
+		// Phase E7 — Load .obj and install Mesh / Material / Texture / VS /
+		// PS / IL / Topology / etc. into the MeshRenderer in one shot.
+		// MeshLoader::LoadInto drives the parser without a temp Drawable
+		// and routes each parsed Bindable through the MeshRenderer's
+		// AddBindable dispatcher.
+		Engine::MeshLoader::LoadInto(TEXT("Bullet\\Bullet.obj"), MESH_PATH, m_pMeshRenderer);
 
 		if (m_pTransform)
 			m_pTransform->SetScale(0.001f, 0.001f, 0.001f);

@@ -1,11 +1,6 @@
 #pragma once
 
 #include "../Types.h"
-#ifdef _DEBUG
-#include "../Bindable/Drawable.h"
-#include "../Scene/SceneManager.h"
-#include "../Scene/Scene.h"
-#endif
 
 namespace Engine
 {
@@ -28,12 +23,9 @@ namespace Engine
 		float	fSize;
 		std::unique_ptr<_tagSpace> pChild[static_cast<int>(SPACE_DIR::END)];
 		_tagSpace* pParent;
-		std::list<class Drawable*>	DrawableList;
+		// Phase E7 — DrawableList removed; no live Drawable instances.
 		std::list<struct _tagPortal>	PortalList;
 		bool bDelete;
-#ifdef _DEBUG
-		//class std::shared_ptr<Drawable> pDebugBox;
-#endif
 		bool bCheck;
 
 		_tagSpace() :
@@ -52,28 +44,12 @@ namespace Engine
 			, pChild()
 			, pParent(nullptr)
 			, bDelete(true)
-#ifdef _DEBUG
-			//, pDebugBox(nullptr)
-#endif
 			, bCheck(false)
 		{
-#ifdef _DEBUG
-			/*Scene* pScene = SceneManager::GetInst()->GetScene();
-
-			pDebugBox = pScene->CreateCloneDrawable("TextureBox", "TextureBox", pScene->FindLayer(DEFAULT_LAYER));
-
-			const std::shared_ptr<Transform>& pTransform = pDebugBox->GetTransform();
-
-			pTransform->SetScale(Vector3{fSize, fSize , fSize });
-			pTransform->SetPosition(vPos);*/
-#endif
 		}
 
 		~_tagSpace()
 		{
-#ifdef _DEBUG
-			//pDebugBox->InActivate();
-#endif
 		}
 
 		bool IsRight(const Vector4& vSphereInfo)	const
@@ -106,26 +82,8 @@ namespace Engine
 			return vSphereInfo.z + vSphereInfo.w - vPos.z >= 0.f;
 		}
 
-		template <int T>
-		int GetTotalDrawableCountSub(int iPrevCount)	const
-		{
-			return pChild[T] ? 
-				(pChild[T]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) + GetTotalDrawableCountSub<T - 1>(iPrevCount)) :
-				GetTotalDrawableCountSub<T - 1>(iPrevCount);
-		}
-
-		template <>
-		int GetTotalDrawableCountSub<0>(int iPrevCount)	const
-		{
-			return pChild[0] ?
-				pChild[0]->GetTotalDrawableCount(iPrevCount + static_cast<int>(DrawableList.size())) :
-				iPrevCount + static_cast<int>(DrawableList.size());
-		}
-
-		int GetTotalDrawableCount(int iPrevCount = 0)	const
-		{
-			return GetTotalDrawableCountSub<7>(iPrevCount);
-		}
+		// Phase E7 — GetTotalDrawableCount + helper templates removed
+		// (DrawableList is gone).
 	}SPACE, * PSPACE;
 
 
@@ -133,45 +91,13 @@ namespace Engine
 	{
 		std::vector<Vector3>	vecPos;
 		_tagSpace* pSpace;
-#ifdef _DEBUG
-		//std::shared_ptr<class Drawable> pDebugLine;
-#endif
 
 		_tagPortal(const std::vector<Vector3>& vecPos) :
 			vecPos(vecPos)
 			, pSpace(nullptr)
-#ifdef _DEBUG
-			//, pDebugLine(nullptr)
-#endif
 		{
-#ifdef _DEBUG
-			/*Scene* pScene = SceneManager::GetInst()->GetScene();
-
-			pDebugLine = pScene->CreateCloneDrawable("Line", "Line", pScene->FindLayer(DEFAULT_LAYER));
-
-			std::vector<VertexTexture> vecVertex;
-
-			std::vector<unsigned int> vecIndex;
-
-			for (size_t i = 0; i < vecPos.size(); ++i)
-			{
-				VertexTexture vertex = {};
-
-				vertex.pos = vecPos[i];
-
-				vecVertex.push_back(vertex);
-
-				vecIndex.push_back(static_cast<unsigned int>(i));
-			}
-
-			vecIndex.push_back(0);
-
-			 = *Graphics::GetInst();
-
-			pDebugLine->CreateBindable<VertexBuffer>("Line", vecVertex);
-			pDebugLine->CreateBindable<IndexBuffer>("LineIndex", vecIndex);*/
-#endif
-
+			// Phase E7 — debug-line construction removed; depended on the
+			// Drawable / CreateCloneDrawable path that no longer exists.
 		}
 	}PORTAL, * PPORTAL;
 
@@ -209,7 +135,8 @@ namespace Engine
 		{
 			SPACE* m_pSpace;
 			std::list<class Collider*>	m_ColliderList;
-			std::unordered_map<class Drawable*, SPACE*>	m_mapDrawable;
+			// Phase E7 — m_mapDrawable + FindSpaceAndErase + DeleteDrawable
+			// removed (Drawable*-keyed spatial hash dropped).
 
 			_tagCollisionChannel() :
 				m_pSpace(dbg_new SPACE({}, 4096.f))
@@ -220,10 +147,6 @@ namespace Engine
 			{
 				SAFE_DELETE(m_pSpace);
 			}
-
-
-			SPACE* FindSpaceAndErase(class Drawable* pDrawable);
-			void DeleteDrawable(class Drawable* pDrawable);
 		}COLLISIONCHANNEL, *PCOLLISIONCHANEEL;
 
 		template <int I, int C>
@@ -254,7 +177,7 @@ namespace Engine
 		void VisibleTest(PSPACE pSpace, const std::vector<Vector4>& vecPlanes, const std::vector<Vector4>* vecLocalPlanes = nullptr);
 		void PortalVisibleTest(PSPACE pSpace, const std::vector<Vector4>& vecPlanes);
 		bool VisibleTestNoRecursive(PSPACE pSpace, const std::vector<Vector4>& vecPlanes, const std::vector<Vector4>* vecLocalPlanes = nullptr);
-		void DeleteDrawable(class Drawable* pDrawable);
+		// Phase E7 — DeleteDrawable removed.
 		void Collision(CAMERA_TYPE eType, float fDeltaTime);
 
 	public:

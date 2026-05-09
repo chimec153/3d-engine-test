@@ -2,7 +2,6 @@
 #include "../Core/Graphics.h"
 #include "Transform.h"
 #include "Agent.h"
-#include "Drawable.h"
 #include "VertexBuffer.h"
 #include "IndexBuffer.h"
 #include "VertexShader.h"
@@ -95,20 +94,9 @@ namespace Engine
 
 	void Bindable::AddChild(const std::shared_ptr<class Bindable>& pChild)
 	{
-		Bindable* pParent = m_pParent;
-
-		while (pParent)
-		{
-			if (pParent->GetObjectType() == OBJECT_TYPE::DRAW)
-			{
-				static_cast<Drawable*>(pParent)->AddDrawable(pChild);
-
-				break;
-			}
-
-			pParent = m_pParent->GetParent();
-		}
-
+		// Phase E7 — parent-Drawable AddDrawable walk removed. There are no
+		// live Drawable instances anymore; the loop never fired in
+		// practice. Bindable child-list bookkeeping remains.
 		pChild->SetParent(this);
 
 		m_ChildList.push_back(pChild);
@@ -508,27 +496,11 @@ namespace Engine
 
 			fread(&eType, 4, 1, pFile);
 
-			// Phase B.3 — Transform records in old save files. Transform
-			// is no longer a Bindable child; route the saved bytes into the
-			// owning Drawable's component-side Transform. Scene-load path
-			// constructs Drawables without calling Init (which is what
-			// usually creates the default Transform), so create one on
-			// demand if the loaded Drawable has none yet.
+			// Phase E7 — Transform-as-Bindable records in legacy save files.
+			// No live Drawable hosts remain; just consume the bytes via a
+			// temporary so the file pointer advances correctly.
 			if (eType == BINDABLE_TYPE::TRANSFORM)
 			{
-				if (auto* pDrawable = dynamic_cast<Drawable*>(this))
-				{
-					std::shared_ptr<Transform> pT = pDrawable->GetTransform();
-					if (!pT)
-					{
-						pT = std::make_shared<Transform>();
-						pDrawable->AddChild(pT); // routes to AddChild(Component) → SetTransform
-					}
-					pT->Load(pFile);
-					continue;
-				}
-				// No owning Drawable — drop bytes by loading into a
-				// temporary so the file pointer advances correctly.
 				Transform tmp;
 				tmp.Load(pFile);
 				continue;
@@ -653,7 +625,11 @@ namespace Engine
 			// Phase B.5 — Camera migrated to Component.
 			return nullptr;
 		case Engine::BINDABLE_TYPE::DRAWABLE:
-			return std::make_shared<Drawable>();
+			// Phase E7 — DRAWABLE factory entry kept for the BINDABLE_TYPE
+			// enum value but no longer instantiates a Drawable. Live entities
+			// are GameObjects today; legacy scenes would have stored Drawables
+			// here, but Layer::Load no longer drives this path (count=0).
+			return nullptr;
 		case Engine::BINDABLE_TYPE::BLEND_STATE:
 			return nullptr;
 		case Engine::BINDABLE_TYPE::DEPTH_STENCIL_STATE:

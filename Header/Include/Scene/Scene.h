@@ -5,8 +5,6 @@
 
 namespace Engine
 {
-	namespace RenderV2 { class Drawable; }
-
 	class ENGINE_DLL Scene
 	{
 	public:
@@ -15,18 +13,11 @@ namespace Engine
 
 	private:
 		std::list<std::shared_ptr<class Layer>>	m_LayerList;
-		std::list<std::shared_ptr<RenderV2::Drawable>> m_v2DrawableList;
 
 	public:
 		void AddLayer(const std::string& strTag, int iZOrder = 0);
 		void AddLayer(std::shared_ptr<Layer> pLayer);
 		std::shared_ptr<class Layer> FindLayer(const std::string& strTag)	const;
-
-		// RenderV2 drawables live alongside the legacy Layer/Drawable system.
-		// Scene::Update advances them every frame, Scene::PreDraw submits
-		// them into RenderManager's V2 queue using the active camera.
-		void AddV2Drawable(std::shared_ptr<RenderV2::Drawable> pDrawable);
-		const std::list<std::shared_ptr<RenderV2::Drawable>>& GetV2Drawables() const { return m_v2DrawableList; }
 
 	public:
 		// Phase E7 — CreateDrawable<T> removed. All entities now go through

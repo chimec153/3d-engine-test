@@ -13,7 +13,7 @@
 #include "../Input/Input.h"
 #include "Transform.h"
 #include "Decal.h"
-#include "Drawable.h"  // For SetNormals/SetTangent static helpers
+#include "MeshUtils.h"  // Phase E7 — SetNormals/SetTangent extracted from Drawable.
 #include "../Shader/StructuredBuffer.h"
 #include "../Component/MeshRendererComponent.h"
 
@@ -50,9 +50,9 @@ namespace Engine
 
 		CreateVertexAndIndex(m_vecVertex, m_vecIndex, iWidth, iHeight);
 
-		Drawable::SetNormals(m_vecVertex, m_vecIndex);
+		MeshUtils::SetNormals(m_vecVertex, m_vecIndex);
 
-		Drawable::SetTangent(m_vecVertex, m_vecIndex);
+		MeshUtils::SetTangent(m_vecVertex, m_vecIndex);
 
 		m_pMesh = StaticCreateBindable<Mesh>("terrainmesh", m_vecVertex, m_vecIndex);
 		if (m_pMeshRenderer) m_pMeshRenderer->SetMesh(m_pMesh);
@@ -73,7 +73,13 @@ namespace Engine
 
 	void Terrain::CreateTerrainTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
+		// Phase E7 — StaticCreateBindable returns nullptr when the tag already
+		// exists in the registry; fall back to StaticFindBindable so subsequent
+		// scene re-inits or duplicate calls still wire the texture into the
+		// MeshRenderer. Without this fallback, the Texture2DArray at slot 20
+		// stayed unbound and PS_Terrain's diffuse sample returned (0,0,0).
 		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 20);
+		if (!pTex) pTex = StaticFindBindable<Texture>(strTag);
 		m_vecTexture.push_back(pTex);
 		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
 	}
@@ -81,6 +87,7 @@ namespace Engine
 	void Terrain::CreateTerrainNormalTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
 		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 21);
+		if (!pTex) pTex = StaticFindBindable<Texture>(strTag);
 		m_vecTexture.push_back(pTex);
 		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
 	}
@@ -88,6 +95,7 @@ namespace Engine
 	void Terrain::CreateTerrainSpecularTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
 		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 22);
+		if (!pTex) pTex = StaticFindBindable<Texture>(strTag);
 		m_vecTexture.push_back(pTex);
 		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
 	}
@@ -95,6 +103,7 @@ namespace Engine
 	void Terrain::CreateTerrainEmissiveTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
 		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 23);
+		if (!pTex) pTex = StaticFindBindable<Texture>(strTag);
 		m_vecTexture.push_back(pTex);
 		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
 	}
@@ -102,6 +111,7 @@ namespace Engine
 	void Terrain::CreateHeightMap(const std::string& strTag, const TCHAR* pFilePath)
 	{
 		m_pHeightMap = StaticCreateBindable<Texture>(strTag, pFilePath, TEXTURE_PATH, 16, D3D11_CPU_ACCESS_WRITE, D3D11_USAGE_DYNAMIC);
+		if (!m_pHeightMap) m_pHeightMap = StaticFindBindable<Texture>(strTag);
 		if (m_pMeshRenderer && m_pHeightMap) m_pMeshRenderer->AddBindable(m_pHeightMap);
 
 		DirectX::ScratchImage* pImage = m_pHeightMap->GetImage();

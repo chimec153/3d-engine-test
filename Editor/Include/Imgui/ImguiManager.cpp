@@ -10,7 +10,6 @@
 // happen to satisfy this transitively; Editor's unity build doesn't.
 #include "Bindable/BindableManager.h"
 #include "Scene/Layer.h"
-#include "Bindable/Drawable.h"
 #include "Core/PathManager.h"
 #include <commdlg.h>
 #include "Bindable/Mesh.h"
@@ -430,11 +429,7 @@ namespace Editor
 			ImGui::TreePop();
 		}
 
-		if (false)
-		{
-			return std::static_pointer_cast<Engine::Drawable>(pDrawable->shared_from_this());
-		}
-
+		// Phase E7 — dead `if (false)` Drawable cast block removed.
 		return _pSelect;
 	}
 

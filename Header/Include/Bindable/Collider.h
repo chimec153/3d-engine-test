@@ -23,14 +23,13 @@ namespace Engine
         std::function<void(Collider*, Collider*, float)>    m_CallBack[static_cast<int>(COLLISION_TYPE::END)];
         COLLISION_CHANNEL m_eChannel;
 
-    protected:
-        // Phase B.4 — debug visualization Drawable (created in the subtype
-        // ctor for OBB/Sphere; null for Line/Mesh which don't draw).
-        // Drawable::AddChild(Component) inspects this and, if non-null,
-        // re-parents it onto the owning Drawable's Bindable child list.
-        std::shared_ptr<class Drawable> m_pDebugDrawable;
     public:
-        std::shared_ptr<class Drawable> GetDebugDrawable() const { return m_pDebugDrawable; }
+        // Phase E7 — debug visualization Drawable removed. Live entities are
+        // GameObjects now, so the "re-parent debug drawable onto owning
+        // Drawable's Bindable child list" mechanism (which Phase B.4 relied
+        // on) has no live host. A future debug-renderer would attach to a
+        // GameObject + MeshRendererComponent, or live in RenderManager
+        // directly as an immediate-mode pass.
 
     public:
         const COLLIDER_TYPE GetColliderType()   const;

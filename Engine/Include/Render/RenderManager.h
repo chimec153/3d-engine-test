@@ -7,13 +7,6 @@ namespace Engine
 	template <typename T>
 	class ConstantBuffer;
 
-	namespace RenderV2
-	{
-		class RenderQueue;
-		class D3D11Context;
-		class GpuResource;
-	}
-
 	class ENGINE_DLL RenderManager
 	{
 	private:
@@ -129,12 +122,6 @@ namespace Engine
 		std::shared_ptr<class BlendState> m_pDestAlpha;
 		FOGCBUFFER m_tFogCBuffer;
 		std::shared_ptr<class ConstantBuffer<FOGCBUFFER>> m_pFogCBuffer;
-		std::unique_ptr<RenderV2::RenderQueue>  m_pV2Queue;
-		std::unique_ptr<RenderV2::D3D11Context> m_pV2Ctx;
-		std::shared_ptr<RenderV2::GpuResource>  m_pV2LightCB;
-
-	public:
-		RenderV2::RenderQueue* GetV2Queue() const { return m_pV2Queue.get(); }
 
 	public:
 		void SetSkyBox(std::shared_ptr<SkyBox> pSkyBox);

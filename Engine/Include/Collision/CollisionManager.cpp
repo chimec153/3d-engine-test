@@ -1,6 +1,5 @@
 #include "CollisionManager.h"
 #include "../Bindable/Collider.h"
-#include "../Bindable/Drawable.h"
 #include "../Bindable/Transform.h"
 #include "../Bindable/Camera.h"
 #ifdef _DEBUG
@@ -486,28 +485,8 @@ namespace Engine
 			}
 		}
 
-		std::list<Drawable*>::iterator iter = pSpace->DrawableList.begin();
-		std::list<Drawable*>::iterator iterEnd = pSpace->DrawableList.end();
-
-		for (; iter != iterEnd;)
-		{
-			if (!(*iter)->IsEnable())
-			{
-				++iter;
-				continue;
-			}
-			(*iter)->UpdateInViewFrustum(vecPlanes, pvecLocalPlanes);
-			++iter;
-		}
-
+		// Phase E7 — DrawableList iteration removed.
 		return true;
-	}
-
-	void CollisionManager::DeleteDrawable(Drawable* pDrawable)
-	{
-		std::shared_ptr<Transform> pTransform = pDrawable->GetTransform();
-
-		m_tChannel[pTransform ? static_cast<int>(pTransform->GetCameraType()) : 0].DeleteDrawable(pDrawable);
 	}
 
 	void CollisionManager::Collision(CAMERA_TYPE eType, float fDeltaTime)
@@ -578,40 +557,6 @@ namespace Engine
 		}
 	}
 
-	SPACE* CollisionManager::_tagCollisionChannel::FindSpaceAndErase(Drawable* pDrawable)
-	{
-		std::unordered_map<Drawable*, PSPACE>::const_iterator iter = m_mapDrawable.find(pDrawable);
-
-		if (iter == m_mapDrawable.end())
-		{
-			return nullptr;
-		}
-
-		SPACE* pSpace = iter->second;
-
-		m_mapDrawable.erase(iter);
-
-		return pSpace;
-	}
-	void CollisionManager::_tagCollisionChannel::DeleteDrawable(Drawable* pDrawable)
-	{
-		PSPACE pSpace = FindSpaceAndErase(pDrawable);
-
-		if (!pSpace)
-		{
-			return;
-		}
-
-		std::list<Drawable*>::iterator iter = pSpace->DrawableList.begin();
-		std::list<Drawable*>::iterator iterEnd = pSpace->DrawableList.end();
-
-		for (; iter != iterEnd; ++iter)
-		{
-			if ((*iter) == pDrawable)
-			{
-				pSpace->DrawableList.erase(iter);
-				return;
-			}
-		}
-	}
+	// Phase E7 — _tagCollisionChannel::FindSpaceAndErase / DeleteDrawable
+	// removed (Drawable*-keyed spatial hash dropped).
 }

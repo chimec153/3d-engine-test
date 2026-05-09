@@ -1,15 +1,6 @@
 #include "ColliderMesh.h"
 #include "../Collision/Collision.h"
 #include "ColliderLine.h"
-#include "BindableManager.h"
-#include "Drawable.h"
-#include "Material.h"
-#include "VertexShader.h"
-#include "PixelShader.h"
-#include "InputLayout.h"
-#include "Topology.h"
-#include "RasterizerState.h"
-#include "Mesh.h"
 
 Engine::ColliderMesh::ColliderMesh(const std::vector<float>& vecPoint, const std::vector<int>& vecIndex) :
     Collider()
@@ -41,51 +32,7 @@ const Engine::PMESHCOLLIDERINFO Engine::ColliderMesh::GetInfo() const
 void Engine::ColliderMesh::SetInfo(const std::vector<float>& vecPoint, const std::vector<int>& vecIndex)
 {
     m_pInfo = std::make_shared<MESHCOLLIDERINFO>(vecPoint, vecIndex);
-
-#ifdef _DEBUG
-	std::vector<VertexStandard> vecVertex;
-
-	for (size_t i = 0; i < vecPoint.size(); i += 3)
-	{
-		VertexStandard vertex;
-
-		vertex.pos.x = vecPoint[i];
-		vertex.pos.y = vecPoint[i + 1];
-		vertex.pos.z = vecPoint[i + 2];
-
-		vecVertex.push_back(vertex);
-	}
-
-    // Phase B.4 — debug Drawable as direct member (re-parented onto owner
-    // when this Collider is attached). SetInfo can be called multiple times
-    // (e.g. terrain regen) so we lazily build the debug Drawable once and
-    // refresh just the mesh data on subsequent calls.
-    if (!m_pDebugDrawable) {
-        auto pDebug = std::make_shared<Drawable>();
-        pDebug->SetTag("debug");
-        pDebug->Init();
-        pDebug->FindAndAddBind<VertexShader>(STANDARD_VS);
-        pDebug->FindAndAddBind<PixelShader>("DebugPS");
-        pDebug->FindAndAddBind<InputLayout>(STANDARD_INPUT_LAYOUT);
-        pDebug->FindAndAddBind<Topology>(STANDARD_TOPOLOGY);
-        pDebug->FindAndAddBind<RasterizerState>(WIREFRAME);
-
-        std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
-        pDebug->AddChild(pMaterial->Clone());
-
-        m_pDebugDrawable = pDebug;
-    }
-
-    std::shared_ptr<Mesh> pMesh = std::static_pointer_cast<Mesh>(m_pDebugDrawable->FindChild("mesh_debug"));
-
-    if (!pMesh) {
-        pMesh = m_pDebugDrawable->CreateBindable<Mesh>("mesh_debug", vecVertex, vecIndex, D3D11_USAGE_DYNAMIC);
-    }
-    else {
-        pMesh->SetVertexBuffer(0, &vecVertex[0], static_cast<int>(sizeof(VertexStandard) * vecVertex.size()));
-        pMesh->SetIndexBuffer(0, 0, &vecIndex[0], static_cast<int>(4 * vecIndex.size()));
-    }
-#endif
+    // Phase E7 — debug Drawable removed.
 }
 
 void Engine::ColliderMesh::Collision(float fDeltaTime)
@@ -116,16 +63,7 @@ bool Engine::ColliderMesh::Collision(Collider* pDest, float fDeltaTime)
 
 void Engine::ColliderMesh::PreDraw(float fDeltaTime)
 {
-#ifdef _DEBUG
-    // Phase B.4 — collision-state color update; previously in Bind.
-    if (m_pDebugDrawable && m_pDebugDrawable->GetMaterial())
-    {
-        if (GetPrevColliderList().size())
-            m_pDebugDrawable->GetMaterial()->SetDiffuseColor(1.f, 0.f, 0.f, 1.f);
-        else
-            m_pDebugDrawable->GetMaterial()->SetDiffuseColor(0.f, 1.f, 0.f, 1.f);
-    }
-#endif
+    // Phase E7 — debug visualization removed.
     __super::PreDraw(fDeltaTime);
 }
 

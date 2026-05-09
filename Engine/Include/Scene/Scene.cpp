@@ -1,13 +1,10 @@
 #include "Scene.h"
 #include "Layer.h"
-#include "../Bindable/Drawable.h"
 #include "SceneManager.h"
 #include "../Core/PathManager.h"
 #include "../Core/Graphics.h"
 #include "../Bindable/Camera.h"
 #include "../Render/RenderManager.h"
-#include "../RenderV2/Drawable.h"
-#include "../RenderV2/RenderQueue.h"
 #include "../Matrix.h"
 
 #include <DirectXMath.h>
@@ -65,8 +62,8 @@ namespace Engine
 	void Scene::Clear()
 	{
 		// Phase E7 — m_mapProtoType registry removed; nothing scene-static
-		// to clear here today. Per-scene state lives on m_LayerList +
-		// m_v2DrawableList and is destroyed with the Scene instance.
+		// to clear here today. Per-scene state lives on m_LayerList and is
+		// destroyed with the Scene instance.
 	}
 
 	bool Scene::Init()
@@ -126,17 +123,6 @@ namespace Engine
 			(*iter)->Update(fDeltaTime);
 			++iter;
 		}
-
-		// RenderV2 drawables advance alongside legacy ones.
-		for (auto& d : m_v2DrawableList)
-		{
-			if (d) d->Update(fDeltaTime);
-		}
-	}
-
-	void Scene::AddV2Drawable(std::shared_ptr<RenderV2::Drawable> pDrawable)
-	{
-		if (pDrawable) m_v2DrawableList.push_back(pDrawable);
 	}
 
 	void Scene::FixedUpdate(float fDelatTime)
@@ -236,42 +222,6 @@ namespace Engine
 
 			(*iter)->PreDraw(fDeltaTime);
 			++iter;
-		}
-
-		// Submit V2 drawables to RenderManager's render-V2 queue. Camera info
-		// comes from the active camera (Graphics::GetCamera). Falls back to a
-		// fixed view if no camera is set, mirroring the Demo path.
-		if (m_v2DrawableList.empty()) return;
-
-		RenderManager* rm = RenderManager::GetInst();
-		RenderV2::RenderQueue* queue = rm ? rm->GetV2Queue() : nullptr;
-		if (!queue) return;
-
-		auto toXM = [](const Matrix& m) {
-			DirectX::XMFLOAT4X4 f;
-			memcpy(&f, m.f, sizeof(float) * 16);
-			return DirectX::XMLoadFloat4x4(&f);
-		};
-
-		RenderV2::FrameInfo frame;
-		std::shared_ptr<Camera> cam = Graphics::GetInst()->GetCamera(CAMERA_TYPE::NORMAL);
-		if (cam)
-		{
-			frame.view     = toXM(cam->GetView());
-			frame.proj     = toXM(cam->GetProjectMatrix());
-			frame.viewProj = toXM(cam->GetViewProject());
-		}
-		else
-		{
-			using namespace DirectX;
-			frame.view     = XMMatrixLookAtLH({0, 0, -3, 1}, {0, 0, 0, 1}, {0, 1, 0, 0});
-			frame.proj     = XMMatrixPerspectiveFovLH(XM_PIDIV4, 16.0f / 9.0f, 0.1f, 100.0f);
-			frame.viewProj = frame.view * frame.proj;
-		}
-
-		for (auto& d : m_v2DrawableList)
-		{
-			if (d) d->Submit(*queue, frame);
 		}
 	}
 

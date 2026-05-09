@@ -906,7 +906,7 @@ namespace Client
 				pCamTransform->PostUpdate(0.f);
 			}
 
-			m_fCameraDist += Engine::CInput::GetInst()->GetMouseDeltaZ() / 120 * 5.f;
+			m_fCameraDist += Engine::CInput::GetInst()->GetMouseDeltaZ() / 120 * 0.5f;
 		}
 
 		Engine::Vector3 vNewPos = pTransform->GetPosition() - pCamTransform->GetAxis(Engine::AXIS_TYPE::Z) * m_fCameraDist;

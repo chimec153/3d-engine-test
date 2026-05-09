@@ -1,6 +1,6 @@
 #include "Mesh.h"
-#include "Drawable.h"
 #include "Animation.h"
+#include "MeshUtils.h"
 #include "../Core/Graphics.h"
 
 namespace Engine
@@ -350,6 +350,8 @@ namespace Engine
 			SetTextures(i, vecTexture);
 		}
 
-		m_vBoundingSphereInfo = Drawable::StaticGetBoundingSphere(_vecVertex);
+		// Phase E7 — Drawable's StaticGetBoundingSphere migrated to
+		// MeshUtils::ComputeBoundingSphere; same math, no Drawable dep.
+		m_vBoundingSphereInfo = MeshUtils::ComputeBoundingSphere(_vecVertex);
 	}
 }

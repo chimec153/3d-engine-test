@@ -2,9 +2,7 @@
 #include "Mesh.h"
 #include "BindableManager.h"
 #include "ColliderSphere.h"
-#include "Drawable.h"  // Phase E5 — for the static SetNormals/SetTangent
-                       // template utilities only; Cloth itself is now a
-                       // Component, not a Drawable.
+#include "MeshUtils.h"  // Phase E7 — SetNormals/SetTangent extracted from Drawable.
 
 Engine::Cloth::Cloth()
 {
@@ -293,9 +291,9 @@ void Engine::Cloth::UpdatePosition(float fDeltaTime)
 		m_vecVelocity[i] = (vecNewPosition[i].pos - vecCurrentPosition[i].pos) / fDeltaTime;
 	}
 
-	Drawable::SetNormals(vecNewPosition, m_vecIndex);
+	MeshUtils::SetNormals(vecNewPosition, m_vecIndex);
 
-	Drawable::SetTangent(vecNewPosition, m_vecIndex);
+	MeshUtils::SetTangent(vecNewPosition, m_vecIndex);
 
 	// Phase E5 — bounding-sphere recompute used to come from Drawable's
 	// instance method (which writes Drawable-only state). Dropped for the
@@ -336,9 +334,9 @@ void Engine::Cloth::CreateVertexAndIndex()
 		}
 	}
 
-	Drawable::SetNormals(vecVertex, m_vecIndex);
+	MeshUtils::SetNormals(vecVertex, m_vecIndex);
 
-	Drawable::SetTangent(vecVertex, m_vecIndex);
+	MeshUtils::SetTangent(vecVertex, m_vecIndex);
 
 	GetPrevVertexs() = vecVertex;
 

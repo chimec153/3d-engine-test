@@ -1,52 +1,16 @@
 #include "ColliderOBB.h"
 #include "../Collision/Collision.h"
 #include "ColliderSphere.h"
-#include "Drawable.h"
 #include "Transform.h"
 #include "ColliderLine.h"
 #include "Camera.h"
-#include "BindableManager.h"
-#ifdef _DEBUG
-#include "Mesh.h"
-#include "RasterizerState.h"
-#include "Topology.h"
-#include "VertexShader.h"
-#include "PixelShader.h"
-#include "InputLayout.h"
-#include "Material.h"
-#include "DepthStencilState.h"
-#endif
 
 Engine::ColliderOBB::ColliderOBB()	:
 	Collider()
 {
 	SetComponentType(COMPONENT_TYPE::COLLIDER_OBB);
 	SetColliderType(COLLIDER_TYPE::OBB);
-#ifdef _DEBUG
-	// Phase B.4 — debug Drawable as direct member; re-parented onto
-	// owning Drawable when this Collider is attached.
-	auto pDebugBox = std::make_shared<Drawable>();
-	pDebugBox->SetTag("debug_obb");
-	pDebugBox->Init();
-	pDebugBox->FindAndAddBind<Mesh>("Box");
-	pDebugBox->FindAndAddBind<RasterizerState>(WIREFRAME);
-	pDebugBox->FindAndAddBind<Topology>("TriangleList");
-	pDebugBox->FindAndAddBind<VertexShader>("anisotropic_microfacet VSNoSkin");
-	pDebugBox->FindAndAddBind<PixelShader>("DebugAlphaPS");
-	pDebugBox->FindAndAddBind<InputLayout>("Standard");
-	pDebugBox->FindAndAddBind<DepthStencilState>("NoDepth");
-
-	m_pDebugTransform = pDebugBox->GetTransform();
-
-	std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>("Material");
-	m_pDebugMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
-	pDebugBox->AddChild(m_pDebugMaterial);
-
-	pDebugBox->NotUseShadow();
-	pDebugBox->SetRenderLayer(RENDER_LAYER::ALPHA);
-
-	m_pDebugDrawable = pDebugBox;
-#endif
+	// Phase E7 — debug visualization Drawable removed.
 }
 
 Engine::ColliderOBB::ColliderOBB(const ColliderOBB& collider)	:
@@ -56,14 +20,6 @@ Engine::ColliderOBB::ColliderOBB(const ColliderOBB& collider)	:
 	, m_vScaleOffset(collider.m_vScaleOffset)
 	, m_vAxisOffset(collider.m_vAxisOffset)
 {
-#ifdef _DEBUG
-	// Collider's copy ctor doesn't clone m_pDebugDrawable — clones share
-	// nothing visual with the original. Re-derive the cached references
-	// from the (now non-existent for this clone) debug drawable: leave
-	// them null, the clone gets its own debug drawable on next attach.
-	m_pDebugTransform = nullptr;
-	m_pDebugMaterial = nullptr;
-#endif
 }
 
 void Engine::ColliderOBB::SetAxis(AXIS_TYPE eType, const Vector3& vAxis)
@@ -206,42 +162,12 @@ void Engine::ColliderOBB::PostUpdate(float fDeltaTime)
 		}
 	}
 
-#ifdef _DEBUG
-	if (m_pDebugTransform)
-	{
-		Matrix matRot = {};
-
-		matRot[0] = m_tInfo.vAxis[0];
-		matRot[1] = m_tInfo.vAxis[1];
-		matRot[2] = m_tInfo.vAxis[2];
-		matRot[3][3] = 1.f;
-
-		Vector3 vRot = {};
-		Vector3 vScale = {};
-		Vector3 vPos = {};
-
-		matRot.GetSRT(vScale, vRot, vPos);
-
-		m_pDebugTransform->SetRotation(vRot);
-
-		m_pDebugTransform->SetScale(m_tInfo.vAxis[0].Length(), m_tInfo.vAxis[1].Length(), m_tInfo.vAxis[2].Length());
-		m_pDebugTransform->SetPosition(m_tInfo.vCenter);
-	}
-#endif
 }
 
 void Engine::ColliderOBB::PreDraw(float fDeltaTime)
 {
+	// Phase E7 — debug visualization removed.
 	__super::PreDraw(fDeltaTime);
-#ifdef _DEBUG
-	if (m_pDebugMaterial)
-	{
-		if (GetPrevColliderList().size())
-			m_pDebugMaterial->SetDiffuseColor(1.f, 0.f, 0.f, 1.f);
-		else
-			m_pDebugMaterial->SetDiffuseColor(0.f, 1.f, 0.f, 1.f);
-	}
-#endif
 }
 
 std::shared_ptr<Engine::Component> Engine::ColliderOBB::Clone()

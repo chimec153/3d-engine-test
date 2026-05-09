@@ -1452,3 +1452,4 @@ Client/Bin/Resource/Sound/hits/hit01.mp3.flac
 Client/Bin/Resource/Mesh/Bullet/Bullet.mtl.bak
 *.exe
 Client/Bin/Client_Debug.exe
+/.vs
