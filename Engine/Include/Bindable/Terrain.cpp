@@ -71,6 +71,28 @@ namespace Engine
 		m_vecTileType.resize(iWidth * iHeight);
 	}
 
+	void Terrain::SetTerrainTexture(const std::shared_ptr<Texture>& pTex)
+	{
+		if (!pTex) return;
+		m_vecTexture.push_back(pTex);
+		if (m_pMeshRenderer) m_pMeshRenderer->AddBindable(pTex);
+	}
+
+	void Terrain::SetTerrainNormalTexture(const std::shared_ptr<Texture>& pTex)
+	{
+		SetTerrainTexture(pTex);
+	}
+
+	void Terrain::SetTerrainSpecularTexture(const std::shared_ptr<Texture>& pTex)
+	{
+		SetTerrainTexture(pTex);
+	}
+
+	void Terrain::SetTerrainEmissiveTexture(const std::shared_ptr<Texture>& pTex)
+	{
+		SetTerrainTexture(pTex);
+	}
+
 	void Terrain::CreateTerrainTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
 		// Phase E7 — StaticCreateBindable returns nullptr when the tag already
@@ -80,39 +102,36 @@ namespace Engine
 		// stayed unbound and PS_Terrain's diffuse sample returned (0,0,0).
 		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 20);
 		if (!pTex) pTex = StaticFindBindable<Texture>(strTag);
-		m_vecTexture.push_back(pTex);
-		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
+		SetTerrainTexture(pTex);
 	}
 
 	void Terrain::CreateTerrainNormalTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
 		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 21);
 		if (!pTex) pTex = StaticFindBindable<Texture>(strTag);
-		m_vecTexture.push_back(pTex);
-		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
+		SetTerrainNormalTexture(pTex);
 	}
 
 	void Terrain::CreateTerrainSpecularTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
 		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 22);
 		if (!pTex) pTex = StaticFindBindable<Texture>(strTag);
-		m_vecTexture.push_back(pTex);
-		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
+		SetTerrainSpecularTexture(pTex);
 	}
 
 	void Terrain::CreateTerrainEmissiveTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath)
 	{
 		auto pTex = StaticCreateBindable<Texture>(strTag, vecFullPath, TEXTURE_PATH, 23);
 		if (!pTex) pTex = StaticFindBindable<Texture>(strTag);
-		m_vecTexture.push_back(pTex);
-		if (m_pMeshRenderer && pTex) m_pMeshRenderer->AddBindable(pTex);
+		SetTerrainEmissiveTexture(pTex);
 	}
 
-	void Terrain::CreateHeightMap(const std::string& strTag, const TCHAR* pFilePath)
+	void Terrain::SetHeightMap(const std::shared_ptr<Texture>& pTex)
 	{
-		m_pHeightMap = StaticCreateBindable<Texture>(strTag, pFilePath, TEXTURE_PATH, 16, D3D11_CPU_ACCESS_WRITE, D3D11_USAGE_DYNAMIC);
-		if (!m_pHeightMap) m_pHeightMap = StaticFindBindable<Texture>(strTag);
-		if (m_pMeshRenderer && m_pHeightMap) m_pMeshRenderer->AddBindable(m_pHeightMap);
+		if (!pTex) return;
+
+		m_pHeightMap = pTex;
+		if (m_pMeshRenderer) m_pMeshRenderer->AddBindable(m_pHeightMap);
 
 		DirectX::ScratchImage* pImage = m_pHeightMap->GetImage();
 
@@ -136,6 +155,13 @@ namespace Engine
 		}
 
 		CreateTerrain(static_cast<int>(pImage->GetMetadata().width) - 1, static_cast<int>(pImage->GetMetadata().height) - 1);
+	}
+
+	void Terrain::CreateHeightMap(const std::string& strTag, const TCHAR* pFilePath)
+	{
+		auto pTex = StaticCreateBindable<Texture>(strTag, pFilePath, TEXTURE_PATH, 16, D3D11_CPU_ACCESS_WRITE, D3D11_USAGE_DYNAMIC);
+		if (!pTex) pTex = StaticFindBindable<Texture>(strTag);
+		SetHeightMap(pTex);
 	}
 
 	void Terrain::SaveHeightMap(const TCHAR* pFilePath, const std::string& strPathKey)

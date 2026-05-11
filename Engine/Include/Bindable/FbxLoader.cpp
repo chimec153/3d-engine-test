@@ -595,6 +595,19 @@ namespace Engine
 							continue;
 						}
 
+						{
+							char buf[1024];
+							sprintf_s(buf,
+								"[FbxTexture] channel='%s' name='%s'\n"
+								"             FileName        ='%s'\n"
+								"             RelativeFileName='%s'\n",
+								fbxsdk::FbxLayerElement::sTextureChannelNames[j],
+								pTexture->GetName(),
+								pFileTexture->GetFileName() ? pFileTexture->GetFileName() : "(null)",
+								pFileTexture->GetRelativeFileName() ? pFileTexture->GetRelativeFileName() : "(null)");
+							::OutputDebugStringA(buf);
+						}
+
 						mesh.m_vecTextureInfo.push_back(TEXTUREINFO{ static_cast<fbxsdk::FbxLayerElement::EType>(j + fbxsdk::FbxLayerElement::sTypeTextureStartIndex), pTexture->GetName() , pFileTexture->GetFileName() });
 					}
 					else
@@ -672,6 +685,40 @@ namespace Engine
 				material.tMaterial.fSpecPower = (float)pPhongMaterial->Shininess;
 
 				material.tMaterial.fFraction = (float)pPhongMaterial->ReflectionFactor;
+
+				material.name = pMaterial->GetName();
+
+				mesh.m_vecMaterial.push_back(material);
+			}
+			else if (pMaterial->GetClassId().Is(fbxsdk::FbxSurfaceLambert::ClassId))
+			{
+				fbxsdk::FbxSurfaceLambert* pLambertMaterial = static_cast<fbxsdk::FbxSurfaceLambert*>(pMaterial);
+
+				MATERIALINFO material = {};
+
+				material.tMaterial.diffuseColor.w = 1.f;
+				material.tMaterial.specularColor.w = 1.f;
+				material.tMaterial.emissiveColor.w = 1.f;
+
+				const fbxsdk::FbxDouble3& diffuse = pLambertMaterial->Diffuse.Get();
+
+				material.tMaterial.diffuseColor.x = (float)diffuse[0];
+				material.tMaterial.diffuseColor.y = (float)diffuse[1];
+				material.tMaterial.diffuseColor.z = (float)diffuse[2];
+
+				const fbxsdk::FbxDouble3& ambient = pLambertMaterial->Ambient.Get();
+
+				material.tMaterial.ambientColor.x = (float)ambient[0];
+				material.tMaterial.ambientColor.y = (float)ambient[1];
+				material.tMaterial.ambientColor.z = (float)ambient[2];
+
+				const fbxsdk::FbxDouble3& emissive = pLambertMaterial->Emissive.Get();
+
+				material.tMaterial.emissiveColor.x = (float)emissive[0];
+				material.tMaterial.emissiveColor.y = (float)emissive[1];
+				material.tMaterial.emissiveColor.z = (float)emissive[2];
+
+				material.tMaterial.fSpecPower = 1.f;
 
 				material.name = pMaterial->GetName();
 

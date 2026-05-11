@@ -821,6 +821,18 @@ namespace Client
 			m_eDir = MOVE_DIR::LEFT;
 		}
 
+		if (Engine::CInput::GetInst()->IsKey(Engine::CInput::KEY_STATE::PRESS, DIK_Q))
+		{
+			vDir = -pTransform->GetAxis(Engine::AXIS_TYPE::Y);
+			m_eDir = MOVE_DIR::RIGHT;
+		}
+
+		if (Engine::CInput::GetInst()->IsKey(Engine::CInput::KEY_STATE::PRESS, DIK_E))
+		{
+			vDir = pTransform->GetAxis(Engine::AXIS_TYPE::Y);
+			m_eDir = MOVE_DIR::LEFT;
+		}
+
 		if (Engine::CInput::GetInst()->IsKey(Engine::CInput::KEY_STATE::PRESS, DIK_SPACE))
 		{
 			m_vRollDir = -pTransform->GetAxis(Engine::AXIS_TYPE::Z);
@@ -835,6 +847,8 @@ namespace Client
 
 				m_fFallSpeed += 4.5f;
 
+				m_fFallSpeed = 0.f;
+
 				pTransform->AddY(m_fFallSpeed * fDeltaTime);
 			}
 		}
@@ -846,7 +860,9 @@ namespace Client
 
 		if (vDir != 0.f)
 		{
-			const Engine::Vector3& vPlayerPos = pTransform->GetPosition();
+			pTransform->AddPosition(vDir * fDeltaTime * m_fSpeed);
+
+			/*const Engine::Vector3& vPlayerPos = pTransform->GetPosition();
 
 			float fHeight = m_pTerrain ? m_pTerrain->GetTerrainHeight(vPlayerPos) : 0.f;
 
@@ -879,7 +895,7 @@ namespace Client
 			else
 			{
 				SetState(PLAYER_STATE::IDLE);
-			}
+			}*/
 		}
 		else
 		{
@@ -927,22 +943,22 @@ namespace Client
 			return;
 		}
 
-		std::shared_ptr<Engine::Transform> pTransform = m_pTransform;
+		//std::shared_ptr<Engine::Transform> pTransform = m_pTransform;
 
-		pTransform->AddY(m_fFallSpeed * fDeltaTime);
+		//pTransform->AddY(m_fFallSpeed * fDeltaTime);
 
-		m_fFallSpeed += m_fAccel * fDeltaTime;
+		//m_fFallSpeed += m_fAccel * fDeltaTime;
 
-		float fHeight = m_pTerrain->GetTerrainHeight(pTransform->GetPosition());
+		//float fHeight = m_pTerrain->GetTerrainHeight(pTransform->GetPosition());
 
-		if (fHeight > pTransform->GetY())
-		{
-			pTransform->SetY(fHeight);
+		//if (fHeight > pTransform->GetY())
+		//{
+		//	pTransform->SetY(fHeight);
 
-			m_fFallSpeed /= 2.f;
+		//	m_fFallSpeed /= 2.f;
 
-			m_bCanJump = true;
-		}
+		//	m_bCanJump = true;
+		//}
 
 		UpdateState(fDeltaTime);
 	}

@@ -40,7 +40,11 @@ namespace Engine
 	void MeshRendererComponent::SetPixelShader(const std::shared_ptr<PixelShader>& p) { m_pPixelShader = p; UpdateInstanceKey(); }
 	const std::shared_ptr<PixelShader>& MeshRendererComponent::GetPixelShader() const { return m_pPixelShader; }
 
-	void MeshRendererComponent::SetMaterial(const std::shared_ptr<Material>& p) { m_pMaterial = p; UpdateInstanceKey(); }
+	void MeshRendererComponent::SetMaterial(const std::shared_ptr<Material>& p)
+	{
+		m_pMaterial = p; 
+		UpdateInstanceKey();
+	}
 	const std::shared_ptr<Material>& MeshRendererComponent::GetMaterial() const { return m_pMaterial; }
 
 	void MeshRendererComponent::AddTexture(const std::shared_ptr<Texture>& p)

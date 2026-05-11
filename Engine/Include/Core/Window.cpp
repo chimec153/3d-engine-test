@@ -398,7 +398,17 @@ namespace Engine
 
 		SceneManager::GetInst()->Draw();
 
+		if (m_PrePresentCb)
+		{
+			m_PrePresentCb();
+		}
+
 		Graphics::GetInst()->EndScene();
+	}
+
+	void Window::SetPrePresentCallback(std::function<void()> cb)
+	{
+		m_PrePresentCb = std::move(cb);
 	}
 
 	int Window::Run()
@@ -427,35 +437,48 @@ namespace Engine
 
 		float fDeltaTime = pTimer->GetDeltTime();
 
-		if (!Input(fDeltaTime))
+		bool bRanDraw = false;
+
+		if (Input(fDeltaTime))
 		{
-			return;
+			m_fFixedTime += fDeltaTime;
+
+			while (m_fFixedTime >= FIXED_UPDATE_TIME)
+			{
+				FixedUpdate(FIXED_UPDATE_TIME);
+
+				m_fFixedTime -= FIXED_UPDATE_TIME;
+			}
+
+			if (Update(fDeltaTime))
+			{
+				Collision(fDeltaTime);
+
+				if (PostUpdate(fDeltaTime))
+				{
+					PreDraw(fDeltaTime);
+
+					Draw(fDeltaTime);
+
+					bRanDraw = true;
+				}
+			}
 		}
 
-		m_fFixedTime += fDeltaTime;
-
-		while (m_fFixedTime >= FIXED_UPDATE_TIME)
+		if (!bRanDraw)
 		{
-			FixedUpdate(FIXED_UPDATE_TIME);
+			// Scene short-circuited (e.g. transition). Still need to close the
+			// ImGui frame and advance the swap chain so NewFrame stays balanced.
+			Graphics::GetInst()->SetRenderTarget();
+			Graphics::GetInst()->Clear(0.f, 0.f, 0.f);
 
-			m_fFixedTime -= FIXED_UPDATE_TIME;
+			if (m_PrePresentCb)
+			{
+				m_PrePresentCb();
+			}
+
+			Graphics::GetInst()->EndScene();
 		}
-
-		if (!Update(fDeltaTime))
-		{
-			return;
-		}
-
-		Collision(fDeltaTime);
-
-		if (!PostUpdate(fDeltaTime))
-		{
-			return;
-		}
-
-		PreDraw(fDeltaTime);
-
-		Draw(fDeltaTime);
 	}
 
 

@@ -10,6 +10,7 @@
 #include "Bindable/BindableManager.h"
 #include "Animation/Skeleton.h"
 #include "Component/MeshRendererComponent.h"
+#include "Bindable/DepthStencilState.h"
 
 namespace Editor
 {
@@ -26,18 +27,19 @@ namespace Editor
         std::shared_ptr<Engine::Mesh> pMesh =
             Engine::StaticFindBindable<Engine::Mesh>("Medieval");
 
-        std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
-        pSkeleton->LoadFromPath("Walking.skel", MESH_PATH);
-        if (m_pAnimation) m_pAnimation->SetSkeleton(pSkeleton);
+        //std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
+        //pSkeleton->LoadFromPath("Walking.skel", MESH_PATH);
+        //if (m_pAnimation) m_pAnimation->SetSkeleton(pSkeleton);
 
         if (m_pMeshRenderer)
         {
             m_pMeshRenderer->SetMesh(pMesh);
             m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_VS));
-            m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>("AlphaNoUVPS"));
+            m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>(STANDARD_PS));
             m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
             m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
-            m_pMeshRenderer->SetAnimation(m_pAnimation);
+            m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::DepthStencilState>("OutLineMask"));
+            //m_pMeshRenderer->SetAnimation(m_pAnimation);
         }
         return true;
     }

@@ -24,6 +24,9 @@
 #include "Core/PathManager.h"
 #include "Bindable/PointLight.h"
 #include "Bindable/MeshLoader.h"
+#include "Component/MeshRendererComponent.h"
+#include "Bindable/InputLayout.h"
+#include "Bindable/DepthStencilState.h"
 
 namespace Client
 {
@@ -31,24 +34,8 @@ namespace Client
 	{
 	}
 
-	bool GameScene::Init()
+	bool GameScene::LoadSequences()
 	{
-		// Phase E7 — preload Walking.fbx mesh data into BindableManager via
-		// the MeshLoader facade. Drawable's loader bridge has been retired;
-		// MeshLoader::Load drives the same parser pipeline without a temp
-		// Drawable, and the parsed Bindables register in BindableManager.
-		Engine::MeshLoader::Load(TEXT("Walking.fbx"));
-
-		Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Walking.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("sword", "Sword.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("shovel", "Shovel.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("armor", "Armor_Leather.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("pistol", "Pistol_5.mesh", MESH_PATH);
-
-		Engine::ResourceManager::GetInst()->LoadSkeleton("Walking.skel");
-		//Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
-
 		Engine::ResourceManager::GetInst()->LoadSequence("Walkingmixamo.com.seq");
 		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Gun_Shoot.seq");
 		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve.seq");
@@ -77,33 +64,12 @@ namespace Client
 		/*Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Attack.seq");
 		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Death.seq");
 		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Idle.seq");
-		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Jump.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Jump.seq");*/
+		return true;
+	}
 
-		Engine::ResourceManager::GetInst()->CreateSound("leather_inventory", "inventory_sound_effects\\leather_inventory.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("metal-clash", "inventory_sound_effects\\metal-clash.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("sword sound", "melee sounds\\sword sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("step_rock_l", "sfx_step_rock_l.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("step_rock_r", "sfx_step_rock_r.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("melee sound", "melee sounds\\melee sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);*/
-
-		//for (int i = 0; i < 37; ++i)
-		//{
-		//	char strSound[TEXT_LEN] = {};
-
-		//	sprintf_s(strSound, "hit%02d", i + 1);
-
-		//	std::string strPath = "hits\\";
-
-		//	strPath += strSound;
-		//	strPath += ".mp3.flac";
-
-		//	Engine::ResourceManager::GetInst()->CreateSound(strSound, strPath.c_str(), SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-		//}
-
-		//std::shared_ptr<Engine::Sound> pSound = Engine::ResourceManager::GetInst()->CreateSound("TownTheme", "TownTheme.mp3", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, true);
-
-		//pSound->Play();
-
+	bool GameScene::CreateTexture()
+	{
 		std::vector<const TCHAR*> vecTexture =
 		{
 			TEXT("LandScape\\dirt.bmp"),
@@ -162,6 +128,98 @@ namespace Client
 		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodNormal", TEXT("Decal\\sgfjdepc_8K_Normal.tga"), TEXTURE_PATH, 1);
 		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodOpacity", TEXT("Decal\\sgfjdepc_8K_Opacity.tga"), TEXTURE_PATH, 2);
 		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodRoughness", TEXT("Decal\\sgfjdepc_8K_Roughness.tga"), TEXTURE_PATH, 3);
+		return true;
+	}
+
+	bool GameScene::CreateSounds()
+	{
+		Engine::ResourceManager::GetInst()->CreateSound("leather_inventory", "inventory_sound_effects\\leather_inventory.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, false);
+		Engine::ResourceManager::GetInst()->CreateSound("metal-clash", "inventory_sound_effects\\metal-clash.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, false);
+		Engine::ResourceManager::GetInst()->CreateSound("sword sound", "melee sounds\\sword sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+		Engine::ResourceManager::GetInst()->CreateSound("step_rock_l", "sfx_step_rock_l.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+		Engine::ResourceManager::GetInst()->CreateSound("step_rock_r", "sfx_step_rock_r.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+		Engine::ResourceManager::GetInst()->CreateSound("melee sound", "melee sounds\\melee sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+
+		//for (int i = 0; i < 37; ++i)
+		//{
+		//	char strSound[TEXT_LEN] = {};
+
+		//	sprintf_s(strSound, "hit%02d", i + 1);
+
+		//	std::string strPath = "hits\\";
+
+		//	strPath += strSound;
+		//	strPath += ".mp3.flac";
+
+		//	Engine::ResourceManager::GetInst()->CreateSound(strSound, strPath.c_str(), SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+		//}
+		return true;
+	}
+
+	bool GameScene::CreateMesh()
+	{
+		Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Walking.mesh", MESH_PATH);
+		//Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
+		//Engine::StaticCreateBindable<Engine::Mesh>("sword", "Sword.mesh", MESH_PATH);
+		//Engine::StaticCreateBindable<Engine::Mesh>("shovel", "Shovel.mesh", MESH_PATH);
+		//Engine::StaticCreateBindable<Engine::Mesh>("armor", "Armor_Leather.mesh", MESH_PATH);
+		//Engine::StaticCreateBindable<Engine::Mesh>("pistol", "Pistol_5.mesh", MESH_PATH);
+		return true;
+	}
+
+	bool GameScene::CreateMonster()
+	{
+		auto pMonster = CreateGameObject<Engine::GameObject>("monster", FindLayer(DEFAULT_LAYER));
+		auto pTransform = pMonster->AddComponent<Engine::Transform>("transform");
+		auto m_pMeshRenderer = pMonster->AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
+		//auto m_pAnimation = pMonster->AddComponent<Engine::Animation>("MonsterAnimation");
+
+		if (pTransform)
+		{
+			pTransform->SetPosition(20.f, 5.f, 10.f);
+			pTransform->SetScale(0.01f, 0.01f, 0.01f);
+		}
+
+		std::shared_ptr<Engine::Mesh> pMesh = Engine::StaticCreateBindable<Engine::Mesh>("war", "war.mesh");
+		if (!pMesh)
+		{
+			pMesh = Engine::StaticFindBindable<Engine::Mesh>("war");
+		}
+		if (m_pMeshRenderer)
+		{
+			m_pMeshRenderer->SetMesh(pMesh);
+			m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_VS));
+			m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>(STANDARD_PS));
+			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
+			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
+			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::DepthStencilState>("OutLineMask"));
+			//m_pMeshRenderer->SetAnimation(m_pAnimation);
+		}
+		return true;
+	}
+
+	bool GameScene::Init()
+	{
+		// Phase E7 — preload Walking.fbx mesh data into BindableManager via
+		// the MeshLoader facade. Drawable's loader bridge has been retired;
+		// MeshLoader::Load drives the same parser pipeline without a temp
+		// Drawable, and the parsed Bindables register in BindableManager.
+		Engine::MeshLoader::Load(TEXT("war.fbx"));
+
+		CreateMesh();
+
+		Engine::ResourceManager::GetInst()->LoadSkeleton("Walking.skel");
+		//Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
+
+		LoadSequences();
+
+		CreateSounds();
+
+		//std::shared_ptr<Engine::Sound> pSound = Engine::ResourceManager::GetInst()->CreateSound("TownTheme", "TownTheme.mp3", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, true);
+
+		//pSound->Play();
+
+		CreateTexture();
 
 		//Load("Resource\\Scene\\test.scn", ROOT_PATH);
 
@@ -170,10 +228,14 @@ namespace Client
 		// Phase E5 — Terrain is a GameObject now.
 		if (auto pTerrain = CreateGameObject<Engine::Terrain>("Terrain", FindLayer(DEFAULT_LAYER)))
 		{
+			// Phase E7 — height map keeps Create* (different file path +
+			// dynamic-access flag for in-game edits). Diffuse/Normal/Specular
+			// were already registered in CreateTexture(); wire them in via
+			// the new Set* path so we don't redundantly create-or-find here.
 			pTerrain->CreateHeightMap("terrain", TEXT("terraintest.bmp"));
-			pTerrain->CreateTerrainTexture("TerrainDiffuse", vecTexture);
-			pTerrain->CreateTerrainNormalTexture("TerrainNormal", vecNormalTexture);
-			pTerrain->CreateTerrainSpecularTexture("TerrainSpecular", vecSpecularTexture);
+			pTerrain->SetTerrainTexture(Engine::StaticFindBindable<Engine::Texture>("TerrainDiffuse"));
+			pTerrain->SetTerrainNormalTexture(Engine::StaticFindBindable<Engine::Texture>("TerrainNormal"));
+			pTerrain->SetTerrainSpecularTexture(Engine::StaticFindBindable<Engine::Texture>("TerrainSpecular"));
 
 			// Phase E5 — Terrain is a GameObject; Material is set on the
 			// MeshRendererComponent instead of via Drawable's SetMaterial.
@@ -312,6 +374,7 @@ namespace Client
 		// will be reintroduced as additions to the V1 render path; the
 		// parallel V2 demos (v2Mesh, TreeV2) and their integration are gone.
 
+		CreateMonster();
 		return true;
 	}
 

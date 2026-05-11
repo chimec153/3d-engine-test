@@ -47,6 +47,7 @@
 #include "Bindable/Cloth.h"
 #include "Bindable/Terrain.h"
 #include "Render/RenderManager.h"
+#include "Bindable/BlendState.h"
 
 namespace Editor
 {
@@ -60,6 +61,7 @@ namespace Editor
 		, m_pPolyMesh(nullptr)
 		, m_pPolyMeshDetail(nullptr)
 		, m_bMode(true)
+		, m_iOutlinedContainerIdx(-1)
 	{
 		m_fCellSize = 0.3f;
 		m_fCellHeight = 0.2f;
@@ -144,7 +146,97 @@ namespace Editor
 		m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush2", TEXT("brush\\star.png"), TEXTURE_PATH));
 		m_vecBrushTexture.push_back(Engine::StaticCreateBindable<Engine::Texture>("brush3", TEXT("brush\\brush.png"), TEXTURE_PATH));
 
+		InitSelectionOutline();
+
 		return true;
+	}
+
+	void ImguiManager::InitSelectionOutline()
+	{
+		m_pOutlineMaskMRT = std::make_shared<Engine::MRT>(
+			std::vector<DXGI_FORMAT>({ DXGI_FORMAT_R8_UNORM }), 30);
+
+		m_pOutlineMaskVS = std::make_shared<Engine::VertexShader>(TEXT("SelectionOutline.fx"), "MaskVS");
+		m_pOutlineMaskPS = std::make_shared<Engine::PixelShader>(TEXT("SelectionOutline.fx"), "MaskPS");
+		m_pOutlineFullScreenVS = std::make_shared<Engine::VertexShader>(TEXT("SelectionOutline.fx"), "OutlineFullScreenVS");
+		m_pOutlineCompositePS = std::make_shared<Engine::PixelShader>(TEXT("SelectionOutline.fx"), "OutlineCompositePS");
+
+		m_pOutlineCB = std::make_shared<Engine::ConstantBuffer<OUTLINECBUFFER>>(0);
+		m_pOutlineCB->CreateBuffer();
+
+		// Standard SrcAlpha / InvSrcAlpha. Don't reuse BindableManager's
+		// "AlphaBlend" because Init() runs before Scene-side bindables are
+		// registered.
+		m_pOutlineBlend = std::make_shared<Engine::BlendState>();
+	}
+
+	void ImguiManager::RenderSelectionOutline()
+	{
+		auto pObj = m_pOutlinedObject.lock();
+		if (!pObj || m_iOutlinedContainerIdx < 0)
+			return;
+
+		auto pMR = pObj->GetComponent<Engine::MeshRendererComponent>();
+		if (!pMR)
+			return;
+
+		auto pMesh = pMR->GetMesh();
+		if (!pMesh || m_iOutlinedContainerIdx >= pMesh->GetMeshCount())
+			return;
+
+		auto pTransform = pObj->GetComponent<Engine::Transform>();
+		if (!pTransform)
+			return;
+
+		// ---- Pass 1: render selected container into mask RT ----
+		m_pOutlineMaskMRT->SetTargets();
+		m_pOutlineMaskMRT->Clear();
+
+		pTransform->Bind();
+
+		auto pStandardIL = Engine::StaticFindBindable<Engine::InputLayout>(STANDARD_INPUT_LAYOUT);
+		if (pStandardIL) pStandardIL->Bind();
+
+		Engine::Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		m_pOutlineMaskVS->Bind();
+		m_pOutlineMaskPS->Bind();
+
+		pMesh->DrawContainer(m_iOutlinedContainerIdx);
+
+		m_pOutlineMaskMRT->ResetTargets();
+
+		// ---- Pass 2: full-screen edge-detect composite onto back buffer ----
+		OUTLINECBUFFER tCB = {};
+		tCB.vColor[0] = 1.f; tCB.vColor[1] = 0.5f; tCB.vColor[2] = 0.f; tCB.vColor[3] = 1.f;
+		tCB.vTexelSize[0] = 1.f / static_cast<float>(Engine::Window::GetInst()->GetWidth());
+		tCB.vTexelSize[1] = 1.f / static_cast<float>(Engine::Window::GetInst()->GetHeight());
+		tCB.iThickness = 2;
+		m_pOutlineCB->UpdateBuffer(tCB);
+		m_pOutlineCB->Bind();
+
+		m_pOutlineMaskMRT->SetSRV(0, 0);
+
+		m_pOutlineFullScreenVS->Bind();
+		m_pOutlineCompositePS->Bind();
+		m_pOutlineBlend->Bind();
+
+		auto pCtx = Engine::Graphics::GetInst()->GetDeviceContext();
+		pCtx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		pCtx->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+		pCtx->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+		pCtx->IASetInputLayout(nullptr);
+		pCtx->Draw(4, 0);
+
+		// Unbind mask SRV from slot 0 so subsequent passes don't sample it.
+		ID3D11ShaderResourceView* pNullSRV = nullptr;
+		pCtx->PSSetShaderResources(0, 1, &pNullSRV);
+
+		m_pOutlineBlend->PostBind();
+
+		// Invalidate VS/PS cache so the next pass rebinds (we left our
+		// outline shaders bound).
+		Engine::Graphics::GetInst()->ResetBindCache();
 	}
 
 	void ImguiManager::Update(float fDeltaTime)
@@ -185,6 +277,14 @@ namespace Editor
 
 		RenderManager_ShowImGuiWindow();
 		Scene_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
+		WorldOutliner_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
+
+		// Register the selection-outline pass with RenderManager every frame
+		// (Clear() wipes the list each frame). Runs at UI layer so it draws
+		// on top of the final HDR-tone-mapped back buffer.
+		Engine::RenderManager::GetInst()->AddCustomRender(
+			Engine::RENDER_LAYER::UI,
+			[this]() { RenderSelectionOutline(); });
 	}
 
 	void ImguiManager::Render(float fDeltaTime)
@@ -1557,6 +1657,310 @@ namespace Editor
 		ImGui::End();
 	}
 
+	void ImguiManager::WorldOutliner_ImGuiWindow(Engine::Scene* pScene)
+	{
+		if (!pScene)
+			return;
+
+		if (ImGui::Begin("World Outliner"))
+		{
+			const auto& layerList = pScene->GetLayerList();
+			int iLayerIdx = 0;
+			for (const auto& pLayer : layerList)
+			{
+				if (!pLayer)
+					continue;
+
+				std::string strLayerLabel = pLayer->GetTag() + "##l" + std::to_string(iLayerIdx++);
+				if (ImGui::TreeNode(strLayerLabel.c_str()))
+				{
+					const auto& objList = pLayer->GetGameObjectList();
+					int iObjIdx = 0;
+					auto pSelected = m_pSelectedObject.lock();
+					for (const auto& pObj : objList)
+					{
+						if (!pObj)
+							continue;
+
+						std::string strObjLabel = pObj->GetTag() + "##o" + std::to_string(iObjIdx++);
+						bool bSelected = (pSelected == pObj);
+						if (ImGui::Selectable(strObjLabel.c_str(), bSelected))
+						{
+							m_pSelectedObject = pObj;
+						}
+					}
+					ImGui::TreePop();
+				}
+			}
+		}
+		ImGui::End();
+
+		if (ImGui::Begin("Details"))
+		{
+			if (auto pSel = m_pSelectedObject.lock())
+			{
+				GameObject_ImGuiWindow(pSel);
+			}
+			else
+			{
+				ImGui::Text("(No GameObject selected)");
+			}
+		}
+		ImGui::End();
+	}
+
+	void ImguiManager::GameObject_ImGuiWindow(std::shared_ptr<Engine::GameObject> pObject)
+	{
+		if (!pObject)
+			return;
+
+		CRef_ImGuiWindow(pObject);
+
+		if (auto pParent = pObject->GetParent())
+			ImGui::Text("Parent: %s", pParent->GetTag().c_str());
+		else
+			ImGui::Text("Parent: (none)");
+
+		if (auto pLayer = pObject->GetLayer())
+			ImGui::Text("Layer: %s", pLayer->GetTag().c_str());
+
+		ImGui::Separator();
+
+		const auto& compList = pObject->GetComponentList();
+		ImGui::Text("Components (%d)", static_cast<int>(compList.size()));
+
+		int iCompIdx = 0;
+		for (const auto& pComp : compList)
+		{
+			if (!pComp)
+				continue;
+
+			std::string strLabel = pComp->GetTag() + "##c" + std::to_string(iCompIdx++);
+			if (ImGui::TreeNode(strLabel.c_str()))
+			{
+				Component_ImGuiWindow(pComp);
+				ImGui::TreePop();
+			}
+		}
+	}
+
+	void ImguiManager::Component_ImGuiWindow(std::shared_ptr<Engine::Component> pComponent)
+	{
+		if (!pComponent)
+			return;
+
+		ImGui::Text("Type: %d", static_cast<int>(pComponent->GetComponentType()));
+		CRef_ImGuiWindow(pComponent);
+
+		if (auto pTrans = pComponent->GetTransform())
+		{
+			TransformBuffer_ImGuiWindow(pTrans);
+		}
+
+		if (auto pMR = std::dynamic_pointer_cast<Engine::MeshRendererComponent>(pComponent))
+		{
+			MeshRenderer_ImGuiWindow(pMR);
+		}
+	}
+
+	void ImguiManager::MeshRenderer_ImGuiWindow(std::shared_ptr<Engine::MeshRendererComponent> pRenderer)
+	{
+		if (!pRenderer)
+			return;
+
+		auto pMesh = pRenderer->GetMesh();
+		if (!pMesh)
+		{
+			ImGui::Text("(No Mesh)");
+			return;
+		}
+
+		ImGui::Text("Mesh: %s", pMesh->GetTag().c_str());
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Save Mesh"))
+		{
+			TCHAR strFile[MAX_PATH] = {};
+			OPENFILENAME tName = {};
+			tName.lStructSize = sizeof(OPENFILENAME);
+			tName.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
+			tName.lpstrFilter = TEXT("Mesh\0*.msh;*.mesh\0All\0*.*\0");
+			tName.nMaxFile = MAX_PATH;
+			tName.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath(MESH_PATH);
+			tName.lpstrFile = strFile;
+			tName.lpstrDefExt = TEXT("msh");
+
+			if (GetSaveFileName(&tName))
+			{
+				pMesh->SaveFromFullPath(strFile);
+			}
+		}
+
+		// TreeNode open state IS the outline-selection state: exactly one
+		// container can be open at a time, and "open" == "outlined". Opening
+		// another node closes the previous one. Closing the open one clears
+		// the outline.
+		auto pSelected = m_pSelectedObject.lock();
+		const int iCurOutlined = (pSelected && m_pOutlinedObject.lock() == pSelected) ? m_iOutlinedContainerIdx : -1;
+
+		const int iContainerCount = pMesh->GetMeshCount();
+
+		// Arrow-key navigation between containers when one is already open.
+		// Skipped if a text input field has focus (so arrows still move the
+		// caret normally). Drives m_iOutlinedContainerIdx; the SetNextItemOpen
+		// loop below picks up the new index on this same frame.
+		if (iCurOutlined >= 0 && iContainerCount > 0 && !ImGui::GetIO().WantTextInput)
+		{
+			if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+			{
+				m_iOutlinedContainerIdx = (iCurOutlined + 1 < iContainerCount) ? iCurOutlined + 1 : iCurOutlined;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+			{
+				m_iOutlinedContainerIdx = (iCurOutlined > 0) ? iCurOutlined - 1 : 0;
+			}
+		}
+
+		const int iEffectiveOutlined = (m_pOutlinedObject.lock() == pSelected) ? m_iOutlinedContainerIdx : iCurOutlined;
+
+		for (int i = 0; i < iContainerCount; ++i)
+		{
+			const bool bShouldBeOpen = (iEffectiveOutlined == i);
+			ImGui::SetNextItemOpen(bShouldBeOpen, ImGuiCond_Always);
+
+			std::string strContainerLabel = "Container " + std::to_string(i) + "##mc" + std::to_string(i);
+			bool bOpen = ImGui::TreeNode(strContainerLabel.c_str());
+
+			if (ImGui::IsItemClicked())
+			{
+				if (bShouldBeOpen)
+				{
+					m_pOutlinedObject.reset();
+					m_iOutlinedContainerIdx = -1;
+				}
+				else
+				{
+					m_pOutlinedObject = pSelected;
+					m_iOutlinedContainerIdx = i;
+				}
+			}
+
+			if (!bOpen)
+				continue;
+
+			const int iSubCount = pMesh->GetMeshSubCount(i);
+			for (int j = 0; j < iSubCount; ++j)
+			{
+				auto pMaterial = pMesh->GetMaterial(i, j);
+				if (!pMaterial)
+					continue;
+
+				std::string strMatLabel = "Material " + std::to_string(j) +
+					" (" + pMaterial->GetTag() + ")##mat" + std::to_string(i) + "_" + std::to_string(j);
+				if (ImGui::TreeNode(strMatLabel.c_str()))
+				{
+					Material_ImGuiWindow(pMaterial);
+					ImGui::TreePop();
+				}
+			}
+
+			// Named texture slots. Slot indices match register(tN) in
+			// shared.hlsl: 0=Diffuse, 1=Normal, 2=Specular, 3=Emissive,
+			// 6=Roughness, 8=AO, 9=Metalness. Roughness/AO/Metalness are
+			// optional in the main PS (detected via GetDimensions) and
+			// fall back cleanly when unbound — the engine's specular
+			// workflow stays intact for assets without these textures.
+			struct SlotDesc { int iSlot; const char* pName; };
+			static const SlotDesc kSlots[] = {
+				{ 0, "Diffuse"   },
+				{ 1, "Normal"    },
+				{ 2, "Specular"  },
+				{ 3, "Emissive"  },
+				{ 6, "Roughness" },
+				{ 8, "AO"        },
+				{ 9, "Metalness" },
+			};
+
+			const int iTexCount = pMesh->GetTextureCount(i);
+
+			for (const SlotDesc& slot : kSlots)
+			{
+				// Locate the texture currently occupying this GPU slot in
+				// this container's vector (linear scan; vector is tiny).
+				std::shared_ptr<Engine::Texture> pTex;
+				int iVecIdx = -1;
+				for (int j = 0; j < iTexCount; ++j)
+				{
+					auto pCandidate = pMesh->GetTexture(i, j);
+					if (pCandidate && pCandidate->GetSlot() == slot.iSlot)
+					{
+						pTex = pCandidate;
+						iVecIdx = j;
+						break;
+					}
+				}
+
+				ImGui::Text("%s: %s", slot.pName, pTex ? pTex->GetTag().c_str() : "(empty)");
+
+				ImGui::SameLine();
+
+				std::string strBtnLabel = "Set##slot" + std::to_string(i) + "_" + std::to_string(slot.iSlot);
+				if (ImGui::Button(strBtnLabel.c_str()))
+				{
+					TCHAR strFile[MAX_PATH] = {};
+					OPENFILENAME tName = {};
+					tName.lStructSize = sizeof(OPENFILENAME);
+					tName.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
+					tName.lpstrFilter = TEXT("Texture\0*.png;*.dds;*.tga;*.jpg;*.bmp\0All\0*.*\0");
+					tName.nMaxFile = MAX_PATH;
+					tName.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath(TEXTURE_PATH);
+					tName.lpstrFile = strFile;
+
+					if (GetOpenFileName(&tName))
+					{
+						char szTag[MAX_PATH] = {};
+						WideCharToMultiByte(CP_ACP, 0, strFile, -1, szTag, MAX_PATH, nullptr, nullptr);
+						std::string strTag(szTag);
+						auto pNewTex = Engine::StaticCreateBindable<Engine::Texture>(strTag, strFile, slot.iSlot);
+						if (pNewTex)
+						{
+							// Replace if a texture exists at this slot,
+							// otherwise append to the vector.
+							const int iWriteIdx = (iVecIdx >= 0) ? iVecIdx : pMesh->GetTextureCount(i);
+							pMesh->SetTexture(i, iWriteIdx, pNewTex);
+						}
+					}
+				}
+
+			}
+
+			// Surface any textures that don't match a named slot (legacy
+			// data, custom slots) so they remain visible to the user.
+			auto isNamedSlot = [](int s) {
+				for (const SlotDesc& d : kSlots) if (d.iSlot == s) return true;
+				return false;
+			};
+			bool bAnyOther = false;
+			for (int j = 0; j < pMesh->GetTextureCount(i); ++j)
+			{
+				auto pT = pMesh->GetTexture(i, j);
+				if (!pT) continue;
+				int iSlot = pT->GetSlot();
+				if (isNamedSlot(iSlot)) continue;
+				if (!bAnyOther)
+				{
+					ImGui::Separator();
+					ImGui::TextDisabled("Other textures:");
+					bAnyOther = true;
+				}
+				ImGui::Text("  slot t%d: %s", iSlot, pT->GetTag().c_str());
+			}
+
+			ImGui::TreePop();
+		}
+	}
+
 	void ImguiManager::Sequence_ImGuiWindow(std::shared_ptr<Engine::Sequence> pSequence)
 	{
 		std::string strTitle = "Sequence";
@@ -1699,6 +2103,20 @@ namespace Editor
 				Engine::RenderManager::GetInst()->SetHDRWhiteSqr(fWhite * fWhite);
 			}
 
+			if (ImGui::Checkbox("Enable Bloom", &m_bEnableBloom))
+			{
+				if (m_bEnableBloom)
+				{
+					Engine::RenderManager::GetInst()->SetBloomScale(m_fSavedBloomScale);
+				}
+				else
+				{
+					m_fSavedBloomScale = Engine::RenderManager::GetInst()->GetBloomScale();
+					Engine::RenderManager::GetInst()->SetBloomScale(0.f);
+				}
+			}
+
+			ImGui::BeginDisabled(!m_bEnableBloom);
 			float fBloomScale = Engine::RenderManager::GetInst()->GetBloomScale();
 
 			if (ImGui::SliderFloat("Bloom Scale", &fBloomScale, 0.f, 5.f))
@@ -1712,7 +2130,29 @@ namespace Editor
 			{
 				Engine::RenderManager::GetInst()->SetBloomThreshold(fThreshold);
 			}
+			ImGui::EndDisabled();
 
+			float fAdaptSpeed = Engine::RenderManager::GetInst()->GetAdaptationSpeed();
+
+			if (ImGui::SliderFloat("Adaptation Speed", &fAdaptSpeed, 0.1f, 20.f))
+			{
+				Engine::RenderManager::GetInst()->SetAdaptationSpeed(fAdaptSpeed);
+			}
+
+			if (ImGui::Checkbox("Enable DOF (FOV)", &m_bEnableDOF))
+			{
+				if (m_bEnableDOF)
+				{
+					Engine::RenderManager::GetInst()->SetFOVValueY(m_fSavedFOVValueY);
+				}
+				else
+				{
+					m_fSavedFOVValueY = Engine::RenderManager::GetInst()->GetFOVValueY();
+					Engine::RenderManager::GetInst()->SetFOVValueY(0.f);
+				}
+			}
+
+			ImGui::BeginDisabled(!m_bEnableDOF);
 			float fDOFVAlueX = Engine::RenderManager::GetInst()->GetFOVValueX();
 
 			if (ImGui::SliderFloat("FOV Value X", &fDOFVAlueX, 0.f, 1000.f))
@@ -1726,6 +2166,7 @@ namespace Editor
 			{
 				Engine::RenderManager::GetInst()->SetFOVValueY(fDOFVAlueY);
 			}
+			ImGui::EndDisabled();
 		}
 
 		ImGui::End();
@@ -1749,6 +2190,20 @@ namespace Editor
 
 		if (ImGui::Begin("Fog Setting"))
 		{
+			if (ImGui::Checkbox("Enable Fog", &m_bEnableFog))
+			{
+				if (m_bEnableFog)
+				{
+					Engine::RenderManager::GetInst()->SetFogDensity(m_fSavedFogDensity);
+				}
+				else
+				{
+					m_fSavedFogDensity = Engine::RenderManager::GetInst()->GetFogDensity();
+					Engine::RenderManager::GetInst()->SetFogDensity(0.f);
+				}
+			}
+
+			ImGui::BeginDisabled(!m_bEnableFog);
 			Engine::Vector3 vColor = Engine::RenderManager::GetInst()->GetFogColor();
 
 			if (ImGui::ColorPicker3("color", &vColor.x))
@@ -1783,6 +2238,7 @@ namespace Editor
 			{
 				Engine::RenderManager::GetInst()->SetFogHeightFallOff(fHeightFallOff);
 			}
+			ImGui::EndDisabled();
 		}
 
 		ImGui::End();

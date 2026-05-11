@@ -71,6 +71,17 @@ namespace Engine
         void CreateTerrainSpecularTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath);
         void CreateTerrainEmissiveTexture(const std::string& strTag, const std::vector<const TCHAR*>& vecFullPath);
         void CreateHeightMap(const std::string& strTag, const TCHAR* pFilePath);
+
+        // Phase E7 — wire an already-registered texture into the MeshRenderer
+        // without creating a new one. Use these when GameScene (or another
+        // owner) has already called StaticCreateBindable<Texture>(...) for
+        // its own resource bookkeeping. The Create* counterparts above are
+        // thin wrappers that delegate to these after creating-or-finding.
+        void SetTerrainTexture(const std::shared_ptr<class Texture>& pTex);
+        void SetTerrainNormalTexture(const std::shared_ptr<class Texture>& pTex);
+        void SetTerrainSpecularTexture(const std::shared_ptr<class Texture>& pTex);
+        void SetTerrainEmissiveTexture(const std::shared_ptr<class Texture>& pTex);
+        void SetHeightMap(const std::shared_ptr<class Texture>& pTex);
         void SaveHeightMap(const TCHAR* pFilePath, const std::string& strPathKey = TEXTURE_PATH);
         void CreateMeshCollider();
         void GetPoints(std::vector<float>& vecPoints);

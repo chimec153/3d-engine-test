@@ -20,13 +20,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         return -1;
     }
 
-    // Imgui �ʱ�ȭ
+    // Imgui �ʱ�ȭ
     if (!Editor::ImguiManager::GetInst()->Init(Engine::Window::GetInst()->GetWinHandle()))
     {
         Editor::ImguiManager::DestroyInst();
         Engine::Window::DestroyInst();
         return -1;
     }
+
+    Engine::Window::GetInst()->SetPrePresentCallback([]()
+    {
+        Editor::ImguiManager::GetInst()->Render(0.f);
+    });
 
     Engine::SceneManager::GetInst()->CreateScene<Editor::InGameScene>();
 

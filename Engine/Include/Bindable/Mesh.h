@@ -33,6 +33,12 @@ namespace Engine
         int m_iCount;
         std::vector<std::shared_ptr<Texture>>   vecTexture;
         std::vector<std::shared_ptr<Material>> vecMaterial;
+        // CPU-side mirrors of the GPU vertex/index buffers — populated by
+        // CreateMesh so Mesh::Save can serialize back to .mesh without a
+        // staging-buffer readback. Raw bytes for vertices (size = m_iSize
+        // * m_iCount); per-sub uint32 indices matching the .mesh format.
+        std::vector<char> m_vecCPUVertex;
+        std::vector<std::vector<unsigned int>> m_vecCPUIndex;
 #ifdef _DEBUG
         bool bEnable;
 #endif
@@ -104,6 +110,13 @@ namespace Engine
     public:
         void SetTextures(const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture);
         void SetTextures(int iIndex, const std::vector<std::shared_ptr<Texture>>& vecTexture);
+        // Per-slot texture access on a MeshContainer's vecTexture. iVecIdx is
+        // the positional slot within the container's texture vector (not the
+        // Texture's GPU register slot). Used by the editor inspector to
+        // swap individual textures without rebuilding the whole vector.
+        void SetTexture(int iIndex, int iVecIdx, const std::shared_ptr<Texture>& pTexture);
+        std::shared_ptr<Texture> GetTexture(int iIndex, int iVecIdx) const;
+        int GetTextureCount(int iIndex) const;
         void AddMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial);
         std::shared_ptr<Material> GetMaterial(int iIndex = 0, int iSubIndex = 0)   const;
         void SetMaterial(int iIndex, int iSubIndex, std::shared_ptr<Material> pMaterial);
@@ -206,6 +219,21 @@ namespace Engine
 
             container.m_iCount = static_cast<int>(vecVertex.size());
             container.m_iSize = sizeof(T);
+
+            container.m_vecCPUVertex.resize(sizeof(T) * vecVertex.size());
+            if (!vecVertex.empty())
+            {
+                memcpy(container.m_vecCPUVertex.data(), &vecVertex[0], sizeof(T) * vecVertex.size());
+            }
+            container.m_vecCPUIndex.resize(vecIndex.size());
+            for (size_t i = 0; i < vecIndex.size(); ++i)
+            {
+                container.m_vecCPUIndex[i].resize(vecIndex[i].size());
+                for (size_t j = 0; j < vecIndex[i].size(); ++j)
+                {
+                    container.m_vecCPUIndex[i][j] = static_cast<unsigned int>(vecIndex[i][j]);
+                }
+            }
         }
 
     public:
@@ -216,10 +244,15 @@ namespace Engine
     public:
         virtual void Bind() override;
         void Draw();
+        // Draw only the given MeshContainer's VB/IB. Used by the editor
+        // selection-outline mask pass which renders one container at a time.
+        // Does not bind textures or materials — caller controls shader state.
+        void DrawContainer(int iIndex);
         void DrawInst(int iCount, int iSize, const CPtr<ID3D11Buffer>& pInstBuffer);
         virtual std::shared_ptr<Bindable> Clone() override;
 
     public:
+        virtual void Save(FILE* pFile) override;
         virtual void Load(FILE* pFile) override;
 
     };

@@ -45,7 +45,7 @@ namespace Engine
 		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
 		Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 		Graphics::GetInst()->GetDeviceContext()->IASetInputLayout(nullptr);
-		InputLayout::ResetBoundCache();
+		Graphics::GetInst()->GetBindCache().pBoundIL = nullptr;
 
 		Graphics::GetInst()->GetDeviceContext()->Draw(4, 0);
 	}

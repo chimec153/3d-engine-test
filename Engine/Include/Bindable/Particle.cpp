@@ -185,10 +185,10 @@ namespace Engine
 		// Without this, debug colliders / alpha drawables that share
 		// "Standard" IL pointer w/ a previously-bound drawable end up
 		// drawing with no IL → DEVICE_DRAW_INPUTLAYOUT_NOT_SET.
-		InputLayout::ResetBoundCache();
+		Graphics::GetInst()->GetBindCache().pBoundIL = nullptr;
 
 		Graphics::GetInst()->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
-		Topology::ResetBoundCache();
+		Graphics::GetInst()->GetBindCache().eBoundTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 
 		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
 

@@ -10,6 +10,11 @@ namespace Engine
 		, m_iCount(iCount)
 		, m_iSize(iSize)
 	{
+		if (!iCount || !iSize)
+		{
+			return;
+		}
+
 		if (!CreateBuffer(iCount, iSize, pData, eUsage, eFlag))
 		{
 			assert(false);
@@ -19,6 +24,11 @@ namespace Engine
 
 	bool StructuredBuffer::CreateBuffer(int iCount, int iSize, void* pData, D3D11_USAGE eUsage, UINT eFlag)
 	{
+		if (!iCount || !iSize)
+		{
+			return false;
+		}
+
 		m_iCount = iCount;
 		m_iSize = iSize;
 

@@ -76,12 +76,6 @@
     <Filter Include="10. Collision">
       <UniqueIdentifier>{5b11b5cf-9d0c-4b6d-bc4d-86d52a168bb5}</UniqueIdentifier>
     </Filter>
-    <Filter Include="20. Component">
-      <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef1234567890}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="21. GameObject">
-      <UniqueIdentifier>{b2c3d4e5-f6a7-8901-bcde-f12345678901}</UniqueIdentifier>
-    </Filter>
     <Filter Include="04. Bindable\08. Collider">
       <UniqueIdentifier>{a993c57b-c768-4156-9abd-abb244997be4}</UniqueIdentifier>
     </Filter>
@@ -90,12 +84,6 @@
     </Filter>
     <Filter Include="09. Render\01. MRT">
       <UniqueIdentifier>{9e99b80c-026c-4211-9672-ecb8a9fc56c0}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="10. RenderV2">
-      <UniqueIdentifier>{a1b2c3d4-0001-4000-8000-000000000001}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="10. RenderV2\Drawables">
-      <UniqueIdentifier>{a1b2c3d4-0001-4000-8000-000000000002}</UniqueIdentifier>
     </Filter>
     <Filter Include="11. Resource">
       <UniqueIdentifier>{61de2fe8-16e7-48a9-8763-d3dd24b0c3c4}</UniqueIdentifier>
@@ -151,6 +139,12 @@
     <Filter Include="04. Bindable\12. Sound">
       <UniqueIdentifier>{0501027e-aafe-416b-84be-2ba2345763bc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="16. Component">
+      <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef1234567890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="17. GameObject">
+      <UniqueIdentifier>{b2c3d4e5-f6a7-8901-bcde-f12345678901}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\Window.cpp">
@@ -194,9 +188,6 @@
     </ClCompile>
     <ClCompile Include="Bindable\PixelShader.cpp">
       <Filter>04. Bindable\02. Shader</Filter>
-    </ClCompile>
-    <ClCompile Include="Bindable\Drawable.cpp">
-      <Filter>05. Drawable</Filter>
     </ClCompile>
     <ClCompile Include="Bindable\Sampler.cpp">
       <Filter>04. Bindable\04. Sampler</Filter>
@@ -258,22 +249,6 @@
     <ClCompile Include="Render\MRT.cpp">
       <Filter>09. Render\01. MRT</Filter>
     </ClCompile>
-      <Filter>10. RenderV2</Filter>
-    </ClCompile>
-      <Filter>10. RenderV2</Filter>
-    </ClCompile>
-      <Filter>10. RenderV2</Filter>
-    </ClCompile>
-      <Filter>10. RenderV2</Filter>
-    </ClCompile>
-      <Filter>10. RenderV2\Drawables</Filter>
-    </ClCompile>
-      <Filter>10. RenderV2\Drawables</Filter>
-    </ClCompile>
-      <Filter>10. RenderV2\Drawables</Filter>
-    </ClCompile>
-      <Filter>10. RenderV2\Drawables</Filter>
-    </ClCompile>
     <ClCompile Include="Bindable\Box.cpp">
       <Filter>05. Drawable\04. Primitive</Filter>
     </ClCompile>
@@ -298,9 +273,6 @@
     <ClCompile Include="Bindable\DomainShader.cpp">
       <Filter>04. Bindable\02. Shader</Filter>
     </ClCompile>
-    <ClCompile Include="Render\RenderInstancing.cpp">
-      <Filter>09. Render</Filter>
-    </ClCompile>
     <ClCompile Include="Bindable\Collider.cpp">
       <Filter>04. Bindable\08. Collider</Filter>
     </ClCompile>
@@ -308,13 +280,13 @@
       <Filter>10. Collision</Filter>
     </ClCompile>
     <ClCompile Include="Component\Component.cpp">
-      <Filter>20. Component</Filter>
+      <Filter>16. Component</Filter>
     </ClCompile>
     <ClCompile Include="Component\MeshRendererComponent.cpp">
-      <Filter>20. Component</Filter>
+      <Filter>16. Component</Filter>
     </ClCompile>
     <ClCompile Include="GameObject\GameObject.cpp">
-      <Filter>21. GameObject</Filter>
+      <Filter>17. GameObject</Filter>
     </ClCompile>
     <ClCompile Include="Bindable\ColliderLine.cpp">
       <Filter>04. Bindable\08. Collider</Filter>
@@ -424,6 +396,9 @@
     <ClCompile Include="Bindable\UIRenderer.cpp">
       <Filter>05. Drawable\12. Renderer</Filter>
     </ClCompile>
+    <ClCompile Include="Bindable\MeshLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Core\Window.h">
@@ -476,9 +451,6 @@
     </ClInclude>
     <ClInclude Include="Bindable\PixelShader.h">
       <Filter>04. Bindable\02. Shader</Filter>
-    </ClInclude>
-    <ClInclude Include="Bindable\Drawable.h">
-      <Filter>05. Drawable</Filter>
     </ClInclude>
     <ClInclude Include="Types.h">
       <Filter>Header Files</Filter>
@@ -549,36 +521,6 @@
     <ClInclude Include="Render\MRT.h">
       <Filter>09. Render\01. MRT</Filter>
     </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2\Drawables</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2\Drawables</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2\Drawables</Filter>
-    </ClInclude>
-      <Filter>10. RenderV2\Drawables</Filter>
-    </ClInclude>
     <ClInclude Include="Bindable\Box.h">
       <Filter>05. Drawable\04. Primitive</Filter>
     </ClInclude>
@@ -603,9 +545,6 @@
     <ClInclude Include="Bindable\DomainShader.h">
       <Filter>04. Bindable\02. Shader</Filter>
     </ClInclude>
-    <ClInclude Include="Render\RenderInstancing.h">
-      <Filter>09. Render</Filter>
-    </ClInclude>
     <ClInclude Include="Bindable\Collider.h">
       <Filter>04. Bindable\08. Collider</Filter>
     </ClInclude>
@@ -613,13 +552,13 @@
       <Filter>10. Collision</Filter>
     </ClInclude>
     <ClInclude Include="Component\Component.h">
-      <Filter>20. Component</Filter>
+      <Filter>16. Component</Filter>
     </ClInclude>
     <ClInclude Include="Component\MeshRendererComponent.h">
-      <Filter>20. Component</Filter>
+      <Filter>16. Component</Filter>
     </ClInclude>
     <ClInclude Include="GameObject\GameObject.h">
-      <Filter>21. GameObject</Filter>
+      <Filter>17. GameObject</Filter>
     </ClInclude>
     <ClInclude Include="Bindable\ColliderLine.h">
       <Filter>04. Bindable\08. Collider</Filter>
@@ -785,6 +724,12 @@
     </ClInclude>
     <ClInclude Include="Bindable\UIRenderer.h">
       <Filter>05. Drawable\12. Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\MeshLoader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Bindable\MeshUtils.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

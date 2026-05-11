@@ -2,6 +2,7 @@
 #include "Animation.h"
 #include "MeshUtils.h"
 #include "../Core/Graphics.h"
+#include "BindableManager.h"
 
 namespace Engine
 {
@@ -80,6 +81,43 @@ namespace Engine
 		}
 
 		m_vecMeshContainer[iIndex].vecTexture = vecTexture;
+	}
+
+	void Mesh::SetTexture(int iIndex, int iVecIdx, const std::shared_ptr<Texture>& pTexture)
+	{
+		if (iIndex < 0 || iIndex >= static_cast<int>(m_vecMeshContainer.size()))
+		{
+			assert(false);
+			return;
+		}
+		auto& vec = m_vecMeshContainer[iIndex].vecTexture;
+		if (iVecIdx < 0)
+		{
+			assert(false);
+			return;
+		}
+		if (iVecIdx >= static_cast<int>(vec.size()))
+		{
+			vec.resize(iVecIdx + 1);
+		}
+		vec[iVecIdx] = pTexture;
+	}
+
+	std::shared_ptr<Texture> Mesh::GetTexture(int iIndex, int iVecIdx) const
+	{
+		if (iIndex < 0 || iIndex >= static_cast<int>(m_vecMeshContainer.size()))
+			return nullptr;
+		const auto& vec = m_vecMeshContainer[iIndex].vecTexture;
+		if (iVecIdx < 0 || iVecIdx >= static_cast<int>(vec.size()))
+			return nullptr;
+		return vec[iVecIdx];
+	}
+
+	int Mesh::GetTextureCount(int iIndex) const
+	{
+		if (iIndex < 0 || iIndex >= static_cast<int>(m_vecMeshContainer.size()))
+			return 0;
+		return static_cast<int>(m_vecMeshContainer[iIndex].vecTexture.size());
 	}
 
 	void Mesh::AddMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial)
@@ -227,6 +265,38 @@ namespace Engine
 		}
 	}
 
+	void Mesh::DrawContainer(int iIndex)
+	{
+		if (iIndex < 0 || iIndex >= static_cast<int>(m_vecMeshContainer.size()))
+			return;
+
+		MESHCONTAINER& container = m_vecMeshContainer[iIndex];
+
+		UINT iStride = container.m_iSize;
+		UINT iOffset = 0;
+
+		Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 1, container.m_pVertexBuffer.GetAddressof(), &iStride, &iOffset);
+
+		for (size_t j = 0; j < container.m_vecIndexBuffer.size(); ++j)
+		{
+			Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(*container.m_vecIndexBuffer[j].pBuffer, container.m_vecIndexBuffer[j].eFormat, 0);
+
+			if (container.m_vecIndexBuffer[j].pBuffer)
+			{
+				Graphics::GetInst()->GetDeviceContext()->DrawIndexed(container.m_vecIndexBuffer[j].iCount, 0, 0);
+			}
+			else
+			{
+				Graphics::GetInst()->GetDeviceContext()->Draw(container.m_iCount, 0);
+			}
+		}
+
+		if (container.m_vecIndexBuffer.empty())
+		{
+			Graphics::GetInst()->GetDeviceContext()->Draw(container.m_iCount, 0);
+		}
+	}
+
 	void Mesh::DrawInst(int iCount, int iSize, const CPtr<ID3D11Buffer>& pInstBuffer)
 	{
 		for (int i = 0; i < static_cast<int>(m_vecMeshContainer.size()); ++i)
@@ -273,6 +343,58 @@ namespace Engine
 	std::shared_ptr<Bindable> Mesh::Clone()
 	{
 		return std::make_shared<Mesh>(*this);
+	}
+
+	void Mesh::Save(FILE* pFile)
+	{
+		// Mirrors Mesh::Load and MeshLoader::SaveMesh — same wire format so
+		// the .mesh files this writes are round-trippable by Mesh::Load.
+		// Tag is NOT written here (Load doesn't read it either); only the
+		// per-container payload.
+		int iContainerCount = static_cast<int>(m_vecMeshContainer.size());
+		fwrite(&iContainerCount, 4, 1, pFile);
+
+		for (int i = 0; i < iContainerCount; ++i)
+		{
+			const MESHCONTAINER& container = m_vecMeshContainer[i];
+
+			int iVertexCount = container.m_iCount;
+			fwrite(&iVertexCount, 4, 1, pFile);
+			if (iVertexCount > 0 && !container.m_vecCPUVertex.empty())
+			{
+				fwrite(container.m_vecCPUVertex.data(), 1, container.m_vecCPUVertex.size(), pFile);
+			}
+
+			short iIndexCount = static_cast<short>(container.m_vecCPUIndex.size());
+			fwrite(&iIndexCount, 2, 1, pFile);
+
+			for (short j = 0; j < iIndexCount; ++j)
+			{
+				int iSubCount = static_cast<int>(container.m_vecCPUIndex[j].size());
+				fwrite(&iSubCount, 4, 1, pFile);
+
+				if (iSubCount > 0)
+				{
+					fwrite(container.m_vecCPUIndex[j].data(), 4, iSubCount, pFile);
+				}
+			}
+
+			int iTextureCount = static_cast<int>(container.vecTexture.size());
+			fwrite(&iTextureCount, 4, 1, pFile);
+			for (int j = 0; j < iTextureCount; ++j)
+			{
+				if (container.vecTexture[j])
+					container.vecTexture[j]->Save(pFile);
+			}
+
+			int iMaterialCount = static_cast<int>(container.vecMaterial.size());
+			fwrite(&iMaterialCount, 4, 1, pFile);
+			for (int j = 0; j < iMaterialCount; ++j)
+			{
+				if (container.vecMaterial[j])
+					container.vecMaterial[j]->Save(pFile);
+			}
+		}
 	}
 
 	void Mesh::Load(FILE* pFile)
@@ -330,6 +452,15 @@ namespace Engine
 				std::shared_ptr<Texture> pTexture = std::make_shared<Texture>();
 
 				pTexture->Load(pFile);
+
+				if (auto pPrevTexture = Engine::BindableManager<Texture>::GetInst()->FindBindable(pTexture->GetTag()))
+				{
+					pTexture = pPrevTexture;
+				}
+				else if (pTexture->LoadTextureFromFullPath(pTexture->GetFullPath()))
+				{
+					BindableManager<Texture>::GetInst()->AddBindable(pTexture);
+				}
 
 				vecTexture.push_back(pTexture);
 			}

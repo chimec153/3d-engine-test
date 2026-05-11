@@ -18,6 +18,7 @@ namespace Engine
 		void AddLayer(const std::string& strTag, int iZOrder = 0);
 		void AddLayer(std::shared_ptr<Layer> pLayer);
 		std::shared_ptr<class Layer> FindLayer(const std::string& strTag)	const;
+		const std::list<std::shared_ptr<class Layer>>& GetLayerList() const { return m_LayerList; }
 
 	public:
 		// Phase E7 — CreateDrawable<T> removed. All entities now go through

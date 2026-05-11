@@ -59,8 +59,6 @@ void Window::Logic()
 	Editor::ImguiManager::GetInst()->MRT_ShowImGuiImage(Engine::RenderManager::GetInst()->GetDecalMRT(), "DecalMRT");
 
 	Engine::Window::GetInst()->Logic();
-
-	Editor::ImguiManager::GetInst()->Render(0.f);
 }
 
 LRESULT __stdcall Window::WndProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)

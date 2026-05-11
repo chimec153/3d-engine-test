@@ -199,19 +199,56 @@ VSInstOut VS_SkinInst(VSStandardInstIn input, uint iInstId : SV_InstanceID)
 PSOut PS(VSOut input)
 {
     PSOut output;
-    
-    output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor * g_Texture.Sample(g_sAnisotropic, input.uv) + g_vEmissiveColor * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv), input.uv).xyz;
-    
+
+    //output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor * g_Texture.Sample(g_sAnisotropic, input.uv) + g_vEmissiveColor * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv), input.uv).xyz;
+
+    float3 baseColor = g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
+    float3 specularRGB = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
+
+    // Optional Metalness texture (t9): converts a metalness-workflow
+    // asset (single base color) into the engine's specular workflow.
+    // metalness=0 keeps the supplied diffuse/specular pair as-is.
+    // metalness=1 mutes diffuse and tints the specular with base color.
+    uint mW, mH;
+    g_MetalnessTexture.GetDimensions(mW, mH);
+    if (mW > 0)
+    {
+        float metalness = g_MetalnessTexture.Sample(g_sAnisotropic, input.uv).r;
+        specularRGB = lerp(specularRGB, baseColor, metalness);
+        baseColor *= (1.0f - metalness);
+    }
+
+    // Optional AO texture (t8): pre-multiply into albedo when bound.
+    uint aoW, aoH;
+    g_AOTexture.GetDimensions(aoW, aoH);
+    if (aoW > 0)
+    {
+        baseColor *= g_AOTexture.Sample(g_sAnisotropic, input.uv).r;
+    }
+    output.value0.xyz = baseColor;
+
     output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
-    
-    output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
+    output.value2.xyz = specularRGB;
+
     output.value3.xyz = g_vSpecularColor.xyz;
-    
-    output.value0.w = g_vMaterialRoughness.x;
-    output.value1.w = g_vMaterialRoughness.y;
+
+    // Optional Roughness texture (t6): .r overrides uniform when bound.
+    uint rW, rH;
+    g_RoughnessTexture.GetDimensions(rW, rH);
+    if (rW > 0)
+    {
+        float r = g_RoughnessTexture.Sample(g_sAnisotropic, input.uv).r;
+        output.value0.w = r;
+        output.value1.w = r;
+    }
+    else
+    {
+        output.value0.w = g_vMaterialRoughness.x;
+        output.value1.w = g_vMaterialRoughness.y;
+    }
     output.value2.w = g_fMaterialFraction;
-    
+
     return output;
 }
 
@@ -561,8 +598,6 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     //float3 BRDF = kd * lambert + cookTorrance;
     
     //float3 outgoingLight = BRDF * envColor.xyz * max(NDotL, 0.0);
-    
-    //return float4(outgoingLight, 1.0);
     
     //float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
     //+ (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;

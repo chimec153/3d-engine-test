@@ -25,12 +25,7 @@ namespace Engine
     public:
         void GetAndBind();
         void BindEnd();
-
-        // See VertexShader::ResetBoundCache for rationale.
-        static void ResetBoundCache();
-
-    private:
-        static ID3D11PixelShader* s_pBoundPS;
+        // Phase E7 — sort-by-state cache moved to Graphics::BindCache.
     };
 
 }

@@ -1,6 +1,7 @@
 #include "Texture.h"
 #include "../Core/PathManager.h"
 #include "../Core/Window.h"
+#include "BindableManager.h"
 
 namespace Engine
 {
@@ -198,6 +199,11 @@ namespace Engine
 
 		if (!LoadTexture(strFullPath, *m_pImage))
 		{
+			char buf[1024];
+			char narrow[MAX_PATH] = {};
+			WideCharToMultiByte(CP_ACP, 0, strFullPath, -1, narrow, MAX_PATH, nullptr, nullptr);
+			sprintf_s(buf, "[Texture] FAILED to load: '%s'\n", narrow);
+			::OutputDebugStringA(buf);
 			return false;
 		}
 
@@ -454,29 +460,29 @@ namespace Engine
 		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(m_iSlot, 1, &pSRV);
 		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(m_iSlot, 1, &pSRV);
 		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(m_iSlot, 1, &pSRV);
-		if (m_iSlot >= 0 && m_iSlot < kMaxSlots) s_pBound[m_iSlot] = nullptr;
+		BindCache& cache = Graphics::GetInst()->GetBindCache();
+		if (m_iSlot >= 0 && m_iSlot < BindCache::kTextureSlots) cache.pBoundTextures[m_iSlot] = nullptr;
+	}
+
+	const TCHAR* Texture::GetFullPath() const
+	{
+		return m_strFullPath;
 	}
 
 	void Texture::Update(float fDeltaTime)
 	{
 	}
 
-	ID3D11ShaderResourceView* Texture::s_pBound[Texture::kMaxSlots] = {};
-
-	void Texture::ResetBoundCache()
-	{
-		for (int i = 0; i < kMaxSlots; ++i) s_pBound[i] = nullptr;
-	}
-
 	void Texture::Bind()
 	{
+		BindCache& cache = Graphics::GetInst()->GetBindCache();
 		ID3D11ShaderResourceView* mine = *m_pSRV;
-		if (m_iSlot >= 0 && m_iSlot < kMaxSlots && s_pBound[m_iSlot] == mine)
+		if (m_iSlot >= 0 && m_iSlot < BindCache::kTextureSlots && cache.pBoundTextures[m_iSlot] == mine)
 			return;
 		Graphics::GetInst()->GetDeviceContext()->VSSetShaderResources(m_iSlot, 1, m_pSRV.GetAddressof());
 		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(m_iSlot, 1, m_pSRV.GetAddressof());
 		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(m_iSlot, 1, m_pSRV.GetAddressof());
-		if (m_iSlot >= 0 && m_iSlot < kMaxSlots) s_pBound[m_iSlot] = mine;
+		if (m_iSlot >= 0 && m_iSlot < BindCache::kTextureSlots) cache.pBoundTextures[m_iSlot] = mine;
 	}
 
 	std::shared_ptr<Bindable> Texture::Clone()
@@ -519,6 +525,6 @@ namespace Engine
 			fread(m_strFullPath, sizeof(TCHAR), iLength, pFile);
 		}
 
-		LoadTextureFromFullPath(m_strFullPath);
+		//LoadTextureFromFullPath(m_strFullPath);
 	}
 }

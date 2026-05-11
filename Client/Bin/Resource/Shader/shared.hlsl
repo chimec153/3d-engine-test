@@ -375,6 +375,17 @@ Texture2D g_SpecularTexture : register(t2);
 Texture2D g_EmissiveTexture : register(t3);
 Texture2D g_PaperBurnTexture : register(t4);
 Texture2D g_EnvironmentTexture : register(t5);
+// Optional PBR textures â€” bind detection via GetDimensions() in PS.
+// Roughness (t6): when bound, .r overrides g_vMaterialRoughness.x/y.
+// AO (t8): when bound, .r is pre-multiplied into albedo (engine has no
+// separate indirect-lighting path, so AO necessarily affects direct
+// lighting too; acceptable approximation).
+Texture2D g_RoughnessTexture : register(t6);
+Texture2D g_AOTexture : register(t8);
+// Metalness (t9): when bound, converts the specular-workflow output to
+// be consistent with a metalness-workflow source asset. Pulls
+// albedoâ†’0 and specularâ†’baseColor as metalness approaches 1.
+Texture2D g_MetalnessTexture : register(t9);
 
 Texture2D g_HDRTexture : register(t7);
 
@@ -647,23 +658,23 @@ float3 ApplyFog(float3 originalColor, float eyePosY, float3 eyeToPixel)
     float pixelDist = length(eyeToPixel);
     float3 eyeToPixelNorm = eyeToPixel / pixelDist;
     
-    // ÇÈ¼¿ °Å¸®¿¡ ´ëÇØ ¾È°³ ½ÃÀÛ ÁöÁ¡ °è»ê
+    // ï¿½È¼ï¿½ ï¿½Å¸ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½È°ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½
     float fogDist = max(pixelDist - FogStartDepth, 0.0);
     
-    // ¾È°³ ¼¼±â¿¡ ´ëÇØ °Å¸® °è»ê
+    // ï¿½È°ï¿½ ï¿½ï¿½ï¿½â¿¡ ï¿½ï¿½ï¿½ï¿½ ï¿½Å¸ï¿½ ï¿½ï¿½ï¿½
     float fogHeightDensityAtViewer = exp(-FogHeightFallOff * eyePosY);
     float fogDistInt = fogDist * fogHeightDensityAtViewer;
     
-    // ¾È°³ ¼¼±â¿¡ ´ëÇØ ³ôÀÌ °è»ê
+    // ï¿½È°ï¿½ ï¿½ï¿½ï¿½â¿¡ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½
     float eyeToPixelY = eyeToPixel.y * (fogDist / pixelDist);
     float t = FogHeightFallOff * eyeToPixelY;
     const float thresholdT = 0.01;
     float fogHeightInt = abs(t) > thresholdT ? (1.0 - exp(-t)) / t : 1.0;
     
-    // À§ °è»ê °ªÀ» ÇÕÇØ ÃÖÁ¾ ÀÎ¼ö °è»ê
+    // ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Î¼ï¿½ ï¿½ï¿½ï¿½
     float fogFinalFactor = exp(-FogGlobalDensity * fogDistInt * fogHeightInt);
     
-    // ÅÂ¾ç ÇÏÀÌ¶óÀÌÆ® °è»ê ¹× ¾È°³ »ö»ó È¥ÇÕ
+    // ï¿½Â¾ï¿½ ï¿½ï¿½ï¿½Ì¶ï¿½ï¿½ï¿½Æ® ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½È°ï¿½ ï¿½ï¿½ï¿½ï¿½ È¥ï¿½ï¿½
     float sunHighlightFactor = saturate(dot(eyeToPixelNorm, g_vLightDir));
     sunHighlightFactor = pow(sunHighlightFactor, 8.0);
     float3 fogFinalColor = lerp(FogColor, FogHighlightColor, sunHighlightFactor);

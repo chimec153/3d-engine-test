@@ -25,9 +25,27 @@ namespace Engine
 	class Texture;
 	class Animation;
 	class Sequence;
+	class GameObject;
+	class Component;
+	class MeshRendererComponent;
+	class VertexShader;
+	class PixelShader;
+	class BlendState;
+	template <typename T> class ConstantBuffer;
 }
 namespace Editor
 {
+	// Constant buffer for the selection-outline composite pass. Layout
+	// mirrors `cbuffer OutlineCB` in SelectionOutline.fx — keep them in
+	// sync (16-byte aligned, 32-byte total).
+	struct OUTLINECBUFFER
+	{
+		float vColor[4];
+		float vTexelSize[2];
+		int iThickness;
+		float padding;
+	};
+
 	class ImguiManager
 	{
 	private:
@@ -91,6 +109,26 @@ namespace Editor
 		void Scene_ImGuiWindow(Engine::Scene* pScene);
 		void Sequence_ImGuiWindow(std::shared_ptr<Engine::Sequence> pSeq);
 
+		// Unreal-style debug windows for entity/component inspection.
+		// WorldOutliner draws the Scene→Layer→GameObject tree and tracks
+		// selection in m_pSelectedObject; GameObject_ImGuiWindow renders the
+		// Details panel for one entity; Component_ImGuiWindow dispatches a
+		// single Component's inline editor (Transform for now).
+		void WorldOutliner_ImGuiWindow(Engine::Scene* pScene);
+		void GameObject_ImGuiWindow(std::shared_ptr<Engine::GameObject> pObject);
+		void Component_ImGuiWindow(std::shared_ptr<Engine::Component> pComponent);
+		void MeshRenderer_ImGuiWindow(std::shared_ptr<Engine::MeshRendererComponent> pRenderer);
+
+		// Selection-outline pass (Unreal-style post-process). Two stages:
+		//   mask  — render the selected (GameObject, containerIdx)'s
+		//           container geometry into m_pOutlineMaskMRT
+		//   composite — full-screen edge-detect that samples the mask and
+		//               writes outline color to whatever RT is currently
+		//               bound (back buffer at UI render time).
+		// Called from Update() via AddCustomRender on RENDER_LAYER::UI.
+		void InitSelectionOutline();
+		void RenderSelectionOutline();
+
 	private:
 		float m_fCellSize;
 		float m_fCellHeight;
@@ -120,6 +158,35 @@ namespace Editor
 
 	private:
 		std::vector<std::shared_ptr<Engine::Texture>> m_vecBrushTexture;
+
+		// Outliner selection; weak so a deleted GameObject auto-clears.
+		std::weak_ptr<Engine::GameObject> m_pSelectedObject;
+
+		// Selection-outline state. Single container highlighted at a time;
+		// -1 means "no container selected". The owning GameObject is held
+		// weakly so deleting it auto-clears the highlight.
+		std::weak_ptr<Engine::GameObject> m_pOutlinedObject;
+		int m_iOutlinedContainerIdx;
+
+		std::shared_ptr<Engine::MRT>          m_pOutlineMaskMRT;
+		std::shared_ptr<Engine::VertexShader> m_pOutlineMaskVS;
+		std::shared_ptr<Engine::PixelShader>  m_pOutlineMaskPS;
+		std::shared_ptr<Engine::VertexShader> m_pOutlineFullScreenVS;
+		std::shared_ptr<Engine::PixelShader>  m_pOutlineCompositePS;
+		std::shared_ptr<Engine::ConstantBuffer<OUTLINECBUFFER>> m_pOutlineCB;
+		std::shared_ptr<Engine::BlendState>   m_pOutlineBlend;
+
+		// Post-process toggles. When a flag flips off, the previous "live"
+		// value is cached in the matching m_fSaved* field and the engine
+		// param is pushed to a neutral value (no-op). Flipping back on
+		// restores the cached value. Default-on so editor mirrors fresh
+		// engine state.
+		bool  m_bEnableBloom = true;
+		bool  m_bEnableDOF   = true;
+		bool  m_bEnableFog   = true;
+		float m_fSavedBloomScale = 0.f;
+		float m_fSavedFOVValueY  = 0.f;
+		float m_fSavedFogDensity = 0.f;
 
 	public:
 		void CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);

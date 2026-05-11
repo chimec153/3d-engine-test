@@ -22,20 +22,14 @@ namespace Engine
 	{
 	}
 
-	ID3D11InputLayout* InputLayout::s_pBound = nullptr;
-
-	void InputLayout::ResetBoundCache()
-	{
-		s_pBound = nullptr;
-	}
-
 	void InputLayout::Bind()
 	{
+		BindCache& cache = Graphics::GetInst()->GetBindCache();
 		ID3D11InputLayout* mine = *pInputLayout;
-		if (mine == s_pBound)
+		if (mine == cache.pBoundIL)
 			return;
 		Graphics::GetInst()->GetDeviceContext()->IASetInputLayout(mine);
-		s_pBound = mine;
+		cache.pBoundIL = mine;
 	}
 
 	std::shared_ptr<Bindable> InputLayout::Clone()

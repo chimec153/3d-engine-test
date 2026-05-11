@@ -56,9 +56,14 @@ namespace Engine
 
 			pBindable->SetTag(strTag);
 
-			m_mapBindable.insert(std::make_pair(strTag, pBindable));
+			AddBindable(pBindable);
 
 			return pBindable;
+		}
+
+		void AddBindable(std::shared_ptr<T> pBindable)
+		{
+			m_mapBindable.insert(std::make_pair(pBindable->GetTag(), pBindable));
 		}
 
 		std::shared_ptr<T> FindBindable(const std::string& strTag)	const

@@ -20,20 +20,14 @@ namespace Engine
 	{
 	}
 
-	ID3D11VertexShader* VertexShader::s_pBoundVS = nullptr;
-
-	void VertexShader::ResetBoundCache()
-	{
-		s_pBoundVS = nullptr;
-	}
-
 	void VertexShader::Bind()
 	{
+		BindCache& cache = Graphics::GetInst()->GetBindCache();
 		ID3D11VertexShader* mine = *pVertexShader;
-		if (mine == s_pBoundVS)
+		if (mine == cache.pBoundVS)
 			return;   // sort-by-state win: same shader as last drawable
 		Graphics::GetInst()->GetDeviceContext()->VSSetShader(mine, nullptr, 0);
-		s_pBoundVS = mine;
+		cache.pBoundVS = mine;
 	}
 
 	void VertexShader::PostBind()

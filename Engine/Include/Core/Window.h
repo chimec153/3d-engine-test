@@ -3,6 +3,7 @@
 #include "Macro.h"
 #include "Graphics.h"
 #include "Timer.h"
+#include <functional>
 
 namespace Engine
 {
@@ -45,8 +46,10 @@ namespace Engine
 		bool bCursorEnable;
 		bool bLockRotate;
 		float m_fFixedTime;
+		std::function<void()> m_PrePresentCb;
 
 	public:
+		void SetPrePresentCallback(std::function<void()> cb);
 		std::shared_ptr<Timer> GetTimer()	const;
 		void Stop();
 		void Resume();

@@ -44,22 +44,17 @@ namespace Engine
 		void SetUAV(int iSlot);
 		void ResetUAV(int iSlot);
 		void ResetSRV();
+		const TCHAR* GetFullPath()	const;
 
 	public:
 		virtual void Update(float fDeltaTime) override;
 		virtual void Bind() override;
 		virtual std::shared_ptr<Bindable> Clone() override;
 		virtual void PostBind() override;
-
-		// Sort-by-state cache — see VertexShader::ResetBoundCache. Tracks
-		// the SRV currently set at each slot (0..kMaxSlots-1). Texture
-		// binding sets VS+PS+CS at the same slot to the same SRV, so a
-		// single tracker per slot is sufficient.
-		static void ResetBoundCache();
-
-	private:
-		static constexpr int kMaxSlots = 64;
-		static ID3D11ShaderResourceView* s_pBound[kMaxSlots];
+		// Phase E7 — sort-by-state cache moved to Graphics::BindCache. Tracks
+		// the SRV currently set at each slot. Texture binding sets VS+PS+CS
+		// at the same slot to the same SRV, so a single tracker per slot
+		// is sufficient.
 
 	public:
 		virtual void Save(FILE* pFile) override;

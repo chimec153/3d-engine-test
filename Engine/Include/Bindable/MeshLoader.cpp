@@ -25,6 +25,9 @@
 #include "../Shader/ShaderManager.h"
 #include "../Core/PathManager.h"
 #include "BindableManager.h"
+#include <algorithm>
+#include <cctype>
+#include <cstring>
 
 namespace Engine
 {
@@ -1231,6 +1234,85 @@ namespace Engine
                     default:
                         break;
                     }
+                }
+
+                // war.fbx ships with no texture refs; map mesh-name prefix
+                // (Maya namespace stripped) to a texture group in
+                // Warrior/additional-files/textures_extracted/TEXTURES/.
+                if (vecTexture.empty() && _stricmp(strFileName, "war") == 0)
+                {
+                    std::string meshName = loader.GetMeshName(i);
+
+                    auto colon = meshName.find(':');
+                    if (colon != std::string::npos)
+                    {
+                        meshName = meshName.substr(colon + 1);
+                    }
+
+                    size_t end = meshName.size();
+                    while (end > 0 && isdigit(static_cast<unsigned char>(meshName[end - 1])))
+                    {
+                        --end;
+                    }
+                    meshName.resize(end);
+
+                    std::string lower = meshName;
+                    std::transform(lower.begin(), lower.end(), lower.begin(),
+                        [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+
+                    const char* group = "1_Armor";
+                    if      (lower == "body" || lower == "cherep" ||
+                             lower == "koza" || lower == "ruka"   ||
+                             lower == "zubi" || lower == "serdce" ||
+                             lower == "brov" || lower == "chep")    group = "1_body";
+                    else if (lower == "eye"  || lower == "glaz" ||
+                             lower == "glazelectro")                 group = "1_eye";
+                    else if (lower == "gun"  || lower == "pulemet" ||
+                             lower == "patron" || lower == "molot")  group = "1_gun";
+                    else if (lower == "hair")                        group = "1_hair";
+                    else if (lower == "portal")                      group = "1_portal23";
+                    else if (lower == "stand" || lower == "stani")   group = "1_stand";
+
+                    {
+                        char dbg[512];
+                        sprintf_s(dbg,
+                            "[war.fbx] mesh[%d] raw=\"%s\" stripped=\"%s\" -> group=\"%s\"\n",
+                            i, loader.GetMeshName(i).c_str(), lower.c_str(), group);
+                        ::OutputDebugStringA(dbg);
+                    }
+
+                    auto LoadFallback = [&](const char* suffix, int slot)
+                    {
+                        char relPath[MAX_PATH];
+                        sprintf_s(relPath,
+                            "Warrior\\additional-files\\textures_extracted\\TEXTURES\\%s_%s.tga",
+                            group, suffix);
+
+                        TCHAR wRelPath[MAX_PATH] = {};
+                        MultiByteToWideChar(CP_ACP, 0, relPath, -1, wRelPath, MAX_PATH);
+
+                        std::string tag = std::string(group) + "_" + suffix;
+                        std::shared_ptr<Texture> pTex = StaticFindBindable<Texture>(tag);
+                        if (!pTex)
+                        {
+                            pTex = StaticCreateBindable<Texture>(tag, wRelPath, std::string(MESH_PATH), slot);
+                        }
+
+                        char dbg[512];
+                        sprintf_s(dbg,
+                            "[war.fbx]   slot=%d suffix=%s file=%s -> %s\n",
+                            slot, suffix, relPath, pTex ? "OK" : "FAIL");
+                        ::OutputDebugStringA(dbg);
+
+                        if (pTex)
+                        {
+                            vecTexture.push_back(pTex);
+                            ++iTextureCount;
+                        }
+                    };
+
+                    LoadFallback("diffuze", 0);
+                    LoadFallback("Normal",  1);
                 }
 
                 pMesh->SetTextures(i, vecTexture);

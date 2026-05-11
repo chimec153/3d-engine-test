@@ -423,6 +423,8 @@ namespace Engine
 
 		m_tDownScaleCBuffer.fBloomThreshold = 0.5f;
 
+		m_fAdaptationSpeed = 1.f;
+
 		m_pDownScaleCBuffer->UpdateBuffer(m_tDownScaleCBuffer);
 
 		m_tHDRCBuffer.fMiddleGray = 0.25f;
@@ -491,7 +493,7 @@ namespace Engine
 		// (MeshRenderer / Decal / Particle / CustomRender) handle their own
 		// per-frame state.
 
-		m_tDownScaleCBuffer.fAdaptation = fDeltaTime;// std::max(fDeltaTime / 0.016f, 1.f);
+		m_tDownScaleCBuffer.fAdaptation = fDeltaTime * m_fAdaptationSpeed;
 
 		m_pDownScaleCBuffer->UpdateBuffer(m_tDownScaleCBuffer);
 	}
@@ -559,6 +561,16 @@ namespace Engine
 		m_pDownScaleCBuffer->UpdateBuffer(m_tDownScaleCBuffer);
 	}
 
+	void RenderManager::SetAdaptationSpeed(float fSpeed)
+	{
+		m_fAdaptationSpeed = fSpeed;
+	}
+
+	float RenderManager::GetAdaptationSpeed() const
+	{
+		return m_fAdaptationSpeed;
+	}
+
 	void RenderManager::RenderOpaque()
 	{
 		pMRT->SetTargets();
@@ -566,25 +578,48 @@ namespace Engine
 		// Invalidate the per-shader bound caches at pass entry — between
 		// passes the actual GPU state is whatever the previous pass left,
 		// which our trackers don't observe.
-		VertexShader::ResetBoundCache();
-		PixelShader::ResetBoundCache();
-		InputLayout::ResetBoundCache();
-		Topology::ResetBoundCache();
-		Sampler::ResetBoundCache();
-		Texture::ResetBoundCache();
+		Graphics::GetInst()->ResetBindCache();
 
-		// Phase E5 — Drawable sort-by-state path removed. No live Drawable
-		// instances populate m_RenderList[OPACUE] anymore. Sort-by-state
-		// will be reintroduced on the MeshRenderer Component pass below
-		// when render-state diversity warrants it.
+		// Phase E7 — sort-by-state pass. m_mapMeshInstance is keyed by
+		// MeshRendererComponent::GetInstanceKey() (a hash combining
+		// Mesh/VS/PS/Material/Animation tags), so each bucket is
+		// state-homogeneous. But unordered_map iteration is hash-bucket
+		// order — adjacent buckets share little. Collect non-empty buckets
+		// into a vector and sort by (VS ptr, PS ptr, Material ptr) so
+		// buckets with the same shaders/material draw adjacently. The
+		// VS/PS/Texture::Bind cache then skips the redundant SetShader /
+		// SetTexture calls between adjacent same-state buckets.
+		auto& mapBuckets = m_mapMeshInstance[static_cast<int>(RENDER_LAYER::OPACUE)];
 
-		// Phase E5 — MeshRenderer opaque render via instance buckets.
+		using BucketRef = std::list<std::shared_ptr<MeshRendererComponent>>*;
+		using SortEntry = std::tuple<void*, void*, void*, BucketRef>;
+		std::vector<SortEntry> sortedBuckets;
+		sortedBuckets.reserve(mapBuckets.size());
+
+		for (auto& kv : mapBuckets)
+		{
+			if (kv.second.empty()) continue;
+			const auto& pFirst = kv.second.front();
+			if (!pFirst) continue;
+			void* vsPtr  = pFirst->GetVertexShader().get();
+			void* psPtr  = pFirst->GetPixelShader().get();
+			void* matPtr = pFirst->GetMaterial().get();
+			sortedBuckets.emplace_back(vsPtr, psPtr, matPtr, &kv.second);
+		}
+
+		std::sort(sortedBuckets.begin(), sortedBuckets.end(),
+			[](const SortEntry& a, const SortEntry& b)
+			{
+				return std::tie(std::get<0>(a), std::get<1>(a), std::get<2>(a))
+				     < std::tie(std::get<0>(b), std::get<1>(b), std::get<2>(b));
+			});
+
 		// For each instance-key bucket, try the DrawInstanced fast path;
 		// fall back to per-MR solo rendering when the bucket has Animation /
 		// decorator Components / no "Inst" shader variant.
-		for (auto& kv : m_mapMeshInstance[static_cast<int>(RENDER_LAYER::OPACUE)])
+		for (auto& entry : sortedBuckets)
 		{
-			auto& bucket = kv.second;
+			auto& bucket = *std::get<3>(entry);
 			if (TryRenderInstancedBucket(bucket)) continue;
 			for (const auto& pMR : bucket) RenderSoloMR(pMR);
 		}
@@ -619,12 +654,7 @@ namespace Engine
 	void RenderManager::RenderAlpha()
 	{
 		// Pass boundary — invalidate the VS/PS bound caches.
-		VertexShader::ResetBoundCache();
-		PixelShader::ResetBoundCache();
-		InputLayout::ResetBoundCache();
-		Topology::ResetBoundCache();
-		Sampler::ResetBoundCache();
-		Texture::ResetBoundCache();
+		Graphics::GetInst()->ResetBindCache();
 
 		m_pHDRTexture->ResetTargets();
 
@@ -891,12 +921,7 @@ namespace Engine
 		{
 			return;
 		}
-		VertexShader::ResetBoundCache();
-		PixelShader::ResetBoundCache();
-		InputLayout::ResetBoundCache();
-		Topology::ResetBoundCache();
-		Sampler::ResetBoundCache();
-		Texture::ResetBoundCache();
+		Graphics::GetInst()->ResetBindCache();
 
 		pMRT->SetDepthSRV(10);
 
@@ -1259,18 +1284,20 @@ namespace Engine
 #endif
 	void RenderManager::RenderUI()
 	{
-		VertexShader::ResetBoundCache();
-		PixelShader::ResetBoundCache();
-		InputLayout::ResetBoundCache();
-		Topology::ResetBoundCache();
-		Sampler::ResetBoundCache();
-		Texture::ResetBoundCache();
+		Graphics::GetInst()->ResetBindCache();
 
 		m_pAlphaBlend->Bind();
 
 		// Phase E5 — Drawable iterate / instancing removed (no live
 		// Drawable instances). Future UI Component-side render pass
 		// would hook in here (none active yet — UI hierarchy is dead).
+
+		// Generic Component render callbacks for UI layer (e.g., editor
+		// selection-outline pass drawn on top of the final back-buffer image).
+		for (const auto& fn : m_CustomRenderList[static_cast<int>(RENDER_LAYER::UI)])
+		{
+			if (fn) fn();
+		}
 
 		m_pAlphaBlend->PostBind();
 	}

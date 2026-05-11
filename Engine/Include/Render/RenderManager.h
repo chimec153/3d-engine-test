@@ -114,6 +114,10 @@ namespace Engine
 		std::shared_ptr<class PixelShader> m_pHDRPS; 
 		HDRCBUFFER m_tHDRCBuffer;
 		DOWNSCALECBUFFER m_tDownScaleCBuffer;
+		// Multiplier applied to fDeltaTime when computing per-frame
+		// adaptation step. 1.0 = engine default (slow); larger = faster
+		// eye-adapt recovery from dark-to-bright transitions.
+		float m_fAdaptationSpeed;
 		std::shared_ptr<class MRT> m_pBlurTarget;
 		std::shared_ptr<class ComputeShader> m_pBlurCS;
 		std::shared_ptr<class Texture> m_pBlurTexture;
@@ -129,6 +133,8 @@ namespace Engine
 		void SetHDRWhiteSqr(float fWhiteSqr);
 		void SetBloomScale(float fScale);
 		void SetBloomThreshold(float fThreshold);
+		void SetAdaptationSpeed(float fSpeed);
+		float GetAdaptationSpeed() const;
 		void SetFOVValueX(float fX);
 		void SetFOVValueY(float fY);
 		float GetHDRMidGray()	const;

@@ -19,20 +19,14 @@ namespace Engine
 	{
 	}
 
-	ID3D11PixelShader* PixelShader::s_pBoundPS = nullptr;
-
-	void PixelShader::ResetBoundCache()
-	{
-		s_pBoundPS = nullptr;
-	}
-
 	void PixelShader::Bind()
 	{
+		BindCache& cache = Graphics::GetInst()->GetBindCache();
 		ID3D11PixelShader* mine = *pPixelShader;
-		if (mine == s_pBoundPS)
+		if (mine == cache.pBoundPS)
 			return;
 		Graphics::GetInst()->GetDeviceContext()->PSSetShader(mine, nullptr, 0);
-		s_pBoundPS = mine;
+		cache.pBoundPS = mine;
 	}
 
 	void PixelShader::GetAndBind()
