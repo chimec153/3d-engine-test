@@ -128,6 +128,7 @@ struct PSOut
     float4 value1 : SV_TARGET1;
     float4 value2 : SV_TARGET2;
     float4 value3 : SV_TARGET3;
+    float4 value4 : SV_TARGET4;
 };
 
 struct VS_PARTICLE_OUT
@@ -397,6 +398,9 @@ Texture2D g_GBufferTexture3 : register(t14);
 Texture2D g_ShadowTexture : register(t15);
 Texture2D g_HeightTexture : register(t16);
 Texture2D g_NoiseTexture : register(t17);
+// GBuffer slot 4 (MRT4): per-pixel emissive RGB. Lives outside the
+// contiguous t11~t14 GBuffer range because t15 is Shadow.
+Texture2D g_GBufferTexture4 : register(t18);
 
 Texture2DArray g_TerrainTexture : register(t20);
 Texture2DArray g_TerrainNormalTexture : register(t21);

@@ -1397,6 +1397,28 @@ namespace Editor
 
 			for (size_t i = 0; i < vecSRV.size(); ++i)
 			{
+				switch (i)
+				{
+				case 0:
+					ImGui::Text("albedo");
+					break;
+				case 1:
+					ImGui::Text("normal");
+					break;
+				case 2:
+					ImGui::Text("specular map");
+					break;
+				case 3:
+					ImGui::Text("specular color");
+					break;
+				case 4:
+					ImGui::Text("emissive");
+					break;
+				default:
+					ImGui::Text("unknown");
+					break;
+				}
+				ImGui::SameLine();
 				ImGui::Image((void*)(*vecSRV[i]), { 640, 360 });
 
 				if ((i + 1) % iCol)

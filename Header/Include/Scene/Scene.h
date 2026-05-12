@@ -21,33 +21,10 @@ namespace Engine
 		const std::list<std::shared_ptr<class Layer>>& GetLayerList() const { return m_LayerList; }
 
 	public:
-		// Phase E7 — CreateDrawable<T> removed. All entities now go through
-		// CreateGameObject<T> (defined below); Component-only registration
-		// uses CreateComponent<T>. The Drawable-typed factory had no live
-		// callers after the Editor migration finished.
-
-		// Phase B.5 — Component-side analogue of CreateDrawable. Used to
-		// register top-level Components (Camera, Light controller, etc.) on
-		// a Layer. Layer drives lifecycle on its m_ComponentList.
-		template <typename T, typename ...Args>
-		std::shared_ptr<T> CreateComponent(const std::string& strTag, const class std::shared_ptr<class Layer>& pLayer, Args... args)
-		{
-			std::shared_ptr<T> pComp = std::make_shared<T>(args...);
-
-			pComp->SetTag(strTag);
-
-			if (!pComp->Init())
-			{
-				return nullptr;
-			}
-
-			if (pLayer)
-			{
-				pLayer->AddComponent(std::static_pointer_cast<class Component>(pComp));
-			}
-
-			return pComp;
-		}
+		// Phase E7 — CreateDrawable<T> and CreateComponent<T> removed. All
+		// entities now go through CreateGameObject<T> (defined below); top-
+		// level Components (Camera, Light, Mouse) are hosted on a wrapper
+		// GameObject created via CreateGameObject + AddComponent<T>.
 
 		// Phase E1 — entity (GameObject / Actor) creation. Scene-level
 		// factory. The returned GameObject's Components are added by the

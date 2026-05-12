@@ -239,7 +239,16 @@ namespace Engine
 		// Phase E7 — RenderV2 init removed. Sort-by-state will be reintroduced
 		// inside the V1 render path in a follow-up.
 
-		const std::vector<DXGI_FORMAT>& format = { DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM };
+		// MRT0~3: albedo/normal/specMap/specColor (RGBA8 each).
+		// MRT4: per-pixel emissive (R11G11B10_FLOAT for HDR in 4B).
+		// MRT4's SRV is rebound to t18 in RenderLight() because t15 is Shadow.
+		const std::vector<DXGI_FORMAT>& format = {
+			DXGI_FORMAT_R8G8B8A8_UNORM,
+			DXGI_FORMAT_R8G8B8A8_UNORM,
+			DXGI_FORMAT_R8G8B8A8_UNORM,
+			DXGI_FORMAT_R8G8B8A8_UNORM,
+			DXGI_FORMAT_R11G11B10_FLOAT,
+		};
 
 		pMRT = std::make_shared<MRT>(format, 11);
 
@@ -544,7 +553,7 @@ namespace Engine
 		m_pNoDepthWrite->PostBind();
 
 #ifdef _DEBUG
-		RenderDebug();
+		//RenderDebug();
 #endif
 
 		// Phase E7 — RenderV2 flush block removed. The sort-by-state pass
@@ -733,6 +742,10 @@ namespace Engine
 
 		m_pDecalMRT->SetSRV();
 		pMRT->SetSRV();
+		// SetSRV() binds 5 SRVs contiguously at t11~t15. t15 collides with
+		// Shadow but is overwritten below by pDepthBuffer[i]->SetDepthSRV(15).
+		// Also rebind MRT4 to t18 — that's where the shader expects emissive.
+		pMRT->SetSRV(4, 18);
 		pMRT->SetDepthSRV(10);
 
 		m_pAccBlend->Bind();
@@ -771,6 +784,7 @@ namespace Engine
 
 		m_pDecalMRT->ResetSRV();
 		pMRT->ResetSRV(10);
+		pMRT->ResetSRV(18);
 		pMRT->ResetSRV();
 
 	}

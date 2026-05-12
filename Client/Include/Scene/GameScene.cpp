@@ -249,26 +249,33 @@ namespace Client
 			std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = std::static_pointer_cast<Engine::ColliderMesh>(pTerrain->FindComponent(Engine::COMPONENT_TYPE::COLLIDER_MESH));
 		}
 
-		if (std::shared_ptr<Engine::Camera> pCamera = CreateComponent<Engine::Camera>("Camera", FindLayer(DEFAULT_LAYER)))
+		if (auto pCameraObj = CreateGameObject("Camera", FindLayer(DEFAULT_LAYER)))
 		{
-			pCamera->SetProjectType(Engine::Camera::PROJECT_TYPE::PERSPECTIVE);
+			if (std::shared_ptr<Engine::Camera> pCamera = pCameraObj->AddComponent<Engine::Camera>("Camera"))
+			{
+				pCamera->SetProjectType(Engine::Camera::PROJECT_TYPE::PERSPECTIVE);
 
-			Engine::Graphics::GetInst()->SetCamera(pCamera);
+				Engine::Graphics::GetInst()->SetCamera(pCamera);
+			}
 		}
 
-		if (auto pLight = CreateComponent<Engine::PointLight>("Light", FindLayer(DEFAULT_LAYER)))
+		if (auto pLightObj = CreateGameObject("Light", FindLayer(DEFAULT_LAYER)))
 		{
-			pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
+			if (auto pLight = pLightObj->AddComponent<Engine::PointLight>("Light"))
+			{
+				pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
+			}
 		}
-
-		std::shared_ptr<Engine::Camera> pUIInventoryCamera = CreateComponent<Engine::Camera>("InventoryCamera", FindLayer(DEFAULT_LAYER));
-
-		pUIInventoryCamera->SetProjectType(Engine::Camera::PROJECT_TYPE::PERSPECTIVE);
 
 		// Phase E5 — Player is a GameObject now.
 		std::shared_ptr<Player> pPlayer = CreateGameObject<Player>("player", FindLayer(DEFAULT_LAYER), 100, 10, 15);
 
-		pPlayer->AddComponent(pUIInventoryCamera);
+		// InventoryCamera is owned by the Player (previously also registered
+		// on Layer's m_ComponentList; that parallel registration was removed
+		// when m_ComponentList was deleted).
+		std::shared_ptr<Engine::Camera> pUIInventoryCamera = pPlayer->AddComponent<Engine::Camera>("InventoryCamera");
+
+		pUIInventoryCamera->SetProjectType(Engine::Camera::PROJECT_TYPE::PERSPECTIVE);
 
 		std::shared_ptr<Engine::Transform> pInventoryCameraTransform = pUIInventoryCamera->GetTransform();
 

@@ -361,13 +361,20 @@ namespace Engine
 
 			if (pLayer)
 			{
-				// Phase B.6 — Mouse migrated to Component; lookup via FindComponent.
-				m_pMouse = std::static_pointer_cast<Mouse>(pLayer->FindComponent("Mouse"));
+				// Mouse is hosted on a GameObject tagged "Mouse"; look up the
+				// GameObject first, then pull the Mouse component out of it.
+				if (auto pMouseObj = pLayer->FindGameObject("Mouse"))
+				{
+					m_pMouse = std::static_pointer_cast<Mouse>(pMouseObj->FindComponent("Mouse"));
+				}
 			}
 
 			if (!m_pMouse)
 			{
-				m_pMouse = pScene->CreateComponent<Mouse>("Mouse", SceneManager::GetInst()->GetScene()->FindLayer(DEFAULT_LAYER));
+				if (auto pMouseObj = pScene->CreateGameObject("Mouse", pLayer))
+				{
+					m_pMouse = pMouseObj->AddComponent<Mouse>("Mouse");
+				}
 			}
 		}
 	}

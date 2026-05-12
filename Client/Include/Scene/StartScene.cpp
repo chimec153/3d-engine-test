@@ -14,7 +14,11 @@ namespace Client
 
 	bool StartScene::Init()
 	{
-		std::shared_ptr<Engine::Camera> pCamera = CreateComponent<Engine::Camera>("camera", FindLayer(DEFAULT_LAYER));
+		std::shared_ptr<Engine::Camera> pCamera;
+		if (auto pCameraObj = CreateGameObject("camera", FindLayer(DEFAULT_LAYER)))
+		{
+			pCamera = pCameraObj->AddComponent<Engine::Camera>("camera");
+		}
 
 		Engine::Graphics::GetInst()->SetCamera(pCamera);
 

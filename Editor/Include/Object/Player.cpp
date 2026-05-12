@@ -25,7 +25,7 @@ namespace Editor
         m_pAnimation    = AddComponent<Engine::Animation>("anim");
 
         std::shared_ptr<Engine::Mesh> pMesh =
-            Engine::StaticFindBindable<Engine::Mesh>("Medieval");
+            Engine::StaticFindBindable<Engine::Mesh>("war");
 
         //std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
         //pSkeleton->LoadFromPath("Walking.skel", MESH_PATH);

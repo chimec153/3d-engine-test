@@ -1,6 +1,7 @@
 #include "FbxLoader.h"
 #include "../Core/PathManager.h"
 #include "../Vector4.h"
+#include "MeshUtils.h"
 
 namespace Engine
 {
@@ -355,6 +356,22 @@ namespace Engine
 			mesh.vecIndex[_iIndex].push_back(iIndex[0]);
 			mesh.vecIndex[_iIndex].push_back(iIndex[2]);
 			mesh.vecIndex[_iIndex].push_back(iIndex[1]);
+		}
+
+		// Fallback: FBX files exported without tangent data leave every
+		// vertex.tangent at (0,0,0,0), which makes BumpMapping return 0
+		// (gray normal GBuffer). Compute tangents from UV derivatives the
+		// same way the OBJ pipeline does (MeshLoader.cpp uses SetTangent).
+		// SetTangent normalises per-vertex once at the end, so per-material
+		// index lists must be flattened into a single pass.
+		if (!pMesh->GetElementTangent())
+		{
+			std::vector<unsigned int> vecFlatIndex;
+			for (const auto& vec : mesh.vecIndex)
+			{
+				vecFlatIndex.insert(vecFlatIndex.end(), vec.begin(), vec.end());
+			}
+			MeshUtils::SetTangent(mesh.vecVertex, vecFlatIndex);
 		}
 
 		LoadAnimation(pMesh, group);

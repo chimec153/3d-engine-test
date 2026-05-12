@@ -5,7 +5,7 @@ namespace Engine
     // Phase B.5 — Camera migrated from Drawable to Component. Camera doesn't
     // render itself (PreDraw was empty). It owns a Transform component for
     // its world placement and provides view/projection matrices to other
-    // systems. Layer drives lifecycle through m_ComponentList.
+    // systems. Lifecycle is driven by the owning GameObject.
     class ENGINE_DLL Camera :
         public Component
     {

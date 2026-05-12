@@ -200,9 +200,10 @@ PSOut PS(VSOut input)
 {
     PSOut output;
 
-    //output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor * g_Texture.Sample(g_sAnisotropic, input.uv) + g_vEmissiveColor * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv), input.uv).xyz;
-
-    float3 baseColor = g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
+    // Emissive is routed through MRT4 (added in PS_Multi after lighting),
+    // so it must NOT be baked into baseColor (would otherwise get attenuated
+    // by NDotL/materialFraction).
+    float3 baseColor = g_vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
     float3 specularRGB = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
 
     // Optional Metalness texture (t9): converts a metalness-workflow
@@ -226,12 +227,20 @@ PSOut PS(VSOut input)
         baseColor *= g_AOTexture.Sample(g_sAnisotropic, input.uv).r;
     }
     output.value0.xyz = baseColor;
-
+    
+    // 진단 1: VS가 PS로 넘긴 normal 자체
+    //output.value1.xyz = normalize(input.normal) * 0.5f + 0.5f;
+    
+    // 진단 2: VS가 PS로 넘긴 tangent 자체
+    //output.value1.xyz = input.tangent.xyz * 0.5f + 0.5f;
     output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
 
     output.value2.xyz = specularRGB;
 
     output.value3.xyz = g_vSpecularColor.xyz;
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
 
     // Optional Roughness texture (t6): .r overrides uniform when bound.
     uint rW, rH;
@@ -255,100 +264,115 @@ PSOut PS(VSOut input)
 PSOut PS_NoSpecMap(VSOut input)
 {
     PSOut output;
-    
+
     output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
-    
+
     output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor * g_Texture.Sample(g_sAnisotropic, input.uv), input.uv).xyz;
-    
+
     output.value0.w = g_vMaterialRoughness.x;
     output.value1.w = g_vMaterialRoughness.y;
-    
+
     output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value2.w = g_fMaterialFraction;
-    
+
     output.value3.xyz = g_vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
 PSOut PS_NoNormalMap(VSOut input)
 {
     PSOut output;
-    
+
     output.value1.xyz = normalize(input.normal) * 0.5f + 0.5f;
-    
+
     output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor * g_Texture.Sample(g_sAnisotropic, input.uv), input.uv).xyz;
-    
+
     output.value0.w = g_vMaterialRoughness.x;
     output.value1.w = g_vMaterialRoughness.y;
-    
+
     output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value2.w = g_fMaterialFraction;
-    
+
     output.value3.xyz = g_vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
 PSOut PS_NoSpecMapNoNormalMap(VSOut input)
 {
     PSOut output;
-    
+
     output.value1.xyz = normalize(input.normal) * 0.5f + 0.5f;
-    
+
     output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor * g_Texture.Sample(g_sAnisotropic, input.uv), input.uv).xyz;
-    
+
     output.value0.w = g_vMaterialRoughness.x;
     output.value1.w = g_vMaterialRoughness.y;
-    
+
     output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value2.w = g_fMaterialFraction;
-    
+
     output.value3.xyz = g_vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
 PSOut PS_NoDiffuseNoSpecMapNoNormalMap(VSOut input)
 {
     PSOut output;
-    
+
     output.value1.xyz = normalize(input.normal) * 0.5f + 0.5f;
-    
+
     output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor, input.pos.xz).xyz;
-    
+
     output.value0.w = g_vMaterialRoughness.x;
     output.value1.w = g_vMaterialRoughness.y;
-    
+
     output.value2.xyz = 0.f;
-    
+
     output.value2.w = g_fMaterialFraction;
-    
+
     output.value3.xyz = g_vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
 PSOut PS_NoTexture(VSOut input)
 {
     PSOut output;
-    
+
     output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
-    
+
     output.value0.xyz = GetPaperBurnColor(g_vDiffuseColor, input.uv).xyz;
-    
+
     output.value0.w = g_vMaterialRoughness.x;
     output.value1.w = g_vMaterialRoughness.y;
-    
+
     output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value2.w = g_fMaterialFraction;
-    
+
     output.value3.xyz = g_vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
@@ -388,7 +412,6 @@ PSOut PS_Terrain(VS_Terrain_Out input)
 
     //output.value1.xyz = normalize(normal.xyz) * 0.5f + 0.5f;
 
-    //output.value0.xyz = g_vDiffuseColor.xyz * vTexture + g_vEmissiveColor.xyz * vEmissive;
     output.value0.xyz = g_vDiffuseColor.xyz * vTexture;
 
     output.value0.w = g_vMaterialRoughness.x;
@@ -399,6 +422,9 @@ PSOut PS_Terrain(VS_Terrain_Out input)
     output.value2.w = g_fMaterialFraction;
 
     output.value3.xyz = g_vSpecularColor.xyz;
+
+    output.value4.xyz = g_vEmissiveColor.xyz * vEmissive;
+    output.value4.w = 1.f;
 
     return output;
 }
@@ -599,12 +625,15 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     //float3 outgoingLight = BRDF * envColor.xyz * max(NDotL, 0.0);
     
-    //float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
-    //+ (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
-    
     float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
-    + (1.f - materialFraction) * envColor);
-    
+    + (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) /** fShadowAttr*/;
+
+    // Per-pixel emissive from MRT4 (written by BasePass PS variants).
+    // Added after shadow attenuation so emissive isn't darkened by shadow;
+    // fog still applies below.
+    float3 emissive = g_GBufferTexture4.Sample(g_sPoint, input.uv).xyz;
+    finalColor.xyz += emissive;
+
     // ApplyFog needs world-space data for both args. Pass camera world Y
     // (g_matInvView row 3 column = camera position) as eyePosY, and the
     // world-space camera→pixel vector as eyeToPixel.
@@ -711,126 +740,144 @@ VSInstOut VSInst(VSInstIn input)
 PSOut PSInst(VSInstOut input)
 {
     PSOut output;
-    
+
     output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
-    
+
     output.value0.xyz = input.vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value0.w = input.vMaterialRoughness.x;
     output.value1.w = input.vMaterialRoughness.y;
-    
+
     output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value2.w = input.fMaterialFraction;
-    
+
     output.value3.xyz = input.vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
 PSOut PS_NoSpecInst(VSInstOut input)
 {
     PSOut output;
-    
+
     output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
-    
+
     output.value0.xyz = input.vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value0.w = input.vMaterialRoughness.x;
     output.value1.w = input.vMaterialRoughness.y;
-    
+
     output.value2.xyz = 0.f;
-    
+
     output.value2.w = input.fMaterialFraction;
-    
+
     output.value3.xyz = input.vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
 PSOut PS_NoNormalInst(VSInstOut input)
 {
     PSOut output;
-    
+
     float3 normal = normalize(input.normal);
-    
+
     output.value1.xyz = normal * 0.5f + 0.5f;
-    
+
     output.value0.xyz = input.vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value0.w = input.vMaterialRoughness.x;
     output.value1.w = input.vMaterialRoughness.y;
-    
+
     output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value2.w = input.fMaterialFraction;
-    
+
     output.value3.xyz = input.vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
 PSOut PS_NoSpecNoNormalInst(VSInstOut input)
 {
     PSOut output;
-    
+
     float3 normal = normalize(input.normal);
-    
+
     output.value1.xyz = normal * 0.5f + 0.5f;
-    
+
     output.value0.xyz = input.vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value0.w = input.vMaterialRoughness.x;
     output.value1.w = input.vMaterialRoughness.y;
-    
+
     output.value2.xyz = 0.f;
-    
+
     output.value2.w = input.fMaterialFraction;
-    
+
     output.value3.xyz = input.vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
 PSOut PS_NoDiffuseNoSpecNoNormalInst(VSInstOut input)
 {
     PSOut output;
-    
+
     float3 normal = normalize(input.normal);
-    
+
     output.value1.xyz = normal * 0.5f + 0.5f;
-    
+
     output.value0.xyz = input.vDiffuseColor.xyz;
-    
+
     output.value0.w = input.vMaterialRoughness.x;
     output.value1.w = input.vMaterialRoughness.y;
-    
+
     output.value2.xyz = 0.f;
-    
+
     output.value2.w = input.fMaterialFraction;
-    
+
     output.value3.xyz = input.vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
 PSOut PS_NoTextureInst(VSInstOut input)
 {
     PSOut output;
-    
+
     output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
-    
+
     output.value0.xyz = input.vDiffuseColor.xyz;
-    
+
     output.value0.w = input.vMaterialRoughness.x;
     output.value1.w = input.vMaterialRoughness.y;
-    
+
     output.value2.xyz = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
-    
+
     output.value2.w = input.fMaterialFraction;
-    
+
     output.value3.xyz = input.vSpecularColor.xyz;
-    
+
+    output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
+    output.value4.w = 1.f;
+
     return output;
 }
 
@@ -969,28 +1016,29 @@ float4 PS_AlphaInst(VSInstOut input) : SV_Target
     shadowpos.y = 1.f - shadowpos.y;
     
     float fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z).r;
-    
+
     float2 vMaterialRoughness = input.vMaterialRoughness;
-    
+
     float4 albedo = g_Texture.Sample(g_sAnisotropic, input.uv) * input.vDiffuseColor;
-    
+
     float3 normal = BumpMapping(input.normal, input.tangent, input.uv);
-    
+
     float4 vSpecColor = g_SpecularTexture.Sample(g_sAnisotropic, input.uv) * input.vSpecularColor;
-    
+
     float materialFraction = input.fMaterialFraction;
-    
+
     float3 light = 0.f;
-    
+
     float4 C = 0.f;
-    
+
     GetLightDirAndColor(input.view, C, light);
-    
+
     float3 view = normalize(-viewPos);
-    
+
     float3 hdir = normalize(light + view);
-    
-    return BRDF(view, hdir, normal, light, albedo, vSpecColor, C, vMaterialRoughness, materialFraction, fShadowAttr);
+
+    return BRDF(view, hdir, normal, light, albedo, vSpecColor, C, vMaterialRoughness, materialFraction, fShadowAttr)
+        + g_vEmissiveColor * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv);
 }
 
 float4 PS_AlphaNoUVInst(VSInstOut input) : SV_Target
@@ -1019,16 +1067,17 @@ float4 PS_AlphaNoUVInst(VSInstOut input) : SV_Target
     float fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z).r;
     
     float4 albedo = input.vDiffuseColor;
-    
+
     float3 light = 0.f;
-    
+
     float4 C = 0.f;
-    
+
     GetLightDirAndColor(input.view, C, light);
-    
+
     float3 view = normalize(-input.view);
-    
+
     float3 hdir = normalize(light + view);
-    
-    return BRDF(view, hdir, input.normal, light, albedo, input.vSpecularColor, C, input.vMaterialRoughness, input.fMaterialFraction, fShadowAttr);
+
+    return BRDF(view, hdir, input.normal, light, albedo, input.vSpecularColor, C, input.vMaterialRoughness, input.fMaterialFraction, fShadowAttr)
+        + g_vEmissiveColor;
 }
