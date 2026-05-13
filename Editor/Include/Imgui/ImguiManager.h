@@ -193,5 +193,17 @@ namespace Editor
 		void LoadNavMesh(const TCHAR* pFullPath, class Engine::Scene* pScene);
 		void LoadNavMesh(class Engine::Scene* pScene, const TCHAR* pFilePath, const std::string& strPathKey);
 		std::shared_ptr<Engine::NavMesh> CreateNavMesh(const std::vector<float>& vecPoint, const std::vector<int>& vecTris, const Engine::Vector3& vMax, const Engine::Vector3& vMin);
+
+	private:
+		// Editor preferences persisted to Editor.ini next to the executable.
+		// Today only the texture-picker default directory lives here; future
+		// editor-only settings (mesh/sound default paths, recent-files list,
+		// etc.) can be added by adding members and Get/Set in INI sections.
+		TCHAR m_strTextureDefaultPath[MAX_PATH];
+
+	public:
+		void EditorSettings_ImGuiWindow();
+		void LoadEditorSettings();
+		void SaveEditorSettings() const;
 	};
 }

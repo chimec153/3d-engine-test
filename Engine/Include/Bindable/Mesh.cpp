@@ -6,6 +6,58 @@
 
 namespace Engine
 {
+	namespace
+	{
+		// Canonical t-register slots used by per-mesh textures (mirrors
+		// shared.hlsl `register(tN)` declarations: Diffuse t0, Normal t1,
+		// Specular t2, Emissive t3, Roughness t6, AO t8, Metalness t9).
+		// Engine-managed slots (PaperBurn t4, Environment t5, HDR t7,
+		// GBuffer t11~t18, Shadow t15, ...) are deliberately excluded —
+		// other systems own those.
+		constexpr int kMeshTextureSlots[] = { 0, 1, 2, 3, 6, 8, 9 };
+
+		// When the previous draw left a texture bound at `iSlot` and the
+		// current mesh container has nothing for that slot, leaving the
+		// stale SRV in place would make HLSL `GetDimensions(...)` report
+		// non-zero — the optional-texture branches in anisotropic_microfacet.hlsl
+		// would then read whichever mesh drew last. Unbinding null'fies
+		// the slot so `GetDimensions` returns (0,0) and the shader takes
+		// the unbound path.
+		void UnbindMeshSlotIfStale(int iSlot)
+		{
+			BindCache& cache = Graphics::GetInst()->GetBindCache();
+			if (iSlot < 0 || iSlot >= BindCache::kTextureSlots) return;
+			if (!cache.pBoundTextures[iSlot]) return;
+
+			ID3D11ShaderResourceView* pNull = nullptr;
+			auto* ctx = Graphics::GetInst()->GetDeviceContext();
+			ctx->VSSetShaderResources(iSlot, 1, &pNull);
+			ctx->PSSetShaderResources(iSlot, 1, &pNull);
+			ctx->CSSetShaderResources(iSlot, 1, &pNull);
+			cache.pBoundTextures[iSlot] = nullptr;
+		}
+
+		// Walk this container's textures, then null out any canonical
+		// mesh-texture slot the container doesn't fill. Must run before
+		// the container's own Bind() calls so we don't unbind what we
+		// just bound.
+		void ResetUnusedMeshSlots(const std::vector<std::shared_ptr<class Texture>>& vecTexture)
+		{
+			bool bUsed[BindCache::kTextureSlots] = {};
+			for (const auto& pTex : vecTexture)
+			{
+				if (!pTex) continue;
+				int iSlot = pTex->GetSlot();
+				if (iSlot >= 0 && iSlot < BindCache::kTextureSlots)
+					bUsed[iSlot] = true;
+			}
+			for (int iSlot : kMeshTextureSlots)
+			{
+				if (!bUsed[iSlot]) UnbindMeshSlotIfStale(iSlot);
+			}
+		}
+	}
+
 	Mesh::Mesh(int iCount)	:
 		Bindable()
 	{
@@ -225,6 +277,7 @@ namespace Engine
 			}
 #endif
 
+			ResetUnusedMeshSlots(m_vecMeshContainer[i].vecTexture);
 			for (size_t j = 0; j < m_vecMeshContainer[i].vecTexture.size(); ++j)
 			{
 				m_vecMeshContainer[i].vecTexture[j]->Bind();
@@ -307,6 +360,7 @@ namespace Engine
 				continue;
 			}
 #endif
+			ResetUnusedMeshSlots(m_vecMeshContainer[i].vecTexture);
 			for (size_t j = 0; j < m_vecMeshContainer[i].vecTexture.size(); ++j)
 			{
 				m_vecMeshContainer[i].vecTexture[j]->Bind();

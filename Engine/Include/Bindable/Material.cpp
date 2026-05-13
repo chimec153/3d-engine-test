@@ -21,9 +21,13 @@ namespace Engine
 		m_tMaterial.ambientColor.z = 1.f;
 		m_tMaterial.ambientColor.w = 1.f;
 
-		m_tMaterial.specularColor.x = 0.8f;
-		m_tMaterial.specularColor.y = 0.2f;
-		m_tMaterial.specularColor.z = 0.1f;
+		// PBR dielectric F0 ≈ 0.04 (plastic, wood, fabric, skin, ...).
+		// Used in PS_Multi as GetFresnel(LDotH, vSpecColor) — vSpecColor is
+		// the F0 in the specular workflow. Metals override this via the
+		// metalness-texture branch in anisotropic_microfacet.hlsl PS.
+		m_tMaterial.specularColor.x = 0.04f;
+		m_tMaterial.specularColor.y = 0.04f;
+		m_tMaterial.specularColor.z = 0.04f;
 		m_tMaterial.specularColor.w = 1.f;
 
 		m_tMaterial.emissiveColor.x = 1.f;
@@ -45,6 +49,10 @@ namespace Engine
 		SetBindableType(BINDABLE_TYPE::MATERIAL);
 
 		m_tMaterial.diffuseColor.w = 1.f;
+		// PBR dielectric F0 default — matches the value above.
+		m_tMaterial.specularColor.x = 0.04f;
+		m_tMaterial.specularColor.y = 0.04f;
+		m_tMaterial.specularColor.z = 0.04f;
 		m_tMaterial.specularColor.w = 1.f;
 	}
 

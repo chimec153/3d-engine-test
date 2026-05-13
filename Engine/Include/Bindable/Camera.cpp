@@ -101,7 +101,13 @@ namespace Engine
 			m_matProj = Matrix::OthorGraphicLH(0.f, static_cast<float>(Window::GetInst()->GetWidth()), static_cast<float>(Window::GetInst()->GetHeight()), 0.f, 0.f, 5000.f);
 			break;
 		case Engine::Camera::PROJECT_TYPE::PERSPECTIVE:
-			m_matProj = Matrix::PerspectiveFovLHInfinity(atanf(tanf(m_fAngle) / m_fRatio), m_fRatio, m_fNear);
+			// m_fAngle is the full vertical FOV (radians). PerspectiveFovLH
+			// already halves it internally (tan(fAngle / 2)), so pass it
+			// through as-is. The prior atan(tan(fAngle)/aspect) wrapper
+			// mangled the angle by mixing half- and full-FOV conventions
+			// between the caller and the matrix builder — yScale was wrong
+			// and varied incorrectly with aspect ratio.
+			m_matProj = Matrix::PerspectiveFovLHInfinity(m_fAngle, m_fRatio, m_fNear);
 			break;
 		default:
 			assert(false);

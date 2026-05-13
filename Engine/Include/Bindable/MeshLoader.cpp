@@ -317,7 +317,14 @@ namespace Engine
                             vColor[i] = static_cast<float>(atof(pResult));
                         }
 
-                        pCurrentMaterial->pMaterial->SetSpecularColor(vColor.x, vColor.y, vColor.z, 1.f);
+                        // Skip when the file states no specular at all. Most
+                        // metalness-workflow assets ship `Ks 0 0 0`; honouring
+                        // that would zero out the engine's dielectric F0
+                        // default (0.04) and remove specular highlights.
+                        if (vColor.x != 0.f || vColor.y != 0.f || vColor.z != 0.f)
+                        {
+                            pCurrentMaterial->pMaterial->SetSpecularColor(vColor.x, vColor.y, vColor.z, 1.f);
+                        }
                     }
 
                     else if (!strcmp(pResult, "Ke"))
@@ -1331,7 +1338,15 @@ namespace Engine
 
                         pMaterial->SetDiffuseColor(vecMaterial[k].tMaterial.diffuseColor);
                         pMaterial->SetAmbientColor(vecMaterial[k].tMaterial.ambientColor);
-                        pMaterial->SetSpecularColor(vecMaterial[k].tMaterial.specularColor);
+                        // Same rationale as the OBJ MTL `Ks` branch above:
+                        // metalness-workflow FBX exports almost always carry
+                        // specular=(0,0,0). Skip the overwrite so the engine's
+                        // dielectric F0 default (0.04) survives.
+                        const Vector4& vSpec = vecMaterial[k].tMaterial.specularColor;
+                        if (vSpec.x != 0.f || vSpec.y != 0.f || vSpec.z != 0.f)
+                        {
+                            pMaterial->SetSpecularColor(vSpec);
+                        }
                         pMaterial->SetEmissiveColor(vecMaterial[k].tMaterial.emissiveColor);
                         pMaterial->SetShininess(vecMaterial[k].tMaterial.fSpecPower);
                         //pMaterial->SetReflectivity(vecMaterial[k].tMaterial.fFraction);

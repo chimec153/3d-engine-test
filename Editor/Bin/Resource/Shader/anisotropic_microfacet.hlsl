@@ -209,12 +209,22 @@ PSOut PS(VSOut input)
     // Optional Metalness texture (t9): converts a metalness-workflow
     // asset (single base color) into the engine's specular workflow.
     // metalness=0 keeps the supplied diffuse/specular pair as-is.
-    // metalness=1 mutes diffuse and tints the specular with base color.
+    // metalness=1 mutes diffuse and tints F0 with base color.
+    //
+    // F0 (= value3, the actual input to GetFresnel in PS_Multi) starts
+    // from the material uniform g_vSpecularColor (dielectric F0, ~0.04
+    // by default) and lerps toward the original (pre-metalness) base
+    // color when the metalness texture says the surface is metallic.
+    // We must capture baseColor BEFORE the `baseColor *= (1-metalness)`
+    // step below, otherwise metals would tint F0 with black.
+    float3 F0 = g_vSpecularColor.xyz;
     uint mW, mH;
     g_MetalnessTexture.GetDimensions(mW, mH);
     if (mW > 0)
     {
         float metalness = g_MetalnessTexture.Sample(g_sAnisotropic, input.uv).r;
+        float3 metalBase = baseColor;                // original albedo
+        F0 = lerp(F0, metalBase, metalness);
         specularRGB = lerp(specularRGB, baseColor, metalness);
         baseColor *= (1.0f - metalness);
     }
@@ -227,17 +237,17 @@ PSOut PS(VSOut input)
         baseColor *= g_AOTexture.Sample(g_sAnisotropic, input.uv).r;
     }
     output.value0.xyz = baseColor;
-    
+
     // 진단 1: VS가 PS로 넘긴 normal 자체
     //output.value1.xyz = normalize(input.normal) * 0.5f + 0.5f;
-    
+
     // 진단 2: VS가 PS로 넘긴 tangent 자체
     //output.value1.xyz = input.tangent.xyz * 0.5f + 0.5f;
     output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
 
     output.value2.xyz = specularRGB;
 
-    output.value3.xyz = g_vSpecularColor.xyz;
+    output.value3.xyz = F0;
 
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;

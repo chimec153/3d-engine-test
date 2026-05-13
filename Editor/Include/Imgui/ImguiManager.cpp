@@ -48,9 +48,29 @@
 #include "Bindable/Terrain.h"
 #include "Render/RenderManager.h"
 #include "Bindable/BlendState.h"
+#include <shlobj.h>
 
 namespace Editor
 {
+	namespace
+	{
+		// Editor preferences live alongside the editor executable. Win32's
+		// GetPrivateProfile* / WritePrivateProfile* APIs only treat fully-
+		// qualified paths as INI files — relative paths fall back to the
+		// Windows directory, which silently breaks persistence — so we
+		// build the absolute path from CPathManager's ROOT_PATH.
+		void BuildEditorIniPath(TCHAR* pOut, size_t iLen)
+		{
+			pOut[0] = 0;
+			const TCHAR* pRoot = Engine::CPathManager::GetInst()->FindPath();
+			if (pRoot)
+			{
+				_tcscpy_s(pOut, iLen, pRoot);
+			}
+			_tcscat_s(pOut, iLen, TEXT("Editor.ini"));
+		}
+	}
+
 	ImguiManager* ImguiManager::m_pInst = nullptr;
 
 	ImguiManager::ImguiManager() :
@@ -63,6 +83,8 @@ namespace Editor
 		, m_bMode(true)
 		, m_iOutlinedContainerIdx(-1)
 	{
+		m_strTextureDefaultPath[0] = 0;
+
 		m_fCellSize = 0.3f;
 		m_fCellHeight = 0.2f;
 		m_fAgentHeight = 2.f;
@@ -76,6 +98,8 @@ namespace Editor
 		m_fVertsPerPoly = 6.f;
 		m_fDetailSampleDist = 6.f;
 		m_fDetailSampleMaxError = 1.f;
+
+		LoadEditorSettings();
 	}
 
 	ImguiManager::~ImguiManager()
@@ -278,6 +302,7 @@ namespace Editor
 		RenderManager_ShowImGuiWindow();
 		Scene_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
 		WorldOutliner_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
+		EditorSettings_ImGuiWindow();
 
 		// Register the selection-outline pass with RenderManager every frame
 		// (Clear() wipes the list each frame). Runs at UI layer so it draws
@@ -1066,6 +1091,36 @@ namespace Editor
 			pMaterial->SetSpecularColor(vSpecular);
 		}
 
+		// F0 (specular color) presets — common PBR reference values used as
+		// the Fresnel base reflectance in PS_Multi. Dielectric covers ~all
+		// non-metals (plastic, wood, fabric, skin, ceramic). The metals are
+		// measured F0 values widely cited in Disney / Substance references.
+		struct F0Preset
+		{
+			const char* name;
+			float r, g, b;
+		};
+		static const F0Preset kPresets[] =
+		{
+			{ "Dielectric", 0.04f, 0.04f, 0.04f },
+			{ "Gold",       1.00f, 0.86f, 0.57f },
+			{ "Silver",     0.95f, 0.93f, 0.88f },
+			{ "Copper",     0.95f, 0.64f, 0.54f },
+			{ "Iron",       0.56f, 0.57f, 0.58f },
+			{ "Aluminum",   0.91f, 0.92f, 0.92f },
+		};
+		ImGui::PushID("F0Presets");
+		ImGui::TextUnformatted("F0 preset:");
+		for (const F0Preset& preset : kPresets)
+		{
+			ImGui::SameLine();
+			if (ImGui::Button(preset.name))
+			{
+				pMaterial->SetSpecularColor(preset.r, preset.g, preset.b, 1.f);
+			}
+		}
+		ImGui::PopID();
+
 		Engine::Vector4 vEmissive = tMaterial.emissiveColor;
 
 		if (ImGui::ColorEdit4("emissive", &vEmissive.x))
@@ -1383,6 +1438,42 @@ namespace Editor
 	//	ImGui::End();
 	//}
 
+	namespace
+	{
+		// GBuffer slots pack non-color data into .w (roughness, fraction, etc).
+		// ImGui's default alpha-blended Image draws those targets as fully
+		// transparent when .w == 0 — looks like "nothing was output". Wrap each
+		// debug Image with a callback that disables blending, then ask ImGui
+		// to restore its default render state afterwards.
+		ID3D11BlendState* GetOpaqueBlendState()
+		{
+			static ID3D11BlendState* s_pOpaque = nullptr;
+			if (!s_pOpaque)
+			{
+				D3D11_BLEND_DESC desc = {};
+				desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+				desc.RenderTarget[0].BlendEnable = FALSE;
+				Engine::Graphics::GetInst()->GetDevice()->CreateBlendState(&desc, &s_pOpaque);
+			}
+			return s_pOpaque;
+		}
+
+		void DisableImguiAlphaBlend(const ImDrawList*, const ImDrawCmd*)
+		{
+			const float bf[4] = { 0.f, 0.f, 0.f, 0.f };
+			Engine::Graphics::GetInst()->GetDeviceContext()->OMSetBlendState(
+				GetOpaqueBlendState(), bf, 0xffffffff);
+		}
+
+		void OpaqueImguiImage(ID3D11ShaderResourceView* pSRV, const ImVec2& size)
+		{
+			ImDrawList* pList = ImGui::GetWindowDrawList();
+			pList->AddCallback(DisableImguiAlphaBlend, nullptr);
+			ImGui::Image((void*)pSRV, size);
+			pList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+		}
+	}
+
 	void ImguiManager::MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT, const std::string& _name)
 	{
 		std::string name = _name;
@@ -1393,41 +1484,145 @@ namespace Editor
 		{
 			const std::vector<Engine::CPtr<ID3D11ShaderResourceView>>& vecSRV = pMRT->GetSRVs();
 
-			int iCol = static_cast<int>(sqrtf(static_cast<float>(vecSRV.size())));
+			static const char* kSlotNames[] = {
+				"albedo", "normal", "specular map", "specular color", "emissive"
+			};
+			constexpr int kSlotNameCount = sizeof(kSlotNames) / sizeof(kSlotNames[0]);
 
-			for (size_t i = 0; i < vecSRV.size(); ++i)
+			// 2-column grid: each cell is [name] over [image]. 5 GBuffer SRVs
+			// plus 1 depth SRV fit exactly 3 rows × 2 columns.
+			if (ImGui::BeginTable("MRTGrid", 2))
 			{
-				switch (i)
+				for (size_t i = 0; i < vecSRV.size(); ++i)
 				{
-				case 0:
-					ImGui::Text("albedo");
-					break;
-				case 1:
-					ImGui::Text("normal");
-					break;
-				case 2:
-					ImGui::Text("specular map");
-					break;
-				case 3:
-					ImGui::Text("specular color");
-					break;
-				case 4:
-					ImGui::Text("emissive");
-					break;
-				default:
-					ImGui::Text("unknown");
-					break;
+					ImGui::TableNextColumn();
+					ImGui::TextUnformatted(i < kSlotNameCount ? kSlotNames[i] : "unknown");
+					OpaqueImguiImage(*vecSRV[i], { 640, 360 });
 				}
-				ImGui::SameLine();
-				ImGui::Image((void*)(*vecSRV[i]), { 640, 360 });
 
-				if ((i + 1) % iCol)
-				{
-					ImGui::SameLine();
-				}
+				ImGui::TableNextColumn();
+				ImGui::TextUnformatted("depth");
+				OpaqueImguiImage(*pMRT->GetDepthSRV(), { 640, 360 });
+
+				ImGui::EndTable();
 			}
+		}
 
-			ImGui::Image((void*)*pMRT->GetDepthSRV(), { 640, 360 });
+		ImGui::End();
+	}
+
+	void ImguiManager::LoadEditorSettings()
+	{
+		// Default to the engine's TEXTURE_PATH (Resource\Texture\) so existing
+		// users get the same behavior as before when no Editor.ini exists yet.
+		const TCHAR* pDefault = Engine::CPathManager::GetInst()->FindPath(TEXTURE_PATH);
+		if (pDefault)
+		{
+			_tcscpy_s(m_strTextureDefaultPath, MAX_PATH, pDefault);
+		}
+		else
+		{
+			m_strTextureDefaultPath[0] = 0;
+		}
+
+		TCHAR strIni[MAX_PATH] = {};
+		BuildEditorIniPath(strIni, MAX_PATH);
+
+		TCHAR strBuf[MAX_PATH] = {};
+		// 4th arg = fallback returned when the key is missing.
+		GetPrivateProfileString(TEXT("Paths"), TEXT("TextureDefault"),
+			m_strTextureDefaultPath, strBuf, MAX_PATH, strIni);
+
+		if (strBuf[0])
+		{
+			_tcscpy_s(m_strTextureDefaultPath, MAX_PATH, strBuf);
+		}
+	}
+
+	void ImguiManager::SaveEditorSettings() const
+	{
+		TCHAR strIni[MAX_PATH] = {};
+		BuildEditorIniPath(strIni, MAX_PATH);
+
+		WritePrivateProfileString(TEXT("Paths"), TEXT("TextureDefault"),
+			m_strTextureDefaultPath, strIni);
+	}
+
+	void ImguiManager::EditorSettings_ImGuiWindow()
+	{
+		if (!ImGui::Begin("Editor Settings"))
+		{
+			ImGui::End();
+			return;
+		}
+
+		ImGui::TextUnformatted("Texture default path");
+		ImGui::TextDisabled("Initial directory for the texture picker dialog.");
+
+		// ImGui::InputText uses UTF-8 char buffers; the underlying storage
+		// is TCHAR (wide on UNICODE builds). Bridge with a static edit buffer
+		// that syncs from the TCHAR field when the field changes externally.
+		static char  s_szEditBuf[MAX_PATH] = {};
+		static TCHAR s_szLastSeen[MAX_PATH] = {};
+
+		if (_tcscmp(s_szLastSeen, m_strTextureDefaultPath) != 0)
+		{
+			_tcscpy_s(s_szLastSeen, MAX_PATH, m_strTextureDefaultPath);
+			WideCharToMultiByte(CP_UTF8, 0, m_strTextureDefaultPath, -1,
+				s_szEditBuf, MAX_PATH, nullptr, nullptr);
+		}
+
+		if (ImGui::InputText("##TexturePath", s_szEditBuf, MAX_PATH))
+		{
+			MultiByteToWideChar(CP_UTF8, 0, s_szEditBuf, -1,
+				m_strTextureDefaultPath, MAX_PATH);
+			_tcscpy_s(s_szLastSeen, MAX_PATH, m_strTextureDefaultPath);
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("Browse..."))
+		{
+			BROWSEINFO tBI = {};
+			tBI.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
+			tBI.lpszTitle = TEXT("Pick the default texture directory");
+			tBI.ulFlags = BIF_RETURNONLYFSDIRS | BIF_USENEWUI;
+
+			LPITEMIDLIST pPidl = SHBrowseForFolder(&tBI);
+			if (pPidl)
+			{
+				TCHAR strPicked[MAX_PATH] = {};
+				if (SHGetPathFromIDList(pPidl, strPicked))
+				{
+					// Trailing slash so it concatenates cleanly with file
+					// names downstream (matches CPathManager convention).
+					size_t iLen = _tcslen(strPicked);
+					if (iLen > 0 && iLen + 1 < MAX_PATH &&
+						strPicked[iLen - 1] != TEXT('\\') &&
+						strPicked[iLen - 1] != TEXT('/'))
+					{
+						strPicked[iLen]     = TEXT('\\');
+						strPicked[iLen + 1] = 0;
+					}
+					_tcscpy_s(m_strTextureDefaultPath, MAX_PATH, strPicked);
+				}
+				CoTaskMemFree(pPidl);
+			}
+		}
+
+		ImGui::Spacing();
+
+		if (ImGui::Button("Save"))
+		{
+			SaveEditorSettings();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Reset to engine default"))
+		{
+			const TCHAR* pDefault = Engine::CPathManager::GetInst()->FindPath(TEXTURE_PATH);
+			if (pDefault)
+			{
+				_tcscpy_s(m_strTextureDefaultPath, MAX_PATH, pDefault);
+			}
 		}
 
 		ImGui::End();
@@ -1936,7 +2131,11 @@ namespace Editor
 					tName.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
 					tName.lpstrFilter = TEXT("Texture\0*.png;*.dds;*.tga;*.jpg;*.bmp\0All\0*.*\0");
 					tName.nMaxFile = MAX_PATH;
-					tName.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath(TEXTURE_PATH);
+					// Editor preference — overridable via the Editor Settings
+					// window. LoadEditorSettings seeds it from CPathManager's
+					// TEXTURE_PATH on first run, so existing users behave the
+					// same until they change it.
+					tName.lpstrInitialDir = m_strTextureDefaultPath;
 					tName.lpstrFile = strFile;
 
 					if (GetOpenFileName(&tName))
@@ -1945,6 +2144,10 @@ namespace Editor
 						WideCharToMultiByte(CP_ACP, 0, strFile, -1, szTag, MAX_PATH, nullptr, nullptr);
 						std::string strTag(szTag);
 						auto pNewTex = Engine::StaticCreateBindable<Engine::Texture>(strTag, strFile, slot.iSlot);
+						if (!pNewTex)
+						{
+							pNewTex = Engine::StaticFindBindable<Engine::Texture>(strTag);
+						}
 						if (pNewTex)
 						{
 							// Replace if a texture exists at this slot,
