@@ -25,6 +25,7 @@ namespace Engine
 		, m_pMaterial(other.m_pMaterial)
 		, m_vecTexture(other.m_vecTexture)
 		, m_pAnimation(other.m_pAnimation)
+		, m_OverrideMaterials(other.m_OverrideMaterials)
 		, m_OtherBindables(other.m_OtherBindables)
 		, m_eRenderLayer(other.m_eRenderLayer)
 		, m_iInstanceKey(other.m_iInstanceKey)
@@ -42,10 +43,62 @@ namespace Engine
 
 	void MeshRendererComponent::SetMaterial(const std::shared_ptr<Material>& p)
 	{
-		m_pMaterial = p; 
+		m_pMaterial = p;
 		UpdateInstanceKey();
 	}
 	const std::shared_ptr<Material>& MeshRendererComponent::GetMaterial() const { return m_pMaterial; }
+
+	void MeshRendererComponent::SetOverrideMaterial(int iContainerIdx, int iSubIdx, const std::shared_ptr<Material>& p)
+	{
+		if (iContainerIdx < 0 || iSubIdx < 0) return;
+		if (static_cast<int>(m_OverrideMaterials.size()) <= iContainerIdx)
+			m_OverrideMaterials.resize(iContainerIdx + 1);
+		auto& row = m_OverrideMaterials[iContainerIdx];
+		if (static_cast<int>(row.size()) <= iSubIdx)
+			row.resize(iSubIdx + 1);
+		row[iSubIdx] = p;
+		UpdateInstanceKey();
+	}
+
+	std::shared_ptr<Material> MeshRendererComponent::GetOverrideMaterial(int iContainerIdx, int iSubIdx) const
+	{
+		if (iContainerIdx < 0 || iSubIdx < 0) return nullptr;
+		if (static_cast<int>(m_OverrideMaterials.size()) <= iContainerIdx) return nullptr;
+		const auto& row = m_OverrideMaterials[iContainerIdx];
+		if (static_cast<int>(row.size()) <= iSubIdx) return nullptr;
+		return row[iSubIdx];
+	}
+
+	std::shared_ptr<Material> MeshRendererComponent::GetEffectiveMaterial(int iContainerIdx, int iSubIdx) const
+	{
+		if (auto p = GetOverrideMaterial(iContainerIdx, iSubIdx)) return p;
+		if (m_pMaterial) return m_pMaterial;
+		if (m_pMesh) return m_pMesh->GetMaterial(iContainerIdx, iSubIdx);
+		return nullptr;
+	}
+
+	std::function<std::shared_ptr<Material>(int, int)> MeshRendererComponent::MakeMaterialResolver() const
+	{
+		// Skip the per-draw indirection if neither layer of override is set —
+		// callers can just rely on Mesh's own slot materials.
+		bool bHasPerSlot = false;
+		for (const auto& row : m_OverrideMaterials)
+		{
+			for (const auto& p : row) { if (p) { bHasPerSlot = true; break; } }
+			if (bHasPerSlot) break;
+		}
+		if (!bHasPerSlot && !m_pMaterial) return nullptr;
+
+		// Capture self pointer (not this raw) only if the component is
+		// alive — caller scope is the render frame so a weak capture is
+		// fine. Using `this` is OK here: resolver is consumed within the
+		// same Draw call.
+		return [this](int c, int s) -> std::shared_ptr<Material>
+		{
+			if (auto p = GetOverrideMaterial(c, s)) return p;
+			return m_pMaterial;
+		};
+	}
 
 	void MeshRendererComponent::AddTexture(const std::shared_ptr<Texture>& p)
 	{
@@ -139,8 +192,10 @@ namespace Engine
 		iSize -= 192;
 		if (iSize <= 0) return;
 
-		std::shared_ptr<Material> pMaterial = m_pMaterial;
-		if (!pMaterial && m_pMesh) pMaterial = m_pMesh->GetMaterial();
+		// Instanced draws share state across every member of the bucket;
+		// use slot (0,0)'s effective material as the representative — same
+		// rationale as Drawable::GetInstData's single-material assumption.
+		std::shared_ptr<Material> pMaterial = GetEffectiveMaterial(0, 0);
 		if (!pMaterial) return;
 
 		const MATERIAL& material = pMaterial->GetMaterial();
@@ -166,6 +221,14 @@ namespace Engine
 
 		for (const auto& tex : m_vecTexture)
 			m_iInstanceKey *= hs(tex->GetTag());
+
+		// Per-slot overrides participate in the key so two MRs sharing the
+		// same Mesh/VS/PS/Material but differing in any (c, s) override
+		// land in separate instance buckets — TryRenderInstancedBucket
+		// binds only the first member's material set.
+		for (const auto& row : m_OverrideMaterials)
+			for (const auto& p : row)
+				if (p) m_iInstanceKey *= hs(p->GetTag());
 	}
 
 	void MeshRendererComponent::Bind()
@@ -274,7 +337,10 @@ namespace Engine
 	void MeshRendererComponent::DrawShadow()
 	{
 		BindExceptShader();
-		if (m_pMesh) m_pMesh->Draw();
+		// Shadow pass doesn't sample material textures, but pass the
+		// resolver anyway for consistency — Material::Bind also pushes
+		// per-material cbuffer state that some shadow shaders may read.
+		if (m_pMesh) m_pMesh->Draw(MakeMaterialResolver());
 		// Animation final-buffer cleanup, if present, mirrors Drawable's path.
 		// Skipping for E2 minimal — full parity will be checked when
 		// MeshRenderer is wired into the render pipeline in E4.

@@ -128,6 +128,11 @@ namespace Engine
 		float fQuadraticAttenuation;
 		LIGHT_TYPE eLightType;
 		float fIntensity;
+		// Spot-only cone falloff exponent. Used in shared.hlsl::SPOT branch as
+		// pow(dot(lightDir, surface→light), fSpotConeExponent). Higher value
+		// → narrower / sharper cone. fIntensity now stays a pure brightness
+		// multiplier for every light type (matches POINT/DIRECTIONAL semantics).
+		float fSpotConeExponent;
 	}POINTLIGHT, * PPOINTLIGHT;
 
 

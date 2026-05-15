@@ -36,7 +36,9 @@ namespace Client
 
 	bool GameScene::LoadSequences()
 	{
-		Engine::ResourceManager::GetInst()->LoadSequence("Walkingmixamo.com.seq");
+		Engine::ResourceManager::GetInst()->LoadSequenceByTag("Idle", "Idle.seq");
+		Engine::ResourceManager::GetInst()->LoadSequenceByTag("Run", "Slow Run.seq");
+		Engine::ResourceManager::GetInst()->LoadSequenceByTag("Attack", "Standing Melee Attack Downward.seq");
 		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Gun_Shoot.seq");
 		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve.seq");
 		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve_2.seq");
@@ -158,7 +160,8 @@ namespace Client
 
 	bool GameScene::CreateMesh()
 	{
-		Engine::StaticCreateBindable<Engine::Mesh>("Medieval", "Walking.mesh", MESH_PATH);
+		Engine::StaticCreateBindable<Engine::Mesh>("Idle", "Idle.mesh", MESH_PATH);
+		Engine::StaticCreateBindable<Engine::Mesh>("Idle2", "Idle2.mesh", MESH_PATH);
 		//Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
 		//Engine::StaticCreateBindable<Engine::Mesh>("sword", "Sword.mesh", MESH_PATH);
 		//Engine::StaticCreateBindable<Engine::Mesh>("shovel", "Shovel.mesh", MESH_PATH);
@@ -169,10 +172,10 @@ namespace Client
 
 	bool GameScene::CreateMonster()
 	{
-		auto pMonster = CreateGameObject<Engine::GameObject>("monster", FindLayer(DEFAULT_LAYER));
+		/*auto pMonster = CreateGameObject<Monster>("monster", FindLayer(DEFAULT_LAYER));
 		auto pTransform = pMonster->AddComponent<Engine::Transform>("transform");
 		auto m_pMeshRenderer = pMonster->AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
-		//auto m_pAnimation = pMonster->AddComponent<Engine::Animation>("MonsterAnimation");
+		auto m_pAnimation = pMonster->AddComponent<Engine::Animation>("MonsterAnimation");
 
 		if (pTransform)
 		{
@@ -180,21 +183,21 @@ namespace Client
 			pTransform->SetScale(0.01f, 0.01f, 0.01f);
 		}
 
-		std::shared_ptr<Engine::Mesh> pMesh = Engine::StaticCreateBindable<Engine::Mesh>("war", "war.mesh");
+		std::shared_ptr<Engine::Mesh> pMesh = Engine::StaticCreateBindable<Engine::Mesh>("Idle2", "Idle2.mesh");
 		if (!pMesh)
 		{
-			pMesh = Engine::StaticFindBindable<Engine::Mesh>("war");
+			pMesh = Engine::StaticFindBindable<Engine::Mesh>("Idle2");
 		}
 		if (m_pMeshRenderer)
 		{
 			m_pMeshRenderer->SetMesh(pMesh);
-			m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_VS));
+			m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_ANIM_VS));
 			m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>(STANDARD_PS));
 			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
 			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
 			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::DepthStencilState>("OutLineMask"));
-			//m_pMeshRenderer->SetAnimation(m_pAnimation);
-		}
+			m_pMeshRenderer->SetAnimation(m_pAnimation);
+		}*/
 		return true;
 	}
 
@@ -204,11 +207,13 @@ namespace Client
 		// the MeshLoader facade. Drawable's loader bridge has been retired;
 		// MeshLoader::Load drives the same parser pipeline without a temp
 		// Drawable, and the parsed Bindables register in BindableManager.
-		Engine::MeshLoader::Load(TEXT("war.fbx"));
+		//Engine::MeshLoader::Load(TEXT("Idle.fbx"));
+		//Engine::MeshLoader::Load(TEXT("Standing Melee Attack Downward.fbx"));
+		//Engine::MeshLoader::Load(TEXT("Slow Run.fbx"));
 
 		CreateMesh();
 
-		Engine::ResourceManager::GetInst()->LoadSkeleton("Walking.skel");
+		Engine::ResourceManager::GetInst()->LoadSkeleton("Idle.skel");
 		//Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
 
 		LoadSequences();
@@ -236,6 +241,51 @@ namespace Client
 			pTerrain->SetTerrainTexture(Engine::StaticFindBindable<Engine::Texture>("TerrainDiffuse"));
 			pTerrain->SetTerrainNormalTexture(Engine::StaticFindBindable<Engine::Texture>("TerrainNormal"));
 			pTerrain->SetTerrainSpecularTexture(Engine::StaticFindBindable<Engine::Texture>("TerrainSpecular"));
+
+			std::vector<float> vecPoints;
+			std::vector<int> vecTris;
+
+			pTerrain->GetPoints(vecPoints);
+			pTerrain->GetTris(vecTris);
+
+			Engine::Vector3 vMin(FLT_MAX, FLT_MAX, FLT_MAX);
+			Engine::Vector3 vMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+			for (size_t i = 0; i + 2 < vecPoints.size(); i += 3)
+			{
+				float x = vecPoints[i], y = vecPoints[i + 1], z = vecPoints[i + 2];
+				vMin.x = std::min(vMin.x, x); vMin.y = std::min(vMin.y, y); vMin.z = std::min(vMin.z, z);
+				vMax.x = std::max(vMax.x, x); vMax.y = std::max(vMax.y, y); vMax.z = std::max(vMax.z, z);
+			}
+
+			// 기본 config로 빌드 (또는 NavMeshConfig 수정해서 전달)
+			Engine::NavMeshConfig cfg;
+			cfg.fAgentRadius = 0.5f;   // 게임에 맞춰 조정
+			cfg.fAgentHeight = 1.8f;
+
+			auto pNavMesh = Engine::NavMesh::Build(vecPoints, vecTris, vMax, vMin, cfg);
+
+			if (pNavMesh)
+			{
+				// Terrain GameObject나 별도 NavMesh holder GameObject에 컴포넌트로 부착
+				if (auto pNavObj = CreateGameObject("NavMesh", FindLayer(DEFAULT_LAYER)))
+				{
+					pNavObj->AddComponent(pNavMesh);
+				}
+				// 이후 Agent 생성/이동에 사용
+			}
+			{
+				auto pDebugMesh = pNavMesh->CreateDebugMesh();
+
+				auto pDebugObj = CreateGameObject("NavDebug", FindLayer(DEFAULT_LAYER));
+				pDebugObj->AddComponent<Engine::Transform>("transform");
+				auto pMR = pDebugObj->AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
+				pMR->SetMesh(pDebugMesh);
+				pMR->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>("anisotropic_microfacet VSNoSkin"));
+				pMR->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal"));
+				pMR->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
+				pMR->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
+				pMR->AddBindable(Engine::StaticFindBindable<Engine::RasterizerState>(WIREFRAME));
+			}
 
 			// Phase E5 — Terrain is a GameObject; Material is set on the
 			// MeshRendererComponent instead of via Drawable's SetMaterial.
@@ -288,7 +338,7 @@ namespace Client
 
 		//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pPlayer.get(), &Player::CollisionTerrainStay);
 
-		//CreateDrawable<Monster>("frog", FindLayer(DEFAULT_LAYER), 50, 5, 10);
+		CreateGameObject<Monster>("frog", FindLayer(DEFAULT_LAYER), 50, 5, 10);
 
 		/*std::shared_ptr<Engine::Decal> pDecal = CreateProtoType<Engine::Decal>("blooddecal", Engine::SCENE_TYPE::CURRENT);
 
@@ -381,7 +431,7 @@ namespace Client
 		// will be reintroduced as additions to the V1 render path; the
 		// parallel V2 demos (v2Mesh, TreeV2) and their integration are gone.
 
-		CreateMonster();
+		//CreateMonster();
 		return true;
 	}
 

@@ -1,9 +1,32 @@
 #include "Material.h"
 #include "BindableManager.h"
 #include "ConstantBuffer.h"
+#include "Texture.h"
+#include "../Core/Graphics.h"
 
 namespace Engine
 {
+	// Slot index N → t-register in shared.hlsl. Keep this in sync with
+	// the comment block on Material::kMaterialSlotCount in the header.
+	const int Material::kMaterialSlotRegisters[Material::kMaterialSlotCount] = {
+		0,  // Diffuse
+		1,  // Normal
+		2,  // Specular
+		3,  // Emissive
+		6,  // Roughness
+		8,  // AO
+		9,  // Metalness
+	};
+
+	int Material::SlotRegisterToIndex(int iRegister)
+	{
+		for (int i = 0; i < kMaterialSlotCount; ++i)
+		{
+			if (kMaterialSlotRegisters[i] == iRegister) return i;
+		}
+		return -1;
+	}
+
 	Material::Material() :
 		Bindable()
 		, m_tMaterial()
@@ -60,6 +83,7 @@ namespace Engine
 		Bindable(material)
 		, m_tMaterial(material.m_tMaterial)
 		, m_pConstantBuffer(material.m_pConstantBuffer)
+		, m_vecTexture(material.m_vecTexture)
 	{
 	}
 
@@ -165,6 +189,18 @@ namespace Engine
 		m_tMaterial.bUsePaperBurn = true;
 	}
 
+	void Material::SetTexture(int iSlotIdx, const std::shared_ptr<Texture>& pTexture)
+	{
+		if (iSlotIdx < 0 || iSlotIdx >= kMaterialSlotCount) return;
+		m_vecTexture[iSlotIdx] = pTexture;
+	}
+
+	std::shared_ptr<Texture> Material::GetTexture(int iSlotIdx) const
+	{
+		if (iSlotIdx < 0 || iSlotIdx >= kMaterialSlotCount) return nullptr;
+		return m_vecTexture[iSlotIdx];
+	}
+
 	void Material::Update(float fDeltaTime)
 	{
 	}
@@ -174,6 +210,32 @@ namespace Engine
 		m_pConstantBuffer->UpdateBuffer(m_tMaterial);
 
 		m_pConstantBuffer->Bind();
+
+		// Per-slot texture binding. Each slot has a fixed t-register; an
+		// empty slot pushes a null SRV so HLSL `GetDimensions` reports
+		// (0,0) and the shader takes the uniform-fallback branch. Empty
+		// slots also wipe any stale SRV the previous mesh left behind.
+		BindCache& cache = Graphics::GetInst()->GetBindCache();
+		auto* ctx = Graphics::GetInst()->GetDeviceContext();
+		for (int i = 0; i < kMaterialSlotCount; ++i)
+		{
+			int iReg = kMaterialSlotRegisters[i];
+			if (m_vecTexture[i])
+			{
+				// Texture::Bind handles cache short-circuit + slot-from-tex.
+				// Sanity: keep tex's m_iSlot in sync with its array index.
+				m_vecTexture[i]->Bind();
+			}
+			else if (iReg >= 0 && iReg < BindCache::kTextureSlots &&
+				cache.pBoundTextures[iReg])
+			{
+				ID3D11ShaderResourceView* pNull = nullptr;
+				ctx->VSSetShaderResources(iReg, 1, &pNull);
+				ctx->PSSetShaderResources(iReg, 1, &pNull);
+				ctx->CSSetShaderResources(iReg, 1, &pNull);
+				cache.pBoundTextures[iReg] = nullptr;
+			}
+		}
 	}
 
 	std::shared_ptr<Bindable> Material::Clone()
@@ -183,13 +245,59 @@ namespace Engine
 
 	void Material::Save(FILE* pFile)
 	{
+		// Format: [tag from Bindable::Save][80 bytes MATERIAL][7 slots].
+		// Per slot: 1 byte present-flag + Texture::Save() if present.
 		__super::Save(pFile);
 
 		fwrite(&m_tMaterial, 80, 1, pFile);
+
+		for (int i = 0; i < kMaterialSlotCount; ++i)
+		{
+			uint8_t bHas = m_vecTexture[i] ? 1 : 0;
+			fwrite(&bHas, 1, 1, pFile);
+			if (bHas)
+			{
+				m_vecTexture[i]->Save(pFile);
+			}
+		}
 	}
 
 	void Material::Load(FILE* pFile)
 	{
+		// Reads the new-format payload (tag + 80 bytes + 7 slots). Older
+		// .mesh files lack the slot block — Mesh::Load's old-format branch
+		// must call LoadLegacy instead so we don't misread the next
+		// container's bytes as our texture slots.
+		__super::Load(pFile);
+
+		fread(&m_tMaterial, 80, 1, pFile);
+
+		for (int i = 0; i < kMaterialSlotCount; ++i)
+		{
+			uint8_t bHas = 0;
+			fread(&bHas, 1, 1, pFile);
+			if (!bHas) continue;
+
+			auto pTex = std::make_shared<Texture>();
+			pTex->Load(pFile);
+
+			if (auto pPrev = BindableManager<Texture>::GetInst()->FindBindable(pTex->GetTag()))
+			{
+				pTex = pPrev;
+			}
+			else if (pTex->LoadTextureFromFullPath(pTex->GetFullPath()))
+			{
+				BindableManager<Texture>::GetInst()->AddBindable(pTex);
+			}
+			m_vecTexture[i] = pTex;
+		}
+	}
+
+	void Material::LoadLegacy(FILE* pFile)
+	{
+		// Pre-refactor wire format: tag + 80-byte MATERIAL struct, nothing
+		// after. Texture slots are filled in by Mesh::Load externally from
+		// the container's loose texture list.
 		__super::Load(pFile);
 
 		fread(&m_tMaterial, 80, 1, pFile);

@@ -130,6 +130,16 @@ namespace Engine
 		tPointLight.fQuadraticAttenuation = fAttenuation;
 	}
 
+	float PointLight::GetSpotConeExponent() const
+	{
+		return tPointLight.fSpotConeExponent;
+	}
+
+	void PointLight::SetSpotConeExponent(float fExponent)
+	{
+		tPointLight.fSpotConeExponent = fExponent;
+	}
+
 	void PointLight::Reset()
 	{
 		__super::Reset();
@@ -148,6 +158,9 @@ namespace Engine
 		tPointLight.fLinearAttenuation = 0.045f;
 		tPointLight.fQuadraticAttenuation = 0.0075f;
 		tPointLight.fIntensity = 1.f;
+		// Default cone exponent: moderate spot. Inspector slider exposes
+		// this so per-light tuning is straightforward.
+		tPointLight.fSpotConeExponent = 8.f;
 
 		tPointLight.eLightType = LIGHT_TYPE::POINT;
 

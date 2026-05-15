@@ -37,14 +37,16 @@ namespace Editor
 	bool InGameScene::Init()
 	{
 		//Engine::MeshLoader::Load(TEXT("war.fbx"));
-		Engine::StaticCreateBindable<Engine::Mesh>("war", "war.mesh", MESH_PATH);
+		Engine::StaticCreateBindable<Engine::Mesh>("Idle", "war2.mesh", MESH_PATH);
 		//Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
 		//Engine::StaticCreateBindable<Engine::Mesh>("armor", "Armor_Leather.mesh", MESH_PATH);
 
-		Engine::ResourceManager::GetInst()->LoadSkeleton("Walking.skel");
+		Engine::ResourceManager::GetInst()->LoadSkeleton("Idle.skel");
 		//Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
 
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Death.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("Idle.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("Slow Run.seq");
+		Engine::ResourceManager::GetInst()->LoadSequence("Standing Melee Attack Downward.seq");
 		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Gun_Shoot.seq");
 		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve.seq");
 		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve_2.seq");

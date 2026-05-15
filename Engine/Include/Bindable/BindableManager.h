@@ -6,6 +6,7 @@
 #include "RasterizerState.h"
 #include "Material.h"
 #include "FbxLoader.h"
+#include "BindableRegistry.h"
 
 namespace Engine
 {
@@ -25,6 +26,11 @@ namespace Engine
 			if (!m_pInst)
 			{
 				m_pInst = dbg_new BindableManager<T>;
+				// Register this concrete type's destroyer so a single
+				// BindableRegistry::DestroyAll() at shutdown releases
+				// every cached Bindable (and the D3D resources they own)
+				// before the Graphics device goes away.
+				BindableRegistry::Register([]() { BindableManager<T>::DestroyInst(); });
 			}
 
 			return m_pInst;
@@ -76,6 +82,14 @@ namespace Engine
 			}
 
 			return iter->second;
+		}
+
+		// Enumerate every registered bindable — used by editor asset
+		// browsers (e.g. material picker dropdown listing all loaded .mat
+		// assets).
+		const std::unordered_map<std::string, std::shared_ptr<T>>& GetMap() const
+		{
+			return m_mapBindable;
 		}
 
 	public:

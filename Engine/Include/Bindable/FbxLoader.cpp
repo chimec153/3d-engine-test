@@ -358,6 +358,38 @@ namespace Engine
 			mesh.vecIndex[_iIndex].push_back(iIndex[1]);
 		}
 
+		// Trust FBX-baked normals when present (LoadNormals accumulated them
+		// per polygon-vertex above) — DCC apps bake smoothing groups, custom
+		// vertex normals, and hard edges that face-cross-product synthesis
+		// can't reproduce. Normalize the per-control-point sum so the
+		// soft-shaded average is unit-length. Falls back to SetNormals only
+		// when the FBX ships without a normal element (raw point clouds,
+		// some procedural exporters). Must run before SetTangent below
+		// because the tangent computation reads `vertex.normal`.
+		if (pMesh->GetElementNormal())
+		{
+			for (auto& vertex : mesh.vecVertex)
+			{
+				Vector3& n = vertex.normal;
+				float fLen = sqrtf(n.x * n.x + n.y * n.y + n.z * n.z);
+				if (fLen > 1e-6f)
+				{
+					n.x /= fLen;
+					n.y /= fLen;
+					n.z /= fLen;
+				}
+			}
+		}
+		else
+		{
+			std::vector<unsigned int> vecFlatIndex;
+			for (const auto& vec : mesh.vecIndex)
+			{
+				vecFlatIndex.insert(vecFlatIndex.end(), vec.begin(), vec.end());
+			}
+			MeshUtils::SetNormals(mesh.vecVertex, vecFlatIndex);
+		}
+
 		// Fallback: FBX files exported without tangent data leave every
 		// vertex.tangent at (0,0,0,0), which makes BumpMapping return 0
 		// (gray normal GBuffer). Compute tangents from UV derivatives the
@@ -387,6 +419,14 @@ namespace Engine
 	{
 		fbxsdk::FbxGeometryElementNormal* pNormal = pNode->GetElementNormal();
 
+		// Mirror LoadTangents/LoadBinormals: skip silently if the mesh
+		// shipped without a normal element. Caller's post-loop fallback
+		// (MeshUtils::SetNormals) synthesises normals from geometry.
+		if (!pNormal)
+		{
+			return;
+		}
+
 		int iNormalIndex = iVertexIndex;
 
 		switch (pNormal->GetMappingMode())
@@ -395,6 +435,9 @@ namespace Engine
 		{
 			switch (pNormal->GetReferenceMode())
 			{
+			case fbxsdk::FbxLayerElement::eDirect:
+				// Default — iNormalIndex stays at iVertexIndex.
+				break;
 			case fbxsdk::FbxLayerElement::eIndexToDirect:
 				iNormalIndex = pNormal->GetIndexArray().GetAt(iVertexIndex);
 				break;
@@ -418,9 +461,17 @@ namespace Engine
 
 		const fbxsdk::FbxVector4& tNormal = pNormal->GetDirectArray().GetAt(iNormalIndex);
 
-		mesh.vecVertex[iControlIndex].normal.x = static_cast<float>(tNormal[0]);
-		mesh.vecVertex[iControlIndex].normal.y = static_cast<float>(tNormal[2]);
-		mesh.vecVertex[iControlIndex].normal.z = static_cast<float>(tNormal[1]);
+		// Accumulate, don't overwrite. FBX stores normals per polygon-vertex
+		// for most meshes (Mixamo, Maya, Max default), so the same control
+		// point gets visited once per adjacent triangle. Writing `=` made
+		// the last triangle's normal win, producing splotchy shading on
+		// shared vertices. Accumulating + post-loop normalize (in LoadFbxMesh
+		// after every polygon-vertex is visited) gives the smooth average.
+		// Hard edges (rare in skinned meshes) get smoothed away, which is
+		// acceptable for the target asset pipeline.
+		mesh.vecVertex[iControlIndex].normal.x += static_cast<float>(tNormal[0]);
+		mesh.vecVertex[iControlIndex].normal.y += static_cast<float>(tNormal[2]);
+		mesh.vecVertex[iControlIndex].normal.z += static_cast<float>(tNormal[1]);
 	}
 
 	void FbxLoader::LoadTangents(fbxsdk::FbxMesh* pNode, int iVertexIndex, int iControlIndex, MESH& mesh)
@@ -469,46 +520,15 @@ namespace Engine
 		mesh.vecVertex[iControlIndex].tangent.x = static_cast<float>(vTangent[0]);
 		mesh.vecVertex[iControlIndex].tangent.y = static_cast<float>(vTangent[2]);
 		mesh.vecVertex[iControlIndex].tangent.z = static_cast<float>(vTangent[1]);
-		mesh.vecVertex[iControlIndex].tangent.w = static_cast<float>(vTangent[3]);
-	}
-
-	void FbxLoader::LoadBiTangents(fbxsdk::FbxMesh* pNode, int iVertexIndex, int iControlIndex, MESH& mesh)
-	{
-		fbxsdk::FbxGeometryElementBinormal* pBinormal = pNode->GetElementBinormal();
-
-		int iIndex = iVertexIndex;
-
-		switch (pBinormal->GetMappingMode())
-		{
-		case fbxsdk::FbxLayerElement::eByControlPoint:
-		{
-			switch (pBinormal->GetReferenceMode())
-			{
-			case fbxsdk::FbxLayerElement::eDirect:
-				iIndex = iControlIndex;
-				break;
-			case fbxsdk::FbxLayerElement::eIndexToDirect:
-				iIndex = pBinormal->GetIndexArray().GetAt(iControlIndex);
-				break;
-			}
-		}
-		break;
-		case fbxsdk::FbxLayerElement::eByPolygonVertex:
-		{
-			switch (pBinormal->GetReferenceMode())
-			{
-			case fbxsdk::FbxLayerElement::eDirect:
-				iIndex = iVertexIndex;
-				break;
-			case fbxsdk::FbxLayerElement::eIndexToDirect:
-				iIndex = pBinormal->GetIndexArray().GetAt(iVertexIndex);
-				break;
-			}
-		}
-		break;
-		}
-
-		fbxsdk::FbxVector4 vBinormal = pBinormal->GetDirectArray().GetAt(iIndex);
+		// Negate the handedness flag. The Y↔Z position swap above is a
+		// reflection (det = -1), which flips the sign of `cross(N, T)` in
+		// engine space. shared.hlsl's BumpMapping computes
+		//   bitangent = cross(N, T) * tangent.w
+		// so to keep `bitangent` pointing the same way relative to the UV
+		// derivative basis the FBX baked it for, w must invert. Without this
+		// every FBX-baked tangent path renders normal maps inverted on one
+		// axis (concave/convex flipped) and breaks mirrored UV consistency.
+		mesh.vecVertex[iControlIndex].tangent.w = -static_cast<float>(vTangent[3]);
 	}
 
 	void FbxLoader::LoadUVs(fbxsdk::FbxMesh* pNode, int iVertexIndex, int iControlIndex, MESH& mesh)
@@ -1215,31 +1235,12 @@ namespace Engine
 							m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
 						}
 
-						int iInterpolation = pCurvePosX->KeyGetInterpolation(k);
-
-						if (iInterpolation & fbxsdk::FbxAnimCurveDef::EInterpolationType::eInterpolationConstant)
-						{
-							if (i == iFrame)
-							{
-								vecPos[i].x = fX;
-							}
-							else
-							{
-								vecPos[i].x = fPrevValue;
-							}
-						}
-						else if (iInterpolation & fbxsdk::FbxAnimCurveDef::EInterpolationType::eInterpolationLinear)
-						{
-							vecPos[i].x = fX * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
-						}
-						else if (iInterpolation & fbxsdk::FbxAnimCurveDef::EInterpolationType::eInterpolationCubic)
-						{
-							assert(false);
-						}
-						else
-						{
-							assert(false);
-						}
+						// Delegate per-frame sampling to the FBX SDK. Evaluate
+						// honours each key's own interpolation type and tangents
+						// (Constant, Linear, Cubic Hermite, TCB, custom curves),
+						// which removes the manual switch and fixes the previous
+						// "assert(false)" crash on cubic Mixamo / Maya animations.
+						vecPos[i].x = pCurvePosX->Evaluate(time);
 					}
 				}
 
@@ -1316,7 +1317,8 @@ namespace Engine
 							m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
 						}
 
-						vecPos[i].y = fY * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
+						// SDK evaluation — same rationale as the X channel above.
+						vecPos[i].y = pCurvePosY->Evaluate(time);
 					}
 				}
 
@@ -1393,7 +1395,8 @@ namespace Engine
 							m_vecSequence[iAnimStackIndex].vecBoneKeyFrame[iBone].vecKeyFrame[i].dTime = time.GetSecondDouble();
 						}
 
-						vecPos[i].z = fZ * (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame) + fPrevValue * (1.f - (i - iPrevFrame) / static_cast<float>(iFrame - iPrevFrame));
+						// SDK evaluation — same rationale as the X channel above.
+						vecPos[i].z = pCurvePosZ->Evaluate(time);
 					}
 				}
 

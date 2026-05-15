@@ -31,7 +31,10 @@ namespace Engine
         std::vector<INDEXBUFFER> m_vecIndexBuffer;
         int m_iSize;
         int m_iCount;
-        std::vector<std::shared_ptr<Texture>>   vecTexture;
+        // Textures previously lived here (per-container) but now belong to
+        // each Material in `vecMaterial`. Material::Bind handles slot
+        // binding (+ null-SRV wipe for empty slots). MeshContainer just
+        // owns geometry and material references.
         std::vector<std::shared_ptr<Material>> vecMaterial;
         // CPU-side mirrors of the GPU vertex/index buffers — populated by
         // CreateMesh so Mesh::Save can serialize back to .mesh without a
@@ -108,15 +111,10 @@ namespace Engine
         void SetVertexCount(int iIndex, int iCount);
 
     public:
-        void SetTextures(const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture);
-        void SetTextures(int iIndex, const std::vector<std::shared_ptr<Texture>>& vecTexture);
-        // Per-slot texture access on a MeshContainer's vecTexture. iVecIdx is
-        // the positional slot within the container's texture vector (not the
-        // Texture's GPU register slot). Used by the editor inspector to
-        // swap individual textures without rebuilding the whole vector.
-        void SetTexture(int iIndex, int iVecIdx, const std::shared_ptr<Texture>& pTexture);
-        std::shared_ptr<Texture> GetTexture(int iIndex, int iVecIdx) const;
-        int GetTextureCount(int iIndex) const;
+        // Textures now belong to Material; pick the right Material via
+        // GetMaterial(container, sub) and call Material::Set/GetTexture
+        // directly. The previous Mesh-level texture API (SetTextures,
+        // SetTexture, GetTexture, GetTextureCount) is gone.
         void AddMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial);
         std::shared_ptr<Material> GetMaterial(int iIndex = 0, int iSubIndex = 0)   const;
         void SetMaterial(int iIndex, int iSubIndex, std::shared_ptr<Material> pMaterial);
@@ -242,13 +240,19 @@ namespace Engine
         void UsePaperBurn();
 
     public:
+        // (containerIdx, subIdx) → effective material for this draw. Returning
+        // nullptr from the resolver means "use the mesh's own material at this
+        // slot" — typical override behaviour. The resolver itself being null
+        // means "no overrides at all, use mesh materials throughout".
+        using MaterialResolver = std::function<std::shared_ptr<Material>(int, int)>;
+
         virtual void Bind() override;
-        void Draw();
+        void Draw(const MaterialResolver& resolver = nullptr);
         // Draw only the given MeshContainer's VB/IB. Used by the editor
         // selection-outline mask pass which renders one container at a time.
         // Does not bind textures or materials — caller controls shader state.
         void DrawContainer(int iIndex);
-        void DrawInst(int iCount, int iSize, const CPtr<ID3D11Buffer>& pInstBuffer);
+        void DrawInst(int iCount, int iSize, const CPtr<ID3D11Buffer>& pInstBuffer, const MaterialResolver& resolver = nullptr);
         virtual std::shared_ptr<Bindable> Clone() override;
 
     public:

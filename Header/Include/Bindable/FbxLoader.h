@@ -128,7 +128,6 @@ namespace Engine
 		bool LoadMeshData(fbxsdk::FbxMesh* pNode, MESH& mesh, LODGROUP& vecMesh);
 		void LoadNormals(fbxsdk::FbxMesh* pNode, int iVertexIndex, int iControlIndex, MESH& mesh);
 		void LoadTangents(fbxsdk::FbxMesh* pNode, int iVertexIndex, int iControlIndex, MESH& mesh);
-		void LoadBiTangents(fbxsdk::FbxMesh* pNode, int iVertexIndex, int iControlIndex, MESH& mesh);
 		void LoadUVs(fbxsdk::FbxMesh* pNode, int iVertexIndex, int iControlIndex, MESH& mesh);
 		void LoadLodGroup(fbxsdk::FbxNode* pNode);
 		void LoadTexture(fbxsdk::FbxGeometry* pGeometry, MESH& mesh);

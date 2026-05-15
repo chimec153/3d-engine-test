@@ -28,6 +28,14 @@ namespace Engine
 		std::vector<std::shared_ptr<class Texture>>  m_vecTexture;
 		std::shared_ptr<class Animation>             m_pAnimation;
 
+		// Per-(container, sub) material overrides. Indexed as
+		// m_OverrideMaterials[containerIdx][subIdx]; a nullptr cell (or out of
+		// bounds) falls through to the mesh's own slot material. m_pMaterial
+		// above is the legacy "single material applies to every slot"
+		// override and stays as the lowest-priority override layer for
+		// backwards compatibility.
+		std::vector<std::vector<std::shared_ptr<class Material>>> m_OverrideMaterials;
+
 		// Other Bindables a render needs (InputLayout, Topology,
 		// RasterizerState, DepthStencilState, etc.). Separate list — direct
 		// fields above are the "common" ones with named slots.
@@ -49,6 +57,20 @@ namespace Engine
 
 		void SetMaterial(const std::shared_ptr<class Material>& p);
 		const std::shared_ptr<class Material>& GetMaterial() const;
+
+		// Per-slot override API. (containerIdx, subIdx) addresses the same
+		// slot model as Mesh's vecMaterial. SetOverrideMaterial(... nullptr)
+		// clears the override and falls back to the mesh's slot material.
+		void SetOverrideMaterial(int iContainerIdx, int iSubIdx, const std::shared_ptr<class Material>& p);
+		std::shared_ptr<class Material> GetOverrideMaterial(int iContainerIdx, int iSubIdx) const;
+		// Resolve final material for a slot: override → m_pMaterial (legacy
+		// blanket override) → mesh slot material. Mirrors the resolver
+		// callback passed to Mesh::Draw.
+		std::shared_ptr<class Material> GetEffectiveMaterial(int iContainerIdx, int iSubIdx) const;
+		// Build a MaterialResolver bound to this MeshRenderer's overrides.
+		// Returns nullptr if no overrides are active so callers can skip
+		// the per-draw indirection in the common case.
+		std::function<std::shared_ptr<class Material>(int, int)> MakeMaterialResolver() const;
 
 		void AddTexture(const std::shared_ptr<class Texture>& p);
 		const std::vector<std::shared_ptr<class Texture>>& GetTextures() const;

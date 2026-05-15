@@ -145,6 +145,9 @@
     <Filter Include="17. GameObject">
       <UniqueIdentifier>{b2c3d4e5-f6a7-8901-bcde-f12345678901}</UniqueIdentifier>
     </Filter>
+    <Filter Include="13. Navigation\02. Recast">
+      <UniqueIdentifier>{cec22bd4-5950-446c-8d1e-8746570ab6ba}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\Window.cpp">
@@ -730,6 +733,15 @@
     </ClInclude>
     <ClInclude Include="Bindable\MeshUtils.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Recast\Recast.h">
+      <Filter>13. Navigation\02. Recast</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Recast\RecastAlloc.h">
+      <Filter>13. Navigation\02. Recast</Filter>
+    </ClInclude>
+    <ClInclude Include="Navigation\Recast\RecastAssert.h">
+      <Filter>13. Navigation\02. Recast</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

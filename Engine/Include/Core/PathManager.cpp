@@ -51,6 +51,8 @@ namespace Engine
 
         AddPath(SOUND_PATH, TEXT("Resource\\Sound\\"));
 
+        AddPath(MATERIAL_PATH, TEXT("Resource\\Material\\"));
+
         return true;
     }
 

@@ -48,7 +48,7 @@ namespace
 			pOwner ? pOwner->GetComponent<Engine::Transform>() : nullptr;
 		if (pTr) pTr->Bind();
 		pMR->Bind();
-		if (pMR->GetMesh()) pMR->GetMesh()->Draw();
+		if (pMR->GetMesh()) pMR->GetMesh()->Draw(pMR->MakeMaterialResolver());
 		pMR->PostBind();
 		if (pTr) pTr->PostBind();
 	}
@@ -125,7 +125,7 @@ namespace
 				b->Bind();
 		}
 
-		pFirst->GetMesh()->DrawInst(iCount, iInstSize, pInstBuffer);
+		pFirst->GetMesh()->DrawInst(iCount, iInstSize, pInstBuffer, pFirst->MakeMaterialResolver());
 
 		if (pFirst->GetPixelShader()) pFirst->GetPixelShader()->PostBind();
 		if (pFirst->GetMaterial())    pFirst->GetMaterial()->PostBind();

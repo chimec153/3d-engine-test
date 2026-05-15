@@ -6,57 +6,6 @@
 
 namespace Engine
 {
-	namespace
-	{
-		// Canonical t-register slots used by per-mesh textures (mirrors
-		// shared.hlsl `register(tN)` declarations: Diffuse t0, Normal t1,
-		// Specular t2, Emissive t3, Roughness t6, AO t8, Metalness t9).
-		// Engine-managed slots (PaperBurn t4, Environment t5, HDR t7,
-		// GBuffer t11~t18, Shadow t15, ...) are deliberately excluded —
-		// other systems own those.
-		constexpr int kMeshTextureSlots[] = { 0, 1, 2, 3, 6, 8, 9 };
-
-		// When the previous draw left a texture bound at `iSlot` and the
-		// current mesh container has nothing for that slot, leaving the
-		// stale SRV in place would make HLSL `GetDimensions(...)` report
-		// non-zero — the optional-texture branches in anisotropic_microfacet.hlsl
-		// would then read whichever mesh drew last. Unbinding null'fies
-		// the slot so `GetDimensions` returns (0,0) and the shader takes
-		// the unbound path.
-		void UnbindMeshSlotIfStale(int iSlot)
-		{
-			BindCache& cache = Graphics::GetInst()->GetBindCache();
-			if (iSlot < 0 || iSlot >= BindCache::kTextureSlots) return;
-			if (!cache.pBoundTextures[iSlot]) return;
-
-			ID3D11ShaderResourceView* pNull = nullptr;
-			auto* ctx = Graphics::GetInst()->GetDeviceContext();
-			ctx->VSSetShaderResources(iSlot, 1, &pNull);
-			ctx->PSSetShaderResources(iSlot, 1, &pNull);
-			ctx->CSSetShaderResources(iSlot, 1, &pNull);
-			cache.pBoundTextures[iSlot] = nullptr;
-		}
-
-		// Walk this container's textures, then null out any canonical
-		// mesh-texture slot the container doesn't fill. Must run before
-		// the container's own Bind() calls so we don't unbind what we
-		// just bound.
-		void ResetUnusedMeshSlots(const std::vector<std::shared_ptr<class Texture>>& vecTexture)
-		{
-			bool bUsed[BindCache::kTextureSlots] = {};
-			for (const auto& pTex : vecTexture)
-			{
-				if (!pTex) continue;
-				int iSlot = pTex->GetSlot();
-				if (iSlot >= 0 && iSlot < BindCache::kTextureSlots)
-					bUsed[iSlot] = true;
-			}
-			for (int iSlot : kMeshTextureSlots)
-			{
-				if (!bUsed[iSlot]) UnbindMeshSlotIfStale(iSlot);
-			}
-		}
-	}
 
 	Mesh::Mesh(int iCount)	:
 		Bindable()
@@ -70,13 +19,9 @@ namespace Engine
 		, m_vecMeshContainer(mesh.m_vecMeshContainer)
 		, m_vBoundingSphereInfo(mesh.m_vBoundingSphereInfo)
 	{
-		for (size_t i = 0; i < m_vecMeshContainer.size(); ++i)
-		{
-			for (size_t j = 0; j < m_vecMeshContainer[i].vecMaterial.size(); ++j)
-			{
-				m_vecMeshContainer[i].vecMaterial[j] = m_vecMeshContainer[i].vecMaterial[j] ? std::static_pointer_cast<Material>(m_vecMeshContainer[i].vecMaterial[j]->Clone()) : nullptr;
-			}
-		}
+		// Material is now a shared asset (BindableManager<Material> SSoT).
+		// Don't clone — every Mesh instance points at the same Material
+		// shared_ptr, and per-instance overrides live on MeshRendererComponent.
 	}
 	const Vector4& Mesh::GetBoundingSphereInfo() const
 	{
@@ -112,64 +57,6 @@ namespace Engine
 	void Mesh::SetVertexCount(int iIndex, int iCount)
 	{
 		m_vecMeshContainer[iIndex].m_iCount = iCount;
-	}
-
-	void Mesh::SetTextures(const std::vector<std::vector<std::shared_ptr<Texture>>>& vecTexture)
-	{
-		assert(m_vecMeshContainer.size() <= vecTexture.size());
-
-		for (int i = 0; i < m_vecMeshContainer.size(); ++i)
-		{
-			m_vecMeshContainer[i].vecTexture = vecTexture[i];
-		}
-	}
-
-	void Mesh::SetTextures(int iIndex, const std::vector<std::shared_ptr<Texture>>& vecTexture)
-	{
-		if (m_vecMeshContainer.size() <= iIndex || iIndex < 0)
-		{
-			assert(false);
-			return;
-		}
-
-		m_vecMeshContainer[iIndex].vecTexture = vecTexture;
-	}
-
-	void Mesh::SetTexture(int iIndex, int iVecIdx, const std::shared_ptr<Texture>& pTexture)
-	{
-		if (iIndex < 0 || iIndex >= static_cast<int>(m_vecMeshContainer.size()))
-		{
-			assert(false);
-			return;
-		}
-		auto& vec = m_vecMeshContainer[iIndex].vecTexture;
-		if (iVecIdx < 0)
-		{
-			assert(false);
-			return;
-		}
-		if (iVecIdx >= static_cast<int>(vec.size()))
-		{
-			vec.resize(iVecIdx + 1);
-		}
-		vec[iVecIdx] = pTexture;
-	}
-
-	std::shared_ptr<Texture> Mesh::GetTexture(int iIndex, int iVecIdx) const
-	{
-		if (iIndex < 0 || iIndex >= static_cast<int>(m_vecMeshContainer.size()))
-			return nullptr;
-		const auto& vec = m_vecMeshContainer[iIndex].vecTexture;
-		if (iVecIdx < 0 || iVecIdx >= static_cast<int>(vec.size()))
-			return nullptr;
-		return vec[iVecIdx];
-	}
-
-	int Mesh::GetTextureCount(int iIndex) const
-	{
-		if (iIndex < 0 || iIndex >= static_cast<int>(m_vecMeshContainer.size()))
-			return 0;
-		return static_cast<int>(m_vecMeshContainer[iIndex].vecTexture.size());
 	}
 
 	void Mesh::AddMaterial(int iIndex, const std::shared_ptr<Material>& pMaterial)
@@ -266,7 +153,7 @@ namespace Engine
 	{
 	}
 
-	void Mesh::Draw()
+	void Mesh::Draw(const MaterialResolver& resolver)
 	{
 		for (int i = 0; i < static_cast<int>(m_vecMeshContainer.size()); ++i)
 		{
@@ -277,11 +164,9 @@ namespace Engine
 			}
 #endif
 
-			ResetUnusedMeshSlots(m_vecMeshContainer[i].vecTexture);
-			for (size_t j = 0; j < m_vecMeshContainer[i].vecTexture.size(); ++j)
-			{
-				m_vecMeshContainer[i].vecTexture[j]->Bind();
-			}
+			// Per-container texture binding is gone — each Material binds
+			// its own textures (and wipes stale SRVs for empty slots) in
+			// Material::Bind below.
 
 			UINT iStride = m_vecMeshContainer[i].m_iSize;
 			UINT iOffset = 0;
@@ -290,10 +175,13 @@ namespace Engine
 
 			for (int j = 0; j < m_vecMeshContainer[i].m_vecIndexBuffer.size(); ++j)
 			{
-				if (m_vecMeshContainer[i].vecMaterial.size() > j && m_vecMeshContainer[i].vecMaterial[j])
-				{
-					m_vecMeshContainer[i].vecMaterial[j]->Bind();
-				}
+				// Resolver gets first pick (per-slot override on the renderer
+				// component); mesh's own material is the fallback.
+				std::shared_ptr<Material> pMat;
+				if (resolver) pMat = resolver(i, j);
+				if (!pMat && m_vecMeshContainer[i].vecMaterial.size() > j)
+					pMat = m_vecMeshContainer[i].vecMaterial[j];
+				if (pMat) pMat->Bind();
 
 				Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(*m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer, m_vecMeshContainer[i].m_vecIndexBuffer[j].eFormat, 0);
 
@@ -350,7 +238,7 @@ namespace Engine
 		}
 	}
 
-	void Mesh::DrawInst(int iCount, int iSize, const CPtr<ID3D11Buffer>& pInstBuffer)
+	void Mesh::DrawInst(int iCount, int iSize, const CPtr<ID3D11Buffer>& pInstBuffer, const MaterialResolver& resolver)
 	{
 		for (int i = 0; i < static_cast<int>(m_vecMeshContainer.size()); ++i)
 		{
@@ -360,11 +248,7 @@ namespace Engine
 				continue;
 			}
 #endif
-			ResetUnusedMeshSlots(m_vecMeshContainer[i].vecTexture);
-			for (size_t j = 0; j < m_vecMeshContainer[i].vecTexture.size(); ++j)
-			{
-				m_vecMeshContainer[i].vecTexture[j]->Bind();
-			}
+			// See Mesh::Draw — Material::Bind handles texture binding now.
 
 			UINT iStrides[] = { static_cast<unsigned int>(m_vecMeshContainer[i].m_iSize), static_cast<unsigned int>(iSize) };
 			UINT iOffsets[2] = {};
@@ -375,10 +259,11 @@ namespace Engine
 
 			for (size_t j = 0; j < m_vecMeshContainer[i].m_vecIndexBuffer.size(); ++j)
 			{
-				if (m_vecMeshContainer[i].vecMaterial.size() > j)
-				{
-					m_vecMeshContainer[i].vecMaterial[j]->Bind();
-				}
+				std::shared_ptr<Material> pMat;
+				if (resolver) pMat = resolver(i, static_cast<int>(j));
+				if (!pMat && m_vecMeshContainer[i].vecMaterial.size() > j)
+					pMat = m_vecMeshContainer[i].vecMaterial[j];
+				if (pMat) pMat->Bind();
 
 				Graphics::GetInst()->GetDeviceContext()->IASetIndexBuffer(m_vecMeshContainer[i].m_vecIndexBuffer[j].pBuffer.Get(), m_vecMeshContainer[i].m_vecIndexBuffer[j].eFormat, 0);
 
@@ -399,12 +284,36 @@ namespace Engine
 		return std::make_shared<Mesh>(*this);
 	}
 
+	// File magic + format-version progression:
+	//   no magic, raw int container_count   = legacy ("v0")
+	//   magic + version 1                   = materials/textures embedded
+	//   magic + version 2                   = materials referenced by tag,
+	//                                          live as standalone .mat assets
+	// kMeshMagic decodes to a comically large container count if read raw,
+	// which is why v0 detection is unambiguous.
+	static constexpr uint32_t kMeshMagic   = 0x4853454D;  // 'MESH' (LE)
+	static constexpr uint32_t kMeshVersion = 2;
+
 	void Mesh::Save(FILE* pFile)
 	{
-		// Mirrors Mesh::Load and MeshLoader::SaveMesh — same wire format so
-		// the .mesh files this writes are round-trippable by Mesh::Load.
-		// Tag is NOT written here (Load doesn't read it either); only the
-		// per-container payload.
+		// v2 format (current):
+		//   uint32 magic ('MESH')
+		//   uint32 version (=2)
+		//   int    container_count
+		//   per container:
+		//     int     vertex_count
+		//     bytes   vertex data (m_iSize * vertex_count)
+		//     int16   index_buffer_count
+		//     per index buffer: int sub_count + uint32 indices[]
+		//     int     material_count
+		//     per material: int tag_length + bytes tag    ← reference only
+		//
+		// Material data itself lives in Resource/Material/*.mat and is loaded
+		// at startup into BindableManager<Material>. v1 (embedded materials)
+		// and v0 (legacy) keep loading via Mesh::Load's version branches.
+		fwrite(&kMeshMagic, 4, 1, pFile);
+		fwrite(&kMeshVersion, 4, 1, pFile);
+
 		int iContainerCount = static_cast<int>(m_vecMeshContainer.size());
 		fwrite(&iContainerCount, 4, 1, pFile);
 
@@ -433,28 +342,71 @@ namespace Engine
 				}
 			}
 
-			int iTextureCount = static_cast<int>(container.vecTexture.size());
-			fwrite(&iTextureCount, 4, 1, pFile);
-			for (int j = 0; j < iTextureCount; ++j)
-			{
-				if (container.vecTexture[j])
-					container.vecTexture[j]->Save(pFile);
-			}
-
 			int iMaterialCount = static_cast<int>(container.vecMaterial.size());
 			fwrite(&iMaterialCount, 4, 1, pFile);
 			for (int j = 0; j < iMaterialCount; ++j)
 			{
-				if (container.vecMaterial[j])
-					container.vecMaterial[j]->Save(pFile);
+				// Reference by tag. An empty tag (anonymous material) writes
+				// length=0 — Load will fall back to a default Material then.
+				const std::string& strTag = container.vecMaterial[j] ? container.vecMaterial[j]->GetTag() : std::string();
+				int iLen = static_cast<int>(strTag.length());
+				fwrite(&iLen, 4, 1, pFile);
+				if (iLen) fwrite(strTag.c_str(), 1, iLen, pFile);
 			}
+		}
+	}
+
+	namespace
+	{
+		// Old-format helper: resolve a Texture loaded from disk against the
+		// BindableManager cache, falling back to disk read if the manager
+		// doesn't know it yet. Mirrors what the old Mesh::Load did inline.
+		std::shared_ptr<Texture> ResolveLoadedTexture(const std::shared_ptr<Texture>& pTex)
+		{
+			if (auto pPrev = BindableManager<Texture>::GetInst()->FindBindable(pTex->GetTag()))
+				return pPrev;
+			if (pTex->LoadTextureFromFullPath(pTex->GetFullPath()))
+				BindableManager<Texture>::GetInst()->AddBindable(pTex);
+			return pTex;
+		}
+
+		// Dedup a freshly-loaded Material against BindableManager<Material>.
+		// If a same-tag asset already exists in the cache, return that and
+		// drop the just-read instance. Otherwise register the new one so
+		// subsequent .mesh loads share it. Empty-tag materials skip the
+		// cache (anonymous → per-mesh).
+		std::shared_ptr<Material> DedupMaterial(const std::shared_ptr<Material>& pMat)
+		{
+			if (!pMat || pMat->GetTag().empty()) return pMat;
+			auto* mgr = BindableManager<Material>::GetInst();
+			if (auto pPrev = mgr->FindBindable(pMat->GetTag())) return pPrev;
+			mgr->AddBindable(pMat);
+			return pMat;
 		}
 	}
 
 	void Mesh::Load(FILE* pFile)
 	{
-		int iContainerCount = 0;
+		// Three-way version detection:
+		//   v0: no magic, raw int container_count (legacy)
+		//   v1: magic + version 1, materials embedded
+		//   v2: magic + version 2, materials referenced by tag
+		uint32_t uMaybeMagic = 0;
+		fread(&uMaybeMagic, 4, 1, pFile);
 
+		uint32_t uVersion = 0;
+		if (uMaybeMagic == kMeshMagic)
+		{
+			fread(&uVersion, 4, 1, pFile);
+			assert((uVersion == 1 || uVersion == 2) && "Unknown .mesh version");
+		}
+		else
+		{
+			fseek(pFile, -4, SEEK_CUR);
+			uVersion = 0;
+		}
+
+		int iContainerCount = 0;
 		fread(&iContainerCount, 4, 1, pFile);
 
 		std::vector<std::vector<VertexStandard>> _vecVertex;
@@ -465,74 +417,118 @@ namespace Engine
 			std::vector<std::vector<unsigned int>> vecIndex;
 
 			int iVertexCount = 0;
-
 			fread(&iVertexCount, 4, 1, pFile);
-
 			vecVertex.resize(iVertexCount);
-
 			fread(&vecVertex[0], sizeof(VertexStandard), iVertexCount, pFile);
-
 			_vecVertex.push_back(vecVertex);
 
 			short iIndexCount = 0;
-
 			fread(&iIndexCount, 2, 1, pFile);
-
 			vecIndex.resize(iIndexCount);
-
 			for (short j = 0; j < iIndexCount; ++j)
 			{
 				int _iIndexCount = 0;
 				fread(&_iIndexCount, 4, 1, pFile);
-
 				if (_iIndexCount)
 				{
 					vecIndex[j].resize(_iIndexCount);
-
 					fread(&vecIndex[j][0], 4, _iIndexCount, pFile);
 				}
 			}
 
 			CreateMesh(vecVertex, vecIndex);
 
-			std::vector<std::shared_ptr<Texture>> vecTexture;
-
-			int iTextureCount = 0;
-
-			fread(&iTextureCount, 4, 1, pFile);
-
-			for (int j = 0; j < iTextureCount; ++j)
+			// v0 only: container-level texture block precedes materials.
+			// Stash for slot assignment after materials are read.
+			std::vector<std::shared_ptr<Texture>> vecOldFormatTextures;
+			if (uVersion == 0)
 			{
-				std::shared_ptr<Texture> pTexture = std::make_shared<Texture>();
+				int iTextureCount = 0;
+				fread(&iTextureCount, 4, 1, pFile);
+				vecOldFormatTextures.reserve(iTextureCount);
 
-				pTexture->Load(pFile);
-
-				if (auto pPrevTexture = Engine::BindableManager<Texture>::GetInst()->FindBindable(pTexture->GetTag()))
+				for (int j = 0; j < iTextureCount; ++j)
 				{
-					pTexture = pPrevTexture;
+					auto pTexture = std::make_shared<Texture>();
+					pTexture->Load(pFile);
+					pTexture = ResolveLoadedTexture(pTexture);
+					vecOldFormatTextures.push_back(pTexture);
 				}
-				else if (pTexture->LoadTextureFromFullPath(pTexture->GetFullPath()))
-				{
-					BindableManager<Texture>::GetInst()->AddBindable(pTexture);
-				}
-
-				vecTexture.push_back(pTexture);
 			}
 
 			int iMaterial = 0;
-
 			fread(&iMaterial, 1, 4, pFile);
 
 			for (int j = 0; j < iMaterial; ++j)
 			{
-				std::shared_ptr<Material> pMaterial = std::make_shared<Material>();
+				std::shared_ptr<Material> pMaterial;
 
-				pMaterial->Load(pFile);
+				if (uVersion == 2)
+				{
+					// Reference-by-tag. Resolve against the global Material
+					// asset cache (populated by ResourceManager::LoadAllMaterials
+					// at startup). Missing tag → instantiate a default placeholder
+					// so rendering doesn't crash; user can author the .mat later.
+					int iLen = 0;
+					fread(&iLen, 4, 1, pFile);
+					std::string strTag;
+					if (iLen)
+					{
+						std::unique_ptr<char[]> buf = std::make_unique<char[]>(iLen + 1);
+						fread(buf.get(), 1, iLen, pFile);
+						buf[iLen] = 0;
+						strTag = buf.get();
+					}
+
+					if (!strTag.empty())
+					{
+						pMaterial = BindableManager<Material>::GetInst()->FindBindable(strTag);
+						if (!pMaterial)
+						{
+							pMaterial = std::make_shared<Material>();
+							pMaterial->SetTag(strTag);
+							BindableManager<Material>::GetInst()->AddBindable(pMaterial);
+						}
+					}
+					else
+					{
+						pMaterial = std::make_shared<Material>();
+					}
+				}
+				else
+				{
+					// v0/v1: materials embedded in the .mesh. v1 has the
+					// per-slot texture block; v0's LoadLegacy stops after
+					// the 80-byte struct so file offsets align.
+					pMaterial = std::make_shared<Material>();
+					if (uVersion == 1) pMaterial->Load(pFile);
+					else               pMaterial->LoadLegacy(pFile);
+
+					// Dedup: same-tag materials across the mesh (or across
+					// .mesh files loaded earlier) collapse to one cached
+					// instance. This is what enables one-edit-affects-all
+					// for repeated materials in a 200-container model.
+					pMaterial = DedupMaterial(pMaterial);
+				}
 
 				AddMaterial(i, pMaterial);
 			}
 
-			SetTextures(i, vecTexture);
+			// v0 fallout: distribute the container's loose texture list to
+			// each material's slot array (keyed by t-register → slot index).
+			if (uVersion == 0)
+			{
+				for (const auto& pTex : vecOldFormatTextures)
+				{
+					if (!pTex) continue;
+					int iSlotIdx = Material::SlotRegisterToIndex(pTex->GetSlot());
+					if (iSlotIdx < 0) continue;
+					for (auto& pMat : m_vecMeshContainer[i].vecMaterial)
+					{
+						if (pMat) pMat->SetTexture(iSlotIdx, pTex);
+					}
+				}
+			}
 		}
 
 		// Phase E7 — Drawable's StaticGetBoundingSphere migrated to

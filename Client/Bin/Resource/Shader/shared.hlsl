@@ -207,7 +207,10 @@ cbuffer light : register(b1)
     float g_fQuadraticAttenuation;
     int g_iLightType;
     float g_fLightIntensity;
-    int pad;
+    // Spot-only cone falloff exponent — see POINTLIGHT struct in Types.h.
+    // g_fLightIntensity is now a pure brightness multiplier for every light
+    // type; cone shape is controlled here.
+    float g_fSpotConeExponent;
 };
 
 cbuffer material : register(b2)
@@ -646,8 +649,10 @@ void GetLightDirAndColor(in float3 view, out float4 C, out float3 light)
     else if (g_iLightType == SPOT_LIGHT)
     {
         light = normalize(g_vLightPos - view);
-        
-        C = GetLightAtt(g_vLightPos - view) * pow(max(dot(g_vLightDir, light), 0.f), g_fLightIntensity);
+        // Cone falloff is shaped by g_fSpotConeExponent (sharper as it
+        // grows); intensity is a separate multiplier so brightness scales
+        // independently of cone tightness.
+        C = GetLightAtt(g_vLightPos - view) * pow(max(dot(g_vLightDir, light), 0.f), g_fSpotConeExponent) * g_fLightIntensity;
     }
     else if (g_iLightType == DIRECTIONAL_LIGHT)
     {

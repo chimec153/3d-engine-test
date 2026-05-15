@@ -4,6 +4,8 @@
 #include "Agent.h"
 #include "../Navigation/Detour/DetourCrowd.h"
 #include "Transform.h"
+#include "../Navigation/Recast/Recast.h"
+#include "Mesh.h"
 
 Engine::NavMesh::NavMesh(dtNavMeshCreateParams& tParams, float fAgentRadius, float fAgentHeight) :
 	Component()
@@ -349,4 +351,204 @@ void Engine::NavMesh::Load(FILE* pFile)
 dtNavMesh* Engine::NavMesh::GetNavMesh() const
 {
 	return m_pNavMesh;
+}
+
+namespace Engine
+{
+	namespace
+	{
+		// RAII guard for Recast intermediates. Freed in reverse-allocation
+		// order on scope exit (success or early return), so every error
+		// path in Build() doesn't have to repeat the cleanup.
+		struct RecastIntermediates
+		{
+			rcHeightfield*        pHF  = nullptr;
+			rcCompactHeightfield* pCHF = nullptr;
+			rcContourSet*         pCS  = nullptr;
+			rcPolyMesh*           pPM  = nullptr;
+			rcPolyMeshDetail*     pPMD = nullptr;
+
+			~RecastIntermediates()
+			{
+				// Detour's NavMesh constructor copies everything it needs
+				// out of dtNavMeshCreateParams, so freeing here is safe.
+				if (pPMD) rcFreePolyMeshDetail(pPMD);
+				if (pPM)  rcFreePolyMesh(pPM);
+				if (pCS)  rcFreeContourSet(pCS);
+				if (pCHF) rcFreeCompactHeightfield(pCHF);
+				if (pHF)  rcFreeHeightField(pHF);
+			}
+		};
+	}
+
+	std::shared_ptr<NavMesh> NavMesh::Build(
+		const std::vector<float>& vecPoint,
+		const std::vector<int>& vecTris,
+		const Vector3& vMax,
+		const Vector3& vMin,
+		const NavMeshConfig& cfg)
+	{
+		if (vecPoint.empty() || vecTris.empty()) return nullptr;
+
+		rcContext tContext;
+		RecastIntermediates guard;
+
+		rcConfig config = {};
+		memcpy_s(config.bmax, 12, &vMax.x, 12);
+		memcpy_s(config.bmin, 12, &vMin.x, 12);
+		config.cs = cfg.fCellSize;
+		config.ch = cfg.fCellHeight;
+		config.walkableSlopeAngle = cfg.fAgentSlopeAngle;
+		config.walkableHeight = static_cast<int>(ceilf(cfg.fAgentHeight / config.ch));
+		config.walkableRadius = static_cast<int>(ceilf(cfg.fAgentRadius / config.cs));
+		config.walkableClimb  = static_cast<int>(floorf(cfg.fAgentClimb / config.ch));
+		config.maxEdgeLen = static_cast<int>(cfg.fMaxEdgeLen / cfg.fCellSize);
+		config.maxSimplificationError = cfg.fMaxEdgeError;
+		config.minRegionArea  = static_cast<int>(cfg.fRegionMinSize * cfg.fRegionMinSize);
+		config.mergeRegionArea = static_cast<int>(cfg.fRegionMergeSize * cfg.fRegionMergeSize);
+		config.maxVertsPerPoly = static_cast<int>(cfg.fVertsPerPoly);
+		config.borderSize = config.walkableRadius + 3;
+		rcCalcGridSize(config.bmin, config.bmax, config.cs, &config.width, &config.height);
+		config.detailSampleDist = cfg.fDetailSampleDist < 0.9f ? 0.f : cfg.fCellSize * cfg.fDetailSampleDist;
+		config.detailSampleMaxError = cfg.fCellHeight * cfg.fDetailSampleMaxError;
+
+		config.bmin[0] -= config.borderSize * config.cs;
+		config.bmin[2] -= config.borderSize * config.cs;
+		config.bmax[0] += config.borderSize * config.cs;
+		config.bmax[2] += config.borderSize * config.cs;
+
+		guard.pHF = rcAllocHeightfield();
+		if (!guard.pHF) return nullptr;
+		if (!rcCreateHeightfield(&tContext, *guard.pHF, config.width, config.height, config.bmin, config.bmax, config.cs, config.ch))
+			return nullptr;
+
+		const int iTriCount = static_cast<int>(vecTris.size() / 3);
+		auto pTriAreas = std::make_unique<unsigned char[]>(iTriCount);
+		memset(pTriAreas.get(), 0, iTriCount);
+
+		rcMarkWalkableTriangles(&tContext, cfg.fAgentSlopeAngle, &vecPoint[0], static_cast<int>(vecPoint.size()),
+			&vecTris[0], iTriCount, pTriAreas.get());
+
+		if (!rcRasterizeTriangles(&tContext, &vecPoint[0], static_cast<int>(vecPoint.size()),
+			&vecTris[0], pTriAreas.get(), iTriCount, *guard.pHF, config.walkableClimb))
+			return nullptr;
+
+		guard.pCHF = rcAllocCompactHeightfield();
+		if (!guard.pCHF) return nullptr;
+		if (!rcBuildCompactHeightfield(&tContext, config.walkableHeight, config.walkableClimb, *guard.pHF, *guard.pCHF))
+			return nullptr;
+		if (!rcErodeWalkableArea(&tContext, config.walkableRadius, *guard.pCHF)) return nullptr;
+		if (!rcBuildDistanceField(&tContext, *guard.pCHF)) return nullptr;
+		if (!rcBuildRegions(&tContext, *guard.pCHF, 0, config.minRegionArea, config.mergeRegionArea)) return nullptr;
+
+		guard.pCS = rcAllocContourSet();
+		if (!guard.pCS) return nullptr;
+		if (!rcBuildContours(&tContext, *guard.pCHF, config.maxSimplificationError, config.maxEdgeLen, *guard.pCS))
+			return nullptr;
+
+		guard.pPM = rcAllocPolyMesh();
+		if (!guard.pPM) return nullptr;
+		if (!rcBuildPolyMesh(&tContext, *guard.pCS, config.maxVertsPerPoly, *guard.pPM)) return nullptr;
+
+		guard.pPMD = rcAllocPolyMeshDetail();
+		if (!guard.pPMD) return nullptr;
+		if (!rcBuildPolyMeshDetail(&tContext, *guard.pPM, *guard.pCHF, config.detailSampleDist, config.detailSampleMaxError, *guard.pPMD))
+			return nullptr;
+
+		// Mark walkable polys as area 0 / flag 1 so Detour treats them
+		// as the default traversable surface (mirrors the editor's pass).
+		for (int i = 0; i < guard.pPM->npolys; ++i)
+		{
+			if (guard.pPM->areas[i] == RC_WALKABLE_AREA) guard.pPM->areas[i] = 0;
+			if (guard.pPM->areas[i] == 0)                guard.pPM->flags[i] = 1;
+		}
+
+		dtNavMeshCreateParams tParams = {};
+		tParams.verts            = guard.pPM->verts;
+		tParams.vertCount        = guard.pPM->nverts;
+		tParams.polys            = guard.pPM->polys;
+		tParams.polyAreas        = guard.pPM->areas;
+		tParams.polyFlags        = guard.pPM->flags;
+		tParams.polyCount        = guard.pPM->npolys;
+		tParams.nvp              = guard.pPM->nvp;
+		tParams.detailMeshes     = guard.pPMD->meshes;
+		tParams.detailVerts      = guard.pPMD->verts;
+		tParams.detailVertsCount = guard.pPMD->nverts;
+		tParams.detailTris       = guard.pPMD->tris;
+		tParams.detailTriCount   = guard.pPMD->ntris;
+		tParams.walkableHeight   = cfg.fAgentHeight;
+		tParams.walkableRadius   = cfg.fAgentRadius;
+		tParams.walkableClimb    = cfg.fAgentClimb;
+		memcpy_s(tParams.bmin, 12, guard.pPM->bmin, 12);
+		memcpy_s(tParams.bmax, 12, guard.pPM->bmax, 12);
+		tParams.cs               = config.cs;
+		tParams.ch               = config.ch;
+		tParams.buildBvTree      = true;
+
+		// NavMesh ctor copies everything it needs; guard frees the Recast
+		// intermediates on scope exit.
+		return std::make_shared<NavMesh>(tParams, cfg.fAgentRadius, cfg.fAgentHeight);
+	}
+
+	std::shared_ptr<Mesh> NavMesh::CreateDebugMesh() const
+	{
+		if (!m_pNavMesh) return nullptr;
+
+		// dtNavMesh has both a public `const dtMeshTile* getTile(int) const`
+		// and a private `dtMeshTile* getTile(int)`. Calling through a
+		// non-const dtNavMesh* picks the private overload — link error.
+		// Routing the call through a const pointer forces the public one.
+		const dtNavMesh* pNav = m_pNavMesh;
+
+		std::vector<VertexStandard> vecVertex;
+		std::vector<unsigned int>   vecIndex;
+
+		const int iMaxTiles = pNav->getMaxTiles();
+		for (int t = 0; t < iMaxTiles; ++t)
+		{
+			const dtMeshTile* pTile = pNav->getTile(t);
+			if (!pTile || !pTile->header) continue;
+
+			// Each tile owns its own vertex array; index polys into it
+			// after offsetting by what we've already appended.
+			const int iVertBase = static_cast<int>(vecVertex.size());
+
+			for (int v = 0; v < pTile->header->vertCount; ++v)
+			{
+				VertexStandard vert;
+				vert.pos.x = pTile->verts[v * 3 + 0];
+				vert.pos.y = pTile->verts[v * 3 + 1];
+				vert.pos.z = pTile->verts[v * 3 + 2];
+				// Default up-pointing normal — debug mesh is rendered with
+				// WIREFRAME rasterizer + the standard nav shader, neither
+				// of which actually shades, but the input layout still
+				// requires a normal value.
+				vert.normal.y = 1.f;
+				vert.tangent.x = 1.f;
+				vert.tangent.w = 1.f;
+				vert.blendWeight.x = 1.f;
+				vecVertex.push_back(vert);
+			}
+
+			for (int p = 0; p < pTile->header->polyCount; ++p)
+			{
+				const dtPoly& poly = pTile->polys[p];
+				// Skip off-mesh connections — they're 2-vertex jump links,
+				// not surface polys.
+				if (poly.getType() == DT_POLYTYPE_OFFMESH_CONNECTION) continue;
+
+				// Fan-triangulate the polygon (Detour guarantees convex).
+				for (int i = 1; i + 1 < poly.vertCount; ++i)
+				{
+					vecIndex.push_back(iVertBase + poly.verts[0]);
+					vecIndex.push_back(iVertBase + poly.verts[i]);
+					vecIndex.push_back(iVertBase + poly.verts[i + 1]);
+				}
+			}
+		}
+
+		if (vecVertex.empty() || vecIndex.empty()) return nullptr;
+
+		return std::make_shared<Mesh>(vecVertex, vecIndex);
+	}
 }

@@ -129,6 +129,26 @@ namespace Editor
 		void InitSelectionOutline();
 		void RenderSelectionOutline();
 
+		// Asset browser for every registered Material. Left pane lists
+		// BindableManager<Material>'s entries; right pane reuses
+		// Material_ImGuiWindow for the currently-selected entry. Toolbar
+		// supports New (create + register), Load (.mat from disk), and
+		// Save All (bulk-write every tagged material to Resource/Material).
+		void MaterialBrowser_ImGuiWindow();
+
+		// 3D translate/rotate/scale gizmo for the currently-selected GameObject.
+		// Backed by ImGuizmo — overlays directly on the main viewport, hooked
+		// to the active camera's view/projection. W/E/R cycle operation,
+		// X toggles world ↔ local mode.
+		void DrawSelectionGizmo();
+
+		// Per-light 2D billboard icons drawn over the viewport so lights are
+		// visible/clickable even when they don't render geometry themselves.
+		// Each light's world position is projected through the active camera's
+		// view-projection; the icon is colored by LIGHT_TYPE and click-picks
+		// into m_pSelectedObject.
+		void RenderLightBillboards();
+
 	private:
 		float m_fCellSize;
 		float m_fCellHeight;
@@ -162,6 +182,16 @@ namespace Editor
 		// Outliner selection; weak so a deleted GameObject auto-clears.
 		std::weak_ptr<Engine::GameObject> m_pSelectedObject;
 
+		// Material Browser selection. Weak so removing the material from
+		// BindableManager (future feature) auto-clears the inspector.
+		std::weak_ptr<Engine::Material> m_pSelectedMaterial;
+
+		// Gizmo state. Kept as ints so this header doesn't have to pull
+		// in ImGuizmo.h (cpp maps them onto ImGuizmo::OPERATION / MODE).
+		// 0=Translate, 1=Rotate, 2=Scale  /  0=Local, 1=World.
+		int m_iGizmoOp   = 0;
+		int m_iGizmoMode = 1;
+
 		// Selection-outline state. Single container highlighted at a time;
 		// -1 means "no container selected". The owning GameObject is held
 		// weakly so deleting it auto-clears the highlight.
@@ -181,6 +211,13 @@ namespace Editor
 		// param is pushed to a neutral value (no-op). Flipping back on
 		// restores the cached value. Default-on so editor mirrors fresh
 		// engine state.
+		// NavMesh wireframe overlay — toggled from the debug UI. The
+		// "NavMesh_Debug" GameObject is created right after navmesh build
+		// (LoadNavMesh path) so flipping this updates its enable flag
+		// next frame. Default off so freshly-built scenes don't show the
+		// overlay until the user asks.
+		bool  m_bShowNavMeshDebug = false;
+
 		bool  m_bEnableBloom = true;
 		bool  m_bEnableDOF   = true;
 		bool  m_bEnableFog   = true;

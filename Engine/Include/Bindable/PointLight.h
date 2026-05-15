@@ -57,6 +57,11 @@ namespace Engine
         void SetConstantAttenuation(float fAttenuation);
         void SetLinearAttenuation(float fAttenuation);
         void SetQuadraticAttenuation(float fAttenuation);
+        // Spot-only cone falloff exponent. Higher = narrower/sharper cone.
+        // Range typically 1.0 (very wide, almost no cone) to 128.0 (laser).
+        // Ignored for POINT/DIRECTIONAL light types.
+        float GetSpotConeExponent() const;
+        void  SetSpotConeExponent(float fExponent);
 
     public:
         virtual void Reset() override;

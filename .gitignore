@@ -1453,3 +1453,8 @@ Client/Bin/Resource/Mesh/Bullet/Bullet.mtl.bak
 *.exe
 Client/Bin/Client_Debug.exe
 /.vs
+.vs/230301/v17/.suo
+.vs/230301/v17/Browse.VC.db
+.vs/230301/v17/Browse.VC.db-wal
+.vs/230301/v17/fileList.bin
+.vs/230301/v17/Solution.VC.db

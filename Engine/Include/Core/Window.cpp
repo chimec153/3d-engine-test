@@ -264,6 +264,12 @@ namespace Engine
 			return false;
 		}
 
+		// Material assets live in Resource/Material/*.mat. Scan after the
+		// shader/cbuffer infrastructure is up so each Material can resolve
+		// its "Material" ConstantBuffer at construction. Empty/missing
+		// folder is a no-op — fresh projects start with zero .mat assets.
+		ResourceManager::GetInst()->LoadAllMaterials();
+
 		CInput::GetInst()->AddKey(DIK_ESCAPE);
 
 		Scene* pCurrentScene = SceneManager::GetInst()->GetScene(SCENE_TYPE::CURRENT);

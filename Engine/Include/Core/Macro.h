@@ -45,11 +45,16 @@
 #pragma comment(lib, "Detour-d.lib")
 #pragma comment(lib, "DetourCrowd-d.lib")
 #pragma comment(lib, "DetourTileCache-d.lib")
+// Recast was previously only linked by the Editor (ImguiManager owned the
+// navmesh build). NavMesh::Build moved into Engine, so the navmesh
+// generation pipeline now needs Recast at link time on the Engine side too.
+#pragma comment(lib, "Recast-d.lib")
 #else
 #pragma comment(lib, "DirectXTex.lib")
 #pragma comment(lib, "Detour.lib")
 #pragma comment(lib, "DetourCrowd.lib")
 #pragma comment(lib, "DetourTileCache.lib")
+#pragma comment(lib, "Recast.lib")
 #endif
 
 #ifdef EXPORT_ENGINE
@@ -76,6 +81,7 @@
 #define TEXTURE_PATH "TexturePath"
 #define MESH_PATH "MeshPath"
 #define SOUND_PATH "SoundPath"
+#define MATERIAL_PATH "MaterialPath"
 
 #define TEXT_LEN	4096
 

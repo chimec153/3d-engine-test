@@ -2,6 +2,7 @@
 #include "../Animation/Skeleton.h"
 #include "../Bindable/FbxLoader.h"
 #include "../Core/Window.h"
+#include "../Core/PathManager.h"
 #include "../Bindable/BindableManager.h"
 #include "../Bindable/Texture.h"
 #include "../Animation/Sequence.h"
@@ -188,6 +189,67 @@ namespace Engine
 		}
 	}
 
+	void ResourceManager::LoadAllMaterials()
+	{
+		// Scan Resource/Material/*.mat into BindableManager<Material>.
+		// File tag (CRef::m_strTag) is set by Material::Load — we don't
+		// need to derive a tag from the filename. Missing folder is fine
+		// (fresh projects have no .mat assets yet).
+		const TCHAR* pDir = CPathManager::GetInst()->FindPath(MATERIAL_PATH);
+		if (!pDir) return;
+
+		// Ensure the folder exists so the editor's "Save as .mat Asset"
+		// can drop files into it without a manual mkdir step. Harmless
+		// (returns ERROR_ALREADY_EXISTS) if it's already there.
+		CreateDirectory(pDir, nullptr);
+
+		TCHAR strSearch[MAX_PATH] = {};
+		wcscpy_s(strSearch, pDir);
+		wcscat_s(strSearch, TEXT("*.mat"));
+
+		WIN32_FIND_DATA tFind = {};
+		HANDLE hFind = FindFirstFile(strSearch, &tFind);
+		if (hFind == INVALID_HANDLE_VALUE) return;
+
+		do
+		{
+			if (tFind.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+
+			char strFileName[MAX_PATH] = {};
+#ifdef UNICODE
+			WideCharToMultiByte(CP_ACP, 0, tFind.cFileName, -1, strFileName, MAX_PATH, nullptr, nullptr);
+#else
+			strcpy_s(strFileName, tFind.cFileName);
+#endif
+
+			auto pMaterial = std::make_shared<Material>();
+			pMaterial->LoadFromPath(strFileName, MATERIAL_PATH);
+
+			// Material::Load → CRe1f::Load reads the tag from the file. If
+			// the tag is empty (legacy/corrupt), fall back to the filename
+			// stem so the asset is still discoverable by name.
+			if (pMaterial->GetTag().empty())
+			{
+				char strStem[_MAX_FNAME] = {};
+				_splitpath_s(strFileName, nullptr, 0, nullptr, 0, strStem, _MAX_FNAME, nullptr, 0);
+				pMaterial->SetTag(strStem);
+			}
+
+			// Skip if a same-tag material is already cached (idempotent).
+			if (!BindableManager<Material>::GetInst()->FindBindable(pMaterial->GetTag()))
+			{
+				BindableManager<Material>::GetInst()->AddBindable(pMaterial);
+			}
+		} while (FindNextFile(hFind, &tFind));
+
+		FindClose(hFind);
+	}
+
+	const std::unordered_map<std::string, std::shared_ptr<Material>>& ResourceManager::GetAllMaterials() const
+	{
+		return BindableManager<Material>::GetInst()->GetMap();
+	}
+
 	void ResourceManager::DumpRegisteredTags() const
 	{
 		::OutputDebugStringA("[ResourceManager] Skeletons:\n");
@@ -213,6 +275,15 @@ namespace Engine
 		pSkeleton->LoadFromPath(pFilePath, strPathKey);
 
 		m_mapSkeleton.insert(std::make_pair(pSkeleton->GetTag(), pSkeleton));
+	}
+
+	void ResourceManager::LoadSequenceByTag(const std::string& strTag, const char* pFilePath, const std::string& strPathKey)
+	{
+		std::shared_ptr<Sequence> pSequence = std::make_shared<Sequence>();
+
+		pSequence->LoadFromPath(pFilePath, strPathKey);
+
+		m_mapSequence.insert(std::make_pair(strTag, pSequence));
 	}
 
 	void ResourceManager::LoadSequence(const char* pFilePath, const std::string& strPathKey)

@@ -221,6 +221,26 @@ namespace Engine
 
             MaterialInfo* pCurrentMaterial = nullptr;
 
+            // Returns a pointer into `path` starting at the immediate
+            // parent directory name (one separator back from the filename).
+            // Example: "C:\Resource\Texture\Decal\brick.png" → "Decal\brick.png".
+            // Two files with the same filename in different folders no
+            // longer collide as long as the parent dir differs. The full
+            // path is still used as the file-load argument.
+            auto FileNameWithParent = [](const char* path) -> const char*
+            {
+                const char* last = strrchr(path, '\\');
+                if (!last) last = strrchr(path, '/');
+                if (!last) return path;
+
+                const char* prev = nullptr;
+                for (const char* p = last - 1; p >= path; --p)
+                {
+                    if (*p == '\\' || *p == '/') { prev = p; break; }
+                }
+                return prev ? (prev + 1) : path;
+            };
+
             FILE* pFile = nullptr;
 
             fopen_s(&pFile, strFullPath, "rt");
@@ -364,11 +384,12 @@ namespace Engine
 
                         pFullPath[strlen(pFullPath) - 1] = 0;
 
-                        std::shared_ptr<Texture> pTexture = StaticFindBindable<Texture>(pFullPath);
+                        const char* pTag = FileNameWithParent(pFullPath);
+                        std::shared_ptr<Texture> pTexture = StaticFindBindable<Texture>(pTag);
 
                         if (pTexture == nullptr)
                         {
-                            pTexture = StaticCreateBindable<Texture>(pFullPath, pFullPath);
+                            pTexture = StaticCreateBindable<Texture>(pTag, pFullPath);
                         }
 
                         pCurrentMaterial->vecTexture.push_back(pTexture);
@@ -397,11 +418,12 @@ namespace Engine
 
                         pFullPath[strlen(pFullPath) - 1] = 0;
 
-                        std::shared_ptr<Texture> pTexture = StaticFindBindable<Texture>(pFullPath);
+                        const char* pTag = FileNameWithParent(pFullPath);
+                        std::shared_ptr<Texture> pTexture = StaticFindBindable<Texture>(pTag);
 
                         if (pTexture == nullptr)
                         {
-                            pTexture = StaticCreateBindable<Texture>(pFullPath, pFullPath, 1);
+                            pTexture = StaticCreateBindable<Texture>(pTag, pFullPath, 1);
                         }
 
                         pCurrentMaterial->vecTexture.push_back(pTexture);
@@ -430,11 +452,12 @@ namespace Engine
 
                         pFullPath[strlen(pFullPath) - 1] = 0;
 
-                        std::shared_ptr<Texture> pTexture = StaticFindBindable<Texture>(pFullPath);
+                        const char* pTag = FileNameWithParent(pFullPath);
+                        std::shared_ptr<Texture> pTexture = StaticFindBindable<Texture>(pTag);
 
                         if (pTexture == nullptr)
                         {
-                            pTexture = StaticCreateBindable<Texture>(pFullPath, pFullPath, 2);
+                            pTexture = StaticCreateBindable<Texture>(pTag, pFullPath, 2);
                         }
 
                         pCurrentMaterial->vecTexture.push_back(pTexture);
@@ -472,6 +495,18 @@ namespace Engine
 
             if (pFile)
             {
+                // New format — magic + version header, no per-container
+                // textures (each Material::Save embeds its own). MeshLoader's
+                // FBX import path distributed `vecTexture` into the materials
+                // earlier, so `vecMaterial` already carries the textures.
+                // The `vecTexture` argument here is preserved only to keep
+                // the call signature compatible.
+                static constexpr uint32_t kMeshMagic   = 0x4853454D;  // 'MESH'
+                static constexpr uint32_t kMeshVersion = 1;
+                fwrite(&kMeshMagic,   4, 1, pFile);
+                fwrite(&kMeshVersion, 4, 1, pFile);
+                (void)vecTexture;
+
                 int iContainerSize = static_cast<int>(vecVertex.size());
 
                 fwrite(&iContainerSize, 4, 1, pFile);
@@ -497,15 +532,6 @@ namespace Engine
                         {
                             fwrite(&vecIndex[i][j][0], 4, vecIndex[i][j].size(), pFile);
                         }
-                    }
-
-                    int iTextureCount = static_cast<int>(vecTexture[i].size());
-
-                    fwrite(&iTextureCount, 4, 1, pFile);
-
-                    for (int j = 0; j < iTextureCount; ++j)
-                    {
-                        vecTexture[i][j]->Save(pFile);
                     }
 
                     int iMaterial = static_cast<int>(vecMaterial[i].size());
@@ -1322,14 +1348,17 @@ namespace Engine
                     LoadFallback("Normal",  1);
                 }
 
-                pMesh->SetTextures(i, vecTexture);
-
                 _vecTexture.push_back(vecTexture);
 
                 const std::vector<FbxLoader::MATERIALINFO>& vecMaterial = loader.GetMaterials(i);
 
                 for (int k = 0; k < vecMaterial.size(); ++k)
                 {
+                    // Materials are shared assets now (BindableManager<Material>
+                    // SSoT). Same-name materials across containers / meshes /
+                    // imports collapse to one instance — editing it updates
+                    // every reference at once. Per-instance variation lives on
+                    // MeshRendererComponent::OverrideMaterials.
                     std::shared_ptr<Material> pMaterial = StaticFindBindable<Material>(vecMaterial[k].name);
 
                     if (pMaterial == nullptr)
@@ -1351,19 +1380,28 @@ namespace Engine
                         pMaterial->SetShininess(vecMaterial[k].tMaterial.fSpecPower);
                         //pMaterial->SetReflectivity(vecMaterial[k].tMaterial.fFraction);
                         pMaterial->SetReflectivity(1.f);
-
-                        pMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
-
-                        pMesh->AddMaterial(i, pMaterial);
                     }
-                    else
-                    {
-                        pMaterial = std::static_pointer_cast<Material>(pMaterial->Clone());
 
-                        pMesh->AddMaterial(i, pMaterial);
-                    }
+                    pMesh->AddMaterial(i, pMaterial);
 
                     _vecMaterial[i].push_back(pMaterial);
+                }
+
+                // Distribute the collected textures to every Material in
+                // this container, mapping each texture's t-register slot
+                // to the Material's slot index. Sub-meshes in the same
+                // container all share the same texture set, matching the
+                // previous container-level texture model. Per-sub-mesh
+                // overrides can be set later (editor or game code).
+                for (const auto& pTex : vecTexture)
+                {
+                    if (!pTex) continue;
+                    int iSlotIdx = Material::SlotRegisterToIndex(pTex->GetSlot());
+                    if (iSlotIdx < 0) continue;
+                    for (const auto& pMat : _vecMaterial[i])
+                    {
+                        if (pMat) pMat->SetTexture(iSlotIdx, pTex);
+                    }
                 }
             }
 

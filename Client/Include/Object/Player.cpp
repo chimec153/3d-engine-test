@@ -112,23 +112,23 @@ namespace Client
 		switch (eState)
 		{
 		case PLAYER_STATE::IDLE:
-			ChangeSequence("CharacterArmature|Idle");
+			ChangeSequence("Idle");
 			break;
 		case PLAYER_STATE::RUN:
 
 			switch (m_eDir)
 			{
 			case Player::MOVE_DIR::LEFT:
-				ChangeSequence("CharacterArmature|Run_Left");
+				ChangeSequence("Run");
 				break;
 			case Player::MOVE_DIR::RIGHT:
-				ChangeSequence("CharacterArmature|Run_Right");
+				ChangeSequence("Run");
 				break;
 			case Player::MOVE_DIR::UP:
-				ChangeSequence("CharacterArmature|Run");
+				ChangeSequence("Run");
 				break;
 			case Player::MOVE_DIR::DOWN:
-				ChangeSequence("CharacterArmature|Run_Back");
+				ChangeSequence("Run");
 				break;
 			case Player::MOVE_DIR::END:
 				break;
@@ -556,10 +556,13 @@ namespace Client
 			m_iInitHP, m_iInitAttackMin, m_iInitAttackMax);
 
 		if (m_pTransform)
+		{
 			m_pTransform->SetPosition(10.f, 5.f, 10.f);
+			m_pTransform->SetScale(0.01f, 0.01f, 0.01f);
+		}
 
 		std::shared_ptr<Engine::Mesh> pMesh =
-			Engine::StaticCreateBindable<Engine::Mesh>("PlayerMesh", "Walking.mesh");
+			Engine::StaticFindBindable<Engine::Mesh>("Idle");
 
 		if (pMesh)
 			pMesh->UsePaperBurn();
@@ -578,7 +581,9 @@ namespace Client
 		std::shared_ptr<Engine::Animation> pAnimation = m_pAnimation;
 
 		std::vector<std::string> vecSeq = {
-			"mixamo.com",
+			"Idle",
+			"Run",
+			"Attack",
 			/*"CharacterArmature|Gun_Shoot",
 			"CharacterArmature|HitRecieve",
 			"CharacterArmature|HitRecieve_2",
@@ -610,11 +615,11 @@ namespace Client
 			{
 				pSequence->UseRootMotion();
 
-				pAnimation->AddSequance(pSequence->GetTag(), pSequence);
+				pAnimation->AddSequance(vecSeq[i], pSequence);
 			}
 		}
 
-		std::shared_ptr<Engine::Skeleton> pSkeleton = Engine::ResourceManager::GetInst()->FindSkeleton("Walking");
+		std::shared_ptr<Engine::Skeleton> pSkeleton = Engine::ResourceManager::GetInst()->FindSkeleton("Idle");
 
 		assert(pSkeleton);
 
@@ -622,7 +627,8 @@ namespace Client
 
 		//pAnimation->ChangeSequence("CharacterArmature|Idle");
 
-		pAnimation->SetLoop("mixamo.com");
+		pAnimation->SetLoop("Idle");
+		pAnimation->SetLoop("Run");
 		/*pAnimation->SetLoop("CharacterArmature|Run");
 		pAnimation->SetLoop("CharacterArmature|Run_Back");
 		pAnimation->SetLoop("CharacterArmature|Run_Left");
@@ -862,7 +868,7 @@ namespace Client
 		{
 			pTransform->AddPosition(vDir * fDeltaTime * m_fSpeed);
 
-			/*const Engine::Vector3& vPlayerPos = pTransform->GetPosition();
+			const Engine::Vector3& vPlayerPos = pTransform->GetPosition();
 
 			float fHeight = m_pTerrain ? m_pTerrain->GetTerrainHeight(vPlayerPos) : 0.f;
 
@@ -895,7 +901,7 @@ namespace Client
 			else
 			{
 				SetState(PLAYER_STATE::IDLE);
-			}*/
+			}
 		}
 		else
 		{
@@ -943,22 +949,22 @@ namespace Client
 			return;
 		}
 
-		//std::shared_ptr<Engine::Transform> pTransform = m_pTransform;
+		std::shared_ptr<Engine::Transform> pTransform = m_pTransform;
 
-		//pTransform->AddY(m_fFallSpeed * fDeltaTime);
+		pTransform->AddY(m_fFallSpeed * fDeltaTime);
 
-		//m_fFallSpeed += m_fAccel * fDeltaTime;
+		m_fFallSpeed += m_fAccel * fDeltaTime;
 
-		//float fHeight = m_pTerrain->GetTerrainHeight(pTransform->GetPosition());
+		float fHeight = m_pTerrain->GetTerrainHeight(pTransform->GetPosition());
 
-		//if (fHeight > pTransform->GetY())
-		//{
-		//	pTransform->SetY(fHeight);
+		if (fHeight > pTransform->GetY())
+		{
+			pTransform->SetY(fHeight);
 
-		//	m_fFallSpeed /= 2.f;
+			m_fFallSpeed /= 2.f;
 
-		//	m_bCanJump = true;
-		//}
+			m_bCanJump = true;
+		}
 
 		UpdateState(fDeltaTime);
 	}

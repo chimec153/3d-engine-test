@@ -366,6 +366,9 @@
     <ClInclude Include="Navigation\Detour\DetourStatus.h" />
     <ClInclude Include="Navigation\Detour\DetourTileCache.h" />
     <ClInclude Include="Navigation\Detour\DetourTileCacheBuilder.h" />
+    <ClInclude Include="Navigation\Recast\Recast.h" />
+    <ClInclude Include="Navigation\Recast\RecastAlloc.h" />
+    <ClInclude Include="Navigation\Recast\RecastAssert.h" />
     <ClInclude Include="Render\MRT.h" />
     <ClInclude Include="Render\RenderManager.h" />
     <ClInclude Include="resource.h" />

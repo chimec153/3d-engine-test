@@ -1,6 +1,8 @@
 #include "ImguiManager.h"
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
+#include "ImGuizmo.h"
+#include "Bindable/Camera.h"
 #include "Core/Graphics.h"
 #include "Input/Input.h"
 #include "Core/Window.h"
@@ -38,6 +40,7 @@
 #include "Bindable/Animation.h"
 #include "GameObject/GameObject.h"
 #include "Component/MeshRendererComponent.h"
+#include "Resource/ResourceManager.h"
 #include "Animation/Sequence.h"
 #include "Animation/Skeleton.h"
 #include "Bindable/PointLight.h"
@@ -69,6 +72,12 @@ namespace Editor
 			}
 			_tcscat_s(pOut, iLen, TEXT("Editor.ini"));
 		}
+
+		// Forward decl — the definition lives further down with the rest of
+		// the MRT debug-view helpers (alpha-blend override for ImGui::Image).
+		// ImguiManager's destructor calls this to release the cached opaque
+		// blend state before Graphics::DestroyInst runs in main.cpp.
+		void ReleaseDebugViewStatics();
 	}
 
 	ImguiManager* ImguiManager::m_pInst = nullptr;
@@ -129,6 +138,11 @@ namespace Editor
 			rcFreeHeightField(m_pHeightField);
 			m_pHeightField = nullptr;
 		}
+
+		// Release MRT debug-view's cached opaque blend state before the
+		// ImGui DX11 backend tears down — both share the device, and we
+		// want this gone before Graphics::DestroyInst runs in main.cpp.
+		ReleaseDebugViewStatics();
 
 		ImGui_ImplDX11_Shutdown();
 		ImGui_ImplWin32_Shutdown();
@@ -268,6 +282,9 @@ namespace Editor
 		ImGui_ImplDX11_NewFrame();
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
+		// ImGuizmo needs its own frame init AFTER ImGui::NewFrame so it
+		// can pull mouse/keyboard state through ImGui's IO.
+		ImGuizmo::BeginFrame();
 
 		if (Engine::CInput::GetInst()->IsKey(Engine::CInput::KEY_STATE::UP, DIK_SPACE))
 		{
@@ -297,12 +314,32 @@ namespace Editor
 			Engine::Window::GetInst()->Resume();
 		}
 
+		// NavMesh wireframe overlay toggle. The "NavMesh_Debug" GameObject
+		// only exists after LoadNavMesh has been invoked; before that the
+		// FindGameObject call below returns null and the checkbox is just
+		// a stored preference applied as soon as the navmesh is built.
+		ImGui::Checkbox("Show NavMesh Debug", &m_bShowNavMeshDebug);
+		if (auto pScene = Engine::SceneManager::GetInst()->GetScene())
+		{
+			if (auto pLayer = pScene->FindLayer(DEFAULT_LAYER))
+			{
+				if (auto pNavDebug = pLayer->FindGameObject("NavMesh_Debug"))
+				{
+					if (m_bShowNavMeshDebug) pNavDebug->Enable();
+					else                     pNavDebug->Disable();
+				}
+			}
+		}
+
 		ImGui::End();
 
 		RenderManager_ShowImGuiWindow();
 		Scene_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
 		WorldOutliner_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
 		EditorSettings_ImGuiWindow();
+		MaterialBrowser_ImGuiWindow();
+		DrawSelectionGizmo();
+		RenderLightBillboards();
 
 		// Register the selection-outline pass with RenderManager every frame
 		// (Clear() wipes the list each frame). Runs at UI layer so it draws
@@ -679,6 +716,40 @@ namespace Editor
 		m_pNavMesh->SetTag("NavigationMesh");
 		pNavigation->AddComponent(std::static_pointer_cast<Engine::Component>(m_pNavMesh));
 
+		// NavMesh wireframe debug overlay — extracts the Detour polygon
+		// data as a renderable mesh and parks it on a sibling GameObject
+		// rendered with the WIREFRAME rasterizer state. Toggled via
+		// m_bShowNavMeshDebug (default off; ImGui Checkbox below sets it).
+		if (auto pDebugMesh = m_pNavMesh->CreateDebugMesh())
+		{
+			auto pNavDebug = pScene->CreateGameObject<Engine::GameObject>(
+				"NavMesh_Debug", pScene->FindLayer(DEFAULT_LAYER));
+			if (pNavDebug)
+			{
+				pNavDebug->AddComponent<Engine::Transform>("transform");
+				auto pDebugMR = pNavDebug->AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
+				if (pDebugMR)
+				{
+					pDebugMR->SetMesh(pDebugMesh);
+					pDebugMR->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(
+						"anisotropic_microfacet VSNoSkin"));
+					pDebugMR->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>(
+						"anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal"));
+					pDebugMR->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
+					pDebugMR->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
+					// WIREFRAME rasterizer = fill mode wireframe + cull none.
+					// Already registered in BindableManager.cpp:95 under the
+					// "WireFrame" tag (= the WIREFRAME macro).
+					pDebugMR->AddBindable(Engine::StaticFindBindable<Engine::RasterizerState>(WIREFRAME));
+
+					if (auto pMat = Engine::StaticFindBindable<Engine::Material>("Material"))
+						pDebugMR->SetMaterial(std::static_pointer_cast<Engine::Material>(pMat->Clone()));
+				}
+				if (m_bShowNavMeshDebug) pNavDebug->Enable();
+				else                     pNavDebug->Disable();
+			}
+		}
+
 		pColliderMesh->SetCallBack(Engine::COLLISION_TYPE::STAY, this, &ImguiManager::CollisionStay);
 	}
 
@@ -700,160 +771,26 @@ namespace Editor
 
 	std::shared_ptr<Engine::NavMesh> ImguiManager::CreateNavMesh(const std::vector<float>& vecPoint, const std::vector<int>& vecTris, const Engine::Vector3& vMax, const Engine::Vector3& vMin)
 	{
-		rcConfig config = {};
+		// Thin wrapper around Engine::NavMesh::Build now that the Recast
+		// pipeline lives in the engine and can be invoked from Client
+		// game code too. Editor UI sliders feed the config struct here so
+		// changes in the inspector still tune the build per-bake.
+		Engine::NavMeshConfig cfg;
+		cfg.fCellSize             = m_fCellSize;
+		cfg.fCellHeight           = m_fCellHeight;
+		cfg.fAgentSlopeAngle      = m_fAgentSlopeAngle;
+		cfg.fAgentHeight          = m_fAgentHeight;
+		cfg.fAgentRadius          = m_fAgentRadius;
+		cfg.fAgentClimb           = m_fAgentClimb;
+		cfg.fMaxEdgeLen           = m_fMaxEdgeLen;
+		cfg.fMaxEdgeError         = m_fMaxEdgeError;
+		cfg.fRegionMinSize        = m_fRegionMinSize;
+		cfg.fRegionMergeSize      = m_fRegionMergeSize;
+		cfg.fVertsPerPoly         = m_fVertsPerPoly;
+		cfg.fDetailSampleDist     = m_fDetailSampleDist;
+		cfg.fDetailSampleMaxError = m_fDetailSampleMaxError;
 
-		memcpy_s(config.bmax, 12, &vMax.x, 12);
-		memcpy_s(config.bmin, 12, &vMin.x, 12);
-
-		config.cs = m_fCellSize;
-		config.ch = m_fCellHeight;
-		config.walkableSlopeAngle = m_fAgentSlopeAngle;
-		config.walkableHeight = static_cast<int>(ceilf(m_fAgentHeight / config.ch));
-		config.walkableRadius = static_cast<int>(ceilf(m_fAgentRadius / config.cs));
-		config.walkableClimb = static_cast<int>(floorf(m_fAgentClimb / config.ch));
-		config.maxEdgeLen = static_cast<int>(m_fMaxEdgeLen / m_fCellSize);
-		config.maxSimplificationError = m_fMaxEdgeError;
-		config.minRegionArea = static_cast<int>(m_fRegionMinSize * m_fRegionMinSize);
-		config.mergeRegionArea = static_cast<int>(m_fRegionMergeSize * m_fRegionMergeSize);
-		config.maxVertsPerPoly = static_cast<int>(m_fVertsPerPoly);
-		config.borderSize = config.walkableRadius + 3;
-		rcCalcGridSize(config.bmin, config.bmax, config.cs, &config.width, &config.height);
-		config.detailSampleDist = m_fDetailSampleDist < 0.9f ? 0 : m_fCellSize * m_fDetailSampleDist;
-		config.detailSampleMaxError = m_fCellHeight * m_fDetailSampleMaxError;
-
-		config.bmin[0] -= config.borderSize * config.cs;
-		config.bmin[2] -= config.borderSize * config.cs;
-		config.bmax[0] += config.borderSize * config.cs;
-		config.bmax[2] += config.borderSize * config.cs;
-
-		m_pHeightField = rcAllocHeightfield();
-
-		if (!m_pHeightField)
-		{
-			return nullptr;
-		}
-
-		if (!rcCreateHeightfield(&m_tContext, *m_pHeightField, config.width, config.height, config.bmin, config.bmax, config.cs, config.ch))
-		{
-			return nullptr;
-		}
-
-		m_pTriAreas = std::make_unique<unsigned char[]>(vecTris.size() / 3);
-
-		if (!m_pTriAreas)
-		{
-			return nullptr;
-		}
-
-		memset(m_pTriAreas.get(), 0, vecTris.size() / 3);
-
-		rcMarkWalkableTriangles(&m_tContext, m_fAgentSlopeAngle, &vecPoint[0], static_cast<int>(vecPoint.size()), &vecTris[0], static_cast<int>(vecTris.size() / 3), m_pTriAreas.get());
-
-		if (!rcRasterizeTriangles(&m_tContext, &vecPoint[0], static_cast<int>(vecPoint.size()), &vecTris[0], m_pTriAreas.get(), static_cast<int>(vecTris.size() / 3), *m_pHeightField, config.walkableClimb))
-		{
-			return nullptr;
-		}
-
-		m_pCompactHeightField = rcAllocCompactHeightfield();
-
-		if (!m_pCompactHeightField)
-		{
-			return nullptr;
-		}
-
-		if (!rcBuildCompactHeightfield(&m_tContext, config.walkableHeight, config.walkableClimb, *m_pHeightField, *m_pCompactHeightField))
-		{
-			return nullptr;
-		}
-
-		if (!rcErodeWalkableArea(&m_tContext, config.walkableRadius, *m_pCompactHeightField))
-		{
-			return nullptr;
-		}
-
-		if (!rcBuildDistanceField(&m_tContext, *m_pCompactHeightField))
-		{
-			return nullptr;
-		}
-
-		if (!rcBuildRegions(&m_tContext, *m_pCompactHeightField, 0, config.minRegionArea, config.mergeRegionArea))
-		{
-			return nullptr;
-		}
-
-		m_pContourSet = rcAllocContourSet();
-
-		if (!m_pContourSet)
-		{
-			return nullptr;
-		}
-
-		if (!rcBuildContours(&m_tContext, *m_pCompactHeightField, config.maxSimplificationError, config.maxEdgeLen, *m_pContourSet))
-		{
-			return nullptr;
-		}
-
-		m_pPolyMesh = rcAllocPolyMesh();
-
-		if (!m_pPolyMesh)
-		{
-			return nullptr;
-		}
-
-		if (!rcBuildPolyMesh(&m_tContext, *m_pContourSet, config.maxVertsPerPoly, *m_pPolyMesh))
-		{
-			return nullptr;
-		}
-
-		m_pPolyMeshDetail = rcAllocPolyMeshDetail();
-
-		if (!m_pPolyMeshDetail)
-		{
-			return nullptr;
-		}
-
-		if (!rcBuildPolyMeshDetail(&m_tContext, *m_pPolyMesh, *m_pCompactHeightField, config.detailSampleDist, config.detailSampleMaxError, *m_pPolyMeshDetail))
-		{
-			return nullptr;
-		}
-
-		for (int i = 0; i < m_pPolyMesh->npolys; ++i)
-		{
-			if (m_pPolyMesh->areas[i] == RC_WALKABLE_AREA)
-			{
-				m_pPolyMesh->areas[i] = 0;
-			}
-
-			if (m_pPolyMesh->areas[i] == 0)
-			{
-				m_pPolyMesh->flags[i] = 1;
-			}
-		}
-
-		dtNavMeshCreateParams tParams = {};
-
-		tParams.verts = m_pPolyMesh->verts;
-		tParams.vertCount = m_pPolyMesh->nverts;
-		tParams.polys = m_pPolyMesh->polys;
-		tParams.polyAreas = m_pPolyMesh->areas;
-		tParams.polyFlags = m_pPolyMesh->flags;
-		tParams.polyCount = m_pPolyMesh->npolys;
-		tParams.nvp = m_pPolyMesh->nvp;
-		tParams.detailMeshes = m_pPolyMeshDetail->meshes;
-		tParams.detailVerts = m_pPolyMeshDetail->verts;
-		tParams.detailVertsCount = m_pPolyMeshDetail->nverts;
-		tParams.detailTris = m_pPolyMeshDetail->tris;
-		tParams.detailTriCount = m_pPolyMeshDetail->ntris;
-		tParams.walkableHeight = m_fAgentHeight;
-		tParams.walkableRadius = m_fAgentRadius;
-		tParams.walkableClimb = m_fAgentClimb;
-		memcpy_s(tParams.bmin, 12, m_pPolyMesh->bmin, 12);
-		memcpy_s(tParams.bmax, 12, m_pPolyMesh->bmax, 12);
-		tParams.cs = config.cs;
-		tParams.ch = config.ch;
-		tParams.buildBvTree = true;
-
-		return std::make_shared<Engine::NavMesh>(tParams, m_fAgentRadius, m_fAgentHeight);
+		return Engine::NavMesh::Build(vecPoint, vecTris, vMax, vMin, cfg);
 	}
 
 	void ImguiManager::CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
@@ -1155,6 +1092,113 @@ namespace Editor
 		{
 			pMaterial->SetRoughnessY(fRoughnessY);
 		}
+
+		// Texture slots — owned by the Material itself. Slot indices on the
+		// labels match the register(tN) in shared.hlsl. The "Clear" button
+		// drops the slot back to nullptr so Material::Bind pushes a null SRV
+		// and the shader's GetDimensions guard falls back to uniforms.
+		ImGui::Separator();
+		ImGui::TextUnformatted("Textures");
+
+		struct SlotLabel { int iSlotIdx; const char* pName; };
+		static const SlotLabel kSlotLabels[Engine::Material::kMaterialSlotCount] = {
+			{ 0, "Diffuse"   },
+			{ 1, "Normal"    },
+			{ 2, "Specular"  },
+			{ 3, "Emissive"  },
+			{ 4, "Roughness" },
+			{ 5, "AO"        },
+			{ 6, "Metalness" },
+		};
+
+		ImGui::PushID(static_cast<const void*>(pMaterial.get()));
+		for (const SlotLabel& slot : kSlotLabels)
+		{
+			auto pTex = pMaterial->GetTexture(slot.iSlotIdx);
+
+			ImGui::PushID(slot.iSlotIdx);
+			ImGui::Text("%s: %s", slot.pName, pTex ? pTex->GetTag().c_str() : "(empty)");
+
+			// Buttons on the line below — texture tags are full file paths
+			// (set by StaticCreateBindable<Texture> using the absolute path
+			// as the tag), so SameLine would push them off-screen.
+			if (ImGui::Button("Set"))
+			{
+				TCHAR strFile[MAX_PATH] = {};
+				OPENFILENAME tName = {};
+				tName.lStructSize = sizeof(OPENFILENAME);
+				tName.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
+				tName.lpstrFilter = TEXT("Texture\0*.png;*.dds;*.tga;*.jpg;*.bmp\0All\0*.*\0");
+				tName.nMaxFile = MAX_PATH;
+				tName.lpstrInitialDir = m_strTextureDefaultPath;
+				tName.lpstrFile = strFile;
+
+				if (GetOpenFileName(&tName))
+				{
+					char szPath[MAX_PATH] = {};
+					WideCharToMultiByte(CP_ACP, 0, strFile, -1, szPath, MAX_PATH, nullptr, nullptr);
+					// Tag = "parent_dir\filename" (e.g. "Decal\brick.png").
+					// Short enough for the inspector, disambiguates same-named
+					// files in different folders. Full path still used for
+					// the actual file load below.
+					const char* pLast = strrchr(szPath, '\\');
+					if (!pLast) pLast = strrchr(szPath, '/');
+					const char* pTagStart = szPath;
+					if (pLast)
+					{
+						const char* pPrev = nullptr;
+						for (const char* p = pLast - 1; p >= szPath; --p)
+						{
+							if (*p == '\\' || *p == '/') { pPrev = p; break; }
+						}
+						pTagStart = pPrev ? (pPrev + 1) : szPath;
+					}
+					std::string strTag(pTagStart);
+
+					const int iRegister = Engine::Material::kMaterialSlotRegisters[slot.iSlotIdx];
+					auto pNewTex = Engine::StaticCreateBindable<Engine::Texture>(strTag, strFile, iRegister);
+					if (!pNewTex)
+					{
+						pNewTex = Engine::StaticFindBindable<Engine::Texture>(strTag);
+					}
+					if (pNewTex)
+					{
+						pMaterial->SetTexture(slot.iSlotIdx, pNewTex);
+					}
+				}
+			}
+
+			if (pTex)
+			{
+				ImGui::SameLine();
+				if (ImGui::Button("Clear"))
+				{
+					pMaterial->SetTexture(slot.iSlotIdx, nullptr);
+				}
+			}
+			ImGui::PopID();
+		}
+		ImGui::PopID();
+
+		// Persist this material to disk as a .mat asset under Resource/Material.
+		// On reload the asset auto-registers via ResourceManager::LoadAllMaterials,
+		// so any mesh that references it by tag picks it up next session.
+		ImGui::Separator();
+		ImGui::PushID(static_cast<const void*>(pMaterial.get()));
+		if (ImGui::Button("Save as .mat Asset"))
+		{
+			if (!pMaterial->GetTag().empty())
+			{
+				std::string strFile = pMaterial->GetTag() + ".mat";
+				pMaterial->SaveFromPath(strFile.c_str(), MATERIAL_PATH);
+			}
+		}
+		if (pMaterial->GetTag().empty())
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled("(set tag first)");
+		}
+		ImGui::PopID();
 	}
 
 	void ImguiManager::Mesh_ImGuiWindow(std::shared_ptr<Engine::Mesh> pMesh)
@@ -1198,7 +1242,16 @@ namespace Editor
 		}
 #endif
 
+		// Mesh default material slots — affects every instance that uses
+		// this Mesh. Per-instance overrides live on MeshRendererComponent
+		// (see MeshRenderer_ImGuiWindow's "[override]" picker). Material
+		// editing itself happens in Material Browser; this UI only chooses
+		// which material is bound to each slot.
 		int iContainerCount = pMesh->GetMeshCount();
+		const auto& mapMaterials = Engine::ResourceManager::GetInst()->GetAllMaterials();
+
+		ImGui::Separator();
+		ImGui::TextUnformatted("Default Material Slots");
 
 		for (int i = 0; i < iContainerCount; ++i)
 		{
@@ -1206,13 +1259,31 @@ namespace Editor
 
 			for (int j = 0; j < iSubCount; ++j)
 			{
-				ImGui::Text("Container: %d, Sub: %d Material", i, j);
+				auto pCurrent = pMesh->GetMaterial(i, j);
+				const char* pCurrentLabel = pCurrent ? pCurrent->GetTag().c_str() : "(empty)";
 
-				std::shared_ptr<Engine::Material> pMaterial = pMesh->GetMaterial(i, j);
+				std::string strComboId =
+					"Container " + std::to_string(i) + " / Sub " + std::to_string(j) +
+					"##mslot" + std::to_string(i) + "_" + std::to_string(j);
 
-				if (pMaterial)
+				if (ImGui::BeginCombo(strComboId.c_str(), pCurrentLabel))
 				{
-					Material_ImGuiWindow(pMaterial);
+					if (ImGui::Selectable("(empty)", !pCurrent))
+					{
+						pMesh->SetMaterial(i, j, nullptr);
+					}
+					for (const auto& entry : mapMaterials)
+					{
+						const std::string& strTag = entry.first;
+						const std::shared_ptr<Engine::Material>& pMat = entry.second;
+						if (!pMat) continue;
+						const bool bSel = (pCurrent == pMat);
+						if (ImGui::Selectable(strTag.c_str(), bSel))
+						{
+							pMesh->SetMaterial(i, j, pMat);
+						}
+					}
+					ImGui::EndCombo();
 				}
 			}
 		}
@@ -1281,6 +1352,18 @@ namespace Editor
 		if (ImGui::RadioButton("DIRECTIONAL", reinterpret_cast<int*>(&eLightType), static_cast<int>(Engine::LIGHT_TYPE::DIRECTIONAL)))
 		{
 			pLight->SetLightType(eLightType);
+		}
+
+		// Cone exponent — only meaningful for SPOT. Hidden for POINT/DIRECTIONAL
+		// since the shader's spot branch is the only consumer. Range 1~128 covers
+		// "very wide cone" → "laser-like" practically.
+		if (pLight->GetLightType() == Engine::LIGHT_TYPE::SPOT)
+		{
+			float fConeExp = pLight->GetSpotConeExponent();
+			if (ImGui::SliderFloat("Cone Exponent", &fConeExp, 1.f, 128.f, "%.1f", ImGuiSliderFlags_Logarithmic))
+			{
+				pLight->SetSpotConeExponent(fConeExp);
+			}
 		}
 
 		Engine::ORTHOINFO tOrthoInfo = pLight->GetOrthoInfo();
@@ -1445,9 +1528,18 @@ namespace Editor
 		// transparent when .w == 0 — looks like "nothing was output". Wrap each
 		// debug Image with a callback that disables blending, then ask ImGui
 		// to restore its default render state afterwards.
-		ID3D11BlendState* GetOpaqueBlendState()
+		// Single owner of the static so both Get/Release access the same
+		// pointer. Wrapped in a function-local static to avoid initialisation
+		// order issues across translation units.
+		ID3D11BlendState*& OpaqueBlendStateRef()
 		{
 			static ID3D11BlendState* s_pOpaque = nullptr;
+			return s_pOpaque;
+		}
+
+		ID3D11BlendState* GetOpaqueBlendState()
+		{
+			ID3D11BlendState*& s_pOpaque = OpaqueBlendStateRef();
 			if (!s_pOpaque)
 			{
 				D3D11_BLEND_DESC desc = {};
@@ -1456,6 +1548,21 @@ namespace Editor
 				Engine::Graphics::GetInst()->GetDevice()->CreateBlendState(&desc, &s_pOpaque);
 			}
 			return s_pOpaque;
+		}
+
+		// Called by ImguiManager destructor — releases the cached blend
+		// state explicitly so it doesn't outlive the D3D11 device. (A
+		// function-local static would otherwise destruct AFTER our main
+		// shutdown, after Graphics::DestroyInst, leading to a release on
+		// a stale device.)
+		void ReleaseDebugViewStatics()
+		{
+			ID3D11BlendState*& s_pOpaque = OpaqueBlendStateRef();
+			if (s_pOpaque)
+			{
+				s_pOpaque->Release();
+				s_pOpaque = nullptr;
+			}
 		}
 
 		void DisableImguiAlphaBlend(const ImDrawList*, const ImDrawCmd*)
@@ -1624,6 +1731,413 @@ namespace Editor
 				_tcscpy_s(m_strTextureDefaultPath, MAX_PATH, pDefault);
 			}
 		}
+
+		ImGui::End();
+	}
+
+	void ImguiManager::DrawSelectionGizmo()
+	{
+		// Nothing selected → no gizmo. Cheap early-out so we don't burn a
+		// fullscreen draw list on every frame in empty selection state.
+		auto pSel = m_pSelectedObject.lock();
+		if (!pSel) return;
+
+		auto pTr = pSel->GetComponent<Engine::Transform>();
+		if (!pTr)
+		{
+			// PointLight / Camera own their Transform internally instead of
+			// registering one on the GameObject's m_Components list. Fall
+			// back to Component::GetTransform() (virtual) on each component
+			// so the gizmo still attaches to those.
+			for (const auto& pComp : pSel->GetComponentList())
+			{
+				if (!pComp) continue;
+				auto pInner = pComp->GetTransform();
+				if (pInner) { pTr = pInner; break; }
+			}
+		}
+		if (!pTr) return;
+
+		auto pCam = Engine::Graphics::GetInst()->GetCamera();
+		if (!pCam) return;
+
+		// W/E/R cycle TRS modes; X toggles world ↔ local. Skipped when an
+		// ImGui text field has focus so typing tag/name doesn't fight the
+		// shortcuts.
+		if (!ImGui::GetIO().WantTextInput)
+		{
+			if (ImGui::IsKeyPressed(ImGuiKey_W)) m_iGizmoOp = 0;
+			if (ImGui::IsKeyPressed(ImGuiKey_E)) m_iGizmoOp = 1;
+			if (ImGui::IsKeyPressed(ImGuiKey_R)) m_iGizmoOp = 2;
+			if (ImGui::IsKeyPressed(ImGuiKey_X)) m_iGizmoMode ^= 1;
+		}
+
+		static const ImGuizmo::OPERATION kOps[] = {
+			ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE,
+		};
+		static const ImGuizmo::MODE kModes[] = {
+			ImGuizmo::LOCAL, ImGuizmo::WORLD,
+		};
+		ImGuizmo::OPERATION eOp = kOps[m_iGizmoOp];
+		ImGuizmo::MODE      eMd = kModes[m_iGizmoMode];
+
+		// Overlay the whole viewport; ImGuizmo draws on the foreground draw
+		// list when SetDrawlist isn't called. Perspective camera → not ortho.
+		ImGuiIO& io = ImGui::GetIO();
+		ImGuizmo::SetOrthographic(false);
+		ImGuizmo::SetRect(0.f, 0.f, io.DisplaySize.x, io.DisplaySize.y);
+
+		const Engine::Matrix& matView = pCam->GetView();
+		const Engine::Matrix& matProj = pCam->GetProjectMatrix();
+
+		// Build the GameObject's world matrix from Transform state. We can't
+		// just feed GetTransformMatrix() back into the setters after Manipulate
+		// because Transform recomposes from position/rotation/scale every
+		// frame — round-tripping through DecomposeMatrixToComponents keeps
+		// the three component arrays as the source of truth.
+		Engine::Vector3 vPos   = pTr->GetPosition();
+		Engine::Vector3 vRot   = pTr->GetRotation();          // radians
+		Engine::Vector3 vScale = pTr->GetScale();
+
+		float aTranslation[3] = { vPos.x, vPos.y, vPos.z };
+		float aRotationDeg[3] = {
+			DirectX::XMConvertToDegrees(vRot.x),
+			DirectX::XMConvertToDegrees(vRot.y),
+			DirectX::XMConvertToDegrees(vRot.z),
+		};
+		float aScale[3]       = { vScale.x, vScale.y, vScale.z };
+
+		float aWorld[16] = {};
+		ImGuizmo::RecomposeMatrixFromComponents(aTranslation, aRotationDeg, aScale, aWorld);
+
+		const bool bChanged = ImGuizmo::Manipulate(
+			reinterpret_cast<const float*>(&matView),
+			reinterpret_cast<const float*>(&matProj),
+			eOp, eMd, aWorld);
+
+		if (bChanged)
+		{
+			ImGuizmo::DecomposeMatrixToComponents(aWorld, aTranslation, aRotationDeg, aScale);
+			pTr->SetPosition(aTranslation[0], aTranslation[1], aTranslation[2]);
+			pTr->SetRelativeRotation(
+				DirectX::XMConvertToRadians(aRotationDeg[0]),
+				DirectX::XMConvertToRadians(aRotationDeg[1]),
+				DirectX::XMConvertToRadians(aRotationDeg[2]));
+			pTr->SetRelativeScale(aScale[0], aScale[1], aScale[2]);
+		}
+
+		// Small mode-indicator overlay (no separate panel — keeps the
+		// gizmo discoverable). Click the labels to switch modes too.
+		ImGui::SetNextWindowPos(ImVec2(10, 30), ImGuiCond_Always);
+		ImGui::SetNextWindowBgAlpha(0.35f);
+		if (ImGui::Begin("##GizmoOverlay", nullptr,
+			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+			ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+			ImGuiWindowFlags_NoNav))
+		{
+			ImGui::Text("Gizmo (W/E/R, X=mode)");
+			if (ImGui::RadioButton("Translate", m_iGizmoOp == 0)) m_iGizmoOp = 0;
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Rotate",    m_iGizmoOp == 1)) m_iGizmoOp = 1;
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Scale",     m_iGizmoOp == 2)) m_iGizmoOp = 2;
+			if (ImGui::RadioButton("Local",     m_iGizmoMode == 0)) m_iGizmoMode = 0;
+			ImGui::SameLine();
+			if (ImGui::RadioButton("World",     m_iGizmoMode == 1)) m_iGizmoMode = 1;
+		}
+		ImGui::End();
+	}
+
+	void ImguiManager::RenderLightBillboards()
+	{
+		Engine::Scene* pScene = Engine::SceneManager::GetInst()->GetScene();
+		if (!pScene) return;
+
+		auto pCam = Engine::Graphics::GetInst()->GetCamera();
+		if (!pCam) return;
+
+		// Fullscreen invisible overlay window glued to the main viewport.
+		// Without SetNextWindowViewport, multi-viewport mode breaks this
+		// window out into its own OS window that ends up fully covering
+		// the game viewport. SetNextWindowBgAlpha(0) + NoBackground
+		// double-belt-and-braces transparency so the window itself never
+		// renders a fill.
+		ImGuiViewport* pMainVP = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(pMainVP->Pos);
+		ImGui::SetNextWindowSize(pMainVP->Size);
+		ImGui::SetNextWindowViewport(pMainVP->ID);
+		ImGui::SetNextWindowBgAlpha(0.f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+		const ImGuiWindowFlags eFlags =
+			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
+			ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus |
+			ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs |
+			ImGuiWindowFlags_NoDocking;
+		ImGui::Begin("##LightBillboardOverlay", nullptr, eFlags);
+		ImDrawList* pOverlayDraw = ImGui::GetWindowDrawList();
+		ImGui::End();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar(3);
+
+		const Engine::Matrix& matVP = pCam->GetViewProject();
+		// Engine::Matrix is a custom union (float f[16] row-major) — convert
+		// to XMMATRIX via its float* constructor so XMVector4Transform's
+		// FXMMATRIX argument is happy. ImGuizmo accepts row-major float*
+		// directly so the same VP can stay in Engine::Matrix elsewhere.
+		DirectX::XMMATRIX xmVP(reinterpret_cast<const float*>(&matVP));
+		ImDrawList* pDraw = pOverlayDraw;
+
+		// Skip click-picking if ImGui is consuming the click (modal/window)
+		// or ImGuizmo is in active drag — otherwise a light click would also
+		// kick off a re-selection mid-manipulation.
+		ImGuiIO& io = ImGui::GetIO();
+		const bool bCanPick = !io.WantCaptureMouse && !ImGuizmo::IsUsing() && !ImGuizmo::IsOver();
+
+		auto ProjectToScreen = [&](const Engine::Vector3& v, ImVec2& out) -> bool
+		{
+			DirectX::XMVECTOR p = DirectX::XMVectorSet(v.x, v.y, v.z, 1.f);
+			DirectX::XMVECTOR clip = DirectX::XMVector4Transform(p, xmVP);
+			float w = DirectX::XMVectorGetW(clip);
+			if (w <= 0.f) return false; // behind camera or on plane
+			float ndcX = DirectX::XMVectorGetX(clip) / w;
+			float ndcY = DirectX::XMVectorGetY(clip) / w;
+			out.x = (ndcX * 0.5f + 0.5f) * io.DisplaySize.x;
+			out.y = (1.f - (ndcY * 0.5f + 0.5f)) * io.DisplaySize.y;
+			return true;
+		};
+
+		for (const auto& pLayer : pScene->GetLayerList())
+		{
+			if (!pLayer) continue;
+			for (const auto& pObj : pLayer->GetGameObjectList())
+			{
+				if (!pObj) continue;
+				auto pLight = pObj->GetComponent<Engine::PointLight>();
+				if (!pLight) continue;
+				// PointLight owns its Transform internally — pull it via the
+				// Component::GetTransform() virtual rather than searching
+				// GameObject's m_Components list (where it isn't registered).
+				auto pTr = pLight->GetTransform();
+				if (!pTr) continue;
+
+				const Engine::Vector3& vPos = pTr->GetPosition();
+				ImVec2 vScreen;
+				if (!ProjectToScreen(vPos, vScreen)) continue;
+
+				Engine::LIGHT_TYPE eType = pLight->GetLightType();
+				ImU32 uColor = IM_COL32(255, 220, 80, 255);
+				const char* pTypeMark = "P";
+				switch (eType)
+				{
+				case Engine::LIGHT_TYPE::POINT:       uColor = IM_COL32(255, 220, 80, 255); pTypeMark = "P"; break;
+				case Engine::LIGHT_TYPE::SPOT:        uColor = IM_COL32(255, 160, 60, 255); pTypeMark = "S"; break;
+				case Engine::LIGHT_TYPE::DIRECTIONAL: uColor = IM_COL32(200, 220, 255, 255); pTypeMark = "D"; break;
+				default: break;
+				}
+
+				const float fRadius = 9.f;
+
+				// Selected light gets a brighter outer ring so it pops in
+				// crowded scenes. m_pSelectedObject is the same selection
+				// the Details panel and gizmo follow.
+				const bool bSelected = (m_pSelectedObject.lock() == pObj);
+				if (bSelected)
+				{
+					pDraw->AddCircle(vScreen, fRadius + 4.f, IM_COL32(255, 255, 255, 255), 16, 2.f);
+				}
+
+				pDraw->AddCircleFilled(vScreen, fRadius, uColor);
+				pDraw->AddCircle(vScreen, fRadius, IM_COL32(0, 0, 0, 255), 16, 2.f);
+				pDraw->AddText(ImVec2(vScreen.x - 3, vScreen.y - 7), IM_COL32(0, 0, 0, 255), pTypeMark);
+
+				// Direction line for spot/directional — uses Transform's
+				// +Z axis as light forward (matches the conventional engine
+				// forward direction used elsewhere).
+				if (eType == Engine::LIGHT_TYPE::SPOT || eType == Engine::LIGHT_TYPE::DIRECTIONAL)
+				{
+					const Engine::Vector3& vForward = pTr->GetAxis(Engine::AXIS_TYPE::Z);
+					Engine::Vector3 vEnd = vPos + vForward * 2.f;
+					ImVec2 vScreenEnd;
+					if (ProjectToScreen(vEnd, vScreenEnd))
+					{
+						pDraw->AddLine(vScreen, vScreenEnd, uColor, 2.f);
+					}
+				}
+
+				// Tag label to the right of the icon for quick identification
+				// in scenes with many lights.
+				pDraw->AddText(ImVec2(vScreen.x + fRadius + 4, vScreen.y - 8),
+					IM_COL32(0, 0, 0, 200), pObj->GetTag().c_str());
+				pDraw->AddText(ImVec2(vScreen.x + fRadius + 5, vScreen.y - 9),
+					uColor, pObj->GetTag().c_str());
+
+				// Click pick — circular hit test on icon. ImGui's
+				// IsMouseClicked is global, so the bCanPick guard above
+				// makes sure UI clicks and gizmo drags don't trigger it.
+				if (bCanPick && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+				{
+					ImVec2 vMouse = ImGui::GetMousePos();
+					float fDx = vMouse.x - vScreen.x;
+					float fDy = vMouse.y - vScreen.y;
+					if (fDx * fDx + fDy * fDy <= fRadius * fRadius)
+					{
+						m_pSelectedObject = pObj;
+					}
+				}
+			}
+		}
+
+	}
+
+	void ImguiManager::MaterialBrowser_ImGuiWindow()
+	{
+		if (!ImGui::Begin("Material Browser"))
+		{
+			ImGui::End();
+			return;
+		}
+
+		const auto& mapMaterials = Engine::ResourceManager::GetInst()->GetAllMaterials();
+
+		// ── Toolbar ───────────────────────────────────────────────────
+		if (ImGui::Button("+ New Material"))
+		{
+			ImGui::OpenPopup("NewMaterialPopup");
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Load .mat..."))
+		{
+			TCHAR strFile[MAX_PATH] = {};
+			OPENFILENAME tName = {};
+			tName.lStructSize = sizeof(OPENFILENAME);
+			tName.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
+			tName.lpstrFilter = TEXT("Material\0*.mat\0All\0*.*\0");
+			tName.nMaxFile = MAX_PATH;
+			tName.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath(MATERIAL_PATH);
+			tName.lpstrFile = strFile;
+			tName.lpstrDefExt = TEXT("mat");
+
+			if (GetOpenFileName(&tName))
+			{
+				char szPath[MAX_PATH] = {};
+				WideCharToMultiByte(CP_ACP, 0, strFile, -1, szPath, MAX_PATH, nullptr, nullptr);
+
+				// CRef has no LoadFromFullPath, only LoadFromPath(pathKey-relative).
+				// Open by absolute path directly so the picker can pull a .mat
+				// from any folder, not just Resource/Material.
+				auto pNew = std::make_shared<Engine::Material>();
+				FILE* pFile = nullptr;
+				fopen_s(&pFile, szPath, "rb");
+				if (pFile)
+				{
+					pNew->Load(pFile);
+					fclose(pFile);
+				}
+
+				// Fall back to filename stem if the .mat had no tag baked in.
+				if (pNew->GetTag().empty())
+				{
+					char strStem[_MAX_FNAME] = {};
+					_splitpath_s(szPath, nullptr, 0, nullptr, 0, strStem, _MAX_FNAME, nullptr, 0);
+					pNew->SetTag(strStem);
+				}
+
+				// Dedup against the cache — same tag wins (live edits stay
+				// in flight). New tag → register so the picker dropdown sees it.
+				auto* mgr = Engine::BindableManager<Engine::Material>::GetInst();
+				if (auto pPrev = mgr->FindBindable(pNew->GetTag()))
+					pNew = pPrev;
+				else
+					mgr->AddBindable(pNew);
+
+				m_pSelectedMaterial = pNew;
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Save All"))
+		{
+			// Persist every cached material with a non-empty tag to
+			// Resource/Material/{tag}.mat. Untagged anonymous materials
+			// (rare — only legacy untagged FBX imports) are skipped.
+			for (const auto& entry : mapMaterials)
+			{
+				if (entry.first.empty() || !entry.second) continue;
+				std::string strFile = entry.first + ".mat";
+				entry.second->SaveFromPath(strFile.c_str(), MATERIAL_PATH);
+			}
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("(%d materials)", static_cast<int>(mapMaterials.size()));
+
+		// ── New Material popup ───────────────────────────────────────
+		if (ImGui::BeginPopup("NewMaterialPopup"))
+		{
+			static char s_szNameBuf[128] = {};
+			ImGui::TextUnformatted("Tag (must be unique):");
+			ImGui::InputText("##NewMatName", s_szNameBuf, sizeof(s_szNameBuf));
+
+			const bool bNameValid = (s_szNameBuf[0] != 0);
+			const bool bCollision = bNameValid &&
+				Engine::StaticFindBindable<Engine::Material>(s_szNameBuf) != nullptr;
+
+			if (bCollision)
+			{
+				ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Tag already in use.");
+			}
+
+			ImGui::BeginDisabled(!bNameValid || bCollision);
+			if (ImGui::Button("Create"))
+			{
+				auto pNew = Engine::StaticCreateBindable<Engine::Material>(s_szNameBuf);
+				if (pNew) m_pSelectedMaterial = pNew;
+				s_szNameBuf[0] = 0;
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndDisabled();
+			ImGui::SameLine();
+			if (ImGui::Button("Cancel"))
+			{
+				s_szNameBuf[0] = 0;
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+
+		ImGui::Separator();
+
+		// ── Left: material list ──────────────────────────────────────
+		ImGui::BeginChild("MatList", ImVec2(220, 0), true);
+		auto pSelected = m_pSelectedMaterial.lock();
+		for (const auto& entry : mapMaterials)
+		{
+			const std::string& strTag = entry.first;
+			const std::shared_ptr<Engine::Material>& pMat = entry.second;
+			if (!pMat) continue;
+			const bool bSel = (pSelected == pMat);
+			if (ImGui::Selectable(strTag.c_str(), bSel))
+			{
+				m_pSelectedMaterial = pMat;
+			}
+		}
+		ImGui::EndChild();
+
+		ImGui::SameLine();
+
+		// ── Right: selected material inspector ───────────────────────
+		ImGui::BeginChild("MatInspector", ImVec2(0, 0), true);
+		if (pSelected)
+		{
+			Material_ImGuiWindow(pSelected);
+		}
+		else
+		{
+			ImGui::TextDisabled("(Select a material from the list)");
+		}
+		ImGui::EndChild();
 
 		ImGui::End();
 	}
@@ -1881,6 +2395,58 @@ namespace Editor
 
 		if (ImGui::Begin("World Outliner"))
 		{
+			// ── Add Light toolbar ────────────────────────────────────────
+			// Creates a GameObject + PointLight component on DEFAULT_LAYER.
+			// PointLight covers all three engine light types via SetLightType
+			// (POINT / SPOT / DIRECTIONAL — shader branches in
+			// shared.hlsl::GetLightDirAndColor). Auto-selects the new object
+			// so Details panel + Transform are immediately editable.
+			if (ImGui::Button("+ Add Light"))
+			{
+				ImGui::OpenPopup("AddLightPopup");
+			}
+
+			if (ImGui::BeginPopup("AddLightPopup"))
+			{
+				static char s_szLightName[64] = "NewLight";
+				static int  s_iLightType     = static_cast<int>(Engine::LIGHT_TYPE::POINT);
+
+				ImGui::InputText("Name", s_szLightName, sizeof(s_szLightName));
+
+				const char* aLightTypeNames[] = { "Point", "Spot", "Directional" };
+				ImGui::Combo("Type", &s_iLightType, aLightTypeNames, IM_ARRAYSIZE(aLightTypeNames));
+
+				const bool bValid = (s_szLightName[0] != 0);
+				ImGui::BeginDisabled(!bValid);
+				if (ImGui::Button("Create"))
+				{
+					auto pLayer = pScene->FindLayer(DEFAULT_LAYER);
+					if (pLayer)
+					{
+						auto pNewObj = pScene->CreateGameObject(s_szLightName, pLayer);
+						if (pNewObj)
+						{
+							auto pLight = pNewObj->AddComponent<Engine::PointLight>(s_szLightName);
+							if (pLight)
+							{
+								pLight->SetLightType(static_cast<Engine::LIGHT_TYPE>(s_iLightType));
+							}
+							m_pSelectedObject = pNewObj;
+						}
+					}
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndDisabled();
+				ImGui::SameLine();
+				if (ImGui::Button("Cancel"))
+				{
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndPopup();
+			}
+
+			ImGui::Separator();
+
 			const auto& layerList = pScene->GetLayerList();
 			int iLayerIdx = 0;
 			for (const auto& pLayer : layerList)
@@ -1978,6 +2544,11 @@ namespace Editor
 		{
 			MeshRenderer_ImGuiWindow(pMR);
 		}
+
+		if (auto pLight = std::dynamic_pointer_cast<Engine::PointLight>(pComponent))
+		{
+			PointLight_ImGuiWindow(pLight);
+		}
 	}
 
 	void ImguiManager::MeshRenderer_ImGuiWindow(std::shared_ptr<Engine::MeshRendererComponent> pRenderer)
@@ -2069,118 +2640,55 @@ namespace Editor
 			const int iSubCount = pMesh->GetMeshSubCount(i);
 			for (int j = 0; j < iSubCount; ++j)
 			{
-				auto pMaterial = pMesh->GetMaterial(i, j);
-				if (!pMaterial)
+				// Three-layer resolution:
+				//   override on this MR → mesh slot default
+				// Editing the *effective* material is the user's intent
+				// (they see what's currently in-flight). The picker below
+				// switches which material the slot points at.
+				auto pMeshDefault = pMesh->GetMaterial(i, j);
+				auto pOverride    = pRenderer->GetOverrideMaterial(i, j);
+				auto pEffective   = pOverride ? pOverride : pMeshDefault;
+				if (!pEffective)
 					continue;
 
 				std::string strMatLabel = "Material " + std::to_string(j) +
-					" (" + pMaterial->GetTag() + ")##mat" + std::to_string(i) + "_" + std::to_string(j);
+					" (" + pEffective->GetTag() + (pOverride ? " [override]" : "") +
+					")##mat" + std::to_string(i) + "_" + std::to_string(j);
 				if (ImGui::TreeNode(strMatLabel.c_str()))
 				{
-					Material_ImGuiWindow(pMaterial);
+					// Override picker — every loaded .mat asset is selectable,
+					// plus "(Mesh Default)" to clear the override and fall
+					// back to the slot material baked into the .mesh.
+					std::string strComboId = "##matpick" + std::to_string(i) + "_" + std::to_string(j);
+					const char* pCurrentLabel = pOverride ? pOverride->GetTag().c_str() : "(Mesh Default)";
+					if (ImGui::BeginCombo(strComboId.c_str(), pCurrentLabel))
+					{
+						if (ImGui::Selectable("(Mesh Default)", !pOverride))
+						{
+							pRenderer->SetOverrideMaterial(i, j, nullptr);
+						}
+						for (const auto& entry : Engine::ResourceManager::GetInst()->GetAllMaterials())
+						{
+							const std::string& strTag = entry.first;
+							const std::shared_ptr<Engine::Material>& pMat = entry.second;
+							const bool bSelected = pOverride && pOverride->GetTag() == strTag;
+							if (ImGui::Selectable(strTag.c_str(), bSelected))
+							{
+								pRenderer->SetOverrideMaterial(i, j, pMat);
+							}
+						}
+						ImGui::EndCombo();
+					}
+
+					Material_ImGuiWindow(pEffective);
 					ImGui::TreePop();
 				}
 			}
 
-			// Named texture slots. Slot indices match register(tN) in
-			// shared.hlsl: 0=Diffuse, 1=Normal, 2=Specular, 3=Emissive,
-			// 6=Roughness, 8=AO, 9=Metalness. Roughness/AO/Metalness are
-			// optional in the main PS (detected via GetDimensions) and
-			// fall back cleanly when unbound — the engine's specular
-			// workflow stays intact for assets without these textures.
-			struct SlotDesc { int iSlot; const char* pName; };
-			static const SlotDesc kSlots[] = {
-				{ 0, "Diffuse"   },
-				{ 1, "Normal"    },
-				{ 2, "Specular"  },
-				{ 3, "Emissive"  },
-				{ 6, "Roughness" },
-				{ 8, "AO"        },
-				{ 9, "Metalness" },
-			};
-
-			const int iTexCount = pMesh->GetTextureCount(i);
-
-			for (const SlotDesc& slot : kSlots)
-			{
-				// Locate the texture currently occupying this GPU slot in
-				// this container's vector (linear scan; vector is tiny).
-				std::shared_ptr<Engine::Texture> pTex;
-				int iVecIdx = -1;
-				for (int j = 0; j < iTexCount; ++j)
-				{
-					auto pCandidate = pMesh->GetTexture(i, j);
-					if (pCandidate && pCandidate->GetSlot() == slot.iSlot)
-					{
-						pTex = pCandidate;
-						iVecIdx = j;
-						break;
-					}
-				}
-
-				ImGui::Text("%s: %s", slot.pName, pTex ? pTex->GetTag().c_str() : "(empty)");
-
-				ImGui::SameLine();
-
-				std::string strBtnLabel = "Set##slot" + std::to_string(i) + "_" + std::to_string(slot.iSlot);
-				if (ImGui::Button(strBtnLabel.c_str()))
-				{
-					TCHAR strFile[MAX_PATH] = {};
-					OPENFILENAME tName = {};
-					tName.lStructSize = sizeof(OPENFILENAME);
-					tName.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
-					tName.lpstrFilter = TEXT("Texture\0*.png;*.dds;*.tga;*.jpg;*.bmp\0All\0*.*\0");
-					tName.nMaxFile = MAX_PATH;
-					// Editor preference — overridable via the Editor Settings
-					// window. LoadEditorSettings seeds it from CPathManager's
-					// TEXTURE_PATH on first run, so existing users behave the
-					// same until they change it.
-					tName.lpstrInitialDir = m_strTextureDefaultPath;
-					tName.lpstrFile = strFile;
-
-					if (GetOpenFileName(&tName))
-					{
-						char szTag[MAX_PATH] = {};
-						WideCharToMultiByte(CP_ACP, 0, strFile, -1, szTag, MAX_PATH, nullptr, nullptr);
-						std::string strTag(szTag);
-						auto pNewTex = Engine::StaticCreateBindable<Engine::Texture>(strTag, strFile, slot.iSlot);
-						if (!pNewTex)
-						{
-							pNewTex = Engine::StaticFindBindable<Engine::Texture>(strTag);
-						}
-						if (pNewTex)
-						{
-							// Replace if a texture exists at this slot,
-							// otherwise append to the vector.
-							const int iWriteIdx = (iVecIdx >= 0) ? iVecIdx : pMesh->GetTextureCount(i);
-							pMesh->SetTexture(i, iWriteIdx, pNewTex);
-						}
-					}
-				}
-
-			}
-
-			// Surface any textures that don't match a named slot (legacy
-			// data, custom slots) so they remain visible to the user.
-			auto isNamedSlot = [](int s) {
-				for (const SlotDesc& d : kSlots) if (d.iSlot == s) return true;
-				return false;
-			};
-			bool bAnyOther = false;
-			for (int j = 0; j < pMesh->GetTextureCount(i); ++j)
-			{
-				auto pT = pMesh->GetTexture(i, j);
-				if (!pT) continue;
-				int iSlot = pT->GetSlot();
-				if (isNamedSlot(iSlot)) continue;
-				if (!bAnyOther)
-				{
-					ImGui::Separator();
-					ImGui::TextDisabled("Other textures:");
-					bAnyOther = true;
-				}
-				ImGui::Text("  slot t%d: %s", iSlot, pT->GetTag().c_str());
-			}
+			// Texture slot picker used to live here (per-container). It
+			// moved into Material_ImGuiWindow above when textures became
+			// per-Material — every Material tree node now shows its own
+			// slot list with Set/Clear buttons.
 
 			ImGui::TreePop();
 		}

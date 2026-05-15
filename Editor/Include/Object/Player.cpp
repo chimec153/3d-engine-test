@@ -11,6 +11,8 @@
 #include "Animation/Skeleton.h"
 #include "Component/MeshRendererComponent.h"
 #include "Bindable/DepthStencilState.h"
+#include "Resource/ResourceManager.h"
+#include "Animation/Sequence.h"
 
 namespace Editor
 {
@@ -25,11 +27,21 @@ namespace Editor
         m_pAnimation    = AddComponent<Engine::Animation>("anim");
 
         std::shared_ptr<Engine::Mesh> pMesh =
-            Engine::StaticFindBindable<Engine::Mesh>("war");
+            Engine::StaticFindBindable<Engine::Mesh>("Idle");
 
-        //std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
-        //pSkeleton->LoadFromPath("Walking.skel", MESH_PATH);
-        //if (m_pAnimation) m_pAnimation->SetSkeleton(pSkeleton);
+        std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
+        pSkeleton->LoadFromPath("Idle.skel", MESH_PATH);
+        if (m_pAnimation)
+        {
+            m_pAnimation->SetSkeleton(pSkeleton);
+            if (std::shared_ptr<Engine::Sequence> pSequence = Engine::ResourceManager::GetInst()->FindSequence("mixamo.com"))
+            {
+                pSequence->UseRootMotion();
+
+                m_pAnimation->AddSequance(pSequence->GetTag(), pSequence);
+                m_pAnimation->SetLoop("mixamo.com");
+            }
+        }
 
         if (m_pMeshRenderer)
         {
@@ -39,7 +51,7 @@ namespace Editor
             m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
             m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
             m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::DepthStencilState>("OutLineMask"));
-            //m_pMeshRenderer->SetAnimation(m_pAnimation);
+            m_pMeshRenderer->SetAnimation(m_pAnimation);
         }
         return true;
     }

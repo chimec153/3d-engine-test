@@ -186,6 +186,7 @@
     <ClCompile Include="Imgui\imgui_impl_win32.cpp" />
     <ClCompile Include="Imgui\imgui_tables.cpp" />
     <ClCompile Include="Imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Imgui\ImGuizmo.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Object\Player.cpp" />
     <ClCompile Include="Scene\InGameScene.cpp" />
@@ -199,6 +200,7 @@
     <ClInclude Include="Imgui\imgui_impl_dx11.h" />
     <ClInclude Include="Imgui\imgui_impl_win32.h" />
     <ClInclude Include="Imgui\imgui_internal.h" />
+    <ClInclude Include="Imgui\ImGuizmo.h" />
     <ClInclude Include="Imgui\imstb_rectpack.h" />
     <ClInclude Include="Imgui\imstb_textedit.h" />
     <ClInclude Include="Imgui\imstb_truetype.h" />

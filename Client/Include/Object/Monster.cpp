@@ -90,19 +90,19 @@ namespace Client
 		switch (m_eState)
 		{
 		case MONSTER_STATE::IDLE:
-			m_pAnimation->ChangeSequence("FrogArmature|Frog_Idle");
+			m_pAnimation->ChangeSequence("Idle");
 			break;
 		case MONSTER_STATE::RUN:
-			m_pAnimation->ChangeSequence("FrogArmature|Frog_Jump");
+			m_pAnimation->ChangeSequence("Run");
 			break;
 		case MONSTER_STATE::ATTACK:
-			m_pAnimation->ChangeSequence("FrogArmature|Frog_Attack");
+			m_pAnimation->ChangeSequence("Attack");
 			break;
 		case MONSTER_STATE::HIT:
-			m_pAnimation->ChangeSequence("FrogArmature|Frog_Jump");
+			m_pAnimation->ChangeSequence("Jump");
 			break;
 		case MONSTER_STATE::DIE:
-			m_pAnimation->ChangeSequence("FrogArmature|Frog_Death");
+			m_pAnimation->ChangeSequence("Death");
 			if (m_pClawBody)
 			{
 				m_pClawBody->InActivate();
@@ -136,7 +136,7 @@ namespace Client
 		// init; not loaded from .obj here).
 		if (m_pMeshRenderer)
 		{
-			std::shared_ptr<Engine::Mesh> pFrogMesh = Engine::StaticFindBindable<Engine::Mesh>("Frog");
+			std::shared_ptr<Engine::Mesh> pFrogMesh = Engine::StaticFindBindable<Engine::Mesh>("Idle2");
 			if (pFrogMesh)
 			{
 				pFrogMesh->UsePaperBurn();
@@ -144,7 +144,7 @@ namespace Client
 			}
 
 			m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_ANIM_VS));
-			m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>(STANDARD_SOLID_PS));
+			m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>(STANDARD_PS));
 			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
 			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
 
@@ -153,16 +153,16 @@ namespace Client
 
 		if (m_pAnimation)
 		{
-			m_pAnimation->FindAndAddSequence("FrogArmature|Frog_Idle");
-			m_pAnimation->FindAndAddSequence("FrogArmature|Frog_Jump");
-			m_pAnimation->FindAndAddSequence("FrogArmature|Frog_Attack");
+			m_pAnimation->FindAndAddSequence("Idle");
+			m_pAnimation->FindAndAddSequence("Run");
+			m_pAnimation->FindAndAddSequence("Attack");
 
-			m_pAnimation->SetLoop("FrogArmature|Frog_Attack");
-			m_pAnimation->SetLoop("FrogArmature|Frog_Jump");
+			m_pAnimation->SetLoop("Idle");
+			m_pAnimation->SetLoop("Run");
 
-			m_pAnimation->FindAndAddSequence("FrogArmature|Frog_Death");
+			//m_pAnimation->FindAndAddSequence("FrogArmature|Frog_Death");
 
-			m_pAnimation->SetSkeleton("Frog");
+			m_pAnimation->SetSkeleton("Idle");
 
 			if (auto pCurr = m_pAnimation->GetCurrentSequence())
 				pCurr->Loop();
@@ -170,14 +170,14 @@ namespace Client
 
 		if (m_pTransform)
 		{
-			m_pTransform->SetScale(0.25f, 0.25f, 0.25f);
-			m_pTransform->SetPosition(5.f, 30.f, 5.f);
+			m_pTransform->SetScale(0.01f, 0.01f, 0.01f);
+			m_pTransform->SetPosition(5.f, 127.f, 5.f);
 		}
 
 		// Phase E5 — Terrain is a GameObject now; look it up in the layer.
 		std::shared_ptr<Engine::Layer> pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
 		std::shared_ptr<Engine::GameObject> pTerrainObj =
-			pLayer ? pLayer->FindGameObject("Terrain") : nullptr;
+			pLayer ? pLayer->FindGameObject("NavMesh") : nullptr;
 
 		if (pTerrainObj)
 		{
@@ -187,6 +187,8 @@ namespace Client
 			if (pNavMesh && m_pTransform)
 			{
 				m_pAgent = pNavMesh->CreateAgent(GetTag() + "agent", m_pTransform, m_pTransform->GetPosition());
+
+				AddComponent(m_pAgent);
 			}
 		}
 
@@ -215,33 +217,35 @@ namespace Client
 			std::shared_ptr<Engine::JointSocket> pSocket = m_pAnimation->AddSocket(5, pClaw);
 			if (pSocket) pSocket->SetPosition({ 0.f, 0.f, 1.f });
 
-			std::shared_ptr<Engine::Notify> pDieNotify = m_pAnimation->AddNotify("FrogArmature|Frog_Death", "PaperBurn", 0.8f);
-
-			pDieNotify->SetCallBack(
-				[this](int, float, Engine::Bindable*)
-				{
-					if (m_pAttackable)
+			if (std::shared_ptr<Engine::Notify> pDieNotify = m_pAnimation->AddNotify("FrogArmature|Frog_Death", "PaperBurn", 0.8f))
+			{
+				pDieNotify->SetCallBack(
+					[this](int, float, Engine::Bindable*)
 					{
-						m_pAttackable->StartPaperBurn();
-						if (auto pParticle = m_pAttackable->GetParticle())
-							pParticle->StopEmit();
+						if (m_pAttackable)
+						{
+							m_pAttackable->StartPaperBurn();
+							if (auto pParticle = m_pAttackable->GetParticle())
+								pParticle->StopEmit();
+						}
 					}
-				}
-			);
+				);
+			}
 		}
 
 		m_pAttackSound = pClaw->AddComponent<Engine::SoundBindable>("attack sound", "melee sound");
 
 		if (m_pAnimation)
 		{
-			std::shared_ptr<Engine::Notify> pAttackNotify = m_pAnimation->AddNotify("FrogArmature|Frog_Attack", "Attack", 0.5f);
-
-			pAttackNotify->SetCallBack(
-				[this](int, float, Engine::Bindable*)
-				{
-					if (m_pAttackSound) m_pAttackSound->Play();
-				}
-			);
+			if (std::shared_ptr<Engine::Notify> pAttackNotify = m_pAnimation->AddNotify("FrogArmature|Frog_Attack", "Attack", 0.5f))
+			{
+				pAttackNotify->SetCallBack(
+					[this](int, float, Engine::Bindable*)
+					{
+						if (m_pAttackSound) m_pAttackSound->Play();
+					}
+				);
+			}
 		}
 
 		return true;
