@@ -2,6 +2,9 @@
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 #include "ImGuizmo.h"
+#include "../Project/ProjectModule.h"
+#include "../Scene/InGameScene.h"
+#include "Core/ObjectFactory.h"
 #include "Bindable/Camera.h"
 #include "Core/Graphics.h"
 #include "Input/Input.h"
@@ -52,6 +55,7 @@
 #include "Render/RenderManager.h"
 #include "Bindable/BlendState.h"
 #include <shlobj.h>
+#include <algorithm>
 
 namespace Editor
 {
@@ -71,6 +75,37 @@ namespace Editor
 				_tcscpy_s(pOut, iLen, pRoot);
 			}
 			_tcscat_s(pOut, iLen, TEXT("Editor.ini"));
+		}
+
+		// Default for m_strClientResourcePath: climb out of Editor\Bin\ and
+		// over to Client\Bin\Resource\. Relies on the standard repo layout
+		// (Editor and Client are sibling top-level folders); user can override
+		// via Editor.ini if their layout differs.
+		void BuildDefaultClientResourcePath(TCHAR* pOut, size_t iLen)
+		{
+			pOut[0] = 0;
+			const TCHAR* pRoot = Engine::CPathManager::GetInst()->FindPath();
+			if (!pRoot) return;
+
+			_tcscpy_s(pOut, iLen, pRoot);
+
+			size_t cur = _tcslen(pOut);
+			if (cur > 0 && (pOut[cur - 1] == TEXT('\\') || pOut[cur - 1] == TEXT('/')))
+			{
+				pOut[--cur] = 0;
+			}
+			for (int strip = 0; strip < 2 && cur > 0; ++strip)
+			{
+				while (cur > 0 && pOut[cur - 1] != TEXT('\\') && pOut[cur - 1] != TEXT('/'))
+				{
+					pOut[--cur] = 0;
+				}
+				if (cur > 0)
+				{
+					pOut[--cur] = 0;
+				}
+			}
+			_tcscat_s(pOut, iLen, TEXT("\\Client\\Bin\\Resource\\"));
 		}
 
 		// Forward decl — the definition lives further down with the rest of
@@ -93,6 +128,7 @@ namespace Editor
 		, m_iOutlinedContainerIdx(-1)
 	{
 		m_strTextureDefaultPath[0] = 0;
+		m_strClientResourcePath[0] = 0;
 
 		m_fCellSize = 0.3f;
 		m_fCellHeight = 0.2f;
@@ -151,6 +187,7 @@ namespace Editor
 
 	bool ImguiManager::Init(HWND hwnd)
 	{
+		m_hWnd = hwnd;
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -333,11 +370,17 @@ namespace Editor
 
 		ImGui::End();
 
+		Project_ImGuiWindow();
 		RenderManager_ShowImGuiWindow();
 		Scene_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
 		WorldOutliner_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
 		EditorSettings_ImGuiWindow();
 		MaterialBrowser_ImGuiWindow();
+
+		if (auto pAnim = m_pSelectedAnimation.lock())
+		{
+			Animation_ImGuiWindow(pAnim);
+		}
 		DrawSelectionGizmo();
 		RenderLightBillboards();
 
@@ -1632,6 +1675,8 @@ namespace Editor
 			m_strTextureDefaultPath[0] = 0;
 		}
 
+		BuildDefaultClientResourcePath(m_strClientResourcePath, MAX_PATH);
+
 		TCHAR strIni[MAX_PATH] = {};
 		BuildEditorIniPath(strIni, MAX_PATH);
 
@@ -1644,6 +1689,31 @@ namespace Editor
 		{
 			_tcscpy_s(m_strTextureDefaultPath, MAX_PATH, strBuf);
 		}
+
+		TCHAR strClientBuf[MAX_PATH] = {};
+		GetPrivateProfileString(TEXT("Paths"), TEXT("ClientResourceRoot"),
+			m_strClientResourcePath, strClientBuf, MAX_PATH, strIni);
+
+		if (strClientBuf[0])
+		{
+			_tcscpy_s(m_strClientResourcePath, MAX_PATH, strClientBuf);
+		}
+
+		m_RecentProjects.clear();
+		for (int i = 0; i < kMaxRecentProjects; ++i)
+		{
+			TCHAR strKey[32] = {};
+			_stprintf_s(strKey, _countof(strKey), TEXT("Project%d"), i);
+
+			TCHAR strRecent[MAX_PATH] = {};
+			GetPrivateProfileString(TEXT("Recent"), strKey, TEXT(""),
+				strRecent, MAX_PATH, strIni);
+
+			if (strRecent[0])
+			{
+				m_RecentProjects.emplace_back(strRecent);
+			}
+		}
 	}
 
 	void ImguiManager::SaveEditorSettings() const
@@ -1653,6 +1723,85 @@ namespace Editor
 
 		WritePrivateProfileString(TEXT("Paths"), TEXT("TextureDefault"),
 			m_strTextureDefaultPath, strIni);
+		WritePrivateProfileString(TEXT("Paths"), TEXT("ClientResourceRoot"),
+			m_strClientResourcePath, strIni);
+
+		// Write current entries; clear any tail slots from a previously
+		// longer list by writing NULL (deletes the key).
+		for (int i = 0; i < kMaxRecentProjects; ++i)
+		{
+			TCHAR strKey[32] = {};
+			_stprintf_s(strKey, _countof(strKey), TEXT("Project%d"), i);
+
+			if (i < (int)m_RecentProjects.size())
+			{
+				WritePrivateProfileString(TEXT("Recent"), strKey,
+					m_RecentProjects[i].c_str(), strIni);
+			}
+			else
+			{
+				WritePrivateProfileString(TEXT("Recent"), strKey,
+					nullptr, strIni);
+			}
+		}
+	}
+
+	void ImguiManager::AddRecentProject(const std::wstring& dllPath)
+	{
+		if (dllPath.empty()) return;
+
+		auto it = std::find(m_RecentProjects.begin(), m_RecentProjects.end(), dllPath);
+		if (it != m_RecentProjects.end())
+		{
+			m_RecentProjects.erase(it);
+		}
+		m_RecentProjects.insert(m_RecentProjects.begin(), dllPath);
+
+		if ((int)m_RecentProjects.size() > kMaxRecentProjects)
+		{
+			m_RecentProjects.resize(kMaxRecentProjects);
+		}
+
+		SaveEditorSettings();
+	}
+
+	void ImguiManager::RemoveRecentProject(const std::wstring& dllPath)
+	{
+		auto it = std::find(m_RecentProjects.begin(), m_RecentProjects.end(), dllPath);
+		if (it == m_RecentProjects.end()) return;
+
+		m_RecentProjects.erase(it);
+		SaveEditorSettings();
+	}
+
+	void ImguiManager::BuildClientSubPath(TCHAR* pOut, size_t iLen, const TCHAR* pSubFolder, const std::string& strFallbackKey) const
+	{
+		pOut[0] = 0;
+
+		if (m_strClientResourcePath[0] == 0)
+		{
+			const TCHAR* pFallback = Engine::CPathManager::GetInst()->FindPath(strFallbackKey);
+			if (pFallback)
+			{
+				_tcscpy_s(pOut, iLen, pFallback);
+			}
+			return;
+		}
+
+		_tcscpy_s(pOut, iLen, m_strClientResourcePath);
+		size_t cur = _tcslen(pOut);
+		if (cur > 0 && pOut[cur - 1] != TEXT('\\') && pOut[cur - 1] != TEXT('/') && cur + 1 < iLen)
+		{
+			pOut[cur] = TEXT('\\');
+			pOut[cur + 1] = 0;
+		}
+		_tcscat_s(pOut, iLen, pSubFolder);
+		cur = _tcslen(pOut);
+		if (cur > 0 && pOut[cur - 1] != TEXT('\\') && pOut[cur - 1] != TEXT('/') && cur + 1 < iLen)
+		{
+			pOut[cur] = TEXT('\\');
+			pOut[cur + 1] = 0;
+		}
 	}
 
 	void ImguiManager::EditorSettings_ImGuiWindow()
@@ -1717,6 +1866,58 @@ namespace Editor
 		}
 
 		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
+
+		ImGui::TextUnformatted("Client resource root");
+		ImGui::TextDisabled("Initial directory for Scene/Mesh/Sequence save dialogs.");
+
+		static char  s_szClientEditBuf[MAX_PATH] = {};
+		static TCHAR s_szClientLastSeen[MAX_PATH] = {};
+
+		if (_tcscmp(s_szClientLastSeen, m_strClientResourcePath) != 0)
+		{
+			_tcscpy_s(s_szClientLastSeen, MAX_PATH, m_strClientResourcePath);
+			WideCharToMultiByte(CP_UTF8, 0, m_strClientResourcePath, -1,
+				s_szClientEditBuf, MAX_PATH, nullptr, nullptr);
+		}
+
+		if (ImGui::InputText("##ClientResourcePath", s_szClientEditBuf, MAX_PATH))
+		{
+			MultiByteToWideChar(CP_UTF8, 0, s_szClientEditBuf, -1,
+				m_strClientResourcePath, MAX_PATH);
+			_tcscpy_s(s_szClientLastSeen, MAX_PATH, m_strClientResourcePath);
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("Browse...##Client"))
+		{
+			BROWSEINFO tBI = {};
+			tBI.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
+			tBI.lpszTitle = TEXT("Pick the client resource root");
+			tBI.ulFlags = BIF_RETURNONLYFSDIRS | BIF_USENEWUI;
+
+			LPITEMIDLIST pPidl = SHBrowseForFolder(&tBI);
+			if (pPidl)
+			{
+				TCHAR strPicked[MAX_PATH] = {};
+				if (SHGetPathFromIDList(pPidl, strPicked))
+				{
+					size_t iLen = _tcslen(strPicked);
+					if (iLen > 0 && iLen + 1 < MAX_PATH &&
+						strPicked[iLen - 1] != TEXT('\\') &&
+						strPicked[iLen - 1] != TEXT('/'))
+					{
+						strPicked[iLen]     = TEXT('\\');
+						strPicked[iLen + 1] = 0;
+					}
+					_tcscpy_s(m_strClientResourcePath, MAX_PATH, strPicked);
+				}
+				CoTaskMemFree(pPidl);
+			}
+		}
+
+		ImGui::Spacing();
 
 		if (ImGui::Button("Save"))
 		{
@@ -1730,6 +1931,7 @@ namespace Editor
 			{
 				_tcscpy_s(m_strTextureDefaultPath, MAX_PATH, pDefault);
 			}
+			BuildDefaultClientResourcePath(m_strClientResourcePath, MAX_PATH);
 		}
 
 		ImGui::End();
@@ -2226,7 +2428,21 @@ namespace Editor
 
 	void ImguiManager::Animation_ImGuiWindow(std::shared_ptr<Engine::Animation> pAnimation)
 	{
-		ImGui::Text("==============Animation============");
+		if (!pAnimation)
+		{
+			return;
+		}
+
+		bool bOpen = true;
+		if (!ImGui::Begin("Animation Editor", &bOpen))
+		{
+			ImGui::End();
+			if (!bOpen)
+			{
+				m_pSelectedAnimation.reset();
+			}
+			return;
+		}
 
 		std::shared_ptr<Engine::Skeleton> pSkeleton = pAnimation->GetSkeleton();
 
@@ -2343,6 +2559,13 @@ namespace Editor
 				}
 			}
 		}
+
+		ImGui::End();
+
+		if (!bOpen)
+		{
+			m_pSelectedAnimation.reset();
+		}
 	}
 
 	void ImguiManager::Scene_ImGuiWindow(Engine::Scene* pScene)
@@ -2352,12 +2575,14 @@ namespace Editor
 			if (ImGui::Button("Save Scene"))
 			{
 				TCHAR pFilePath[MAX_PATH] = {};
+				TCHAR strInitDir[MAX_PATH] = {};
+				BuildClientSubPath(strInitDir, MAX_PATH, TEXT("Scene"), ROOT_PATH);
 
 				OPENFILENAME tOFN = {};
 
 				tOFN.lStructSize = sizeof(OPENFILENAME);
 				tOFN.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
-				tOFN.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath();
+				tOFN.lpstrInitialDir = strInitDir;
 				tOFN.nMaxFile = MAX_PATH;
 				tOFN.lpstrFilter = TEXT(".scn");
 				tOFN.lpstrFile = pFilePath;
@@ -2549,6 +2774,14 @@ namespace Editor
 		{
 			PointLight_ImGuiWindow(pLight);
 		}
+
+		if (auto pAnim = std::dynamic_pointer_cast<Engine::Animation>(pComponent))
+		{
+			if (ImGui::Button("Open Animation Editor"))
+			{
+				m_pSelectedAnimation = pAnim;
+			}
+		}
 	}
 
 	void ImguiManager::MeshRenderer_ImGuiWindow(std::shared_ptr<Engine::MeshRendererComponent> pRenderer)
@@ -2570,12 +2803,14 @@ namespace Editor
 		if (ImGui::Button("Save Mesh"))
 		{
 			TCHAR strFile[MAX_PATH] = {};
+			TCHAR strInitDir[MAX_PATH] = {};
+			BuildClientSubPath(strInitDir, MAX_PATH, TEXT("Mesh"), MESH_PATH);
 			OPENFILENAME tName = {};
 			tName.lStructSize = sizeof(OPENFILENAME);
 			tName.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
 			tName.lpstrFilter = TEXT("Mesh\0*.msh;*.mesh\0All\0*.*\0");
 			tName.nMaxFile = MAX_PATH;
-			tName.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath(MESH_PATH);
+			tName.lpstrInitialDir = strInitDir;
 			tName.lpstrFile = strFile;
 			tName.lpstrDefExt = TEXT("msh");
 
@@ -2712,6 +2947,18 @@ namespace Editor
 				}
 			}
 
+			int iMaxFrame = pSequence->GetMaxFrame();
+			int iFrameLimit = pSequence->GetFrameDataLimit();
+			ImGui::Text("Frame Data Limit: %d", iFrameLimit);
+			ImGui::Text("Max Time: %.3f", pSequence->GetMaxTime());
+			if (iFrameLimit > 0)
+			{
+				if (ImGui::SliderInt("Max Frame", &iMaxFrame, 1, iFrameLimit))
+				{
+					pSequence->SetMaxFrame(iMaxFrame);
+				}
+			}
+
 			int iFrame = pSequence->GetFrame();
 
 			Engine::Sequence::PSEQUENCEINFO pInfo = pSequence->GetSequenceInfo();
@@ -2777,10 +3024,12 @@ namespace Editor
 			if (ImGui::Button("Save Sequence"))
 			{
 				TCHAR strFullPath[MAX_PATH] = {};
+				TCHAR strInitDir[MAX_PATH] = {};
+				BuildClientSubPath(strInitDir, MAX_PATH, TEXT("Mesh"), MESH_PATH);
 
 				OPENFILENAME tOFN = {};
 
-				tOFN.lpstrInitialDir = Engine::CPathManager::GetInst()->FindPath(MESH_PATH);
+				tOFN.lpstrInitialDir = strInitDir;
 				tOFN.lpstrFile = strFullPath;
 				tOFN.hwndOwner = Engine::Window::GetInst()->GetWinHandle();
 				tOFN.lStructSize = sizeof(OPENFILENAME);
@@ -3039,6 +3288,161 @@ namespace Editor
 		if (pLayer->GetLoadingThread())
 		{
 			ImGui::Text("Loading ...");
+		}
+
+		ImGui::End();
+	}
+
+	void ImguiManager::Project_ImGuiWindow()
+	{
+		auto& project = ProjectModule::Get();
+
+		if (!ImGui::Begin("Project"))
+		{
+			ImGui::End();
+			return;
+		}
+
+		if (!project.IsLoaded())
+		{
+			ImGui::TextUnformatted("No game module loaded.");
+			if (ImGui::Button("Open Project..."))
+			{
+				std::wstring path = ProjectModule::OpenDialog(m_hWnd);
+				if (!path.empty())
+				{
+					if (project.Load(path))
+					{
+						AddRecentProject(path);
+					}
+					else
+					{
+						ImGui::OpenPopup("LoadFailed");
+					}
+				}
+			}
+
+			// Recent projects — one click reopens. On failure we drop the
+			// entry (DLL likely moved/deleted) and surface the same popup.
+			if (!m_RecentProjects.empty())
+			{
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::TextUnformatted("Recent projects:");
+
+				std::wstring wstrToLoad;
+				std::wstring wstrToRemove;
+
+				for (size_t i = 0; i < m_RecentProjects.size(); ++i)
+				{
+					const std::wstring& wstrPath = m_RecentProjects[i];
+
+					char strUtf8[MAX_PATH * 2] = {};
+					WideCharToMultiByte(CP_UTF8, 0, wstrPath.c_str(), -1,
+						strUtf8, sizeof(strUtf8), nullptr, nullptr);
+
+					std::string strLabel = strUtf8;
+					strLabel += "##recent";
+					strLabel += std::to_string(i);
+
+					if (ImGui::Selectable(strLabel.c_str()))
+					{
+						wstrToLoad = wstrPath;
+					}
+				}
+
+				if (!wstrToLoad.empty())
+				{
+					if (project.Load(wstrToLoad))
+					{
+						AddRecentProject(wstrToLoad);
+					}
+					else
+					{
+						wstrToRemove = wstrToLoad;
+						ImGui::OpenPopup("LoadFailed");
+					}
+				}
+
+				if (!wstrToRemove.empty())
+				{
+					RemoveRecentProject(wstrToRemove);
+				}
+			}
+
+			if (ImGui::BeginPopup("LoadFailed"))
+			{
+				ImGui::TextUnformatted("LoadLibrary failed. Is the DLL path valid?");
+				if (ImGui::Button("OK")) ImGui::CloseCurrentPopup();
+				ImGui::EndPopup();
+			}
+			ImGui::End();
+			return;
+		}
+
+		ImGui::Text("Loaded: %ls", project.Path().c_str());
+		ImGui::Separator();
+
+		// --- Play / Stop ---
+		auto scenes = Engine::SceneFactory::ListAll();
+		static int selectedScene = 0;
+		if (selectedScene >= (int)scenes.size()) selectedScene = 0;
+
+		ImGui::TextUnformatted("Startup scene:");
+		if (!scenes.empty())
+		{
+			if (ImGui::BeginCombo("##scene", scenes[selectedScene].c_str()))
+			{
+				for (int i = 0; i < (int)scenes.size(); ++i)
+				{
+					bool sel = (selectedScene == i);
+					if (ImGui::Selectable(scenes[i].c_str(), sel)) selectedScene = i;
+				}
+				ImGui::EndCombo();
+			}
+
+			if (ImGui::Button("> Play"))
+			{
+				Engine::Scene* s = Engine::SceneFactory::Create(scenes[selectedScene]);
+				Engine::SceneManager::GetInst()->SetScene(s, Engine::SCENE_TYPE::NEXT);
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("# Stop"))
+			{
+				Engine::SceneManager::GetInst()->SetScene(
+					new Editor::InGameScene(), Engine::SCENE_TYPE::NEXT);
+			}
+		}
+		else
+		{
+			ImGui::TextDisabled("(no scenes registered by this module)");
+		}
+
+		ImGui::Separator();
+
+		// --- Actor palette ---
+		auto actors = Engine::GameObjectFactory::ListAll();
+		ImGui::Text("Registered actors (%d):", (int)actors.size());
+		for (auto& name : actors)
+		{
+			ImGui::BulletText("%s", name.c_str());
+			ImGui::SameLine();
+			std::string btn = "Spawn##" + name;
+			if (ImGui::SmallButton(btn.c_str()))
+			{
+				if (auto* pScene = Engine::SceneManager::GetInst()->GetScene())
+				{
+					if (auto pLayer = pScene->FindLayer(DEFAULT_LAYER))
+					{
+						if (auto* pGO = Engine::GameObjectFactory::Create(name))
+						{
+							std::shared_ptr<Engine::GameObject> sp(pGO);
+							sp->Init();
+							pLayer->AddGameObject(sp);
+						}
+					}
+				}
+			}
 		}
 
 		ImGui::End();

@@ -14,14 +14,7 @@ namespace Engine
 	{
 		char strFullPath[MAX_PATH] = {};
 
-		const char* pPath = CPathManager::GetInst()->FindMultibytePath(strPath);
-
-		if (pPath)
-		{
-			strcpy_s(strFullPath, pPath);
-		}
-
-		strcat_s(strFullPath, pFilePath);
+		CPathManager::GetInst()->ResolveMB(pFilePath, strPath, strFullPath);
 
 		pSystem->createSound(strFullPath, b3D, nullptr, &m_pSound);
 

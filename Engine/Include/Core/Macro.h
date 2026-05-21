@@ -61,6 +61,25 @@
 #define ENGINE_DLL __declspec(dllexport)
 #else
 #define ENGINE_DLL __declspec(dllimport)
+#ifdef _WIN64
+	#ifdef _DEBUG
+		#pragma comment(lib, "Engine_Debug.lib")
+	#else
+		#pragma comment(lib, "Engine.lib")
+	#endif
+#else
+	#ifdef _DEBUG
+		#pragma comment(lib, "Engine32_Debug.lib")
+	#else
+		#pragma comment(lib, "Engine32.lib")
+	#endif
+#endif
+#endif
+
+#ifdef EXPORT_GAME
+#define GAME_DLL __declspec(dllexport)
+#else
+#define GAME_DLL __declspec(dllimport)
 #endif
 
 

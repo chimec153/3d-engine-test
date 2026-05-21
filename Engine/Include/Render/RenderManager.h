@@ -74,6 +74,14 @@ namespace Engine
 	private:
 		std::shared_ptr<class MRT> pMRT;
 		std::shared_ptr<class MRT> m_pDecalMRT;
+		// Unreal-style CustomDepth target. Depth-only MRT (no color RTs)
+		// that flagged MeshRendererComponents draw into during
+		// RenderCustomDepth(). Sampled in CompositeCustomDepth() to detect
+		// pixels where the flagged mesh is behind opaque scene geometry.
+		std::shared_ptr<class MRT> m_pCustomDepth;
+		std::shared_ptr<class PixelShader> m_pCustomDepthCompositePS;
+		std::shared_ptr<class BlendState> m_pCustomDepthCompositeBlend;
+		std::shared_ptr<class DepthStencilState> m_pCustomDepthWriteState;
 #ifdef _DEBUG
 		std::shared_ptr<class VertexShader> pNullVertexShader;
 		std::shared_ptr<class PixelShader> pNullPixelShader;
@@ -170,6 +178,7 @@ namespace Engine
 		std::shared_ptr<class MRT> GetMRT()	const;
 		std::shared_ptr<MRT> GetDepthBuffer(LIGHT_TYPE eType)	const;
 		std::shared_ptr<MRT> GetDecalMRT()	const;
+		std::shared_ptr<MRT> GetCustomDepth()	const;
 
 	public:
 		bool Init();
@@ -178,6 +187,8 @@ namespace Engine
 		void Render();
 		void RenderOpaque();
 		void RenderOpaqueInst();
+		void RenderCustomDepth();
+		void CompositeCustomDepth();
 		void RenderAlpha();
 		void RenderLight();
 		void RenderShadow();

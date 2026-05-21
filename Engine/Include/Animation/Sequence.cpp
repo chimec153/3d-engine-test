@@ -145,6 +145,59 @@ namespace Engine
 		return m_iMaxFrame;
 	}
 
+	int Sequence::GetFrameDataLimit() const
+	{
+		int iLimit = 0;
+
+		for (size_t i = 0; i < m_vecInfo.size(); ++i)
+		{
+			for (size_t j = 0; j < m_vecInfo[i]->vecJoint.size(); ++j)
+			{
+				int iSize = static_cast<int>(m_vecInfo[i]->vecJoint[j].vecFrame.size());
+
+				if (iSize > 0 && (iLimit == 0 || iSize < iLimit))
+				{
+					iLimit = iSize;
+				}
+			}
+		}
+
+		return iLimit;
+	}
+
+	void Sequence::SetMaxFrame(int iMaxFrame)
+	{
+		int iLimit = GetFrameDataLimit();
+
+		if (iLimit <= 0 || m_iMaxFrame <= 0)
+		{
+			return;
+		}
+
+		if (iMaxFrame < 1)
+		{
+			iMaxFrame = 1;
+		}
+		if (iMaxFrame > iLimit)
+		{
+			iMaxFrame = iLimit;
+		}
+
+		if (iMaxFrame == m_iMaxFrame)
+		{
+			return;
+		}
+
+		float fNewMaxTime = fMaxTime * static_cast<float>(iMaxFrame) / static_cast<float>(m_iMaxFrame);
+
+		m_iMaxFrame = iMaxFrame;
+		m_tCBuffer.iMaxFrame = iMaxFrame;
+		fMaxTime = fNewMaxTime;
+		m_tCBuffer.fMaxTime = fNewMaxTime;
+
+		CreateSequenceBuffer();
+	}
+
 	Sequence::PSEQUENCEINFO Sequence::GetSequenceInfo(int iIndex) const
 	{
 		if (m_vecInfo.size() <= iIndex || 
@@ -216,7 +269,14 @@ namespace Engine
 		{
 			for (int j = 0; j < m_vecInfo[i]->vecJoint.size(); ++j)
 			{
-				for (int k = 0; k < m_vecInfo[i]->vecJoint[j].vecFrame.size(); ++k)
+				// Clamp to m_iMaxFrame so SetMaxFrame can shrink the buffer
+				// without spilling joint j's tail data into joint j+1's slot.
+				int iFrameEnd = static_cast<int>(m_vecInfo[i]->vecJoint[j].vecFrame.size());
+				if (iFrameEnd > m_iMaxFrame)
+				{
+					iFrameEnd = m_iMaxFrame;
+				}
+				for (int k = 0; k < iFrameEnd; ++k)
 				{
 					vecTransform[j * m_iMaxFrame + k].vPos = m_vecInfo[i]->vecJoint[j].vecFrame[k].vPos;
 					vecTransform[j * m_iMaxFrame + k].vScale = m_vecInfo[i]->vecJoint[j].vecFrame[k].vScale;

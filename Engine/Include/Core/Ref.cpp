@@ -1,5 +1,6 @@
 #include "Ref.h"
 #include "PathManager.h"
+#include "MountPointRegistry.h"
 
 namespace Engine
 {
@@ -49,14 +50,7 @@ namespace Engine
 	{
 		char strFullPath[MAX_PATH] = {};
 
-		const char* pPath = CPathManager::GetInst()->FindMultibytePath(strPathKey);
-
-		if (pPath)
-		{
-			strcpy_s(strFullPath, pPath);
-		}
-
-		strcat_s(strFullPath, pFilePath);
+		CPathManager::GetInst()->ResolveMB(pFilePath, strPathKey, strFullPath);
 
 		FILE* pFile = nullptr;
 

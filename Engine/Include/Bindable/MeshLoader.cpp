@@ -480,14 +480,7 @@ namespace Engine
         {
             char strFullPath[MAX_PATH] = {};
 
-            const char* pPath = CPathManager::GetInst()->FindMultibytePath(strPathKey);
-
-            if (pPath)
-            {
-                strcpy_s(strFullPath, pPath);
-            }
-
-            strcat_s(strFullPath, pFilePath);
+            CPathManager::GetInst()->ResolveMB(pFilePath, strPathKey, strFullPath);
 
             FILE* pFile = nullptr;
 
@@ -567,14 +560,7 @@ namespace Engine
         {
             TCHAR strFullPath[MAX_PATH] = {};
 
-            const TCHAR* pPath = CPathManager::GetInst()->FindPath(strPathKey);
-
-            if (pPath)
-            {
-                wcscpy_s(strFullPath, pPath);
-            }
-
-            wcscat_s(strFullPath, pFileName);
+            CPathManager::GetInst()->Resolve(pFileName, strPathKey, strFullPath);
 
             char strFull[MAX_PATH] = {};
 

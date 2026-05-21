@@ -19,6 +19,36 @@ namespace Engine
 		SAFE_DELETE(m_pNextScene);
 	}
 
+	bool SceneManager::SetScene(Scene* pScene, SCENE_TYPE type)
+	{
+		if (!pScene) return false;
+
+		if (!pScene->Init())
+		{
+			SAFE_DELETE(pScene);
+			return false;
+		}
+
+		switch (type)
+		{
+		case SCENE_TYPE::CURRENT:
+			SAFE_DELETE(m_pScene);
+			m_pScene = pScene;
+			break;
+		case SCENE_TYPE::NEXT:
+			SAFE_DELETE(m_pNextScene);
+			m_pNextScene = pScene;
+			break;
+		}
+		return true;
+	}
+
+	void SceneManager::ClearScene()
+	{
+		SAFE_DELETE(m_pScene);
+		SAFE_DELETE(m_pNextScene);
+	}
+
 	void SceneManager::ChangeScene()
 	{
 		SAFE_DELETE(m_pScene);

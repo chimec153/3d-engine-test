@@ -79,21 +79,21 @@
     <OutDir>../Bin/</OutDir>
     <IntDir>../BinObj/</IntDir>
     <TargetName>$(ProjectName)32_Debug</TargetName>
-    <IncludePath>$(IncludePath);../../Header/Include;../../Header/Include/ImGui;</IncludePath>
+    <IncludePath>$(IncludePath);../../Engine/Include;../../Header/Include/ImGui;</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>../Bin/</OutDir>
     <IntDir>../BinObj/</IntDir>
     <TargetName>$(ProjectName)32</TargetName>
-    <IncludePath>$(IncludePath);../../Header/Include;../../Header/Include/ImGui;</IncludePath>
+    <IncludePath>$(IncludePath);../../Engine/Include;../../Header/Include/ImGui;</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>../Bin/</OutDir>
     <IntDir>../BinObj/</IntDir>
     <TargetName>$(ProjectName)_Debug</TargetName>
-    <IncludePath>$(IncludePath);../../Header/Include;../../Header/Include/ImGui;</IncludePath>
+    <IncludePath>$(IncludePath);../../Engine/Include;../../Header/Include/ImGui;</IncludePath>
     <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
     <LibraryPath>C:\Program Files\Autodesk\FBX\FBX SDK\2020.0.1\lib\vs2017\x64\debug;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);</LibraryPath>
     <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64);</ExcludePath>
@@ -102,7 +102,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>../Bin/</OutDir>
     <IntDir>../BinObj/</IntDir>
-    <IncludePath>$(IncludePath);../../Header/Include;../../Header/Include/ImGui;</IncludePath>
+    <IncludePath>$(IncludePath);../../Engine/Include;../../Header/Include/ImGui;</IncludePath>
     <LibraryPath>C:\Program Files\Autodesk\FBX\FBX SDK\2020.0.1\lib\vs2017\x64\release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -189,6 +189,7 @@
     <ClCompile Include="Imgui\ImGuizmo.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Object\Player.cpp" />
+    <ClCompile Include="Project\ProjectModule.cpp" />
     <ClCompile Include="Scene\InGameScene.cpp" />
     <ClCompile Include="Window.cpp" />
   </ItemGroup>
@@ -212,6 +213,7 @@
     <ClInclude Include="Navigation\Recast\RecastAlloc.h" />
     <ClInclude Include="Navigation\Recast\RecastAssert.h" />
     <ClInclude Include="Object\Player.h" />
+    <ClInclude Include="Project\ProjectModule.h" />
     <ClInclude Include="Scene\InGameScene.h" />
     <ClInclude Include="Window.h" />
   </ItemGroup>

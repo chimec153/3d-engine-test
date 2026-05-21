@@ -234,6 +234,11 @@ namespace Engine
 		return m_pDecalMRT;
 	}
 
+	std::shared_ptr<MRT> RenderManager::GetCustomDepth() const
+	{
+		return m_pCustomDepth;
+	}
+
 	bool RenderManager::Init()
 	{
 		// Phase E7 — RenderV2 init removed. Sort-by-state will be reintroduced
@@ -277,6 +282,16 @@ namespace Engine
 		m_pDecalMRT = std::make_shared<MRT>(format, 25);
 
 		m_pDecalMRT->SetTag("DecalMRT");
+
+		// Phase V8 — CustomDepth target. Depth-only, no color RTs. Same
+		// resolution as the main back buffer (MRT auto-sizes from Window).
+		// Sampled at t19 in CompositeCustomDepth().
+		{
+			const std::vector<DXGI_FORMAT> noColor = {};
+			m_pCustomDepth = std::make_shared<MRT>(noColor, 0,
+				DXGI_FORMAT_R32_TYPELESS, DXGI_FORMAT_D32_FLOAT, DXGI_FORMAT_R32_FLOAT);
+			if (m_pCustomDepth) m_pCustomDepth->SetTag("CustomDepth");
+		}
 
 #ifdef _DEBUG
 		pNullVertexShader = StaticFindBindable<VertexShader>("NullVS");
@@ -476,6 +491,15 @@ namespace Engine
 
 		m_pDestAlpha = StaticFindBindable<BlendState>("DestAlpha");
 
+		// Phase V8 — CustomDepth composite resources. PS samples scene depth
+		// (t10) + custom depth (t19) and outputs a silhouette when the
+		// flagged mesh is occluded. AlphaBlend already exists; reuse it.
+		// CustomDepthWrite: depth=LESS_EQUAL + write ALL, stencil off. The
+		// "Basic" state already matches; reuse without registering a new one.
+		m_pCustomDepthCompositePS    = StaticFindBindable<PixelShader>("CustomDepthCompositePS");
+		m_pCustomDepthCompositeBlend = StaticFindBindable<BlendState>("AlphaBlend");
+		m_pCustomDepthWriteState     = StaticFindBindable<DepthStencilState>("Basic");
+
 		m_pFogCBuffer = std::make_shared<ConstantBuffer<FOGCBUFFER>>(12);
 
 		if (!m_pFogCBuffer) 
@@ -528,6 +552,12 @@ namespace Engine
 
 		RenderOpaque();
 
+		// Phase V8 — Unreal-style CustomDepth. Flagged MRs draw to a
+		// depth-only target right after the main opaque pass; the silhouette
+		// is composited into m_pHDRTexture between RenderSkyBox and
+		// RenderAlpha (below) so alpha layers blend over it correctly.
+		RenderCustomDepth();
+
 		RenderDecal();
 
 		RenderShadow();
@@ -539,6 +569,8 @@ namespace Engine
 		RenderLight();
 
 		RenderSkyBox();
+
+		CompositeCustomDepth();
 
 		RenderAlpha();
 
@@ -646,6 +678,143 @@ namespace Engine
 	void RenderManager::RenderOpaqueInst()
 	{
 		// Phase E5 — Drawable opaque instancing removed (m_mapInstance gone).
+	}
+
+	void RenderManager::RenderCustomDepth()
+	{
+		if (!m_pCustomDepth) return;
+
+		// Iterate OPACUE buckets first to see if any flagged MR exists. If
+		// none, skip the entire pass — no clear, no state churn.
+		auto& mapBuckets = m_mapMeshInstance[static_cast<int>(RENDER_LAYER::OPACUE)];
+		bool bAny = false;
+		for (auto& kv : mapBuckets)
+		{
+			if (kv.second.empty()) continue;
+			const auto& pFirst = kv.second.front();
+			if (pFirst && pFirst->IsCustomDepthEnabled()) { bAny = true; break; }
+		}
+		if (!bAny) return;
+
+		m_pCustomDepth->Clear(D3D11_CLEAR_DEPTH);
+
+		// Depth-only render: 0 color RTs + CustomDepth's DSV. The MRT
+		// helper handles the 0-RT case (OMSetRenderTargets(0, nullptr, DSV)).
+		m_pCustomDepth->SetTargets();
+
+		// Standard depth-write state. CustomDepth doesn't care about the
+		// MR's own DSS (e.g. OutLineMask's stencil writes) — we want a
+		// clean LESS_EQUAL + write ALL.
+		if (m_pCustomDepthWriteState) m_pCustomDepthWriteState->Bind();
+
+		Graphics::GetInst()->ResetBindCache();
+
+		for (auto& kv : mapBuckets)
+		{
+			if (kv.second.empty()) continue;
+			const auto& pFirst = kv.second.front();
+			if (!pFirst || !pFirst->IsCustomDepthEnabled()) continue;
+
+			for (const auto& pMR : kv.second)
+			{
+				if (!pMR || !pMR->IsCustomDepthEnabled()) continue;
+
+				GameObject* pOwner = pMR->GetGameObjectOwner();
+				std::shared_ptr<Transform> pTr =
+					pOwner ? pOwner->GetComponent<Transform>() : nullptr;
+				if (pTr) pTr->Bind();
+
+				// Bind VS + Animation (skinning bone palette) + IL/Topology
+				// /Rasterizer only. Skip PS/Material/Textures/DSS — the
+				// depth-only pass doesn't sample or shade.
+				if (pMR->GetVertexShader()) pMR->GetVertexShader()->Bind();
+				if (pMR->GetAnimation())    pMR->GetAnimation()->Bind();
+				for (const auto& b : pMR->GetOtherBindables())
+				{
+					if (!b) continue;
+					switch (b->GetBindableType())
+					{
+					case BINDABLE_TYPE::INPUTLAYOUT:
+					case BINDABLE_TYPE::TOPOLOGY:
+					case BINDABLE_TYPE::RASTERIZER_STATE:
+						b->Bind();
+						break;
+					default:
+						break;
+					}
+				}
+
+				// Null PS → driver skips pixel work entirely; only depth
+				// is written.
+				Graphics::GetInst()->GetDeviceContext()->PSSetShader(nullptr, nullptr, 0);
+
+				if (pMR->GetMesh()) pMR->GetMesh()->Draw(pMR->MakeMaterialResolver());
+
+				for (const auto& b : pMR->GetOtherBindables())
+				{
+					if (!b) continue;
+					switch (b->GetBindableType())
+					{
+					case BINDABLE_TYPE::INPUTLAYOUT:
+					case BINDABLE_TYPE::TOPOLOGY:
+					case BINDABLE_TYPE::RASTERIZER_STATE:
+						b->PostBind();
+						break;
+					default:
+						break;
+					}
+				}
+				if (pMR->GetAnimation())    pMR->GetAnimation()->PostBind();
+				if (pMR->GetVertexShader()) pMR->GetVertexShader()->PostBind();
+				if (pTr) pTr->PostBind();
+			}
+		}
+
+		if (m_pCustomDepthWriteState) m_pCustomDepthWriteState->PostBind();
+
+		m_pCustomDepth->ResetTargets();
+	}
+
+	void RenderManager::CompositeCustomDepth()
+	{
+		if (!m_pCustomDepth || !m_pCustomDepthCompositePS) return;
+
+		// Check there's actually something to composite — skip when no
+		// flagged MR drew this frame (mirrors RenderCustomDepth's early-out).
+		auto& mapBuckets = m_mapMeshInstance[static_cast<int>(RENDER_LAYER::OPACUE)];
+		bool bAny = false;
+		for (auto& kv : mapBuckets)
+		{
+			if (kv.second.empty()) continue;
+			const auto& pFirst = kv.second.front();
+			if (pFirst && pFirst->IsCustomDepthEnabled()) { bAny = true; break; }
+		}
+		if (!bAny) return;
+
+		// Fullscreen pass over m_pHDRTexture. Render() already binds it as
+		// the active target (with pMRT's DSV) before RenderAlpha, so we
+		// don't rebind RTs here — just sample depths and write color.
+		pMRT->SetDepthSRV(10);                 // scene depth → t10
+		m_pCustomDepth->SetDepthSRV(19);       // custom depth → t19
+
+		if (m_pCustomDepthCompositeBlend) m_pCustomDepthCompositeBlend->Bind();
+
+		auto* pCtx = Graphics::GetInst()->GetDeviceContext();
+		pCtx->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+		pCtx->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+		pCtx->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+		if (pMultiVertexShader)             pMultiVertexShader->Bind();
+		if (m_pCustomDepthCompositePS)      m_pCustomDepthCompositePS->Bind();
+
+		pCtx->Draw(4, 0);
+
+		if (m_pCustomDepthCompositePS)      m_pCustomDepthCompositePS->PostBind();
+		if (pMultiVertexShader)             pMultiVertexShader->PostBind();
+		if (m_pCustomDepthCompositeBlend)   m_pCustomDepthCompositeBlend->PostBind();
+
+		pMRT->ResetSRV(10);
+		m_pCustomDepth->ResetSRV(19);
 	}
 
 	float RenderManager::GetBloomScale() const

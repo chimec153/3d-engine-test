@@ -175,10 +175,10 @@ namespace Engine
 
 				x2 = fLengthSq * 0.5F;
 				y_val = fLengthSq;
-				i = *(long*)&y_val;           // 부동소수점 비트를 정수로 강제 캐스팅
-				i = 0x5f3759df - (i >> 1);       // 와! 마법의 수치와 비트 시프트 연산
-				y_val = *(float*)&i;           // 다시 부동소수점으로 캐스팅
-				y_val = y_val * (threehalfs - (x2 * y_val * y_val));   // 뉴턴-랩슨 보정
+				i = *(long*)&y_val;           // float bits as integer
+				i = 0x5f3759df - (i >> 1);    // Quake III fast inverse sqrt magic
+				y_val = *(float*)&i;          // back to float
+				y_val = y_val * (threehalfs - (x2 * y_val * y_val));   // Newton-Raphson
 
 				x *= y_val;
 				y *= y_val;

@@ -12,6 +12,25 @@
 
 namespace Engine
 {
+	void Animation::_tagSequenceInfo::ClearNotifies()
+	{
+		for (const auto& pNotify : NotifyList)
+		{
+			if (pNotify) pNotify->Clear();
+		}
+	}
+
+	void Animation::_tagSequenceInfo::UpdateNotifies() const
+	{
+		if (!pSequence) return;
+		const int   iFrame = pSequence->GetFrame();
+		const float fT     = fTime;
+		for (const auto& pNotify : NotifyList)
+		{
+			if (pNotify) pNotify->Update(fT, iFrame);
+		}
+	}
+
 	Animation::Animation() :
 		Component()
 		, m_pCurrentSequence(nullptr)
@@ -328,13 +347,14 @@ namespace Engine
 
 		if (fNextTime >= m_pCurrentSequence->pSequence->GetMaxTime())
 		{
-			std::list<std::shared_ptr<Notify>>::iterator iter = m_pCurrentSequence->NotifyList.begin();
-			std::list<std::shared_ptr<Notify>>::iterator iterEnd = m_pCurrentSequence->NotifyList.end();
-
-			for (; iter != iterEnd; ++iter)
+			if (m_pCurrentSequence->pSequence->GetTag() == "Run")
 			{
-				(*iter)->Clear();
+				OutputDebugStringA("MaxTime: ");
+				OutputDebugStringA(m_pCurrentSequence->pSequence->GetTag().c_str());
+				OutputDebugStringA("\n");
 			}
+
+			m_pCurrentSequence->ClearNotifies();
 
 			if (m_pCurrentSequence->pSequence->IsLoop())
 			{
@@ -362,13 +382,7 @@ namespace Engine
 			m_pCurrentSequence->fTime = fNextTime;
 		}
 
-		std::list<std::shared_ptr<Notify>>::iterator iterN = m_pCurrentSequence->NotifyList.begin();
-		std::list<std::shared_ptr<Notify>>::iterator iterNEnd = m_pCurrentSequence->NotifyList.end();
-
-		for (; iterN != iterNEnd; ++iterN)
-		{
-			(*iterN)->Update(m_pCurrentSequence->fTime, m_pCurrentSequence->pSequence->GetFrame());
-		}
+		m_pCurrentSequence->UpdateNotifies();
 
 		if (m_pAdditiveSequence)
 		{
@@ -376,25 +390,13 @@ namespace Engine
 
 			if (m_pAdditiveSequence->fTime >= m_pAdditiveSequence->pSequence->GetMaxTime())
 			{
-				std::list<std::shared_ptr<Notify>>::iterator iter = m_pAdditiveSequence->NotifyList.begin();
-				std::list<std::shared_ptr<Notify>>::iterator iterEnd = m_pAdditiveSequence->NotifyList.end();
-
-				for (; iter != iterEnd; ++iter)
-				{
-					(*iter)->Clear();
-				}
+				m_pAdditiveSequence->ClearNotifies();
 
 				if (m_pAdditiveSequence->pSequence->IsLoop())
 				{
 					m_pAdditiveSequence->fTime -= static_cast<int>(m_pAdditiveSequence->fTime / m_pAdditiveSequence->pSequence->GetMaxTime()) * m_pAdditiveSequence->pSequence->GetMaxTime();
 
-					std::list<std::shared_ptr<Notify>>::iterator iter = m_pAdditiveSequence->NotifyList.begin();
-					std::list<std::shared_ptr<Notify>>::iterator iterEnd = m_pAdditiveSequence->NotifyList.end();
-
-					for (; iter != iterEnd; ++iter)
-					{
-						(*iter)->Update(m_pAdditiveSequence->fTime, m_pAdditiveSequence->pSequence->GetFrame());
-					}
+					m_pAdditiveSequence->UpdateNotifies();
 				}
 				else
 				{
@@ -403,13 +405,7 @@ namespace Engine
 			}
 			else
 			{
-				std::list<std::shared_ptr<Notify>>::iterator iter = m_pAdditiveSequence->NotifyList.begin();
-				std::list<std::shared_ptr<Notify>>::iterator iterEnd = m_pAdditiveSequence->NotifyList.end();
-
-				for (; iter != iterEnd; ++iter)
-				{
-					(*iter)->Update(m_pAdditiveSequence->fTime, m_pAdditiveSequence->pSequence->GetFrame());
-				}
+				m_pAdditiveSequence->UpdateNotifies();
 			}
 		}
 
@@ -421,10 +417,7 @@ namespace Engine
 
 		if (pHostTransform)
 		{
-			std::list<std::shared_ptr<JointSocket>>::iterator iter = m_SocketList.begin();
-			std::list<std::shared_ptr<JointSocket>>::iterator iterEnd = m_SocketList.end();
-
-			for (; iter != iterEnd; ++iter)
+			for (auto iter = m_SocketList.begin(), iterEnd = m_SocketList.end(); iter != iterEnd; ++iter)
 			{
 				(*iter)->Update(m_pPoseBuffer, pHostTransform->GetTransformMatrix());
 			}

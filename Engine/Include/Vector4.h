@@ -78,6 +78,11 @@ namespace Engine
 			return *((&x) + index);
 		}
 
+		_tagVector4 operator+(const _tagVector4& v)	const
+		{
+			return _tagVector4(x + v.x, y + v.y, z + v.z, w + v.w);
+		}
+
 		_tagVector4 operator*(float f)	const
 		{
 			return _tagVector4(x * f, y * f, z * f, w * f);

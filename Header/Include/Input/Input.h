@@ -111,6 +111,11 @@ namespace Engine
 		bool CreateAction(const std::string& strAction, unsigned char iKey);
 		void AddAction(const std::string& strAction, KEY_STATE eState, void(*pFunc)(float));
 
+		// Drops every registered action and its bound callbacks. Used by
+		// ProjectModule on game-load so the previous world's input bindings
+		// don't fire against the new scene's objects.
+		void ClearActions();
+
 		template <typename T>
 		void AddAction(const std::string& strAction, KEY_STATE eState, T* pObj, void(T::* pFunc)(float))
 		{

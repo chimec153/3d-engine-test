@@ -41,6 +41,14 @@ namespace Engine
                 return std::shared_ptr<class Notify>();
             }
 
+            // Reset every notify on this sequence. Called when the sequence
+            // wraps around (loop) or ends so notifies can re-fire next pass.
+            void ClearNotifies();
+
+            // Drive each notify with the sequence's current (time, frame).
+            // No-op if pSequence is null so misconfigured slots don't crash.
+            void UpdateNotifies() const;
+
             _tagSequenceInfo() :
                 pSequence()
                 , fTime()

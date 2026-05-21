@@ -130,10 +130,10 @@ namespace Engine
 
 		Reset();
 
-		if (!CInput::GetInst()->CreateAction(GetTag() + "_W", DIK_W))
-		{
-			return false;
-		}
+		//if (!CInput::GetInst()->CreateAction(GetTag() + "_W", DIK_W))
+		//{
+		//	return false;
+		//}
 
 		return true;
 	}

@@ -33,6 +33,14 @@ namespace Engine
 		}
 	}
 
+	void ResourceManager::Clear()
+	{
+		m_mapSound.clear();
+		m_mapSequence.clear();
+		m_mapSkeleton.clear();
+		m_mapAnimation.clear();
+	}
+
 	std::shared_ptr<Skeleton> ResourceManager::CreateSkeleton(const std::string& strTag, const std::vector<BONE>& vecBone)
 	{
 		std::shared_ptr<Skeleton> pSkeleton = FindSkeleton(strTag);
@@ -282,6 +290,8 @@ namespace Engine
 		std::shared_ptr<Sequence> pSequence = std::make_shared<Sequence>();
 
 		pSequence->LoadFromPath(pFilePath, strPathKey);
+
+		pSequence->SetTag(strTag);
 
 		m_mapSequence.insert(std::make_pair(strTag, pSequence));
 	}

@@ -92,6 +92,15 @@ namespace Engine
 			return m_mapBindable;
 		}
 
+		// Drops the tag→bindable index. Outstanding shared_ptrs (held by
+		// e.g. a live Scene) keep the objects alive; only future
+		// FindBindable lookups stop seeing them. Used by ProjectModule when
+		// swapping to a different game project's content.
+		void Clear()
+		{
+			m_mapBindable.clear();
+		}
+
 	public:
 		bool Init()
 		{

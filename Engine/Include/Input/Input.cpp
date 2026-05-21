@@ -351,6 +351,11 @@ namespace Engine
 		}
 	}
 
+	void CInput::ClearActions()
+	{
+		Safe_Delete_Map(m_mapAction);
+	}
+
 	void CInput::SceneChanged()
 	{
 		Scene* pScene = SceneManager::GetInst()->GetScene();
@@ -440,6 +445,8 @@ namespace Engine
 		AddKey(DIK_D);
 		AddKey(DIK_Q);
 		AddKey(DIK_E);
+		AddKey(DIK_F);
+		AddKey(DIK_G);
 
 		return true;
 	}

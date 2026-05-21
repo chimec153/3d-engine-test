@@ -1,7 +1,34 @@
 #include "PathManager.h"
+#include "MountPointRegistry.h"
+#include <io.h>
 
 namespace Engine
 {
+#ifdef _DEBUG
+    // Read-only existence probe. _waccess(path, 0) returns 0 iff the file
+    // exists. We only warn (no throw / assert) so debugging an asset gap is
+    // a one-line log lookup, not a halted process.
+    static void WarnIfMissingW(const TCHAR* fullPath, const TCHAR* original)
+    {
+        if (_waccess(fullPath, 0) != 0)
+        {
+            wchar_t buf[1024];
+            swprintf_s(buf, L"[PathManager] Asset not found: %s  (input: %s)\n",
+                       fullPath, original ? original : L"");
+            OutputDebugStringW(buf);
+        }
+    }
+    static void WarnIfMissingA(const char* fullPath, const char* original)
+    {
+        if (_access(fullPath, 0) != 0)
+        {
+            char buf[1024];
+            sprintf_s(buf, "[PathManager] Asset not found: %s  (input: %s)\n",
+                      fullPath, original ? original : "");
+            OutputDebugStringA(buf);
+        }
+    }
+#endif
     CPathManager* CPathManager::m_pInst = nullptr;
 
     CPathManager::CPathManager()
@@ -53,6 +80,14 @@ namespace Engine
 
         AddPath(MATERIAL_PATH, TEXT("Resource\\Material\\"));
 
+        // Mount /Engine/ at the exe-relative Resource folder. /Game/ defaults
+        // to the same location so shipped clients (where engine + game assets
+        // live in one Resource tree) resolve game-mounted paths out of the
+        // box. ProjectModule overwrites /Game/ with the project-specific
+        // Resource folder when the editor loads a game DLL.
+        MountPointRegistry::Mount("/Engine/", std::wstring(pPath) + L"Resource\\");
+        MountPointRegistry::Mount("/Game/",   std::wstring(pPath) + L"Resource\\");
+
         return true;
     }
 
@@ -78,6 +113,44 @@ namespace Engine
         }
 
         return iter->second;
+    }
+
+    void CPathManager::Resolve(const TCHAR* pFilePath, const std::string& strPathKey, TCHAR out[MAX_PATH]) const
+    {
+        out[0] = 0;
+        if (MountPointRegistry::IsVirtual(std::wstring(pFilePath)))
+        {
+            std::wstring r = MountPointRegistry::Resolve(std::wstring(pFilePath));
+            wcscpy_s(out, MAX_PATH, r.c_str());
+        }
+        else
+        {
+            const TCHAR* p = FindPath(strPathKey);
+            if (p) wcscpy_s(out, MAX_PATH, p);
+            wcscat_s(out, MAX_PATH, pFilePath);
+        }
+#ifdef _DEBUG
+        WarnIfMissingW(out, pFilePath);
+#endif
+    }
+
+    void CPathManager::ResolveMB(const char* pFilePath, const std::string& strPathKey, char out[MAX_PATH]) const
+    {
+        out[0] = 0;
+        if (MountPointRegistry::IsVirtual(std::string(pFilePath)))
+        {
+            std::string r = MountPointRegistry::ResolveMB(pFilePath);
+            strcpy_s(out, MAX_PATH, r.c_str());
+        }
+        else
+        {
+            const char* p = FindMultibytePath(strPathKey);
+            if (p) strcpy_s(out, MAX_PATH, p);
+            strcat_s(out, MAX_PATH, pFilePath);
+        }
+#ifdef _DEBUG
+        WarnIfMissingA(out, pFilePath);
+#endif
     }
 
     void CPathManager::AddPath(const std::string& strPath, const TCHAR* pPath)

@@ -66,6 +66,16 @@ namespace Engine
 		}
 		Scene* GetScene(SCENE_TYPE type = SCENE_TYPE::CURRENT)	const;
 
+		// Runtime equivalent of CreateScene<T>(). Use when the concrete type
+		// is not visible at compile time (e.g. created via SceneFactory in
+		// Editor after LoadLibrary). Takes ownership; calls Init().
+		bool SetScene(Scene* pScene, SCENE_TYPE type = SCENE_TYPE::NEXT);
+
+		// Drops current + pending scenes (and the GameObjects/Components
+		// they own). Used by ProjectModule before LoadLibrary so a fresh
+		// project starts without stale entities from the previous world.
+		void ClearScene();
+
 	public:
 		bool Input(float fDeltaTime);
 		bool Update(float fDeltaTime);

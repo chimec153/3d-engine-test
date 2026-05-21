@@ -42,6 +42,13 @@ namespace Engine
 		const char* FindMultibytePath(const std::string& strPath = ROOT_PATH)	const;
 		void AddPath(const std::string& strPath, const TCHAR* pPath);
 
+		// Asset path resolution. Writes the full OS path into out (capacity
+		// MAX_PATH). If pFilePath is a virtual path (starts with '/'),
+		// resolves via MountPointRegistry and ignores strPathKey. Otherwise
+		// concatenates FindPath(strPathKey) + pFilePath as legacy behavior.
+		void Resolve(const TCHAR* pFilePath, const std::string& strPathKey, TCHAR out[MAX_PATH]) const;
+		void ResolveMB(const char* pFilePath, const std::string& strPathKey, char out[MAX_PATH]) const;
+
 	};
 
 }

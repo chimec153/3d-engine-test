@@ -165,13 +165,29 @@ namespace Engine
 
 		_tagVector3& Normalize()
 		{
-			float fLength = Length();
+			float fLengthSq = x * x + y * y + z * z;
 
-			assert(fLength);
+			if (fLengthSq > 1e-6f)
+			{
+				long i;
+				float x2, y_val;
+				const float threehalfs = 1.5F;
 
-			x /= fLength;
-			y /= fLength;
-			z /= fLength;
+				x2 = fLengthSq * 0.5F;
+				y_val = fLengthSq;
+				i = *(long*)&y_val;           // float bits as integer
+				i = 0x5f3759df - (i >> 1);    // Quake III fast inverse sqrt magic
+				y_val = *(float*)&i;          // back to float
+				y_val = y_val * (threehalfs - (x2 * y_val * y_val));   // Newton-Raphson
+
+				x *= y_val;
+				y *= y_val;
+				z *= y_val;
+			}
+			else
+			{
+				x = 0.0f; y = 0.0f; z = 0.0f;
+			}
 
 			return *this;
 		}

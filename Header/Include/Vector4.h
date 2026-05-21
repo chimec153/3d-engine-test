@@ -92,7 +92,6 @@ namespace Engine
 		{
 			return _tagVector4(x / f, y / f, z / f, w / f);
 		}
-
 		_tagVector4& operator-=(float f)
 		{
 			x -= f;

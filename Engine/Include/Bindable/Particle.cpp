@@ -150,6 +150,19 @@ namespace Engine
 		m_pBuffer->ResetUAV(2);
 	}
 
+	void Particle::PostUpdate(float fDeltaTime)
+	{
+		__super::PostUpdate(fDeltaTime);
+
+		// Particle owns its emitter Transform standalone (not a child
+		// Component), so Component::PostUpdate's m_ChildList traversal
+		// never reaches it. Drive PostUpdate here directly — this is
+		// where Transform rebuilds m_matTransform and the camera-relative
+		// matWorldView/matWorldViewProject the particle CS and VS sample.
+		// Decal follows the same pattern for the same reason.
+		if (m_pTransform) m_pTransform->PostUpdate(fDeltaTime);
+	}
+
 	void Particle::PreDraw(float fDeltaTime)
 	{
 		__super::PreDraw(fDeltaTime);

@@ -75,6 +75,7 @@ namespace Engine
     public:
         virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
+        virtual void PostUpdate(float fDeltaTime) override;
         virtual void PreDraw(float fDeltaTime) override;
         virtual std::shared_ptr<Component> Clone() override;
 

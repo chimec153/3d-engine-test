@@ -69,14 +69,7 @@ namespace Engine
 
 		TCHAR strFullPath[MAX_PATH] = {};
 
-		const TCHAR* pPath = CPathManager::GetInst()->FindPath(strPathKey);
-
-		if (pPath)
-		{
-			wcscpy_s(strFullPath, pPath);
-		}
-
-		wcscat_s(strFullPath, pFileName);
+		CPathManager::GetInst()->Resolve(pFileName, strPathKey, strFullPath);
 
 		LoadTextureFromFullPath(strFullPath, eCpuFlag, eUsage);
 	}
@@ -92,14 +85,7 @@ namespace Engine
 
 		char pFullPath[MAX_PATH] = {};
 
-		const char* pPath = CPathManager::GetInst()->FindMultibytePath(strPathKey);
-
-		if (pPath)
-		{
-			strcpy_s(pFullPath, pPath);
-		}
-
-		strcat_s(pFullPath, pFileName);
+		CPathManager::GetInst()->ResolveMB(pFileName, strPathKey, pFullPath);
 
 		TCHAR strFullPath[MAX_PATH] = {};
 
@@ -118,28 +104,21 @@ namespace Engine
 
 		m_iSlot = iSlot;
 
-		const TCHAR* pPath = CPathManager::GetInst()->FindPath(strPathKey);
-
 		std::vector<const TCHAR*> vecFileName;
 
 		for (int i = 0; i < pFileName.size(); ++i)
 		{
 			TCHAR* strFullPath = dbg_new TCHAR[MAX_PATH];
 
-			if (pPath)
-			{
-				_tcscpy_s(strFullPath, MAX_PATH, pPath);
-			}
-
-			_tcscat_s(strFullPath, MAX_PATH, pFileName[i]);
+			CPathManager::GetInst()->Resolve(pFileName[i], strPathKey, strFullPath);
 
 			vecFileName.push_back(strFullPath);
 		}
 
 		if (!LoadTextureFromFullPath(vecFileName))
 		{
-			Safe_Delete_VecList_Array(vecFileName);
 			assert(false);
+			Safe_Delete_VecList_Array(vecFileName);
 		}
 
 		Safe_Delete_VecList_Array(vecFileName);
@@ -383,13 +362,7 @@ namespace Engine
 	{
 		TCHAR strFullPath[MAX_PATH] = {};
 
-		const TCHAR* pPath = CPathManager::GetInst()->FindPath(strPathKey);
-
-		if (pPath) {
-			_tcscpy_s(strFullPath, pPath);
-		}
-
-		_tcscat_s(strFullPath, pFilePath);
+		CPathManager::GetInst()->Resolve(pFilePath, strPathKey, strFullPath);
 
 		if (FAILED(DirectX::SaveToWICFile(*m_pImage->GetImage(0, 0, 0), DirectX::WIC_FLAGS::WIC_FLAGS_NONE, DirectX::GetWICCodec(DirectX::WIC_CODEC_BMP), strFullPath, nullptr, nullptr))) {
 			return false;

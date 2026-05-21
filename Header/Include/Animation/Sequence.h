@@ -55,6 +55,15 @@ namespace Engine
         void UseRootMotion();
         float GetMaxTime()  const;
         int GetMaxFrame()   const;
+        // Upper bound for SetMaxFrame: min non-empty vecFrame.size() across
+        // all joints/containers — i.e. how many frames of CPU data exist.
+        // Returns 0 if the sequence has no joints loaded yet.
+        int GetFrameDataLimit() const;
+        // Editor-side setter. Clamped to [1, GetFrameDataLimit()]; fMaxTime
+        // scales proportionally so playback rate (frames/sec) stays constant.
+        // Rebuilds the GPU StructuredBuffer with the new stride; CPU vecFrame
+        // data is preserved so the value can be raised again later.
+        void SetMaxFrame(int iMaxFrame);
         PSEQUENCEINFO GetSequenceInfo(int iIndex = 0) const;
         bool IsRootMotion() const;
         int GetFrame()  const;

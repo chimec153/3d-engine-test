@@ -76,6 +76,7 @@ namespace Editor
 
 	private:
 		bool m_bDemoWindow;
+		HWND m_hWnd = nullptr;
 
 	public:
 		bool Init(HWND hWnd);
@@ -85,6 +86,12 @@ namespace Editor
 	public:
 		void DisableMouse();
 		void EnableMouse();
+
+	public:
+		// "Open Project..." + Play / Stop toolbar. Lists scenes from
+		// Engine::SceneFactory and actors from Engine::GameObjectFactory once
+		// a project DLL is loaded via ProjectModule.
+		void Project_ImGuiWindow();
 
 	public:
 		void CRef_ImGuiWindow(std::shared_ptr<Engine::CRef> pRef);
@@ -186,6 +193,13 @@ namespace Editor
 		// BindableManager (future feature) auto-clears the inspector.
 		std::weak_ptr<Engine::Material> m_pSelectedMaterial;
 
+		// Animation editor target. Set by the "Open Animation Editor" button
+		// in Component_ImGuiWindow; Animation_ImGuiWindow is then called every
+		// frame from Update with this pointer's lock(). Weak so the window
+		// auto-closes when the GameObject (or its Animation component) is
+		// removed.
+		std::weak_ptr<Engine::Animation> m_pSelectedAnimation;
+
 		// Gizmo state. Kept as ints so this header doesn't have to pull
 		// in ImGuizmo.h (cpp maps them onto ImGuizmo::OPERATION / MODE).
 		// 0=Translate, 1=Rotate, 2=Scale  /  0=Local, 1=World.
@@ -237,6 +251,33 @@ namespace Editor
 		// editor-only settings (mesh/sound default paths, recent-files list,
 		// etc.) can be added by adding members and Get/Set in INI sections.
 		TCHAR m_strTextureDefaultPath[MAX_PATH];
+
+		// Root of the client's Resource folder — used as the initial directory
+		// for Scene/Mesh/Sequence save dialogs so artists don't have to climb
+		// out of the editor's mirrored Resource tree and over to the client's.
+		// Always ends with a path separator. Default at first launch is
+		// derived from the editor exe location (../../Client/Bin/Resource/).
+		TCHAR m_strClientResourcePath[MAX_PATH];
+
+		// Recent projects (DLL paths) shown on the empty Project window so the
+		// user can re-open a project with one click instead of re-browsing.
+		// Most-recently-used first. Capped at kMaxRecentProjects; persisted to
+		// Editor.ini's [Recent] section as Project0..ProjectN-1.
+		static constexpr int kMaxRecentProjects = 8;
+		std::vector<std::wstring> m_RecentProjects;
+
+		// Build "<m_strClientResourcePath><pSubFolder>\" into pOut. Used by
+		// the save dialogs to default into Client\Bin\Resource\<subfolder>\.
+		// Falls back to engine's FindPath(strFallbackKey) when the client
+		// path is empty (user cleared it in settings).
+		void BuildClientSubPath(TCHAR* pOut, size_t iLen, const TCHAR* pSubFolder, const std::string& strFallbackKey) const;
+
+		// Move/insert path at the front of m_RecentProjects (dedupes, caps at
+		// kMaxRecentProjects), then persists. Called after a successful Load.
+		void AddRecentProject(const std::wstring& dllPath);
+		// Drop an entry by exact path match and persist. Called when a click
+		// on a recent entry fails to load (DLL missing/moved).
+		void RemoveRecentProject(const std::wstring& dllPath);
 
 	public:
 		void EditorSettings_ImGuiWindow();

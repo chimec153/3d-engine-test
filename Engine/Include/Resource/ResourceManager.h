@@ -40,6 +40,11 @@ namespace Engine
 		std::unordered_map<std::string, std::shared_ptr<class Sound>>	m_mapSound;
 
 	public:
+		// Drops cached skeletons / sequences / animations / sounds. Active
+		// users (a scene mid-frame) keep their objects alive via shared_ptr;
+		// only future Find* calls miss. Used by ProjectModule on game-load.
+		void Clear();
+
 		std::shared_ptr<Skeleton> CreateSkeleton(const std::string& strTag, const std::vector<BONE>& vecBone);
 		std::shared_ptr<Skeleton> FindSkeleton(const std::string& strTag)	const;
 		std::shared_ptr<Sequence> CreateSequence(const std::string& strTag);

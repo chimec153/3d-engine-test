@@ -211,6 +211,7 @@ namespace Engine
 
 		CreateBindable("MultiPS", TEXT("anisotropic_microfacet.hlsl"), "PS_Multi");
 		CreateBindable("ShadowPS", TEXT("Shadow.hlsl"), "ShadowPS");
+		CreateBindable("CustomDepthCompositePS", TEXT("customdepth_composite.hlsl"), "PS_CustomDepthComposite");
 
 		CreateBindable("anisotropic_microfacet PS_NoTexture", TEXT("anisotropic_microfacet.hlsl"), "PS_NoTexture");
 		CreateBindable("anisotropic_microfacet PS_Terrain", TEXT("anisotropic_microfacet.hlsl"), "PS_Terrain");
@@ -592,4 +593,12 @@ namespace Engine
 
 		CreateBindable("PaperBurn", TEXT("DefaultBurn.png"), TEXTURE_PATH, 4);
 	}
+
+	// Force instantiation of Clear() in Engine.dll for types the editor
+	// resets on project load (ProjectModule::Load). Without these, the
+	// template member function never gets compiled into Engine.dll and
+	// dllimport from Editor.exe ends with an unresolved external.
+	template ENGINE_DLL void BindableManager<Mesh>::Clear();
+	template ENGINE_DLL void BindableManager<Texture>::Clear();
+	template ENGINE_DLL void BindableManager<Material>::Clear();
 }

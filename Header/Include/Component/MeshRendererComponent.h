@@ -44,6 +44,12 @@ namespace Engine
 		RENDER_LAYER m_eRenderLayer;
 		size_t       m_iInstanceKey;
 
+		// Unreal-style CustomDepth opt-in. When true, RenderManager's
+		// RenderCustomDepth() pass redraws this mesh to a depth-only target
+		// so a downstream composite can detect occluded pixels (player visible
+		// through voxel walls, outline targets, etc.).
+		bool         m_bRenderCustomDepth = false;
+
 	public:
 		// Direct accessors / mutators (mirror Drawable's existing API).
 		void SetMesh(const std::shared_ptr<class Mesh>& p);
@@ -87,6 +93,9 @@ namespace Engine
 
 		void SetRenderLayer(RENDER_LAYER eLayer);
 		RENDER_LAYER GetRenderLayer() const;
+
+		void EnableCustomDepth(bool b) { m_bRenderCustomDepth = b; }
+		bool IsCustomDepthEnabled() const { return m_bRenderCustomDepth; }
 
 		size_t GetInstanceKey() const;
 		void   UpdateInstanceKey();
