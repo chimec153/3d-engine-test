@@ -4,6 +4,9 @@
 #include "Transform.h"
 #include "ColliderLine.h"
 #include "Camera.h"
+#ifdef _DEBUG
+#include "../Render/RenderManager.h"
+#endif
 
 Engine::ColliderOBB::ColliderOBB()	:
 	Collider()
@@ -166,8 +169,55 @@ void Engine::ColliderOBB::PostUpdate(float fDeltaTime)
 
 void Engine::ColliderOBB::PreDraw(float fDeltaTime)
 {
-	// Phase E7 — debug visualization removed.
 	__super::PreDraw(fDeltaTime);
+
+#ifdef _DEBUG
+	// Wireframe overlay — 8 corners + 12 edges of the OBB. m_tInfo.vAxis[i]
+	// already encodes both direction and *half-length-times-2* (PostUpdate
+	// sets vAxis[i] = unitAxis * m_vScaleOffset[i]), so the half-extent
+	// along each axis is |vAxis[i]| / 2, and the corner-offset is
+	// vAxis[i] * 0.5 * signCombo.
+	auto* pRM = RenderManager::GetInst();
+	if (!pRM->IsDebugDrawColliders()) return;
+
+	const Vector3& c  = m_tInfo.vCenter;
+	const Vector3  ax = m_tInfo.vAxis[0] * 0.5f;
+	const Vector3  ay = m_tInfo.vAxis[1] * 0.5f;
+	const Vector3  az = m_tInfo.vAxis[2] * 0.5f;
+
+	// 8 corners indexed by (sx, sy, sz) ∈ {-1, +1}^3.
+	auto corner = [&](int sx, int sy, int sz)
+	{
+		return c + ax * static_cast<float>(sx)
+		         + ay * static_cast<float>(sy)
+		         + az * static_cast<float>(sz);
+	};
+
+	const Vector3 c000 = corner(-1, -1, -1);
+	const Vector3 c100 = corner(+1, -1, -1);
+	const Vector3 c010 = corner(-1, +1, -1);
+	const Vector3 c110 = corner(+1, +1, -1);
+	const Vector3 c001 = corner(-1, -1, +1);
+	const Vector3 c101 = corner(+1, -1, +1);
+	const Vector3 c011 = corner(-1, +1, +1);
+	const Vector3 c111 = corner(+1, +1, +1);
+
+	// Bottom rectangle (sz = -1)
+	pRM->AddDebugLine(c000, c100);
+	pRM->AddDebugLine(c100, c110);
+	pRM->AddDebugLine(c110, c010);
+	pRM->AddDebugLine(c010, c000);
+	// Top rectangle (sz = +1)
+	pRM->AddDebugLine(c001, c101);
+	pRM->AddDebugLine(c101, c111);
+	pRM->AddDebugLine(c111, c011);
+	pRM->AddDebugLine(c011, c001);
+	// Vertical edges
+	pRM->AddDebugLine(c000, c001);
+	pRM->AddDebugLine(c100, c101);
+	pRM->AddDebugLine(c110, c111);
+	pRM->AddDebugLine(c010, c011);
+#endif
 }
 
 std::shared_ptr<Engine::Component> Engine::ColliderOBB::Clone()

@@ -12,6 +12,8 @@ namespace Engine
 
 namespace Client
 {
+    class EnemyCountHUD;
+
     class GAME_DLL GameScene :
         public Engine::Scene
     {
@@ -25,10 +27,21 @@ namespace Client
         // / break / place; lifetime is bound to the scene.
         std::unique_ptr<Engine::VoxelWorld> m_pVoxelWorld;
 
+        // HPBar now lives as a UIControl-derived Component on a
+        // dedicated GameObject in the default layer (created in Init).
+        // Its child UIRenderers self-register with RenderManager via
+        // their own PreDraw, so the Scene holds no direct reference
+        // and re-registers nothing each frame.
+
+        // Top-right debug HUD showing the current live enemy count as a
+        // procedural 5x7 bitmap-font number. Scene-owned plain class
+        // (draws a procedural digit atlas — different render path).
+        std::unique_ptr<EnemyCountHUD> m_pEnemyCountHUD;
+
         // Periodic enemy spawning — drops an Enemy at a random angle
         // around the player every m_fEnemySpawnInterval seconds.
         float m_fEnemySpawnAcc      = 0.f;
-        float m_fEnemySpawnInterval = 2.0f;
+        float m_fEnemySpawnInterval = 1.f;
         // Slow chase speed for testing; raise later for tuned gameplay.
         float m_fEnemyTestSpeed     = 1.0f;
         // Ring radius (cells) around the player where enemies materialise.

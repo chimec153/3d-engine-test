@@ -4,6 +4,11 @@
 #include "Animation.h"
 #include "PointLight.h"
 #include "Camera.h"
+#include "VertexShader.h"
+#include "PixelShader.h"
+#include "Texture.h"
+#include "Topology.h"
+#include "../Core/Graphics.h"
 #include "../Render/RenderManager.h"
 
 namespace Engine
@@ -64,10 +69,11 @@ namespace Engine
 	void UIRenderer::Bind()
 	{
 		// Phase E5 — Drawable::BindChild used to bind the UIRenderer's own
-		// Bindable child list (shaders/topology/etc.). Stripped for the
-		// Component shell; future re-introduction should host this on a
-		// GameObject paired with a MeshRendererComponent providing those
-		// bindable slots.
+		// Bindable child list (shaders/topology/etc.). The Component-shell
+		// migration moved those slots up to UIRenderer itself (SetVS /
+		// SetPS / SetTexture / SetTopology) so a Component-only UI
+		// element can drive its draw through here without a paired
+		// MeshRendererComponent.
 
 		if (m_pCamera)
 		{
@@ -85,6 +91,11 @@ namespace Engine
 			m_pParentTransform->Bind();
 		}
 
+		if (m_pVS)       m_pVS->Bind();
+		if (m_pPS)       m_pPS->Bind();
+		if (m_pTexture)  m_pTexture->Bind();
+		if (m_pTopology) m_pTopology->Bind();
+
 		if (m_pParentAnimation)
 		{
 			m_pParentAnimation->SetFinalBuffer();
@@ -92,7 +103,30 @@ namespace Engine
 
 		if (m_pParentMesh)
 		{
+			// Clear the input layout: the UI VS pipeline reads only
+			// SV_VertexID and never consumes VB inputs. A leftover IL
+			// from the previous (opaque) pass would mismatch the bound
+			// VB or VS signature; null IL keeps the IA passive while
+			// Mesh::Draw still binds a VB.
+			Graphics::GetInst()->GetDeviceContext()->IASetInputLayout(nullptr);
+			Graphics::GetInst()->GetBindCache().pBoundIL = nullptr;
+
 			m_pParentMesh->Draw();
+		}
+
+		// Tear down the shader / texture state we set so a subsequent
+		// pass starts from a clean slot 0 / VS / PS. Mirrors the manual
+		// cleanup HPBar used to do at the end of its render — moved here
+		// once UIRenderer owns the shader binding.
+		if (m_pVS || m_pPS || m_pTexture)
+		{
+			auto* pDC = Graphics::GetInst()->GetDeviceContext();
+			ID3D11ShaderResourceView* pNullSRV[1] = { nullptr };
+			pDC->PSSetShaderResources(0, 1, pNullSRV);
+			pDC->VSSetShaderResources(0, 1, pNullSRV);
+			if (m_pVS) pDC->VSSetShader(nullptr, nullptr, 0);
+			if (m_pPS) pDC->PSSetShader(nullptr, nullptr, 0);
+			Graphics::GetInst()->ResetBindCache();
 		}
 	}
 

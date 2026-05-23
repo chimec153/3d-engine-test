@@ -23,6 +23,14 @@
 #include <string>
 #include <stdio.h>
 #include <tchar.h>
+// FBX SDK DLL bindings — without FBXSDK_SHARED the headers default to
+// the static-link signature where class statics (FbxAnimStack::ClassId,
+// FbxLayerElement::sTextureChannelNames, FbxSystemUnit::m, ...) are
+// expected to be defined in the linked .lib. Switching the link line
+// to libfbxsdk.lib (DLL import lib) requires this define so the headers
+// emit __declspec(dllimport) annotations and the linker resolves those
+// statics through the DLL instead.
+#define FBXSDK_SHARED
 #include "fbxsdk/scene/geometry/fbxlayer.h"
 #include <fbxsdk.h>
 #include <memory>
@@ -32,7 +40,18 @@
 
 #pragma comment(lib, "zlib-md.lib")
 #pragma comment(lib, "libxml2-md.lib")
-#pragma comment(lib, "libfbxsdk-md.lib")
+// FBX SDK — link against the DLL via its import lib (libfbxsdk.lib +
+// libfbxsdk.dll) instead of the static "-md" archive. The static lib
+// ships in this repo only as the Debug (/MDd) build, which made Release
+// configurations error with _ITERATOR_DEBUG_LEVEL / RuntimeLibrary
+// mismatches against /MD client objects. The DLL form is CRT-agnostic
+// at the API boundary so the same Engine.dll links under both configs.
+#ifdef _DEBUG
+	//#pragma comment(lib, "libfbxsdk-md.lib")
+	#pragma comment(lib, "libfbxsdk.lib")
+#else
+	#pragma comment(lib, "libfbxsdk.lib")
+#endif
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")

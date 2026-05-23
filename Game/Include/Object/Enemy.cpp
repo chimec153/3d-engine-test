@@ -2,6 +2,10 @@
 #include "Core/ObjectFactory.h"
 REGISTER_GAMEOBJECT(Client::Enemy, Enemy)
 #include "Orb.h"
+#include "Bullet.h"
+#include "Attackable.h"
+#include "Player.h"
+#include "../GameDefs.h"
 #include "Scene/Scene.h"
 #include "Scene/Layer.h"
 #include "Bindable/Transform.h"
@@ -174,8 +178,20 @@ namespace Client
         {
             m_pCollider->SetRadius(0.35f);
             m_pCollider->SetOffset({ 0.f, 0.3f, 0.f });
+            // Enemy body collides with player (frogclaw-style melee) and
+            // bullets (taking damage). Filtering eliminates the big
+            // ENEMY×ENEMY cross product that dominated pair counts as
+            // spawn density climbed.
+            m_pCollider->SetGroup(Engine::COLLISION_GROUP::ENEMY);
+            m_pCollider->SetMask(Engine::COLLISION_GROUP::PLAYER
+                               | Engine::COLLISION_GROUP::BULLET);
             m_pCollider->SetCallBack(Engine::COLLISION_TYPE::BEGIN, this, &Enemy::OnCollision);
         }
+
+        // Melee attack source. Stats are modest — Attackable picks a random
+        // value in [min, max] per hit, and Player::OnHitBy routes it through
+        // its own Attackable so the existing Hit/Die state transitions fire.
+        m_pAttackable = AddComponent<Attackable>("attackable", 1, 1, 2);
 
         return true;
     }
@@ -187,11 +203,17 @@ namespace Client
         // other enemies, future melee hitboxes) pass through.
         if (pDest->GetTag() != "bullet_body") return;
 
-        // Consume the bullet on impact.
+        // Per-weapon damage. The bullet owns its own OnHit handling now
+        // (Vanish vs Reflect vs Multiply vs NoChange), so we no longer
+        // InActivate it here — that would short-circuit reflect/orbital
+        // weapons that need to keep flying after impact.
+        int iDmg = 1;
         if (auto* pBulletGO = pDest->GetGameObjectOwner())
-            pBulletGO->InActivate();
+            if (auto* pBullet = dynamic_cast<Bullet*>(pBulletGO))
+                iDmg = pBullet->GetDamage();
 
-        if (--m_iHP <= 0)
+        m_iHP -= iDmg;
+        if (m_iHP <= 0)
         {
             // Drop a pickup orb at the enemy's current position before
             // deactivating — Scene's prune pass removes the corpse next
@@ -238,25 +260,27 @@ namespace Client
         }
     }
 
-    void Enemy::SetSpawnCell(int x, int y, int z)
+    void Enemy::SetSpawnCell(int x, int z)
     {
-        m_iCellX = x; m_iCellY = y; m_iCellZ = z;
-        if (m_pTransform) m_pTransform->SetPosition(CellCenter(x, y, z));
+        m_iCellX = x; m_iCellZ = z;
+        if (m_pTransform) m_pTransform->SetPosition(CellCenter(x, z));
         m_Path.clear();
         m_iPathIdx    = 0;
         m_fBreakAccum = 0.f;
         m_bHasPlan    = false;
     }
 
-    Engine::Vector3 Enemy::CellCenter(int x, int y, int z) const
+    Engine::Vector3 Enemy::CellCenter(int x, int z) const
     {
+        // 2D world — enemies stand on top of the floor block (y=0 cell
+        // occupies y=0..1, so the body sits at y=kWallY).
         return Engine::Vector3(
             static_cast<float>(x) + 0.5f,
-            static_cast<float>(y),
+            static_cast<float>(kWallY),
             static_cast<float>(z) + 0.5f);
     }
 
-    bool Enemy::ResolveTargetCell(int& tx, int& ty, int& tz) const
+    bool Enemy::ResolveTargetCell(int& tx, int& tz) const
     {
         auto pTarget = m_TargetObj.lock();
         if (!pTarget) return false;
@@ -265,24 +289,10 @@ namespace Client
         const Engine::Vector3& vPos = pTransform->GetPosition();
         tx = static_cast<int>(std::floor(vPos.x));
         tz = static_cast<int>(std::floor(vPos.z));
-        // Target y = the empty cell the player stands in. Pathfinder's goal
-        // test ignores y (it can climb 1 / fall any), but keeping ty accurate
-        // makes it robust if we ever bring y into the heuristic. Surface +
-        // 1 is preferred over floor(vPos.y) because the player transform
-        // pivot sits at the waist, not the feet.
-        if (m_pVoxelWorld)
-        {
-            const int surf = m_pVoxelWorld->GetSurfaceHeight(tx, tz, 0, 64);
-            ty = surf + 1;
-        }
-        else
-        {
-            ty = m_iCellY;
-        }
         return true;
     }
 
-    bool Enemy::RecomputePathTo(int tx, int ty, int tz)
+    bool Enemy::RecomputePathTo(int tx, int tz)
     {
         m_Path.clear();
         m_iPathIdx = 0;
@@ -290,8 +300,8 @@ namespace Client
         if (!m_pVoxelWorld) return false;
         const bool bOk = Pathfinder::FindPath(
             *m_pVoxelWorld,
-            m_iCellX, m_iCellY, m_iCellZ,
-            tx, ty, tz,
+            m_iCellX, m_iCellZ,
+            tx, tz,
             m_fSpeed, 64, m_Path);
         if (bOk)
         {
@@ -308,8 +318,31 @@ namespace Client
 
         if (!m_pVoxelWorld || !m_pTransform) return;
 
-        int tx, ty, tz;
-        if (!ResolveTargetCell(tx, ty, tz))
+        // Periodic melee — when the target sits within m_fAttackRange the
+        // cooldown advances and a hit lands on expiry. Runs before pathing
+        // so a melee strike fires even when we've already arrived at the
+        // target's cell (the early-out below skips pathing in that case).
+        m_fAttackAcc += fDeltaTime;
+        if (m_fAttackAcc >= m_fAttackCooldown && m_pAttackable)
+        {
+            if (auto pTarget = m_TargetObj.lock())
+            {
+                if (auto pTargetTr = pTarget->GetComponent<Engine::Transform>())
+                {
+                    const Engine::Vector3 vDelta =
+                        pTargetTr->GetPosition() - m_pTransform->GetPosition();
+                    if (vDelta.Length() <= m_fAttackRange)
+                    {
+                        if (auto* pPlayer = dynamic_cast<Player*>(pTarget.get()))
+                            pPlayer->OnHitBy(m_pAttackable.get());
+                        m_fAttackAcc = 0.f;
+                    }
+                }
+            }
+        }
+
+        int tx, tz;
+        if (!ResolveTargetCell(tx, tz))
         {
             // Lost the target — stand still.
             return;
@@ -331,18 +364,18 @@ namespace Client
             m_bHasPlan && (tx != m_iPlannedTargetX || tz != m_iPlannedTargetZ);
         if (!m_bHasPlan || m_iPathIdx >= m_Path.size() || bTargetMoved)
         {
-            if (!RecomputePathTo(tx, ty, tz) || m_Path.empty()) return;
+            if (!RecomputePathTo(tx, tz) || m_Path.empty()) return;
         }
 
         Pathfinder::PathStep& step = m_Path[m_iPathIdx];
 
         // World may have changed since planning — another enemy broke the
-        // block, the player placed a new one, etc. Replan on mismatch.
-        const Engine::BlockType nowBlock = m_pVoxelWorld->GetBlock(step.x, step.y, step.z);
+        // wall, the player placed a new one, etc. Replan on mismatch.
+        const Engine::BlockType nowBlock = m_pVoxelWorld->GetBlock(step.x, kWallY, step.z);
         const bool bSolidNow = Engine::IsSolid(nowBlock);
         if (step.bBreak != bSolidNow)
         {
-            RecomputePathTo(tx, ty, tz);
+            RecomputePathTo(tx, tz);
             return;
         }
 
@@ -351,21 +384,22 @@ namespace Client
             const float fNeeded = Engine::BlockBreakTime(nowBlock);
             if (fNeeded < 0.f)
             {
-                RecomputePathTo(tx, ty, tz);
+                RecomputePathTo(tx, tz);
                 return;
             }
             m_fBreakAccum += fDeltaTime;
             if (m_fBreakAccum >= fNeeded)
             {
-                m_pVoxelWorld->SetBlock(step.x, step.y, step.z, Engine::BlockType::Air);
+                m_pVoxelWorld->SetBlock(step.x, kWallY, step.z, Engine::BlockType::Air);
                 m_fBreakAccum = 0.f;
                 step.bBreak   = false;
             }
             return;
         }
 
-        // Plain movement: slide toward the cell center at fSpeed.
-        const Engine::Vector3 vTarget = CellCenter(step.x, step.y, step.z);
+        // Plain movement: slide toward the cell center at fSpeed. Y is
+        // fixed (kWallY) so no per-frame surface snap is needed.
+        const Engine::Vector3 vTarget = CellCenter(step.x, step.z);
         Engine::Vector3 vCur = m_pTransform->GetPosition();
         Engine::Vector3 vDir = vTarget - vCur;
         const float fDist = vDir.Length();
@@ -375,7 +409,6 @@ namespace Client
         {
             m_pTransform->SetPosition(vTarget);
             m_iCellX = step.x;
-            m_iCellY = step.y;
             m_iCellZ = step.z;
             ++m_iPathIdx;
         }
@@ -384,15 +417,5 @@ namespace Client
             vDir.Normalize();
             m_pTransform->SetPosition(vCur + vDir * fMove);
         }
-
-        // Snap Y to the current column's surface — mirrors Player::Input.
-        // Without this, the linear 3D lerp from (cx, cy, ...) to (nx, cy+1,
-        // ...) on a step-up move slides the mesh diagonally and clips through
-        // the higher block partway across the cell.
-        const Engine::Vector3 vNow = m_pTransform->GetPosition();
-        const int wx = static_cast<int>(std::floor(vNow.x));
-        const int wz = static_cast<int>(std::floor(vNow.z));
-        const int surf = m_pVoxelWorld->GetSurfaceHeight(wx, wz, 0, 64);
-        m_pTransform->SetY(static_cast<float>(surf + 1));
     }
 }

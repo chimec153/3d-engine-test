@@ -130,6 +130,15 @@ namespace Engine
 		{
 			UpdateCameraRelateMatrix(pCamera);
 		}
+		else if (m_eCameraType == CAMERA_TYPE::UI)
+		{
+			// UI-flagged Transform with no UI camera registered: treat
+			// matWorld (Scale × Rotation × Translation) as the final
+			// clip-space matrix so the UI VS (output.pos = pos × g_matTransform)
+			// renders directly in NDC. Lets HPBar / future UI Components
+			// position quads in [-1, 1]² without an actual UI camera.
+			m_tBuffer.matWorldViewProject = m_tBuffer.matWorld;
+		}
 
 		const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();
 

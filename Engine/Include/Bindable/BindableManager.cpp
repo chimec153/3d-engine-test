@@ -2,6 +2,13 @@
 #include "Texture.h"
 #include "Transform.h"
 #include "Box.h"
+// VertexShader's full type is required so the post-IL attachment code in
+// BindableManager<InputLayout>::BindableManager() can call SetInstInputLayout
+// through a shared_ptr<VertexShader>. The existing CreateBindable<VertexShader>
+// calls earlier in this file only need a forward declaration (they pass
+// shared_ptrs through without dereferencing), so the include wasn't pulled
+// in before.
+#include "VertexShader.h"
 #ifdef _DEBUG
 #include "Camera.h"
 #endif
@@ -162,6 +169,13 @@ namespace Engine
 		CreateBindable("FluidVS", TEXT("VertexShader.hlsl"), "VS_FLUID");
 		CreateBindable("EnvironmentVS", TEXT("VertexShader.hlsl"), "VS_ENV");
 		CreateBindable("UIVS", TEXT("UI.fx"), "VS_UI");
+
+#ifdef _DEBUG
+		// Position-only VS for the collider wireframe debug pass. Pre-
+		// transformed world-space verts; the VS just multiplies by
+		// g_matTransform (set to view*proj by RenderManager's debug flush).
+		CreateBindable("DebugLineVS", TEXT("VertexShader.hlsl"), "VS");
+#endif
 	}
 
 	template<>
@@ -207,6 +221,8 @@ namespace Engine
 		CreateBindable("DebugPSInst", TEXT("Debug.hlsl"), "DebugPSInst");
 		CreateBindable("DebugAlphaPS", TEXT("Debug.hlsl"), "DebugAlphaPS");
 		CreateBindable("DebugAlphaPSInst", TEXT("Debug.hlsl"), "DebugAlphaPSInst");
+		// Pairs with DebugLineVS; reads g_vDiffuseColor uniform for tint.
+		CreateBindable("DebugLinePS", TEXT("Debug.hlsl"), "PS_DebugLine");
 #endif
 
 		CreateBindable("MultiPS", TEXT("anisotropic_microfacet.hlsl"), "PS_Multi");
@@ -480,9 +496,52 @@ namespace Engine
 
 		CreateBindable("Standard_Inst", pVSSkinInst, descSkinInst, static_cast<int>(sizeof(descSkinInst) / sizeof(D3D11_INPUT_ELEMENT_DESC)), 312);
 
+		// Back-fill instanced input layouts onto their matching VS
+		// bindables. VertexShader bindables are constructed BEFORE the
+		// InputLayout pool exists (template specialization ordering), so
+		// VS::m_pInputLayoutInst was left null at ctor time. RenderManager's
+		// TryRenderInstancedBucket fast path reads
+		// pInstVS->GetInstInputLayout() and bails when null, so without
+		// this attachment every "Inst" VS silently falls back to per-MR
+		// solo rendering.
+		//
+		// "Standard_Inst" was created with VSSkinInst for layout validation,
+		// but VSStandardInstIn (its input struct) is shared by both
+		// VSSkinInst and VSNoSkinInst — D3D11 allows reusing the IL across
+		// any VS whose signature matches, so both shaders attach the same
+		// IL pointer.
+		//
+		// Critical: we're still INSIDE BindableManager<InputLayout>'s ctor,
+		// so the singleton's m_pInst is not yet assigned. Calling
+		// StaticFindBindable<InputLayout>(...) here re-enters GetInst, sees
+		// null, and constructs a SECOND BindableManager — infinite
+		// recursion / stack overflow. Use the local FindBindable (just a
+		// map lookup on m_mapBindable we just populated) instead. The
+		// VertexShader manager is a different singleton fully built by
+		// now, so StaticFindBindable<VertexShader> is safe.
+		auto pTPNTInst     = FindBindable("TPNT_Inst");
+		auto pStandardInst = FindBindable("Standard_Inst");
+		if (auto pVSInst = StaticFindBindable<VertexShader>("anisotropic_microfacet VSInst"))
+		{
+			if (pTPNTInst) pVSInst->SetInstInputLayout(pTPNTInst);
+		}
+		if (pVSSkinInst && pStandardInst)
+			pVSSkinInst->SetInstInputLayout(pStandardInst);
+		if (auto pVSNoSkinInst = StaticFindBindable<VertexShader>("anisotropic_microfacet VSNoSkinInst"))
+		{
+			if (pStandardInst) pVSNoSkinInst->SetInstInputLayout(pStandardInst);
+		}
+
 		D3D11_INPUT_ELEMENT_DESC descP = { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 };
 
 		CreateBindable("P", StaticFindBindable<VertexShader>("PointLightVS"), &descP, static_cast<int>(sizeof(descP) / sizeof(D3D11_INPUT_ELEMENT_DESC)));
+
+#ifdef _DEBUG
+		// Position-only input layout dedicated to the collider wireframe
+		// debug pass. Pairs with DebugLineVS (consumes Position semantic).
+		D3D11_INPUT_ELEMENT_DESC descDebugLine = { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 };
+		CreateBindable("DebugLineIL", StaticFindBindable<VertexShader>("DebugLineVS"), &descDebugLine, 1);
+#endif
 
 		D3D11_INPUT_ELEMENT_DESC pDecalInstDesc[] =
 		{
@@ -580,6 +639,15 @@ namespace Engine
 #endif
 
 		CreateBindable("Box", Box::CreateTextureVertex<VertexStandard>(), Box::GetTextureIndex());
+
+		// 4-vertex unit quad for UIRenderer-hosted UI elements (HPBar et
+		// al). The UI VS reads g_vUIPosition[SV_VertexID] so the actual
+		// VB data is never consumed — we just need *something* to make
+		// Mesh::Draw issue Draw(4, 0). No index buffer → triangle-strip
+		// topology over 4 verts gives the two triangles of a quad.
+		CreateBindable("UIQuad",
+			std::vector<VertexStandard>(4),
+			std::vector<unsigned int>{});
 	}
 
 	template <>

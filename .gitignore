@@ -1458,3 +1458,5 @@ Client/Bin/Client_Debug.exe
 .vs/230301/v17/Browse.VC.db-wal
 .vs/230301/v17/fileList.bin
 .vs/230301/v17/Solution.VC.db
+/Game/BinObj
+Game/Bin/Game_Debug.exp

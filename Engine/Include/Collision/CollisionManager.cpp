@@ -491,54 +491,156 @@ namespace Engine
 
 	void CollisionManager::Collision(CAMERA_TYPE eType, float fDeltaTime)
 	{
-		if (m_tChannel[static_cast<int>(eType)].m_ColliderList.size() < 2)
+		auto& vec = m_tChannel[static_cast<int>(eType)].m_ColliderList;
+		const size_t N = vec.size();
+		if (N < 2)
 		{
-			m_tChannel[static_cast<int>(eType)].m_ColliderList.clear();
+			vec.clear();
 			return;
 		}
 
-		std::list<Collider*>::iterator iterSrc = m_tChannel[static_cast<int>(eType)].m_ColliderList.begin();
-		std::list<Collider*>::iterator iterEnd = m_tChannel[static_cast<int>(eType)].m_ColliderList.end();
+		// 2D uniform spatial grid (xz plane). After Phase V7 the game runs
+		// on a flat-world voxel grid, so a 2D grid is the natural fit. Each
+		// collider lands in the cell of its host Transform's xz position;
+		// the cell size is chosen larger than the typical collider radius
+		// so colliders rarely span multiple cells (the neighbour pass below
+		// handles the cell-boundary case via 4 forward-direction cells).
+		//
+		// Previously this was an O(N²) all-pairs loop that the Release
+		// profile showed at ~55% self CPU even after vector + cache
+		// improvements — the per-pair dispatch dominated. Grid cuts pair
+		// count from N(N-1)/2 to roughly cells × (avg-per-cell)² + pair
+		// edges between adjacent cells.
+		constexpr float kCellSize = 4.0f;
 
-		--iterEnd;
+		auto cellKey = [](int cx, int cz) -> int64_t {
+			// Pack two int32s, offset to keep both halves non-negative so
+			// the resulting key has a stable bit pattern.
+			constexpr int32_t kBias = 1 << 30;
+			const uint64_t ux = static_cast<uint32_t>(cx + kBias);
+			const uint64_t uz = static_cast<uint32_t>(cz + kBias);
+			return static_cast<int64_t>((ux << 32) | uz);
+		};
 
-		for (; iterSrc != iterEnd; ++iterSrc)
+		struct GridCell
 		{
-			std::list<Collider*>::iterator iterDest = iterSrc;
-			std::list<Collider*>::iterator iterDestEnd = m_tChannel[static_cast<int>(eType)].m_ColliderList.end();
+			int cx;
+			int cz;
+			std::vector<Collider*> colliders;
+		};
 
-			++iterDest;
+		std::unordered_map<int64_t, GridCell> grid;
+		grid.reserve(N);
 
-			for (; iterDest != iterDestEnd; ++iterDest)
+		// Bucket each collider into its xz cell via the cached host
+		// Transform position. Colliders without a host (degenerate state)
+		// are skipped — Collision::CollisionSphereToSphere and friends
+		// short-circuit on null host anyway so they never produced hits.
+		for (size_t i = 0; i < N; ++i)
+		{
+			Collider* p = vec[i];
+			if (!p) continue;
+			Transform* pTr = p->GetHostTransformRaw();
+			if (!pTr) continue;
+			const Vector3& pos = pTr->GetPosition();
+			const int cx = static_cast<int>(std::floor(pos.x / kCellSize));
+			const int cz = static_cast<int>(std::floor(pos.z / kCellSize));
+			const int64_t key = cellKey(cx, cz);
+			auto it = grid.find(key);
+			if (it == grid.end())
 			{
-				if ((*iterSrc)->Collision(*iterDest, fDeltaTime))
-				{
-					if (!(*iterSrc)->HasPrevCollider(*iterDest))
-					{
-						(*iterSrc)->AddPrevCollider(*iterDest);
-						(*iterDest)->AddPrevCollider(*iterSrc);
+				GridCell c{ cx, cz, {} };
+				c.colliders.reserve(4);
+				c.colliders.push_back(p);
+				grid.emplace(key, std::move(c));
+			}
+			else
+			{
+				it->second.colliders.push_back(p);
+			}
+		}
 
-						(*iterSrc)->Call(COLLISION_TYPE::BEGIN, *iterDest, fDeltaTime);
-						(*iterDest)->Call(COLLISION_TYPE::BEGIN, *iterSrc, fDeltaTime);
-					}
-					else
-					{
-						(*iterSrc)->Call(COLLISION_TYPE::STAY, *iterDest, fDeltaTime);
-						(*iterDest)->Call(COLLISION_TYPE::STAY, *iterSrc, fDeltaTime);
-					}
+		// Inline pair test — same semantics as the old N² loop.
+		auto checkPair = [fDeltaTime](Collider* pSrc, Collider* pDest)
+		{
+			// Object-type pair filter — cheap bitwise check, runs before
+			// the virtual Collision dispatch / HasPrevCollider scan.
+			// Both sides must want each other: A is in B's mask AND B is
+			// in A's mask. Defaults are DEFAULT / ALL so unconfigured
+			// colliders fall through unchanged.
+			if (!(pSrc->GetGroup() & pDest->GetMask())) return;
+			if (!(pDest->GetGroup() & pSrc->GetMask())) return;
+
+			if (pSrc->Collision(pDest, fDeltaTime))
+			{
+				if (!pSrc->HasPrevCollider(pDest))
+				{
+					pSrc->AddPrevCollider(pDest);
+					pDest->AddPrevCollider(pSrc);
+
+					pSrc->Call(COLLISION_TYPE::BEGIN, pDest, fDeltaTime);
+					pDest->Call(COLLISION_TYPE::BEGIN, pSrc, fDeltaTime);
 				}
-				else if ((*iterSrc)->HasPrevCollider(*iterDest))
+				else
 				{
-					(*iterSrc)->DeletePrevCollider(*iterDest);
-					(*iterDest)->DeletePrevCollider(*iterSrc);
+					pSrc->Call(COLLISION_TYPE::STAY, pDest, fDeltaTime);
+					pDest->Call(COLLISION_TYPE::STAY, pSrc, fDeltaTime);
+				}
+			}
+			else if (pSrc->HasPrevCollider(pDest))
+			{
+				pSrc->DeletePrevCollider(pDest);
+				pDest->DeletePrevCollider(pSrc);
 
-					(*iterSrc)->Call(COLLISION_TYPE::LAST, *iterDest, fDeltaTime);
-					(*iterDest)->Call(COLLISION_TYPE::LAST, *iterSrc, fDeltaTime);
+				pSrc->Call(COLLISION_TYPE::LAST, pDest, fDeltaTime);
+				pDest->Call(COLLISION_TYPE::LAST, pSrc, fDeltaTime);
+			}
+		};
+
+		// Forward-direction neighbour offsets. Of the 8 surrounding cells,
+		// we visit only 4 — pairs (A, B) where A is in this cell and B
+		// is in the neighbour cell. Visiting the *reverse* directions
+		// from the neighbour would re-check the same pair. Choosing
+		// (+1, 0), (-1, +1), (0, +1), (+1, +1) gives a half-plane that
+		// guarantees each unordered pair is visited exactly once.
+		static const int kForwardDX[4] = {  1, -1,  0,  1 };
+		static const int kForwardDZ[4] = {  0,  1,  1,  1 };
+
+		for (auto& kv : grid)
+		{
+			GridCell& cell = kv.second;
+			const auto& cellVec = cell.colliders;
+			const size_t M = cellVec.size();
+
+			// Same-cell pairs.
+			for (size_t i = 0; i + 1 < M; ++i)
+			{
+				Collider* pSrc = cellVec[i];
+				for (size_t j = i + 1; j < M; ++j)
+				{
+					checkPair(pSrc, cellVec[j]);
+				}
+			}
+
+			// Cross-cell pairs with forward neighbours.
+			for (int k = 0; k < 4; ++k)
+			{
+				const int64_t nkey = cellKey(cell.cx + kForwardDX[k],
+				                             cell.cz + kForwardDZ[k]);
+				auto it = grid.find(nkey);
+				if (it == grid.end()) continue;
+				const auto& nVec = it->second.colliders;
+				for (Collider* pSrc : cellVec)
+				{
+					for (Collider* pDest : nVec)
+					{
+						checkPair(pSrc, pDest);
+					}
 				}
 			}
 		}
 
-		m_tChannel[static_cast<int>(eType)].m_ColliderList.clear();
+		vec.clear();
 	}
 
 	void CollisionManager::Collision(float fDeltaTime)

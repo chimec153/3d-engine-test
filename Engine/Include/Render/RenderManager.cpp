@@ -62,6 +62,13 @@ namespace
 	{
 		if (bucket.size() < 2) return false;
 
+#ifdef _DEBUG
+		if (GetAsyncKeyState(VK_SPACE) & 0x8000)
+		{
+			return false;
+		}
+#endif
+
 		const auto& pFirst = bucket.front();
 		if (!pFirst || !pFirst->GetMesh() || !pFirst->GetVertexShader())
 			return false;
@@ -89,6 +96,43 @@ namespace
 		const int iInstSize = pInstIL->GetInstSize();
 		if (iInstSize <= 0) return false;
 
+		// Resolve the matching Inst PS. The non-Inst PS takes VSOut, but
+		// the Inst VS outputs VSInstOut (more fields, different register
+		// layout) — using the non-Inst PS produces a VS/PS linkage error
+		// on Position semantic register mismatch. The "Inst" PS variants
+		// in anisotropic_microfacet.hlsl take VSInstOut directly and read
+		// per-instance material data from the input struct instead of
+		// material textures / CB.
+		//
+		// Naming convention: original PS names use "Map" suffixes for
+		// texture variants; the Inst counterparts strip "Map" and append
+		// "Inst". Example:
+		//   "anisotropic_microfacet PS_NoDiffuseNoSpecMapNoNormalMap"
+		//   → strip Map → "anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal"
+		//   → +Inst → "anisotropic_microfacet PS_NoDiffuseNoSpecNoNormalInst"
+		std::shared_ptr<Engine::PixelShader> pInstPS;
+		if (auto pBasePS = pFirst->GetPixelShader())
+		{
+			const std::string& strBase = pBasePS->GetTag();
+			// Direct {tag}Inst lookup first — covers any PS already named
+			// to match the convention.
+			pInstPS = Engine::StaticFindBindable<Engine::PixelShader>(strBase + "Inst");
+			if (!pInstPS)
+			{
+				std::string strStripped;
+				strStripped.reserve(strBase.size());
+				for (size_t i = 0; i < strBase.size(); )
+				{
+					if (i + 3 <= strBase.size() && strBase.compare(i, 3, "Map") == 0)
+						i += 3;
+					else
+						strStripped.push_back(strBase[i++]);
+				}
+				pInstPS = Engine::StaticFindBindable<Engine::PixelShader>(strStripped + "Inst");
+			}
+		}
+		if (!pInstPS) return false;
+
 		// Build per-instance data buffer.
 		const int iCount = static_cast<int>(bucket.size());
 		std::vector<char> data(static_cast<size_t>(iInstSize) * iCount, 0);
@@ -115,20 +159,32 @@ namespace
 		// bucket since GetInstanceKey hashes Mesh/VS/PS/Material/Anim).
 		pInstIL->Bind();
 		pInstVS->Bind();
-		if (pFirst->GetPixelShader()) pFirst->GetPixelShader()->Bind();
+		pInstPS->Bind();
 		if (pFirst->GetMaterial())    pFirst->GetMaterial()->Bind();
 		for (const auto& tex : pFirst->GetTextures()) if (tex) tex->Bind();
 		for (const auto& b : pFirst->GetOtherBindables())
 		{
-			if (b && (b->GetObjectType() == Engine::OBJECT_TYPE::BIND ||
-			          b->GetObjectType() == Engine::OBJECT_TYPE::COLLIDER))
+			if (!b) continue;
+			// Skip the per-MR InputLayout — every game-side MR registers
+			// the non-instanced "Standard" IL via AddBindable, which would
+			// IASetInputLayout AFTER pInstIL->Bind() and overwrite our
+			// instanced layout with one that lacks per-instance fields.
+			// The D3D11 draw then fails with "VS requires (Material, 3) /
+			// (JointSocket, 0..3) / (Bone, 0)" linkage errors because the
+			// bound IL is the non-inst variant. Topology is fine to
+			// re-bind — it's bucket-uniform.
+			if (b->GetBindableType() == Engine::BINDABLE_TYPE::INPUTLAYOUT)
+				continue;
+
+			if (b->GetObjectType() == Engine::OBJECT_TYPE::BIND ||
+			    b->GetObjectType() == Engine::OBJECT_TYPE::COLLIDER)
 				b->Bind();
 		}
 
 		pFirst->GetMesh()->DrawInst(iCount, iInstSize, pInstBuffer, pFirst->MakeMaterialResolver());
 
-		if (pFirst->GetPixelShader()) pFirst->GetPixelShader()->PostBind();
-		if (pFirst->GetMaterial())    pFirst->GetMaterial()->PostBind();
+		pInstPS->PostBind();
+		if (pFirst->GetMaterial()) pFirst->GetMaterial()->PostBind();
 		pInstVS->PostBind();
 		return true;
 	}
@@ -515,6 +571,10 @@ namespace Engine
 
 		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
 
+#ifdef _DEBUG
+		InitDebugLines();
+#endif
+
 		return true;
 	}
 
@@ -586,6 +646,11 @@ namespace Engine
 
 #ifdef _DEBUG
 		//RenderDebug();
+
+		// Collider wireframe overlay (ImGui-toggled). Drawn last so lines
+		// appear on top of post-processed image and UI without being
+		// tonemapped or blurred. Cleans m_DebugLineVertices internally.
+		FlushDebugLines();
 #endif
 
 		// Phase E7 — RenderV2 flush block removed. The sort-by-state pass
@@ -657,11 +722,18 @@ namespace Engine
 
 		// For each instance-key bucket, try the DrawInstanced fast path;
 		// fall back to per-MR solo rendering when the bucket has Animation /
-		// decorator Components / no "Inst" shader variant.
+		// decorator Components / no "Inst" shader variant. When the
+		// instanced path succeeds, record bucket.size() into
+		// m_InstancedBucketCounts so the debug HUD can surface each
+		// bucket's draw size individually.
 		for (auto& entry : sortedBuckets)
 		{
 			auto& bucket = *std::get<3>(entry);
-			if (TryRenderInstancedBucket(bucket)) continue;
+			if (TryRenderInstancedBucket(bucket))
+			{
+				m_InstancedBucketCounts.push_back(static_cast<int>(bucket.size()));
+				continue;
+			}
 			for (const auto& pMR : bucket) RenderSoloMR(pMR);
 		}
 
@@ -1157,6 +1229,12 @@ namespace Engine
 			m_CustomRenderList[i].clear();
 		}
 
+		// Reset per-frame stats. The HUD samples this in the same frame's
+		// UI render — Clear() runs after RenderUI, so the values the HUD
+		// just read for THIS frame are what get wiped here. Next frame's
+		// RenderOpaque accumulates fresh.
+		m_InstancedBucketCounts.clear();
+
 		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
 		{
 			m_LightList[i].clear();
@@ -1503,4 +1581,108 @@ namespace Engine
 
 		m_pBloomTexture->ResetSRV();
 	}
+
+#ifdef _DEBUG
+	void RenderManager::InitDebugLines()
+	{
+		m_pDebugLineVS       = StaticFindBindable<VertexShader>("DebugLineVS");
+		m_pDebugLinePS       = StaticFindBindable<PixelShader>("DebugLinePS");
+		m_pDebugLineIL       = StaticFindBindable<InputLayout>("DebugLineIL");
+		m_pDebugLineTopology = StaticFindBindable<Topology>("LineList");
+
+		// Bright yellow wireframe tint. Material owns the diffuse-colour
+		// constant buffer slot (b2 / g_vDiffuseColor) that DebugLinePS reads.
+		m_pDebugLineMaterial = std::make_shared<Material>();
+		if (m_pDebugLineMaterial)
+		{
+			m_pDebugLineMaterial->SetDiffuseColor(1.f, 0.85f, 0.1f, 1.f);
+		}
+	}
+
+	void RenderManager::AddDebugLine(const Vector3& p0, const Vector3& p1)
+	{
+		if (!m_bDebugDrawColliders) return;
+		m_DebugLineVertices.push_back(p0);
+		m_DebugLineVertices.push_back(p1);
+	}
+
+	void RenderManager::FlushDebugLines()
+	{
+		if (m_DebugLineVertices.empty()) return;
+
+		auto* pDev = Graphics::GetInst()->GetDevice();
+		auto* pCtx = Graphics::GetInst()->GetDeviceContext();
+
+		const unsigned int iNeeded = static_cast<unsigned int>(m_DebugLineVertices.size());
+
+		// Grow VB to next power of two when capacity is short.
+		if (iNeeded > m_iDebugLineVBCapacity)
+		{
+			unsigned int iCap = m_iDebugLineVBCapacity ? m_iDebugLineVBCapacity : 256;
+			while (iCap < iNeeded) iCap *= 2;
+
+			D3D11_BUFFER_DESC desc = {};
+			desc.ByteWidth           = static_cast<UINT>(sizeof(Vector3) * iCap);
+			desc.Usage               = D3D11_USAGE_DYNAMIC;
+			desc.BindFlags           = D3D11_BIND_VERTEX_BUFFER;
+			desc.CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE;
+			desc.StructureByteStride = sizeof(Vector3);
+
+			// CPtr::operator&() releases the existing buffer and hands the
+			// raw slot to CreateBuffer, which fills it with refcount 1 — no
+			// double-AddRef needed.
+			if (FAILED(pDev->CreateBuffer(&desc, nullptr, &m_pDebugLineVB)))
+			{
+				m_DebugLineVertices.clear();
+				return;
+			}
+			m_iDebugLineVBCapacity = iCap;
+		}
+
+		// Upload world-space line vertices.
+		{
+			D3D11_MAPPED_SUBRESOURCE mapped = {};
+			if (SUCCEEDED(pCtx->Map(*m_pDebugLineVB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+			{
+				memcpy(mapped.pData, m_DebugLineVertices.data(),
+					iNeeded * sizeof(Vector3));
+				pCtx->Unmap(*m_pDebugLineVB, 0);
+			}
+		}
+
+		// Bind shaders / input layout / topology.
+		if (m_pDebugLineVS)       m_pDebugLineVS->Bind();
+		if (m_pDebugLinePS)       m_pDebugLinePS->Bind();
+		if (m_pDebugLineIL)       m_pDebugLineIL->Bind();
+		if (m_pDebugLineTopology) m_pDebugLineTopology->Bind();
+
+		// Disable depth so wireframes overlay everything — including geometry
+		// drawn earlier in the frame and the post-processed back buffer.
+		if (m_pNoDepthRead) m_pNoDepthRead->Bind();
+
+		// Transform CB — vertices are pre-transformed to world space, so
+		// matWorldViewProject = view * proj only.
+		auto pCamera = Graphics::GetInst()->GetCamera();
+		if (pCamera && m_pTransformBuffer)
+		{
+			TRANSFORMBUFFER tBuf = {};
+			tBuf.matWorldViewProject = pCamera->GetViewProject();
+			tBuf.matWorldViewProject.Transpose();
+			m_pTransformBuffer->UpdateBuffer(tBuf);
+			m_pTransformBuffer->Bind();
+		}
+
+		// Colour CB (b2 / g_vDiffuseColor).
+		if (m_pDebugLineMaterial) m_pDebugLineMaterial->Bind();
+
+		// Bind VB + draw.
+		UINT stride = sizeof(Vector3);
+		UINT offset = 0;
+		ID3D11Buffer* pVB = *m_pDebugLineVB;
+		pCtx->IASetVertexBuffers(0, 1, &pVB, &stride, &offset);
+		pCtx->Draw(iNeeded, 0);
+
+		m_DebugLineVertices.clear();
+	}
+#endif
 }

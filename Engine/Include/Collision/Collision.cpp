@@ -568,10 +568,12 @@ namespace Engine
 	{
 		Vector3 vCross;
 
-		// Phase E5 — host transform via the Component's host-agnostic
-		// helper (Drawable owner first, GameObject owner fallback).
-		std::shared_ptr<Transform> pSrcTr = pSrc->GetHostTransform();
-		std::shared_ptr<Transform> pDstTr = pDest->GetHostTransform();
+		// Raw pointer accessor — this is called O(N²) per frame across
+		// all sphere pairs, so the shared_ptr ref-count traffic from the
+		// non-raw GetHostTransform was a measurable hot path. Lifetime
+		// is guaranteed by the Collider's owning GameObject.
+		Transform* pSrcTr = pSrc->GetHostTransformRaw();
+		Transform* pDstTr = pDest->GetHostTransformRaw();
 		if (!pSrcTr || !pDstTr) return false;
 
 		Vector3 vSrcVel = pSrcTr->GetVelocity();

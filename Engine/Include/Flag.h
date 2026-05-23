@@ -98,6 +98,37 @@ namespace Engine
 		END
 	};
 
+	// Object-type tag for per-collider pair filtering. Orthogonal to
+	// COLLISION_CHANNEL (which separates camera-pass: NORMAL vs UI).
+	// Each Collider stores:
+	//   m_eGroup — which group THIS collider belongs to (single bit)
+	//   m_eMask  — which groups it WANTS to collide with (OR'd bits)
+	// Pair passes filter iff (A.group & B.mask) && (B.group & A.mask).
+	// Defaults (DEFAULT / ALL) preserve the pre-filter behaviour for any
+	// collider that hasn't been categorised yet.
+	enum class COLLISION_GROUP : unsigned int
+	{
+		NONE        = 0,
+		DEFAULT     = 1u << 0,
+		PLAYER      = 1u << 1,
+		ENEMY       = 1u << 2,
+		BULLET      = 1u << 3,
+		PICKUP      = 1u << 4,
+		CAMERA_LINE = 1u << 5,
+		TERRAIN     = 1u << 6,
+		ALL         = 0xFFFFFFFFu
+	};
+
+	inline COLLISION_GROUP operator|(COLLISION_GROUP a, COLLISION_GROUP b)
+	{
+		return static_cast<COLLISION_GROUP>(
+			static_cast<unsigned int>(a) | static_cast<unsigned int>(b));
+	}
+	inline unsigned int operator&(COLLISION_GROUP a, COLLISION_GROUP b)
+	{
+		return static_cast<unsigned int>(a) & static_cast<unsigned int>(b);
+	}
+
 	enum class COLLISION_TYPE
 	{
 		BEGIN,

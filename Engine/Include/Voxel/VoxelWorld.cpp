@@ -9,6 +9,7 @@
 #include "../Bindable/Topology.h"
 #include "../Bindable/VertexShader.h"
 #include "../Bindable/PixelShader.h"
+#include "../Bindable/Material.h"
 #include "../Bindable/BindableManager.h"
 #include "../Component/MeshRendererComponent.h"
 #include "../GameObject/GameObject.h"
@@ -107,6 +108,24 @@ namespace Engine
             // the default STANDARD_PS (samples diffuse/normal/spec) draws
             // black. Use the texture-less variant — same NavDebug uses.
             rec.pMR->SetPixelShader (StaticFindBindable<PixelShader> (STANDARD_SOLID_PS));
+
+            // PS_NoDiffuse... pulls colour from the material ConstantBuffer
+            // (g_vDiffuseColor). Without an explicit material the CB keeps
+            // whatever the previously-drawn mesh wrote — which produced
+            // garbage colours after the HUD pass started writing the CB.
+            // One shared default-white material across every chunk is
+            // enough; per-block colouring can replace this later.
+            auto pVoxelMat = StaticFindBindable<Material>("VoxelMaterial");
+            if (!pVoxelMat)
+            {
+                pVoxelMat = StaticCreateBindable<Material>("VoxelMaterial");
+                if (pVoxelMat)
+                {
+                    pVoxelMat->SetDiffuseColor(0.3f, 0.6f, 0.3f, 1.f);
+                    pVoxelMat->SetEmissiveColor({ 0.f, 0.f, 0.f, 0.f });
+                }
+            }
+            if (pVoxelMat) rec.pMR->SetMaterial(pVoxelMat);
         }
 
         auto [it, ok] = m_chunks.emplace(c, std::move(rec));

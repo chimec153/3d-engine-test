@@ -134,7 +134,15 @@ namespace Engine
 		typedef struct _tagCollisionChannel
 		{
 			SPACE* m_pSpace;
-			std::list<class Collider*>	m_ColliderList;
+			// Contiguous storage so the O(N²) pair-check loop in
+			// CollisionManager::Collision can walk the list with cache-
+			// friendly index access instead of chasing per-node pointers
+			// scattered across the heap. Profile showed std::list<>
+			// iterator ops (operator*, operator++, operator==) burning
+			// ~6% of the frame just on the iteration overhead before the
+			// switch. push_back is the only mutation; order doesn't
+			// matter to the collision loop.
+			std::vector<class Collider*>	m_ColliderList;
 			// Phase E7 — m_mapDrawable + FindSpaceAndErase + DeleteDrawable
 			// removed (Drawable*-keyed spatial hash dropped).
 

@@ -16,6 +16,8 @@ namespace Engine
 
 namespace Client
 {
+    class Attackable;
+
     // Tower-defense-style enemy that chases a target GameObject (typically the
     // Player). Each path is planned with grid A* on the voxel world and treats
     // entering a solid block as "break it first" (cost += BlockBreakTime). When
@@ -34,7 +36,9 @@ namespace Client
 
     public:
         void SetVoxelWorld(Engine::VoxelWorld* pWorld) { m_pVoxelWorld = pWorld; }
-        void SetSpawnCell(int x, int y, int z);
+        // 2D world — enemies live on the floor layer; the y of the spawn
+        // cell is implicit (Client::kWallY for body positioning).
+        void SetSpawnCell(int x, int z);
         void SetTarget(const std::shared_ptr<Engine::GameObject>& pTarget) { m_TargetObj = pTarget; }
         void SetSpeed(float fSpeed) { m_fSpeed = fSpeed; }
         float GetSpeed() const { return m_fSpeed; }
@@ -57,7 +61,9 @@ namespace Client
         // Weak ref so the enemy doesn't keep the player alive past scene exit.
         std::weak_ptr<Engine::GameObject> m_TargetObj;
 
-        int m_iCellX = 0, m_iCellY = 1, m_iCellZ = 0;    // current occupied cell
+        // 2D occupied cell. Y is fixed at Client::kWallY for transform
+        // positioning so we only track xz.
+        int m_iCellX = 0, m_iCellZ = 0;
 
         std::vector<Pathfinder::PathStep> m_Path;
         size_t m_iPathIdx = 0;
@@ -74,15 +80,22 @@ namespace Client
         // hit us. Set up + callback wired in Init.
         std::shared_ptr<Engine::ColliderSphere> m_pCollider;
 
+        // Melee attack — when the target is within m_fAttackRange the
+        // cooldown ticks down and triggers Player::OnHitBy on expiry.
+        std::shared_ptr<Attackable> m_pAttackable;
+        float m_fAttackRange    = 1.5f;
+        float m_fAttackCooldown = 1.0f;
+        float m_fAttackAcc      = 0.f;
+
         // World cell the last path was planned against — used to detect when
         // the player has moved enough to warrant a fresh A* run.
         int  m_iPlannedTargetX = 0;
         int  m_iPlannedTargetZ = 0;
         bool m_bHasPlan        = false;
 
-        bool ResolveTargetCell(int& tx, int& ty, int& tz) const;
-        bool RecomputePathTo(int tx, int ty, int tz);
-        Engine::Vector3 CellCenter(int x, int y, int z) const;
+        bool ResolveTargetCell(int& tx, int& tz) const;
+        bool RecomputePathTo(int tx, int tz);
+        Engine::Vector3 CellCenter(int x, int z) const;
 
     public:
         virtual bool Init() override;

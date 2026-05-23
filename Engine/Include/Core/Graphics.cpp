@@ -25,7 +25,14 @@ namespace Engine
 
 		desc.BufferDesc.Width = 0;
 		desc.BufferDesc.Height = 0;
-		desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		// BGRA8 (was RGBA8). D2D's DXGI-surface render target only
+		// supports BGRA8; switching the swap chain to BGRA lets Text
+		// (and any other D2D path) draw straight into the backbuffer
+		// without a staging texture. The RTV below doesn't pin a
+		// format so it picks the swap-chain's automatically, and the
+		// PS still outputs straight RGBA — D3D11 does the channel swap
+		// at write time.
+		desc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
 		desc.BufferDesc.RefreshRate.Denominator = 0;
 		desc.BufferDesc.RefreshRate.Numerator = 0;
 		desc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;

@@ -11,22 +11,15 @@ namespace Engine
 			m_bActive(true)
 			, m_bEnable(true)
 			, m_strTag()
-		{
-
-		}
+		{}
 
 		CRef(const CRef& ref) :
 			m_bActive(ref.m_bActive)
 			, m_bEnable(ref.m_bEnable)
 			, m_strTag(ref.m_strTag)
-		{
+		{}
 
-		}
-
-		virtual ~CRef()
-		{
-
-		}
+		virtual ~CRef()	{}
 
 	private:
 		bool m_bActive;

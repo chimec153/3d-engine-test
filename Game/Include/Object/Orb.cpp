@@ -62,7 +62,7 @@ namespace Client
 
         // Sphere helper emits a radius-0.5 sphere centred at the origin; shrink
         // it via the transform so the orb reads as a small floating bead.
-        if (m_pTransform) m_pTransform->SetScale(0.3f, 0.3f, 0.3f);
+        if (m_pTransform) m_pTransform->SetScale(0.2f, 0.2f, 0.2f);
 
         auto pMat = EnsureOrbMaterial();
 
@@ -83,23 +83,77 @@ namespace Client
         m_pCollider = AddComponent<Engine::ColliderSphere>("orb_body");
         if (m_pCollider)
         {
-            m_pCollider->SetRadius(0.25f);
-            m_pCollider->SetCallBack(Engine::COLLISION_TYPE::BEGIN, this, &Orb::OnCollision);
+            // Larger pickup radius — Player::CollisionPlayerBodyStay handles
+            // the pickup when its PlayerBody OBB touches this sphere. No
+            // callback on the Orb side: putting the handler on the Player
+            // body avoids double-counting and dodges any one-way dispatch
+            // quirks where the OBB->Sphere check only fires the OBB owner.
+            m_pCollider->SetRadius(0.5f);
+            // Orbs only need to register against the player.
+            m_pCollider->SetGroup(Engine::COLLISION_GROUP::PICKUP);
+            m_pCollider->SetMask(Engine::COLLISION_GROUP::PLAYER);
+        }
+
+        // Magnet zone — bigger sphere with tag "orb_attract". Same
+        // PICKUP×PLAYER pair filter, so the spatial grid + group filter
+        // wakes the pair only when the player is in xz range. The STAY
+        // callback (orb side) pulls the orb toward the player; the player
+        // body's callback ignores this tag (only acts on "orb_body").
+        m_pAttractCollider = AddComponent<Engine::ColliderSphere>("orb_attract");
+        if (m_pAttractCollider)
+        {
+            m_pAttractCollider->SetRadius(m_fAttractRadius);
+            m_pAttractCollider->SetGroup(Engine::COLLISION_GROUP::PICKUP);
+            m_pAttractCollider->SetMask(Engine::COLLISION_GROUP::PLAYER);
+            m_pAttractCollider->SetCallBack(Engine::COLLISION_TYPE::STAY,
+                this, &Orb::AttractStay);
         }
 
         return true;
     }
 
-    void Orb::OnCollision(Engine::Collider* /*pSrc*/, Engine::Collider* pDest, float /*fDeltaTime*/)
+    void Orb::AttractStay(Engine::Collider* /*pSrc*/, Engine::Collider* pDest, float fDeltaTime)
     {
-        if (!pDest || pDest->GetTag() != "PlayerBody") return;
+        // pSrc is our attract collider, pDest is whatever it overlaps —
+        // expected to be the player body (PICKUP×PLAYER filter).
+        if (!m_pTransform || !pDest) return;
 
-        if (auto* pOwner = pDest->GetGameObjectOwner())
-        {
-            if (auto* pPlayer = dynamic_cast<Player*>(pOwner))
-                pPlayer->AddExp(m_iExp);
-        }
+        auto* pOwner = pDest->GetGameObjectOwner();
+        if (!pOwner) return;
+        auto pPlayerTr = pOwner->GetComponent<Engine::Transform>();
+        if (!pPlayerTr) return;
 
-        InActivate();
+        const Engine::Vector3& vOrb    = m_pTransform->GetPosition();
+        const Engine::Vector3& vPlayer = pPlayerTr->GetPosition();
+
+        // xz-plane motion: 2D world fixes y per layer, so collapse the y
+        // delta to 0 before Vector3::Distance / Normalize. The orb stays
+        // on its own y track.
+        Engine::Vector3 vDelta = vPlayer - vOrb;
+        vDelta.y = 0.f;
+        const float fDistSq = vDelta.LengthSq();
+        if (fDistSq < 1e-6f) return; // already on top — pickup will fire
+
+        const float fDist = sqrtf(fDistSq);
+
+        // Speed ramps with proximity (1.0 at the magnet edge → ~2.0 at
+        // centre) so distant orbs drift in lazily and near orbs snap
+        // quickly. Step is clamped to fDist so we never overshoot the
+        // player on a single frame.
+        const float fT     = 1.f - std::min(fDist / m_fAttractRadius, 1.f);
+        const float fSpeed = m_fAttractSpeed * (1.f + fT);
+        const float fStep  = std::min(fSpeed * fDeltaTime, fDist);
+
+        // Unit direction × step.
+        vDelta.Normalize();
+        m_pTransform->SetPosition(
+            vOrb.x + vDelta.x * fStep,
+            vOrb.y,
+            vOrb.z + vDelta.z * fStep);
+    }
+
+    void Orb::OnCollision(Engine::Collider* /*pSrc*/, Engine::Collider* /*pDest*/, float /*fDeltaTime*/)
+    {
+        // Kept for header parity; pickup is driven from Player's body callback.
     }
 }

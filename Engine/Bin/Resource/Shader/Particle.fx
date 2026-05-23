@@ -106,22 +106,40 @@ void GS_PARTICLE(point VS_PARTICLE_OUT p[1], inout TriangleStream<VSOut> OutputS
     {
         return;
     }
-    
+
+    // Transform particle world position to view space ONCE up front. The
+    // billboard quad's per-vertex offset is applied in view space and then
+    // projected — sharing one view-space anchor keeps the quad coplanar
+    // with the camera plane and lets us cull degenerate billboards.
+    const float4 vViewPos = mul(float4(g_vecParticle[p[0].instID].pos, 1.f), g_matView);
+
+    // Near-plane / behind-camera cull. Without this, a particle that
+    // crosses (or starts behind) the camera near plane projects with a
+    // tiny / negative w, blowing the billboard up into a screen-spanning
+    // primitive — observed as a part of the screen turning solid white
+    // when a particle reaches certain world coordinates. 0.1u matches the
+    // engine's default near-plane budget; nudge higher if floaters bleed
+    // through.
+    if (vViewPos.z < 0.1f)
+    {
+        return;
+    }
+
     VSOut _point[4] = (VSOut[4]) 0;
-    
+
     for (int j = 0; j < 2; ++j)
     {
         for (int i = 0; i < 2; ++i)
         {
-            _point[i + j * 2].pos = mul(float4(g_vecParticle[p[0].instID].pos, 1.f), g_matView);
-            
+            _point[i + j * 2].pos = vViewPos;
+
             _point[i + j * 2].pos.x += (i * 2 - 1) * g_vecParticle[p[0].instID].size.x / 2.f;
             _point[i + j * 2].pos.y -= (j * 2 - 1) * g_vecParticle[p[0].instID].size.y / 2.f;
-            
+
             _point[i + j * 2].pos = mul(_point[i + j * 2].pos, g_matProj);
-            
+
             _point[i + j * 2].tangent = g_vecParticle[p[0].instID].color;
-            
+
             _point[i + j * 2].uv.x = (g_vecParticle[p[0].instID].frame % g_iParticleFrameWidth + i) / (float) g_iParticleFrameWidth;
             _point[i + j * 2].uv.y = (g_vecParticle[p[0].instID].frame / g_iParticleFrameHeight + j) / (float) g_iParticleFrameHeight;
         }

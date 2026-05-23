@@ -14,6 +14,7 @@
 #include "Topology.h"
 #include "Material.h"
 #include "Mesh.h"
+#include "../Render/RenderManager.h"
 #endif
 
 namespace Engine
@@ -110,9 +111,23 @@ namespace Engine
 
 	void ColliderLine::PreDraw(float fDeltaTime)
 	{
-		// Phase E7 — debug visualization removed; only the base PreDraw
-		// remains.
 		__super::PreDraw(fDeltaTime);
+
+#ifdef _DEBUG
+		// Wireframe overlay — single segment from vStart along vDir for
+		// the original (m_vEndOffset - m_vStartOffset) length. vDir was
+		// normalised in Update so the length isn't in m_tInfo; recompute
+		// it from the source offsets here.
+		auto* pRM = RenderManager::GetInst();
+		if (!pRM->IsDebugDrawColliders()) return;
+
+		const float fLength = (m_vEndOffset - m_vStartOffset).Length();
+		if (fLength <= 0.f) return;
+
+		const Vector3& p0 = m_tInfo.vStart;
+		const Vector3  p1 = p0 + m_tInfo.vDir * fLength;
+		pRM->AddDebugLine(p0, p1);
+#endif
 	}
 	std::shared_ptr<Component> ColliderLine::Clone()
 	{

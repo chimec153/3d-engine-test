@@ -36,6 +36,12 @@ namespace Engine
 		bool CreateShaderResourceView(DXGI_FORMAT eFormat, int iMipLevels, int iArraySize, D3D_SRV_DIMENSION eDimension = D3D11_SRV_DIMENSION_TEXTURE2D);
 		bool CreateUnorderedAccessView(DXGI_FORMAT eFormat, D3D11_UAV_DIMENSION eDimension = D3D11_UAV_DIMENSION_TEXTURE2D);
 		CPtr<ID3D11ShaderResourceView> GetSRV()	const;
+		// Raw ID3D11Texture2D access for D2D/DXGI interop. Used by
+		// Text (and any future ad-hoc renderer) to query an
+		// IDXGISurface and stand up an ID2D1RenderTarget on top of
+		// this texture, so D2D draws land in the same memory the
+		// UI pixel shader samples — no extra copy.
+		CPtr<ID3D11Texture2D> GetTexture2D() const { return m_pTexture; }
 		DirectX::ScratchImage* GetImage()	const;
 		bool SaveTexture(const TCHAR* pFilePath, const std::string& strPathKey = TEXTURE_PATH);
 		int GetImageWidth()	const noexcept;

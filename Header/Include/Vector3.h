@@ -163,6 +163,30 @@ namespace Engine
 			return sqrtf(x * x + y * y + z * z);
 		}
 
+		float LengthSq() const
+		{
+			return x * x + y * y + z * z;
+		}
+
+		// Distance helpers — `(*this - b).Length()` works too but is
+		// noisier at call sites that want a threshold check. Prefer the
+		// Sq variant whenever a sqrt isn't needed (compare radii² etc.).
+		float Distance(const _tagVector3& b) const
+		{
+			const float dx = x - b.x;
+			const float dy = y - b.y;
+			const float dz = z - b.z;
+			return sqrtf(dx * dx + dy * dy + dz * dz);
+		}
+
+		float DistanceSq(const _tagVector3& b) const
+		{
+			const float dx = x - b.x;
+			const float dy = y - b.y;
+			const float dz = z - b.z;
+			return dx * dx + dy * dy + dz * dz;
+		}
+
 		_tagVector3& Normalize()
 		{
 			float fLengthSq = x * x + y * y + z * z;

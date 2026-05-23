@@ -30,7 +30,15 @@ float4 NullPS(VSOutDebug input) : SV_TARGET
 }
 
 float4 CollideDebugPS(VSMultiOut input) :   SV_TARGET
-{    
+{
+    return g_vDiffuseColor;
+}
+
+// Debug-line pass — paired with VS_DebugLine (position-only). Returns the
+// uniform material diffuse colour so RenderManager can pick the wireframe
+// tint per draw via the Material CB.
+float4 PS_DebugLine(float4 pos : SV_POSITION) : SV_TARGET
+{
     return g_vDiffuseColor;
 }
 

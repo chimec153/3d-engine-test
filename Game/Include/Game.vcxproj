@@ -201,12 +201,18 @@
     <ClCompile Include="Object\Pathfinder.cpp" />
     <ClCompile Include="Object\Player.cpp" />
     <ClCompile Include="Object\PlayerState.cpp" />
+    <ClCompile Include="Object\WeaponDatabase.cpp" />
     <ClCompile Include="Object\Trail.cpp" />
     <ClCompile Include="Object\Tree.cpp" />
     <ClCompile Include="Scene\GameScene.cpp" />
     <ClCompile Include="Scene\StartScene.cpp" />
+    <ClCompile Include="UI\Button.cpp" />
+    <ClCompile Include="UI\EnemyCountHUD.cpp" />
+    <ClCompile Include="UI\HPBar.cpp" />
     <ClCompile Include="UI\Inventory.cpp" />
     <ClCompile Include="UI\ItemIcon.cpp" />
+    <ClCompile Include="UI\LevelUpChoices.cpp" />
+    <ClCompile Include="UI\XPBar.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Object\Attackable.h" />
@@ -221,10 +227,18 @@
     <ClInclude Include="Object\State.h" />
     <ClInclude Include="Object\Trail.h" />
     <ClInclude Include="Object\Tree.h" />
+    <ClInclude Include="Object\WeaponData.h" />
+    <ClInclude Include="Object\WeaponDatabase.h" />
+    <ClInclude Include="Util\CSVLoader.h" />
     <ClInclude Include="Scene\GameScene.h" />
     <ClInclude Include="Scene\StartScene.h" />
+    <ClInclude Include="UI\Button.h" />
+    <ClInclude Include="UI\EnemyCountHUD.h" />
+    <ClInclude Include="UI\HPBar.h" />
     <ClInclude Include="UI\Inventory.h" />
     <ClInclude Include="UI\ItemIcon.h" />
+    <ClInclude Include="UI\LevelUpChoices.h" />
+    <ClInclude Include="UI\XPBar.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Copy.bat" />

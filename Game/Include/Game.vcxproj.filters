@@ -1,0 +1,146 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="Object\Pathfinder.cpp" />
+    <ClCompile Include="Object\Bullet.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Orb.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Player.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Scene\GameScene.cpp">
+      <Filter>02. Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Enemy.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Monster.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Scene\StartScene.cpp">
+      <Filter>02. Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Button.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\EnemyCountHUD.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\HPBar.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Inventory.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\ItemIcon.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\LevelUpChoices.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\XPBar.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\PlayerState.cpp">
+      <Filter>04. State</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Trail.cpp">
+      <Filter>05. Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Tree.cpp">
+      <Filter>05. Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Attackable.cpp">
+      <Filter>05. Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\MonsterState.cpp">
+      <Filter>04. State</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Object\Pathfinder.h" />
+    <ClInclude Include="Object\Bullet.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Orb.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Player.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene\GameScene.h">
+      <Filter>02. Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Enemy.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Monster.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene\StartScene.h">
+      <Filter>02. Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\Button.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\EnemyCountHUD.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\HPBar.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\ItemIcon.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\Inventory.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\LevelUpChoices.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\XPBar.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\State.h">
+      <Filter>04. State</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\PlayerState.h">
+      <Filter>04. State</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Tree.h">
+      <Filter>05. Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Trail.h">
+      <Filter>05. Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Attackable.h">
+      <Filter>05. Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\MonsterState.h">
+      <Filter>04. State</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Copy.bat" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="01. Object">
+      <UniqueIdentifier>{abcf091b-0617-4b14-a741-57662cdfde5a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="02. Scene">
+      <UniqueIdentifier>{51f681e5-318f-4663-9029-c0b7ac9fa83c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="03. UI">
+      <UniqueIdentifier>{d52cf800-6f1f-4c11-8a1a-94da4beade61}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="04. State">
+      <UniqueIdentifier>{7ebea3ac-fa3e-4c34-aa07-0d2bc989a2e9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="05. Component">
+      <UniqueIdentifier>{b3f51d25-4ecb-428b-8f9c-8890afe7ede0}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

@@ -86,8 +86,8 @@ namespace Engine
 		std::shared_ptr<class VertexShader> pNullVertexShader;
 		std::shared_ptr<class PixelShader> pNullPixelShader;
 #endif
-		std::shared_ptr<VertexShader> pMultiVertexShader;
-		std::shared_ptr<PixelShader> pMultiPixelShader;
+		std::shared_ptr<class VertexShader> pMultiVertexShader;
+		std::shared_ptr<class PixelShader> pMultiPixelShader;
 		std::shared_ptr<class DepthStencilState> m_pNoDepthWrite;
 		std::shared_ptr<class RasterizerState> m_pCullFront;
 		std::shared_ptr<class DepthStencilState> m_pGreaterOrEqual;
@@ -135,6 +135,29 @@ namespace Engine
 		FOGCBUFFER m_tFogCBuffer;
 		std::shared_ptr<class ConstantBuffer<FOGCBUFFER>> m_pFogCBuffer;
 
+		// Per-frame instancing tally — each successful instanced bucket
+		// appends its member count here. The vector preserves render
+		// order, which is the sort-by-(VS,PS,Material) order from
+		// RenderOpaque, so identical entity types stay grouped. Cleared
+		// in Clear() so the contents reflect the current frame only.
+		std::vector<int> m_InstancedBucketCounts;
+
+#ifdef _DEBUG
+		// Debug wireframe overlay — each Collider's PreDraw pushes its edges
+		// (already in world space) into m_DebugLineVertices when the toggle
+		// is on; FlushDebugLines runs after RenderUI so wireframes overlay
+		// the final image without participating in HDR / post-process.
+		bool m_bDebugDrawColliders = false;
+		std::vector<Vector3> m_DebugLineVertices;
+		CPtr<ID3D11Buffer> m_pDebugLineVB;
+		unsigned int m_iDebugLineVBCapacity = 0;
+		std::shared_ptr<class VertexShader> m_pDebugLineVS;
+		std::shared_ptr<class PixelShader>  m_pDebugLinePS;
+		std::shared_ptr<class InputLayout>  m_pDebugLineIL;
+		std::shared_ptr<class Topology>     m_pDebugLineTopology;
+		std::shared_ptr<class Material>     m_pDebugLineMaterial;
+#endif
+
 	public:
 		void SetSkyBox(std::shared_ptr<SkyBox> pSkyBox);
 		void SetHDRMidGray(float fMidGray);
@@ -176,6 +199,13 @@ namespace Engine
 		void AddCustomRender(RENDER_LAYER eLayer, std::function<void()> renderFn);
 		// Phase E5 — AddDrawable removed (no more live Drawable instances).
 		std::shared_ptr<class MRT> GetMRT()	const;
+
+		// Per-bucket instanced render counts for the just-finished frame.
+		// Each entry = one bucket that took the DrawInstanced fast path.
+		// Sum of entries == total instanced MR count. Cleared in Clear()
+		// (post-Render) so reading during the next frame's UI render
+		// shows the just-finished frame's values.
+		const std::vector<int>& GetInstancedBucketCounts() const { return m_InstancedBucketCounts; }
 		std::shared_ptr<MRT> GetDepthBuffer(LIGHT_TYPE eType)	const;
 		std::shared_ptr<MRT> GetDecalMRT()	const;
 		std::shared_ptr<MRT> GetCustomDepth()	const;
@@ -200,6 +230,18 @@ namespace Engine
 		void Clear();
 #ifdef _DEBUG
 		void RenderDebug();
+
+		// Collider wireframe overlay. Toggle from ImGui; AddDebugLine is
+		// called from each Collider's PreDraw (world-space endpoint pairs).
+		// FlushDebugLines runs at the tail of Render().
+		void SetDebugDrawColliders(bool b) { m_bDebugDrawColliders = b; }
+		bool IsDebugDrawColliders() const  { return m_bDebugDrawColliders; }
+		void AddDebugLine(const Vector3& p0, const Vector3& p1);
+
+	private:
+		void InitDebugLines();
+		void FlushDebugLines();
+	public:
 #endif
 
 	public:

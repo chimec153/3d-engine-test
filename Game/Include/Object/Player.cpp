@@ -30,6 +30,7 @@ REGISTER_GAMEOBJECT_EX(Player, new Client::Player(100, 1, 5))
 #include "../UI/Inventory.h"
 #include "Bindable/SoundBindable.h"
 #include "Bullet.h"
+#include "WeaponDatabase.h"
 #include "PlayerState.h"
 #include "Voxel/VoxelWorld.h"
 #include "Scene/Scene.h"
@@ -297,8 +298,61 @@ namespace Client
 		}
 	}
 
+	void Player::OnHitBy(Attackable* pAttacker)
+	{
+		if (!pAttacker || !m_pAttackable) return;
+
+		if (pAttacker->Attack(m_pAttackable.get()))
+			ChangeLowerState(std::make_unique<PlayerLowerDieState>());
+		else
+			ChangeLowerState(std::make_unique<PlayerLowerHitState>());
+	}
+
+	int Player::GetHP()    const { return m_pAttackable ? m_pAttackable->GetHP()    : 0; }
+	int Player::GetMaxHP() const { return m_pAttackable ? m_pAttackable->GetMaxHP() : 1; }
+
+	void Player::AddExp(int iAmount)
+	{
+		if (iAmount <= 0) return;
+		m_iXp += iAmount;
+
+		// Roll forward through as many boundaries as the pickup spans —
+		// a single big AddExp shouldn't lose XP if it crosses two levels.
+		// Threshold for level N is 5 * N (5 for L1→L2, 10 for L2→L3 …),
+		// so progression slowly stretches per level.
+		while (m_iXp >= m_iXpToNext)
+		{
+			m_iXp     -= m_iXpToNext;
+			++m_iLevel;
+			m_iXpToNext = 5 * m_iLevel;
+			m_bPendingLevelUp = true;
+		}
+	}
+
+	void Player::ConsumeLevelUp(int iWeaponId)
+	{
+		// LevelUpChoices passes a CSV weapon id (the picked card). New
+		// weapon ids open a fresh slot, existing ids bump the slot's level
+		// in-place — either way the pending flag clears so the modal hides.
+		AddOrLevelUpWeapon(iWeaponId);
+		m_bPendingLevelUp = false;
+	}
+
 	void Player::CollisionPlayerBodyStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
 	{
+		if (pDest->GetTag() == "orb_body")
+		{
+			// XP pickup — Enemy::OnCollision drops an Orb (tag "orb_body") at
+			// its position on death. Route through AddExp so level-up
+			// detection runs; Handling the pickup from the Player side
+			// guarantees it fires even if the Orb's own collider callback
+			// doesn't get dispatched.
+			AddExp(1);
+			if (auto* pOwner = pDest->GetGameObjectOwner())
+				pOwner->InActivate();
+			return;
+		}
+
 		if (pDest->GetTag() == "frogclawbody")
 		{
 			// Phase E5 — attacker is GameObject-hosted (Drawable hosts gone).
@@ -369,12 +423,20 @@ namespace Client
 		// Attackable handles a null owner gracefully (PaperBurn/Particle/
 		// Sound creation just becomes no-op); the rendering-side dissolve
 		// effect for Player is wired separately if needed.
+		// Player opts in to the blood particle (last arg true). Enemies /
+		// monsters leave it at the default false so they skip the
+		// per-frame CS dispatch + system-buffer upload for an emitter
+		// they'd never visibly use.
 		m_pAttackable = AddComponent<Attackable>("attackable",
-			m_iInitHP, m_iInitAttackMin, m_iInitAttackMax);
+			m_iInitHP, m_iInitAttackMin, m_iInitAttackMax, true);
 
 		if (m_pTransform)
 		{
-			m_pTransform->SetPosition(10.f, 5.f, 10.f);
+			// 2D world — feet sit on top of the y=0 floor block at y=kWallY,
+			// pivot at the waist is +1 above that. Input snaps Y each frame
+			// regardless, but starting at the right height avoids the
+			// first-frame drop.
+			m_pTransform->SetPosition(10.f, static_cast<float>(kWallY) + 1.f, 10.f);
 			m_pTransform->SetScale(0.01f, 0.01f, 0.01f);
 			// Idle.mesh was authored in a Z-up convention; the engine is
 			// Y-up, so rotate -90° around X once to stand the model upright.
@@ -410,29 +472,6 @@ namespace Client
 			"Idle",
 			"Run",
 			"Attack",
-			/*"CharacterArmature|Gun_Shoot",
-			"CharacterArmature|HitRecieve",
-			"CharacterArmature|HitRecieve_2",
-			"CharacterArmature|Idle",
-			"CharacterArmature|Idle_Gun",
-			"CharacterArmature|Idle_Gun_Pointing",
-			"CharacterArmature|Idle_Gun_Shoot",
-			"CharacterArmature|Idle_Neutral",
-			"CharacterArmature|Idle_Sword",
-			"CharacterArmature|Interact",
-			"CharacterArmature|Kick_Left",
-			"CharacterArmature|Kick_Right",
-			"CharacterArmature|Punch_Left",
-			"CharacterArmature|Punch_Right",
-			"CharacterArmature|Roll",
-			"CharacterArmature|Run",
-			"CharacterArmature|Run_Back",
-			"CharacterArmature|Run_Left",
-			"CharacterArmature|Run_Right",
-			"CharacterArmature|Run_Shoot",
-			"CharacterArmature|Sword_Slash",
-			"CharacterArmature|Walk",
-			"CharacterArmature|Wave",*/
 		};
 
 		for (size_t i = 0; i < vecSeq.size(); ++i)
@@ -451,30 +490,33 @@ namespace Client
 
 		pAnimation->SetSkeleton(pSkeleton);
 
-		//pAnimation->ChangeSequence("CharacterArmature|Idle");
-
 		pAnimation->SetLoop("Idle");
 		pAnimation->SetLoop("Run");
-		/*pAnimation->SetLoop("CharacterArmature|Run");
-		pAnimation->SetLoop("CharacterArmature|Run_Back");
-		pAnimation->SetLoop("CharacterArmature|Run_Left");
-		pAnimation->SetLoop("CharacterArmature|Run_Right");
-		pAnimation->SetLoop("CharacterArmature|Run_Shoot");
-		pAnimation->SetLoop("CharacterArmature|Idle_Gun");
-		pAnimation->SetLoop("CharacterArmature|Idle_Gun_Pointing");
-		pAnimation->SetLoop("CharacterArmature|Idle_Gun_Shoot");
-		pAnimation->SetLoop("CharacterArmature|Idle_Neutral");
-		pAnimation->SetLoop("CharacterArmature|Idle_Sword");
-
-		pAnimation->SetNextSequence("CharacterArmature|Roll", "CharacterArmature|Run");
-		pAnimation->SetNextSequence("CharacterArmature|Sword_Slash", "CharacterArmature|Idle");
-		pAnimation->SetNextSequence("CharacterArmature|HitRecieve", "CharacterArmature|Idle");*/
 
 		m_pBody = AddComponent<Engine::ColliderOBB>("PlayerBody");
 
-		m_pBody->SetScaleOffset({ 0.5f, 1.8f, 0.4f });
+		// Idle.mesh is Z-up and the transform applies SetRX(-PI/2) to stand
+		// it upright, which makes model-local Y the world-forward axis and
+		// model-local Z the world-up axis. Scale/axis offsets are expressed
+		// in *local* space, so the "height" component must go on Z (not Y).
+		//
+		// The transform pivot sits at the waist (~surface + 2; feet at
+		// surface + 1, head ~surface + 3), so an axis offset of (0,0,0)
+		// centres a 1.8u-tall OBB at the waist, spanning [waist - 0.9,
+		// waist + 0.9] ≈ knees-to-head. That overlaps the orb sphere
+		// (centred ~0.3 above feet, radius 0.5) so a walking pickup fires
+		// when the player's feet are roughly on top of the orb.
+		m_pBody->SetScaleOffset({ 0.5f, 0.4f, 1.8f });
 
-		m_pBody->SetAxisOffset({ 0.f, 0.9f, -0.1f });
+		m_pBody->SetAxisOffset({ 0.f, -0.1f, 0.f });
+
+		// Pair filter — player body collides with enemies (so frogclaw-
+		// style melee colliders register), bullets (none from enemies
+		// today, kept for symmetry), and pickups (orbs).
+		m_pBody->SetGroup(Engine::COLLISION_GROUP::PLAYER);
+		m_pBody->SetMask(Engine::COLLISION_GROUP::ENEMY
+		               | Engine::COLLISION_GROUP::BULLET
+		               | Engine::COLLISION_GROUP::PICKUP);
 
 		m_pBody->SetCallBack(Engine::COLLISION_TYPE::BEGIN, this, &Player::CollisionPlayerBodyStay);
 
@@ -499,129 +541,22 @@ namespace Client
 			GetScene()->CreateGameObject<>("Trail", GetScene()->FindLayer(DEFAULT_LAYER));
 		m_pTrail = pTrailObj ? pTrailObj->AddComponent<Trail>("trail", 10) : nullptr;
 
-		/*for (int i = 0; i < 77; ++i)
-		{
-			std::string strNotify = "trail";
-
-			strNotify += std::to_string(i);
-
-			std::shared_ptr<Engine::Notify> pNotify = m_pAnimation->AddNotify("CharacterArmature|Sword_Slash", strNotify, i * 0.01666f);
-
-			if (i == 0)
-			{
-				pNotify->SetCallBack(
-					[this](int iFrame, float fTime, Engine::Bindable* pOwner)
-					{
-						if (!m_pSword)
-						{
-							return;
-						}
-
-						Engine::Vector3 vTop = { 0.f, 2.0f, 0.f };
-						Engine::Vector3 vBottom = { 0.f, 0.3f, 0.f };
-
-						const Engine::Matrix& matTransform = m_pSword->GetTransform()->GetTransformMatrix();
-
-						m_pTrail->SetAllPosition(matTransform.TransformCoord(vTop), matTransform.TransformCoord(vBottom));
-						m_pTrail->Enable();
-						m_pSwordBody->Enable();
-						m_pSwordParticle->ResumeEmit();
-					});
-			}
-			else if (i == 76)
-			{
-				pNotify->SetCallBack(
-					[this](int, float, Engine::Bindable*)
-					{
-						if (!m_pSword)
-						{
-							return;
-						}
-
-						m_pTrail->Disable();
-						m_pSwordBody->Disable();
-						m_pSwordParticle->StopEmit();
-					});
-			}
-			else if (i == 30)
-			{
-				pNotify->SetCallBack(
-					[this](int, float, Engine::Bindable*)
-					{
-
-						if (m_pSwordSound)
-						{
-							m_pSwordSound->Play();
-						}
-					});
-			}
-			else
-			{
-				pNotify->SetCallBack(
-					[this](int iFrame, float fTime, Engine::Bindable* pOwner)
-					{
-						if (!m_pSword)
-						{
-							return;
-						}
-
-						Engine::Vector3 vTop = { 0.f, 2.0f, 0.f };
-						Engine::Vector3 vBottom = { 0.f, 0.3f, 0.f };
-
-						const Engine::Matrix& matTransform = m_pSword->GetTransform()->GetTransformMatrix();
-
-						m_pTrail->SetPosition(matTransform.TransformCoord(vTop), matTransform.TransformCoord(vBottom));
-					});
-
-			}
-		}
-		if (m_pTransform) m_pTransform->SetY(10.f);
-
-		for (int i = 0; i < 45; ++i)
-		{
-			std::string strNotify = "effect";
-
-			strNotify += std::to_string(i + 1);
-
-			std::shared_ptr<Engine::Notify> pNotify = pAnimation->AddNotify("CharacterArmature|Roll", strNotify, 0.048f * i + 0.075f);
-
-			pNotify->SetCallBack(this, &Player::RollEffect);
-		}
-
-		std::shared_ptr<Engine::Notify> pDieNotify = pAnimation->AddNotify("CharacterArmature|Death", "DiePaperBurn", 1.f);
-
-		pDieNotify->SetCallBack([this](int, float, Engine::Bindable*)
-			{
-				if (m_pAttackable) m_pAttackable->StartPaperBurn();
-			}
-		);
-
+		// LCTRL toggles bullet mouse-aim mode (see SpawnBullet). Must be
+		// registered with CInput before Input() can poll its DOWN edge.
+		// The duplicate AddKey above lives inside the 596–713 block
+		// comment and never runs.
 		Engine::CInput::GetInst()->AddKey(DIK_LCONTROL);
-
-		m_pFootLSound = AddComponent<Engine::SoundBindable>("step_rock_l", "step_rock_l");
-
-		m_pFootRSound = AddComponent<Engine::SoundBindable>("step_rock_r", "step_rock_r");
-
-		std::shared_ptr<Engine::Notify> pRunLNotify = pAnimation->AddNotify("CharacterArmature|Run", "foot_l", 0.5f);
-
-		pRunLNotify->SetCallBack([this](int, float, Engine::Bindable*)
-			{
-				m_pFootLSound->Play();
-			}
-		);
-
-		std::shared_ptr<Engine::Notify> pRunRNotify = pAnimation->AddNotify("CharacterArmature|Run", "foot_r", 0.9f);
-
-		pRunRNotify->SetCallBack([this](int, float, Engine::Bindable*)
-			{
-				m_pFootRSound->Play();
-			}
-		);*/
 
 		// Seed both state machines so Update has something to dispatch on
 		// the first frame. Anim sync in ChangeLowerState picks the Idle clip.
 		ChangeLowerState(std::make_unique<PlayerLowerIdleState>());
 		ChangeUpperState(std::make_unique<PlayerUpperIdleState>());
+
+		// Grant the basic weapon (Arrow, id=1 in weapons.csv) so the
+		// player can damage enemies before the first level-up card.
+		// Without this the player can't earn XP — no damage means no
+		// kills, no orbs, no level-ups, no further weapons.
+		AddOrLevelUpWeapon(1);
 
 		return true;
 	}
@@ -640,36 +575,56 @@ namespace Client
 		if (Engine::CInput::GetInst()->IsKey(Engine::CInput::KEY_STATE::PRESS, DIK_D)) { vDir.x -= 1.f; m_eDir = MOVE_DIR::RIGHT; }
 		if (Engine::CInput::GetInst()->IsKey(Engine::CInput::KEY_STATE::PRESS, DIK_A)) { vDir.x += 1.f; m_eDir = MOVE_DIR::LEFT; }
 
-		// Voxel surface lookup. yMax is generous (covers any sensible stack).
-		const int yMin = 0;
-		const int yMax = 64;
-		// The model's pivot sits at the character's waist (not the feet), so
-		// "stand on top of block" needs an extra half-height lift past the
-		// surface top. ~1 unit matches the 2-unit-tall Idle.mesh @ scale 0.01.
+		// 2D world: floor block at y=0 (top face at y=1), walls at y=kWallY.
+		// Player feet sit on the floor's top face; the transform pivot is
+		// at the waist (~1 unit above feet for the 2-unit-tall Idle.mesh),
+		// so the player's Y is fixed at 2.0 for every frame.
 		const float fFeetOffset = 1.f;
+		const float fPlayerY    = static_cast<float>(kWallY) + fFeetOffset;
 
 		const Engine::Vector3 vCurr = pTransform->GetPosition();
 		const int cx = static_cast<int>(std::floor(vCurr.x));
 		const int cz = static_cast<int>(std::floor(vCurr.z));
-		int currSurf = m_pVoxelWorld
-			? m_pVoxelWorld->GetSurfaceHeight(cx, cz, yMin, yMax)
-			: -1;
 
-		// F: place a block at the player's standing cell (surface + 1) so
-		// the next-frame surface snap lifts the player one block up.
-		// G: clear the surface block under the player so they drop one cell.
+		// LCTRL toggles mouse-aim mode for bullets. DOWN edge so a
+		// held key flips the state exactly once. SpawnBullet reads
+		// m_bMouseAim and picks the aim source.
+		{
+			auto* pInput = Engine::CInput::GetInst();
+			if (pInput->IsKey(Engine::CInput::KEY_STATE::DOWN, DIK_LCONTROL))
+			{
+				m_bMouseAim = !m_bMouseAim;
+			}
+		}
+
+		// F: place a wall in the cell immediately in front of the player.
+		// G: remove the wall in the cell immediately in front of the player.
+		// Placing at the player's own cell would trap them inside; the
+		// "facing" cell is the natural target for build/break.
 		if (m_pVoxelWorld)
 		{
 			auto* pInput = Engine::CInput::GetInst();
-			if (pInput->IsKey(Engine::CInput::KEY_STATE::DOWN, DIK_F))
+			const bool bF = pInput->IsKey(Engine::CInput::KEY_STATE::DOWN, DIK_F);
+			const bool bG = pInput->IsKey(Engine::CInput::KEY_STATE::DOWN, DIK_G);
+			if (bF || bG)
 			{
-				m_pVoxelWorld->SetBlock(cx, currSurf + 1, cz, Engine::BlockType::Stone);
-				currSurf = m_pVoxelWorld->GetSurfaceHeight(cx, cz, yMin, yMax);
-			}
-			else if (pInput->IsKey(Engine::CInput::KEY_STATE::DOWN, DIK_G) && currSurf >= 0)
-			{
-				m_pVoxelWorld->SetBlock(cx, currSurf, cz, Engine::BlockType::Air);
-				currSurf = m_pVoxelWorld->GetSurfaceHeight(cx, cz, yMin, yMax);
+				// Player's world-forward at the current yaw (same derivation
+				// as SpawnBullet): forward = (-sin θ, 0, -cos θ).
+				const float fYaw = pTransform->GetRY();
+				const float fxf  = -sinf(fYaw);
+				const float fzf  = -cosf(fYaw);
+				// Snap to the dominant axis so build/break always targets
+				// exactly one neighbour cell (the visual model rotates in
+				// 4 cardinal directions, so a diagonal forward would still
+				// resolve to one cardinal neighbour).
+				const int frontX = cx + (std::abs(fxf) > std::abs(fzf)
+					? (fxf > 0.f ? 1 : -1) : 0);
+				const int frontZ = cz + (std::abs(fzf) >= std::abs(fxf)
+					? (fzf > 0.f ? 1 : -1) : 0);
+				if (bF)
+					m_pVoxelWorld->SetBlock(frontX, kWallY, frontZ, Engine::BlockType::Stone);
+				else
+					m_pVoxelWorld->SetBlock(frontX, kWallY, frontZ, Engine::BlockType::Air);
 			}
 		}
 
@@ -679,14 +634,12 @@ namespace Client
 			const Engine::Vector3 vTarget = vCurr + vDir * (fDeltaTime * m_fSpeed);
 			const int tx = static_cast<int>(std::floor(vTarget.x));
 			const int tz = static_cast<int>(std::floor(vTarget.z));
-			const int tgtSurf = m_pVoxelWorld->GetSurfaceHeight(tx, tz, yMin, yMax);
+			const bool bBlocked = Engine::IsSolid(
+				m_pVoxelWorld->GetBlock(tx, kWallY, tz));
 
-			// Auto-step: allow 1-block ascent. Anything >1 is blocked.
-			if (tgtSurf - currSurf <= 1)
+			if (!bBlocked)
 			{
-				pTransform->SetPosition(vTarget.x,
-					static_cast<float>(tgtSurf + 1) + fFeetOffset,
-					vTarget.z);
+				pTransform->SetPosition(vTarget.x, fPlayerY, vTarget.z);
 				// After SetRX(-PI/2) the model's natural forward becomes world
 				// -Z (RY=0), so face-direction yaw is atan2 of the negated dir.
 				pTransform->SetRY(atan2f(-vDir.x, -vDir.z));
@@ -694,15 +647,15 @@ namespace Client
 			}
 			else
 			{
-				// Blocked — re-anchor Y to current surface, hold idle.
-				pTransform->SetY(static_cast<float>(currSurf + 1) + fFeetOffset);
+				// Blocked — hold position and switch to idle. Y still needs
+				// to be re-anchored in case external code nudged it.
+				pTransform->SetY(fPlayerY);
 				ChangeLowerState(std::make_unique<PlayerLowerIdleState>());
 			}
 		}
 		else
 		{
-			if (m_pVoxelWorld)
-				pTransform->SetY(static_cast<float>(currSurf + 1) + fFeetOffset);
+			if (m_pVoxelWorld) pTransform->SetY(fPlayerY);
 			ChangeLowerState(std::make_unique<PlayerLowerIdleState>());
 		}
 
@@ -724,57 +677,252 @@ namespace Client
 		// voxels; UpdateState still runs so Idle/Run animations sync.
 		UpdateState(fDeltaTime);
 
-		// Periodic forward fire — emitter cadence. Multiple shots within a
-		// single frame are possible if the frame stalled, so loop.
-		m_fFireAcc += fDeltaTime;
-		while (m_fFireAcc >= m_fFireInterval)
+		// Weapon slots — Cooldown slots accumulate dt and fire when the
+		// (level-scaled) cooldown is reached; Sustained slots have no
+		// per-frame work here, their orbital instances tick themselves.
+		for (auto& slot : m_vecWeaponSlots)
 		{
-			m_fFireAcc -= m_fFireInterval;
-			//SpawnBullet();
+			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+			if (!pDef || pDef->eFireMode != FireMode::Cooldown) continue;
+			const float fCd = ComputeCooldown(*pDef, slot.iLevel);
+			slot.fCooldownAcc += fDeltaTime;
+			// Loop so a paused / hitching frame doesn't drop shots.
+			int iGuard = 0;
+			while (slot.fCooldownAcc >= fCd && iGuard++ < 8)
+			{
+				slot.fCooldownAcc -= fCd;
+				FireCooldownBurst(slot);
+			}
 		}
 	}
 
-	void Player::SpawnBullet()
+	float Player::ComputeAimYaw() const
 	{
-		if (!m_pTransform) return;
+		if (!m_pTransform) return 0.f;
+		// Default aim: player's world-forward at the current yaw.
+		// Derivation: model is authored Z-up; engine applies SetRX(-PI/2)
+		// once to stand it up, so model-local +Y (Z-up "forward") maps
+		// to world -Z at RY=0. Subsequent SetRY(θ) rotates that vector
+		// around world Y. Closed form: forward = (-sinθ, 0, -cosθ).
+		float fAimYaw = m_pTransform->GetRY();
 
-		// Player's world-forward at the current yaw. Derivation:
-		//   model is authored Z-up; engine applies SetRX(-PI/2) once to
-		//   stand it up, so model-local +Z maps to world -Y... then
-		//   model-local +Y (the original "forward" of a Z-up rig) maps to
-		//   world -Z at RY=0. Subsequent SetRY(θ) rotates that vector
-		//   around world Y. Closed form: forward = (-sinθ, 0, -cosθ).
-		const float fYaw = m_pTransform->GetRY();
-		const Engine::Vector3 vForward(-sinf(fYaw), 0.f, -cosf(fYaw));
-
-		// Spawn just in front of the player at knee height. The player
-		// transform pivot sits at the waist (~surface + 2), so a -0.7u Y
-		// offset puts the muzzle around y = surface + 1.3 — exactly the
-		// centre of the voxel Enemy's body collider (cellY=1 → collider
-		// sphere centred at y=1.3 with radius 0.35). Forward offset 0.6u
-		// keeps the muzzle out of the player mesh.
-		const Engine::Vector3 vSpawn =
-			m_pTransform->GetPosition() + vForward * 0.6f + Engine::Vector3{ 0.f, -0.7f, 0.f };
-
-		auto pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
-		std::shared_ptr<Bullet> pBullet =
-			GetScene()->CreateGameObject<Bullet>("bullet", pLayer);
-		if (!pBullet) return;
-
-		// Copy the player's rotation onto the bullet — same RX/RY chain
-		// turns the bullet's local +Y (its movement axis in Bullet::Update)
-		// into the player's world-forward direction.
-		std::shared_ptr<Engine::Transform> pBulletTr = pBullet->GetTransform();
-		if (pBulletTr)
+		// Mouse-aim override (LCTRL toggle). Cast a ray from the camera
+		// through the mouse cursor onto the player's horizontal plane,
+		// then derive the yaw whose forward direction points from the
+		// player to that aim point. Falls back to the default yaw if any
+		// engine resource is missing (no camera, near-vertical ray, etc.)
+		// so we never spawn bullets with NaN orientations.
+		if (m_bMouseAim && m_pCamera)
 		{
-			pBulletTr->SetPosition(vSpawn);
-			pBulletTr->SetRX(-PI / 2.f);
-			pBulletTr->SetRY(fYaw);
+			auto* pInput = Engine::CInput::GetInst();
+			const Engine::Vector2 vMouseScreen{
+				static_cast<float>(pInput->GetMouseX()),
+				static_cast<float>(pInput->GetMouseY()) };
+			const Engine::Vector3 vClip  = m_pCamera->ScreenPosToClipPos(vMouseScreen);
+			// ScreenPosToClipPos maps screen Y as (screenY/H * 2 − 1), so
+			// the top of the screen comes out as clip Y = −1 — opposite to
+			// the D3D NDC convention CameraPosToWorldPos unprojects from
+			// (NDC +Y is up). Flip Y here instead of fixing the shared
+			// helper, since the UI/picking callers built around the
+			// current convention and might break if it changes.
+			const Engine::Vector3 vWorld = m_pCamera->CameraPosToWorldPos({ vClip.x, -vClip.y });
+			const Engine::Vector3 vCamPos = m_pCamera->GetTransform()->GetPosition();
+
+			const Engine::Vector3 vRayDir = vWorld - vCamPos;
+			const Engine::Vector3 vPlayerPos = m_pTransform->GetPosition();
+
+			// Solve cam.y + t*dir.y = player.y. With the locked top-
+			// down camera the ray points clearly downward (dir.y < 0),
+			// so |dir.y| is comfortably above the epsilon — but guard
+			// anyway in case the camera ever flattens.
+			if (std::abs(vRayDir.y) > 1e-4f)
+			{
+				const float t = (vPlayerPos.y - vCamPos.y) / vRayDir.y;
+				if (t > 0.f)
+				{
+					const Engine::Vector3 vAim{
+						vCamPos.x + vRayDir.x * t,
+						vPlayerPos.y,
+						vCamPos.z + vRayDir.z * t };
+					const float dx = vAim.x - vPlayerPos.x;
+					const float dz = vAim.z - vPlayerPos.z;
+					if (dx * dx + dz * dz > 1e-6f)
+					{
+						// Inverse of the forward closed form above:
+						// forward = (-sinθ, 0, -cosθ) gives
+						// θ = atan2(-dx, -dz). Same convention used by
+						// Player::Input when steering by WASD.
+						fAimYaw = atan2f(-dx, -dz);
+					}
+				}
+			}
 		}
 
-		// The particle trail lives on the Bullet itself (it owns and syncs
-		// its own emitter Transform in Update). Player just sets the
-		// bullet's pose; trail follows.
+		return fAimYaw;
+	}
+
+	void Player::FireCooldownBurst(const WeaponSlot& slot)
+	{
+		if (!m_pTransform) return;
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		if (!pDef) return;
+
+		const float fAimYaw = ComputeAimYaw();
+		const Engine::Vector3 vForward(-sinf(fAimYaw), 0.f, -cosf(fAimYaw));
+		const Engine::Vector3 vRight(cosf(fAimYaw), 0.f, -sinf(fAimYaw));
+		const Engine::Vector3 vPlayerPos = m_pTransform->GetPosition();
+
+		// Resolve the spawn anchor by the WeaponDef's origin. Front
+		// matches the legacy bullet muzzle (kept the same offsets so
+		// gameplay timing/aim doesn't shift); Around drops the projectile
+		// straight at the player's pivot; Mouse projects the cursor onto
+		// the player's y-plane and snaps the projectile there (used by
+		// CursorShot — the projectile sits on the cursor and damages
+		// whatever walks into it during its lifetime).
+		Engine::Vector3 vSpawn = vPlayerPos + Engine::Vector3{ 0.f, -0.7f, 0.f };
+		switch (pDef->eOrigin)
+		{
+		case SpawnOrigin::Front:
+			vSpawn = vSpawn + vForward * 0.6f;
+			break;
+		case SpawnOrigin::Around:
+			break;
+		case SpawnOrigin::Mouse:
+			if (m_pCamera)
+			{
+				auto* pInput = Engine::CInput::GetInst();
+				const Engine::Vector2 vMouseScreen{
+					static_cast<float>(pInput->GetMouseX()),
+					static_cast<float>(pInput->GetMouseY()) };
+				const Engine::Vector3 vClip = m_pCamera->ScreenPosToClipPos(vMouseScreen);
+				const Engine::Vector3 vWorld = m_pCamera->CameraPosToWorldPos({ vClip.x, -vClip.y });
+				const Engine::Vector3 vCamPos = m_pCamera->GetTransform()->GetPosition();
+				const Engine::Vector3 vRayDir = vWorld - vCamPos;
+				if (std::abs(vRayDir.y) > 1e-4f)
+				{
+					const float t = (vPlayerPos.y - vCamPos.y) / vRayDir.y;
+					if (t > 0.f)
+					{
+						vSpawn = {
+							vCamPos.x + vRayDir.x * t,
+							vPlayerPos.y - 0.7f,
+							vCamPos.z + vRayDir.z * t };
+					}
+				}
+			}
+			break;
+		default:
+			break;
+		}
+
+		auto pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
+		if (!pLayer) return;
+
+		// Multi-shot burst — Count>1 fans projectiles around the aim
+		// direction. ±10° per extra projectile feels tight enough to
+		// stay readable.
+		const int iCount = ComputeCount(*pDef, slot.iLevel);
+		const float fFanStep = 0.174f;   // ~10°
+		const float fFanBase = -fFanStep * (iCount - 1) * 0.5f;
+		for (int i = 0; i < iCount; ++i)
+		{
+			auto pBullet = GetScene()->CreateGameObject<Bullet>("bullet", pLayer);
+			if (!pBullet) continue;
+			pBullet->Configure(*pDef, slot.iLevel, m_pTransform);
+			if (auto pBulletTr = pBullet->GetTransform())
+			{
+				pBulletTr->SetPosition(vSpawn);
+				pBulletTr->SetRX(-PI / 2.f);
+				pBulletTr->SetRY(fAimYaw + fFanBase + fFanStep * i);
+			}
+		}
+	}
+
+	void Player::RespawnSustainedInstances(WeaponSlot& slot)
+	{
+		// Drop any still-live instances first — Orbital orbs from the
+		// previous level no longer reflect the new count/speed/damage.
+		for (auto& wp : slot.vecSustainedInstances)
+			if (auto sp = wp.lock())
+				sp->InActivate();
+		slot.vecSustainedInstances.clear();
+
+		if (!m_pTransform) return;
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		if (!pDef || pDef->eFireMode != FireMode::Sustained) return;
+
+		auto pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
+		if (!pLayer) return;
+
+		const int iCount = ComputeCount(*pDef, slot.iLevel);
+		const Engine::Vector3 vSpawn = m_pTransform->GetPosition();
+		// Evenly distribute starting angles around the player so multiple
+		// orbs don't stack on top of each other. RY is interpreted as the
+		// initial orbit angle in Bullet::Configure (Orbital path).
+		for (int i = 0; i < iCount; ++i)
+		{
+			auto pBullet = GetScene()->CreateGameObject<Bullet>("bullet", pLayer);
+			if (!pBullet) continue;
+			if (auto pBulletTr = pBullet->GetTransform())
+			{
+				pBulletTr->SetPosition(vSpawn);
+				pBulletTr->SetRX(-PI / 2.f);
+				pBulletTr->SetRY((6.2831853f * i) / iCount);
+			}
+			pBullet->Configure(*pDef, slot.iLevel, m_pTransform);
+			slot.vecSustainedInstances.emplace_back(pBullet);
+		}
+	}
+
+	void Player::AddOrLevelUpWeapon(int iWeaponId)
+	{
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(iWeaponId);
+		if (!pDef)
+		{
+			MessageBox(nullptr, TEXT("Error"), TEXT("그런 무기가 없다."), MB_OK);
+			assert(false);
+			return;
+		}
+
+		// Existing slot → bump level. Sustained orbs need a re-spawn so a
+		// count/speed bump on the level-up column actually takes effect;
+		// Cooldown weapons just read the new level on the next fire.
+		for (auto& slot : m_vecWeaponSlots)
+		{
+			if (slot.iWeaponId == iWeaponId)
+			{
+				++slot.iLevel;
+				if (pDef->eFireMode == FireMode::Sustained)
+					RespawnSustainedInstances(slot);
+				return;
+			}
+		}
+
+		// New weapon — capped at kMaxWeaponSlots. LevelUpChoices skips
+		// new-weapon cards once the cap is hit, but the guard here keeps
+		// the invariant local.
+		if (static_cast<int>(m_vecWeaponSlots.size()) >= kMaxWeaponSlots) return;
+		WeaponSlot slot;
+		slot.iWeaponId = iWeaponId;
+		slot.iLevel    = 1;
+		m_vecWeaponSlots.push_back(std::move(slot));
+		if (pDef->eFireMode == FireMode::Sustained)
+			RespawnSustainedInstances(m_vecWeaponSlots.back());
+	}
+
+	std::vector<int> Player::GetOwnedWeaponIds() const
+	{
+		std::vector<int> out;
+		out.reserve(m_vecWeaponSlots.size());
+		for (const auto& s : m_vecWeaponSlots) out.push_back(s.iWeaponId);
+		return out;
+	}
+
+	int Player::GetOwnedWeaponLevel(int iWeaponId) const
+	{
+		for (const auto& s : m_vecWeaponSlots)
+			if (s.iWeaponId == iWeaponId) return s.iLevel;
+		return 0;
 	}
 
 	void Player::FixedUpdate(float fDeltaTime)

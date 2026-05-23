@@ -55,12 +55,31 @@ namespace Engine
 	void Component::SetGameObjectOwner(GameObject* pOwner)
 	{
 		m_pGameObjectOwner = pOwner;
+		// Owner changed → previously-resolved host Transform belongs to a
+		// different GameObject and must be re-looked-up on next access.
+		m_pCachedHostTransform.reset();
+		m_pCachedHostTr = nullptr;
 	}
 
-	std::shared_ptr<Transform> Component::GetHostTransform() const
+	const std::shared_ptr<Transform>& Component::GetHostTransform() const
 	{
-		if (m_pGameObjectOwner) return m_pGameObjectOwner->GetComponent<Transform>();
-		return nullptr;
+		if (m_pCachedHostTr) return m_pCachedHostTransform;
+
+		if (m_pGameObjectOwner)
+		{
+			m_pCachedHostTransform = m_pGameObjectOwner->GetComponent<Transform>();
+			m_pCachedHostTr        = m_pCachedHostTransform.get();
+		}
+		return m_pCachedHostTransform;
+	}
+
+	Transform* Component::GetHostTransformRaw() const
+	{
+		if (m_pCachedHostTr) return m_pCachedHostTr;
+		if (!m_pGameObjectOwner) return nullptr;
+		m_pCachedHostTransform = m_pGameObjectOwner->GetComponent<Transform>();
+		m_pCachedHostTr        = m_pCachedHostTransform.get();
+		return m_pCachedHostTr;
 	}
 
 	const std::list<std::shared_ptr<Component>>& Component::GetChildList() const

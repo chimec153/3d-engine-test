@@ -12,6 +12,7 @@ namespace Engine
 		, fFrameTime(0.f)
 		, m_fScale(1.f)
 		, m_fDeltaTime(0.f)
+		, m_bStop(false)
 	{
 	}
 
@@ -26,7 +27,11 @@ namespace Engine
 
 	constexpr float Timer::GetDeltTime() const noexcept
 	{
-		return m_fDeltaTime * m_fScale;
+		// Single source of truth for the per-frame game delta. When the
+		// game is paused, return zero so every consumer (Input, Scene,
+		// per-object Update) naturally no-ops without each having to
+		// branch on a "paused" flag.
+		return m_bStop ? 0.f : (m_fDeltaTime * m_fScale);
 	}
 
 	constexpr float Timer::GetFPS() const noexcept

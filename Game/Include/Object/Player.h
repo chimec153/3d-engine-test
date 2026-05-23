@@ -2,6 +2,8 @@
 
 #include "GameObject\GameObject.h"
 #include "State.h"
+#include "WeaponData.h"
+#include <vector>
 
 namespace Engine
 {
@@ -27,6 +29,7 @@ namespace Client
     class Inventory;
     class Attackable;
     class Trail;
+    class Bullet;
     class IPlayerLowerState;
     class IPlayerUpperState;
 
@@ -116,23 +119,96 @@ namespace Client
         // Player is constructed.
         Engine::VoxelWorld* m_pVoxelWorld = nullptr;
 
-        // Periodic forward-fire — spawns a Bullet GameObject (with a
-        // Particle trail attached) every m_fFireInterval seconds.
-        float m_fFireInterval = 0.3f;
-        float m_fFireAcc      = 0.f;
+        // Weapon slots. Each slot tracks one CSV-loaded weapon, its current
+        // level, the cooldown accumulator (for FireMode::Cooldown), and the
+        // live Sustained instances (Orbital orbs etc. that persist across
+        // frames). Capacity is locked to 6 (Vampire-Survivors-style).
+        struct WeaponSlot
+        {
+            int   iWeaponId    = -1;
+            int   iLevel       = 1;
+            float fCooldownAcc = 0.f;
+            std::vector<std::weak_ptr<Bullet>> vecSustainedInstances;
+        };
+        static constexpr int kMaxWeaponSlots = 6;
+        std::vector<WeaponSlot> m_vecWeaponSlots;
 
-        // Experience pool. Orbs dropped by dead enemies feed AddExp on pickup.
-        int m_iExp = 0;
+        // Aim mode toggle. Default = false (bullets follow the player's
+        // facing direction). Pressing LCTRL flips it; while true the
+        // weapon-spawn path traces the mouse cursor onto the player's
+        // y-plane and aims along that vector.
+        bool m_bMouseAim = false;
+
+        // Experience / level progression. Orbs dropped by dead enemies
+        // feed AddExp on pickup; AddExp pushes overflow back into the
+        // next level so a single pickup can never silently drop XP.
+        int  m_iLevel       = 1;
+        int  m_iXp          = 0;      // XP accumulated in the current level
+        int  m_iXpToNext    = 5;      // XP needed to advance to the next level
+        // Latched flag — AddExp sets this when a level boundary was just
+        // crossed. LevelUpChoices consumes the flag (and applies a stat
+        // boost) once the player picks a card.
+        bool m_bPendingLevelUp = false;
 
     private:
-        void SpawnBullet();
+        // Get the aim yaw the next projectile should fly along. Honours
+        // m_bMouseAim (raycast onto the player's y-plane) and falls back
+        // to the player's facing yaw.
+        float ComputeAimYaw() const;
+        // Spawn one Cooldown shot from a slot. Reads slot.iLevel for damage
+        // / speed scaling; the slot's cooldown accumulator is the caller's
+        // job.
+        void  FireCooldownBurst(const WeaponSlot& slot);
+        // Spawn Sustained instances for a slot (Orbital orbs). Called when
+        // the weapon is gained or its level changes — old instances are
+        // released first so the count change takes effect.
+        void  RespawnSustainedInstances(WeaponSlot& slot);
 
     public:
         void SetVoxelWorld(Engine::VoxelWorld* pWorld) { m_pVoxelWorld = pWorld; }
 
-        // Experience hooks for Orb pickups.
-        void AddExp(int iAmount) { m_iExp += iAmount; }
-        int  GetExp() const      { return m_iExp; }
+        // Weapon-slot API consumed by LevelUpChoices.
+        //   AddOrLevelUpWeapon — adds a new slot, or levels an existing
+        //                        slot if the player already owns the
+        //                        weapon. Sustained instances re-spawn on
+        //                        level changes so count/speed bumps take.
+        //   GetOwnedWeaponIds   — ids the player already has (LevelUpChoices
+        //                        uses this to compose the card pool).
+        //   GetOwnedWeaponLevel — current level for a given owned id.
+        //   GetWeaponSlotCount  — used to decide whether new-weapon cards
+        //                        should appear in the pool (capped at 6).
+        void AddOrLevelUpWeapon(int iWeaponId);
+        std::vector<int> GetOwnedWeaponIds() const;
+        int  GetOwnedWeaponLevel(int iWeaponId) const;
+        int  GetWeaponSlotCount() const { return static_cast<int>(m_vecWeaponSlots.size()); }
+        static constexpr int GetMaxWeaponSlots() { return kMaxWeaponSlots; }
+
+        // Experience hooks for Orb pickups. AddExp folds overflow into
+        // m_iXpToNext = 5 * level (so each level takes a few more orbs)
+        // and raises m_bPendingLevelUp on every boundary crossing.
+        void AddExp(int iAmount);
+        int  GetExp()      const { return m_iXp; }
+        int  GetLevel()    const { return m_iLevel; }
+        int  GetXpToNext() const { return m_iXpToNext; }
+
+        // Level-up handshake between Player and the LevelUpChoices UI:
+        //   HasPendingLevelUp — true while a card must still be picked.
+        //   ConsumeLevelUp     — UI calls this with the choice index
+        //                        (0/1/2) to apply the boost and clear
+        //                        the flag.
+        bool HasPendingLevelUp() const { return m_bPendingLevelUp; }
+        void ConsumeLevelUp(int iChoice);
+
+        // Apply a hit from an external attacker. Mirrors the frogclaw
+        // collision branch in CollisionPlayerBodyStay so non-collision damage
+        // sources (e.g. Enemy periodic melee from Enemy::Update) can route
+        // through the same Attackable + Hit/Die state path.
+        void OnHitBy(Attackable* pAttacker);
+
+        // HP accessors for HUD readback. Both forward to the Attackable
+        // component that actually tracks the values.
+        int GetHP()    const;
+        int GetMaxHP() const;
 
     public:
         // Replace the active lower/upper state. Mirrors the original SetState

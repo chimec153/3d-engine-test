@@ -1,0 +1,27 @@
+# weapons.csv — weapon catalogue. Loaded by WeaponDatabase at scene init.
+# Columns:
+#   id             — unique integer key
+#   name           — display name (currently unused by UI; text rendering not wired)
+#   spawn_origin   — Front | Around | Mouse
+#   movement       — Straight | Spiral | Fixed | Orbital
+#   fire_mode      — Cooldown | Sustained
+#   on_hit         — Vanish | NoChange | Reflect | Multiply
+#   shape          — Sphere | Box | Triangle
+#   damage         — int, hp removed per hit
+#   cooldown       — seconds between fires (ignored for Sustained)
+#   projectile_speed — world units / sec
+#   lifetime       — seconds before despawn (Fixed/Orbital use this too)
+#   count          — projectiles per fire
+#   color_rgb      — 0xRRGGBB packed colour (card + projectile tint)
+#   level_up_field — Damage | Cooldown | Count | Speed
+#   level_up_amount — bump per level. Damage/Count add (int part);
+#                     Cooldown multiplies (0.9 = -10%/lvl);
+#                     Speed adds (world units / sec).
+id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,projectile_speed,lifetime,count,color_rgb,level_up_field,level_up_amount
+1,Arrow,Front,Straight,Cooldown,Vanish,Sphere,5,0.30,9.0,2.0,1,0xFFCC33,Damage,2
+2,Orb,Around,Orbital,Sustained,NoChange,Sphere,3,0.00,2.5,9999.0,2,0x3399FF,Count,1
+3,Boomerang,Front,Spiral,Cooldown,Reflect,Triangle,4,0.70,6.0,2.5,1,0x66CC66,Damage,2
+4,Mine,Front,Fixed,Cooldown,Vanish,Box,12,1.20,0.0,4.0,1,0xCC3333,Damage,4
+5,Splitter,Front,Straight,Cooldown,Multiply,Sphere,3,0.80,7.0,2.0,1,0x9933CC,Count,1
+6,CursorShot,Mouse,Fixed,Cooldown,Vanish,Triangle,8,0.90,0.0,1.2,1,0x33CCCC,Damage,3
+7,ShieldOrb,Around,Orbital,Sustained,Reflect,Box,2,0.00,1.5,9999.0,1,0x888888,Damage,1

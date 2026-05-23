@@ -24,7 +24,7 @@ namespace Engine
 		{
 			m_pMouseButton[i].iKey = i;
 		}
-		ShowCursor(FALSE);
+		//ShowCursor(FALSE);
 	}
 
 	CInput::~CInput()

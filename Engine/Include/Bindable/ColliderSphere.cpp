@@ -3,6 +3,10 @@
 #include "ColliderLine.h"
 #include "../Collision/Collision.h"
 #include "ColliderOBB.h"
+#ifdef _DEBUG
+#include "../Render/RenderManager.h"
+#include <cmath>
+#endif
 
 namespace Engine
 {
@@ -79,8 +83,41 @@ namespace Engine
 
 	void ColliderSphere::PreDraw(float fDeltaTime)
 	{
-		// Phase E7 — debug visualization removed.
 		__super::PreDraw(fDeltaTime);
+
+#ifdef _DEBUG
+		// Wireframe overlay — three orthogonal great circles (XY/XZ/YZ
+		// planes through the sphere centre). 24 segments per circle reads
+		// cleanly without flooding the line buffer.
+		auto* pRM = RenderManager::GetInst();
+		if (!pRM->IsDebugDrawColliders()) return;
+
+		constexpr int   kSegs = 24;
+		const Vector3&  c     = m_tInfo.vCenter;
+		const float     r     = m_tInfo.fRadius;
+		const float     fStep = 6.2831853f / static_cast<float>(kSegs);
+
+		for (int i = 0; i < kSegs; ++i)
+		{
+			const float a0 = static_cast<float>(i)     * fStep;
+			const float a1 = static_cast<float>(i + 1) * fStep;
+			const float s0 = sinf(a0), c0 = cosf(a0);
+			const float s1 = sinf(a1), c1 = cosf(a1);
+
+			// XY plane (z = 0)
+			pRM->AddDebugLine(
+				Vector3(c.x + r * c0, c.y + r * s0, c.z),
+				Vector3(c.x + r * c1, c.y + r * s1, c.z));
+			// XZ plane (y = 0)
+			pRM->AddDebugLine(
+				Vector3(c.x + r * c0, c.y, c.z + r * s0),
+				Vector3(c.x + r * c1, c.y, c.z + r * s1));
+			// YZ plane (x = 0)
+			pRM->AddDebugLine(
+				Vector3(c.x, c.y + r * c0, c.z + r * s0),
+				Vector3(c.x, c.y + r * c1, c.z + r * s1));
+		}
+#endif
 	}
 	void ColliderSphere::Save(FILE* pFile)
 	{

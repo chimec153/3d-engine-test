@@ -4,6 +4,7 @@
 #include "Bindable/Particle.h"
 #include "Bindable/Texture.h"
 #include "Bindable/SoundBindable.h"
+#include "Bindable/Transform.h"
 #include "GameObject/GameObject.h"
 
 namespace
@@ -32,11 +33,12 @@ namespace Client
 		SetComponentType(Engine::COMPONENT_TYPE::NONE);
 	}
 
-	Attackable::Attackable(int iMaxHP, int iAttackMin, int iAttackMax)	:
+	Attackable::Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle)	:
 		m_iMaxHP(iMaxHP)
 		, m_iHP(iMaxHP)
 		, m_iAttackMin(iAttackMin)
 		, m_iAttackMax(iAttackMax)
+		, m_bWithBloodParticle(bWithBloodParticle)
 	{
 		SetComponentType(Engine::COMPONENT_TYPE::NONE);
 	}
@@ -47,6 +49,7 @@ namespace Client
 		, m_iHP(other.m_iHP)
 		, m_iAttackMin(other.m_iAttackMin)
 		, m_iAttackMax(other.m_iAttackMax)
+		, m_bWithBloodParticle(other.m_bWithBloodParticle)
 		, m_pPaperBurn(other.m_pPaperBurn)
 		, m_pParticle(other.m_pParticle)
 		, m_pBloodParticle(other.m_pBloodParticle)
@@ -147,23 +150,32 @@ namespace Client
 			m_pParticle->StopEmit();
 		}
 
-		m_pBloodParticle = CreateSiblingComponent<Engine::Particle>(
-			pOwnerGameObject, "bloodparticle", 512);
-
-		if (m_pBloodParticle)
+		// Blood particle is opt-in (see Attackable.h constructor doc).
+		// Every Attackable that opts in pays a per-frame CS dispatch +
+		// system-buffer upload, which dominated the profile when enemies
+		// each had one. Default-off means enemies / monsters skip it
+		// entirely; only entities that pass bWithBloodParticle=true (the
+		// player) get the emitter.
+		if (m_bWithBloodParticle)
 		{
-			m_pBloodParticle->SetAccelaration({ 0.f, -3.f, 0.f });
-			m_pBloodParticle->SetEmitTime(0.0001f);
-			m_pBloodParticle->SetStartColor({ 0.4f, 0.f, 0.f, 1.0f });
-			m_pBloodParticle->SetEndColor({ 0.4f, 0.f, 0.f, 0.9f });
-			m_pBloodParticle->SetMaxLifeTime(1.f);
-			m_pBloodParticle->SetStartSize({ 0.04f, 0.04f });
-			m_pBloodParticle->SetEndSize({ 0.04f, 0.04f });
-			m_pBloodParticle->SetVelocity({ -0.2f, -0.2f, -0.2f });
-			m_pBloodParticle->SetMaxVelocity({ 0.2f, 0.2f, 0.2f });
-			m_pBloodParticle->SetTexture(pParticleTex);
-			m_pBloodParticle->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
-			m_pBloodParticle->AddEmitCount(1);
+			m_pBloodParticle = CreateSiblingComponent<Engine::Particle>(
+				pOwnerGameObject, "bloodparticle", 512);
+
+			if (m_pBloodParticle)
+			{
+				m_pBloodParticle->SetAccelaration({ 0.f, -3.f, 0.f });
+				m_pBloodParticle->SetEmitTime(0.0001f);
+				m_pBloodParticle->SetStartColor({ 0.4f, 0.f, 0.f, 1.0f });
+				m_pBloodParticle->SetEndColor({ 0.4f, 0.f, 0.f, 0.9f });
+				m_pBloodParticle->SetMaxLifeTime(1.f);
+				m_pBloodParticle->SetStartSize({ 0.04f, 0.04f });
+				m_pBloodParticle->SetEndSize({ 0.04f, 0.04f });
+				m_pBloodParticle->SetVelocity({ -0.2f, -0.2f, -0.2f });
+				m_pBloodParticle->SetMaxVelocity({ 0.2f, 0.2f, 0.2f });
+				m_pBloodParticle->SetTexture(pParticleTex);
+				m_pBloodParticle->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
+				m_pBloodParticle->AddEmitCount(1);
+			}
 		}
 
 		char strHit[TEXT_LEN] = {};
@@ -173,6 +185,42 @@ namespace Client
 			pOwnerGameObject, "hitsound", strHit);
 
 		return true;
+	}
+
+	void Attackable::Update(float fDeltaTime)
+	{
+		__super::Update(fDeltaTime);
+
+		// Each sibling Particle component owns a standalone Transform that
+		// Particle::Init seeded at (0,0,0) and that nothing else writes to.
+		// Without per-frame sync, particles spawn at world origin instead
+		// of the host's position — Bullet uses the same pattern (Bullet
+		// updates its trail's Transform every Update). Mirror that here
+		// for the yellow/blood emitters created in Init.
+		Engine::GameObject* pOwner = GetGameObjectOwner();
+		if (!pOwner) return;
+		auto pHostTr = pOwner->GetComponent<Engine::Transform>();
+		if (!pHostTr) return;
+
+		const Engine::Vector3& vPos = pHostTr->GetPosition();
+		const Engine::Vector3& vRot = pHostTr->GetRotation();
+
+		if (m_pParticle)
+		{
+			if (auto pTr = m_pParticle->GetTransform())
+			{
+				pTr->SetPosition(vPos);
+				pTr->SetRotation(vRot);
+			}
+		}
+		if (m_pBloodParticle)
+		{
+			if (auto pTr = m_pBloodParticle->GetTransform())
+			{
+				pTr->SetPosition(vPos);
+				pTr->SetRotation(vRot);
+			}
+		}
 	}
 
 	std::shared_ptr<Engine::Component> Attackable::Clone()

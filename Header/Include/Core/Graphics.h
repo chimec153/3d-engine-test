@@ -90,6 +90,10 @@ namespace Engine
 		ID3D11DeviceContext* GetDeviceContext()	const;
 		ID3D11Device* GetDevice()	const;
 		const CPtr<ID3D11RenderTargetView>& GetRTV()	const;
+		// Swap-chain access for D2D / DXGI interop. Text renders straight
+		// to backbuffer 0 by wrapping its IDXGISurface in a D2D render
+		// target — needs the swap chain to query that surface.
+		const CPtr<IDXGISwapChain>& GetSwapChain() const { return pSwapChain; }
 		const CPtr<ID3D11DepthStencilView>& GetDSV()	const;
 		const std::shared_ptr<class PointLight>& GetLight()	const;
 

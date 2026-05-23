@@ -341,14 +341,14 @@ namespace Editor
 
 		if (ImGui::Button("stop"))
 		{
-			Engine::Window::GetInst()->Stop();
+			Engine::Window::GetInst()->GetTimer()->Stop();
 		}
 
 		ImGui::SameLine();
 
 		if (ImGui::Button("resume"))
 		{
-			Engine::Window::GetInst()->Resume();
+			Engine::Window::GetInst()->GetTimer()->Resume();
 		}
 
 		// NavMesh wireframe overlay toggle. The "NavMesh_Debug" GameObject
@@ -367,6 +367,21 @@ namespace Editor
 				}
 			}
 		}
+
+		// Collider wireframe overlay. Every ColliderOBB/Sphere/Line pushes
+		// its edges to RenderManager's debug-line buffer each frame when
+		// this flag is on; the flush pass at the end of Render() draws
+		// them on top of the final image. Only available in _DEBUG (the
+		// engine-side toggle and flush path are themselves _DEBUG-only).
+#ifdef _DEBUG
+		{
+			bool bShowColliders = Engine::RenderManager::GetInst()->IsDebugDrawColliders();
+			if (ImGui::Checkbox("Show Colliders", &bShowColliders))
+			{
+				Engine::RenderManager::GetInst()->SetDebugDrawColliders(bShowColliders);
+			}
+		}
+#endif
 
 		ImGui::End();
 
@@ -2817,6 +2832,33 @@ namespace Editor
 			if (GetSaveFileName(&tName))
 			{
 				pMesh->SaveFromFullPath(strFile);
+			}
+		}
+
+		// Primary material shortcut — surfaces the MeshRenderer's
+		// renderer-level material (the one assigned via SetMaterial). Voxel
+		// chunks, Orbs, and other entities that only call SetMaterial
+		// would otherwise be invisible in this panel, since the per-
+		// container loop below only walks mesh-slot defaults + per-slot
+		// overrides. Clicking the row promotes the material into the
+		// Material Browser's selection so its editor pane jumps to it.
+		{
+			auto pPrimary = pRenderer->GetMaterial();
+			const std::string strLabel = pPrimary
+				? pPrimary->GetTag()
+				: std::string("(none)");
+			const std::string strRow = "Material: " + strLabel + "##primarymat";
+			if (ImGui::Selectable(strRow.c_str()))
+			{
+				if (pPrimary)
+				{
+					m_pSelectedMaterial = pPrimary;
+					// Surface the Material Browser too — if the user has it
+					// closed or hidden behind other windows, the selection
+					// change would otherwise be invisible. Matches the
+					// "jump to inspector" expectation of clicking a name.
+					ImGui::SetWindowFocus("Material Browser");
+				}
 			}
 		}
 

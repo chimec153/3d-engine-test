@@ -55,7 +55,6 @@ namespace Engine
 		, m_hInst()
 		, m_bRun(true)
 		, pTimer(nullptr)
-		, bStop(false)
 		, m_iWidth(0)
 		, m_iHeight(0)
 		, bCursorEnable(false)
@@ -133,19 +132,12 @@ namespace Engine
 		return pTimer;
 	}
 
-	void Window::Stop()
-	{
-		bStop = true;
-	}
-
-	void Window::Resume()
-	{
-		bStop = false;
-	}
+	// Window::Stop / Resume removed — pause state moved to Timer. Use
+	// Window::GetInst()->GetTimer()->Stop() / Resume() instead.
 
 	void Window::CursorEnable()
 	{
-		while (ShowCursor(TRUE) < 0);
+		//while (ShowCursor(TRUE) < 0);
 
 		ClipCursor(nullptr);
 
@@ -154,7 +146,7 @@ namespace Engine
 
 	void Window::CursorDisable()
 	{
-		while (ShowCursor(FALSE) >= 0);
+		//while (ShowCursor(FALSE) >= 0);
 
 		POINT pt = {};
 
@@ -357,13 +349,16 @@ namespace Engine
 
 		SetWindowText(m_hWnd, strFPS);
 
-		CInput::GetInst()->Update(fDeltaTime * !bStop);
+		// fDeltaTime already comes from Timer::GetDeltTime which folds
+		// the Stop() gate in directly (returns 0 while paused) — no
+		// per-callsite `* !bStop` masking needed anymore.
+		CInput::GetInst()->Update(fDeltaTime);
 
 		ShaderManager::GetInst()->Update(fDeltaTime, fTime);
 
 		ResourceManager::GetInst()->Update(fDeltaTime);
 
-		return SceneManager::GetInst()->Update(fDeltaTime * !bStop);
+		return SceneManager::GetInst()->Update(fDeltaTime);
 	}
 
 	void Window::FixedUpdate(float fDeltaTime)

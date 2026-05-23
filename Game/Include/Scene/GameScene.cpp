@@ -3,6 +3,7 @@
 #include "Voxel/VoxelWorld.h"
 REGISTER_SCENE(Client::GameScene, GameScene)
 #include "../Object/Player.h"
+#include "../Object/WeaponDatabase.h"
 #include "Bindable/BindableManager.h"
 #include "Bindable/Mesh.h"
 #include "Resource/ResourceManager.h"
@@ -17,9 +18,16 @@ REGISTER_SCENE(Client::GameScene, GameScene)
 #include "UI/Image.h"
 #include "UI/Frame.h"
 #include "../UI/Inventory.h"
+#include "../UI/HPBar.h"
+#include "../UI/XPBar.h"
+#include "../UI/LevelUpChoices.h"
+#include "../UI/EnemyCountHUD.h"
 #include "Input/Input.h"
 #include "Bindable/Camera.h"
 #include "Core/Graphics.h"
+#include "Bindable/Texture.h"
+#include "Bindable/ConstantBuffer.h"
+#include "Matrix.h"
 #include "Bindable/UIRenderer.h"
 #include "Sound/Sound.h"
 #include "../Object/Tree.h"
@@ -305,7 +313,7 @@ namespace Client
 		// Fixed spawn cell on the floor (y=1, above the y=0 stone slab).
 		// Picked at the far edge of the demo wall so the chase visibly forces
 		// the enemy to choose between detour and wall-break.
-		pEnemy->SetSpawnCell(4, 1, 24);
+		pEnemy->SetSpawnCell(4, 24);
 
 		if (auto pPlayer = pLayer->FindGameObject("player"))
 		{
@@ -325,6 +333,14 @@ namespace Client
 
 		CreateMesh();
 
+		// Static weapon catalogue. The DB is a singleton so Player and
+		// LevelUpChoices both find the same rows without threading a
+		// pointer through. CSVLoader::Load resolves the virtual /Game/...
+		// path via PathManager internally — /Game/ is mounted at
+		// <exe-dir>\Resource\ by CPathManager::Init, so this works
+		// regardless of the host .exe's working directory.
+		WeaponDatabase::GetInst().LoadFromCSV("/Game/Data/Weapons/weapons.csv");
+
 		Engine::ResourceManager::GetInst()->LoadSkeleton("/Game/Mesh/Idle.skel");
 		//Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
 
@@ -338,11 +354,7 @@ namespace Client
 
 		CreateTexture();
 
-		//Load("Resource\\Scene\\test.scn", ROOT_PATH);
-
 		AddLayer(DEFAULT_LAYER);
-
-		//CreateTerrain();
 
 		if (auto pCameraObj = CreateGameObject("Camera", FindLayer(DEFAULT_LAYER)))
 		{
@@ -366,6 +378,9 @@ namespace Client
 		// Phase E5 — Player is a GameObject now.
 		// Phase V6 — VoxelWorld lives on the scene. Seed it BEFORE Player
 		// is created so the player can be handed a ready-to-use world.
+		// Phase V7 — design pivot: voxels are 2D walls only. The world has
+		// a floor at y=0 (48×48 stone slab) and walls at y=kWallY; any
+		// other y is unused.
 		m_pVoxelWorld = std::make_unique<Engine::VoxelWorld>(
 			this, FindLayer(DEFAULT_LAYER));
 
@@ -373,20 +388,53 @@ namespace Client
 			for (int z = 0; z < 48; ++z)
 				m_pVoxelWorld->SetBlock(x, 0, z, Engine::BlockType::Stone);
 
-		m_pVoxelWorld->SetBlock( 8, 5,  8, Engine::BlockType::Stone);
-		m_pVoxelWorld->SetBlock(15, 5, 24, Engine::BlockType::Stone);
-		m_pVoxelWorld->SetBlock(16, 5, 24, Engine::BlockType::Stone);
-
 		// Demo wall: a stone strip at x=24 spanning z=14..34. Enemies that
 		// spawn on one side of it and chase the player on the other side
 		// will choose "break a wall block" if it beats the detour cost.
 		for (int z = 14; z <= 34; ++z)
 		{
-			m_pVoxelWorld->SetBlock(24, 1, z, Engine::BlockType::Stone);
+			m_pVoxelWorld->SetBlock(24, kWallY, z, Engine::BlockType::Stone);
 		}
 
 		std::shared_ptr<Player> pPlayer = CreateGameObject<Player>("player", FindLayer(DEFAULT_LAYER), 100, 10, 15);
 		if (pPlayer) pPlayer->SetVoxelWorld(m_pVoxelWorld.get());
+
+		// HPBar — UIControl-derived Component on a dedicated GameObject.
+		// Its child UIRenderers self-register with RenderManager's UI
+		// layer (UIRenderer::PreDraw), so Scene only seeds the target
+		// here and does not re-register anything per frame.
+		if (auto pHPBarObj = CreateGameObject<>("HPBar", FindLayer(DEFAULT_LAYER)))
+		{
+			if (auto pHPBar = pHPBarObj->AddComponent<HPBar>("hpbar"))
+			{
+				pHPBar->SetTarget(pPlayer);
+			}
+		}
+
+		// XP gauge — same pattern, sits just above the HP bar.
+		if (auto pXPBarObj = CreateGameObject<>("XPBar", FindLayer(DEFAULT_LAYER)))
+		{
+			if (auto pXPBar = pXPBarObj->AddComponent<XPBar>("xpbar"))
+			{
+				pXPBar->SetTarget(pPlayer);
+			}
+		}
+
+		// Level-up choice modal — hidden until Player::HasPendingLevelUp
+		// flips on. Pauses the game (Engine::Window::Stop) and waits
+		// for the 1/2/3 keypress to apply a boost and resume.
+		if (auto pLevelUpObj = CreateGameObject<>("LevelUpChoices", FindLayer(DEFAULT_LAYER)))
+		{
+			if (auto pLevelUp = pLevelUpObj->AddComponent<LevelUpChoices>("levelup"))
+			{
+				pLevelUp->SetTarget(pPlayer);
+			}
+		}
+
+		// Debug overlay — live enemy count. Reads the active scene's
+		// default layer each frame, so it works whether the Editor or
+		// standalone Game launched us.
+		m_pEnemyCountHUD = std::make_unique<EnemyCountHUD>();
 
 		// InventoryCamera is owned by the Player (previously also registered
 		// on Layer's m_ComponentList; that parallel registration was removed
@@ -404,102 +452,11 @@ namespace Client
 
 		pInventoryCameraTransform->SetRelativePosition(1.f, -0.2f, -20.f);
 
-		//pTerrainCollider->SetCallBack(Engine::COLLISION_TYPE::STAY, pPlayer.get(), &Player::CollisionTerrainStay);
-
-		CreateGameObject<Monster>("frog", FindLayer(DEFAULT_LAYER), 50, 5, 10);
-
-		/*std::shared_ptr<Engine::Decal> pDecal = CreateProtoType<Engine::Decal>("blooddecal", Engine::SCENE_TYPE::CURRENT);
-
-		pDecal->FindAndAddBind<Engine::PixelShader>(DECAL_PS_PBR);
-		pDecal->FindAndAddBind<Engine::Texture>("DecalBloodAlbedo");
-		pDecal->FindAndAddBind<Engine::Texture>("DecalBloodNormal");
-		pDecal->FindAndAddBind<Engine::Texture>("DecalBloodOpacity");
-		pDecal->FindAndAddBind<Engine::Texture>("DecalBloodRoughness");
-		pDecal->FindAndAddBind<Engine::Mesh>("Box");
-		pDecal->FindAndAddBind<Engine::Topology>("TriangleList");
-		pDecal->SetMaxFadeTime(12.f);
-		pDecal->StartFade();
-
-		std::shared_ptr<Engine::Material> pDecalMetarial = std::static_pointer_cast<Engine::Material>(pDecal->FindChild(Engine::BINDABLE_TYPE::MATERIAL));
-
-		if (pDecalMetarial)
-		{
-			pDecalMetarial->SetRoughnessX(1.f);
-			pDecalMetarial->SetRoughnessY(1.f);
-		}
-
-		std::shared_ptr<Engine::Transform> pDecalTransform = pDecal->GetTransform();
-
-		if (pDecalTransform)
-		{
-			pDecalTransform->SetPosition(5.f, 31.f, 5.f);
-
-			pDecalTransform->SetScale(2.f, 1.f, 2.f);
-		}
-
-		std::shared_ptr<Engine::Image> pQuickSlot = CreateDrawable<Engine::Image>("QuickSlot", FindLayer(DEFAULT_LAYER), "QuickSlot");
-
-		std::shared_ptr<Engine::Transform> pQuickSlotTransform = pQuickSlot->GetTransform();
-
-		pQuickSlotTransform->SetScale(287.f, 42.f, 1.f);
-		pQuickSlotTransform->SetPosition(floor((Engine::Window::GetInst()->GetWidth() - 287.f) / 2.f), 10.f, 0.f);
-
-		std::shared_ptr<Inventory> pInventory = CreateDrawable<Inventory>("Inventory", FindLayer(DEFAULT_LAYER), "frame");
-
-		std::shared_ptr<Engine::Transform> pFrameTransform = pInventory->GetTransform();
-
-		pFrameTransform->SetScale(291.f, 313.f, 1.f);
-		pFrameTransform->SetPosition(Engine::Window::GetInst()->GetWidth() / 2 - 145.f, Engine::Window::GetInst()->GetHeight() / 2 - 156.f, 0.f);
-
-		Engine::CInput::GetInst()->AddKey(DIK_I);
-
-		Engine::CInput::GetInst()->CreateAction("Inventory", DIK_I);
-
-		Engine::CInput::GetInst()->AddAction("Inventory", Engine::CInput::KEY_STATE::UP, pInventory.get(), &Inventory::ToggleInventory);
-
-		pInventory->AddItem(1);
-
-		pInventory->AddItem(2);
-
-		pInventory->AddItem(3);
-
-		pInventory->AddItem(4);
-
-		std::shared_ptr<Engine::UIRenderer> pUIRenderer = std::static_pointer_cast<Engine::UIRenderer>(pInventory->FindChild("uirenderer"));
-
-		if (pUIRenderer)
-		{
-			pUIRenderer->SetCamera(pUIInventoryCamera);
-
-			pUIRenderer->SetTarget(pPlayer);
-		}
-
-		std::shared_ptr<Engine::UIRenderer> pUIWeaponRenderer = std::static_pointer_cast<Engine::UIRenderer>(pInventory->FindChild("uirenderer_weapon"));
-
-		if (pUIWeaponRenderer)
-		{
-			pUIWeaponRenderer->SetCamera(pUIInventoryCamera);
-		}
-
-		pPlayer->SetInventory(pInventory);*/
-
-		//std::shared_ptr<Engine::Drawable> pArmor = CreateDrawable<Engine::Drawable>("armor", FindLayer(DEFAULT_LAYER));
-
-		//pArmor->Load(TEXT("UltimateRPGItemsBundle\\ArmorLeather\\Armor_Leather.fbx"));
-
-		//CreateDrawable<Tree>("tree", FindLayer(DEFAULT_LAYER));
-
 		Engine::RenderManager::GetInst()->SetFogColor({ 0.f, 43.f / 255.f, 152.f / 255.f });
 		Engine::RenderManager::GetInst()->SetFogHighlightColor({ 1.f, 0.f, 0.f });
 		Engine::RenderManager::GetInst()->SetFogStartDepth(50.f);   // was 10 — fog 시작 거리 늘림
 		Engine::RenderManager::GetInst()->SetFogDensity(0.005f);    // was 0.03 — 농도 약하게
 		Engine::RenderManager::GetInst()->SetFogHeightFallOff(0.001f);
-
-		// Phase E7 — RenderV2 retired. The sort-by-state benefit it provided
-		// will be reintroduced as additions to the V1 render path; the
-		// parallel V2 demos (v2Mesh, TreeV2) and their integration are gone.
-
-		//CreateMonster();
 
 		return true;
 	}
@@ -507,6 +464,16 @@ namespace Client
 	void GameScene::Update(float dt)
 	{
 		__super::Update(dt);   // Scene::Update auto-advances V2 drawables.
+
+		// HPBar's child UIRenderers self-register via their own PreDraw.
+		// EnemyCountHUD stays a plain class so we still drive it here.
+		if (m_pEnemyCountHUD)
+		{
+			EnemyCountHUD* pHud = m_pEnemyCountHUD.get();
+			Engine::RenderManager::GetInst()->AddCustomRender(
+				Engine::RENDER_LAYER::UI,
+				[pHud]() { pHud->Render(); });
+		}
 
 		// Periodic enemy spawning — pick a random angle around the player
 		// every m_fEnemySpawnInterval seconds and drop a slow-chase Enemy
@@ -549,7 +516,7 @@ namespace Client
 			pEnemy->SetMeshKind(Enemy::MESH_KIND::CAPSULE);
 
 		pEnemy->SetVoxelWorld(m_pVoxelWorld.get());
-		pEnemy->SetSpawnCell(cx, 1, cz);
+		pEnemy->SetSpawnCell(cx, cz);
 		pEnemy->SetSpeed(m_fEnemyTestSpeed);
 		pEnemy->SetTarget(pPlayer);
 	}

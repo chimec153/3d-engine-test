@@ -36,7 +36,20 @@ namespace Engine
 		, m_pPS(StaticFindBindable<PixelShader>("ParticlePS"))
 		, m_pCS(StaticFindBindable<ComputeShader>("ParticleCS"))
 		, m_tCBuffer(iMaxCount)
-		, m_pBuffer(std::make_shared<StructuredBuffer>(iMaxCount, static_cast<int>(sizeof(PARTICLE))))
+		// Zero-initialise the per-particle GPU buffer at construction. D3D11
+		// USAGE_DEFAULT buffers contain undefined contents until first write;
+		// the CS_PARTICLE dispatch only touches a slot when `alive` is the
+		// expected sentinel value, so a garbage `alive == true` would skip
+		// the spawn path and pump random pos/size/colour through the GS on
+		// the very first frame — a screen-spanning billboard with the
+		// particle texture's white centre, observed as "voxel exteriors
+		// painted white" for the duration the rogue particle's `age`
+		// remains below its (also garbage) `maxage`. The temporary vector
+		// stays alive through end-of-full-expression, long enough for the
+		// StructuredBuffer constructor to upload its contents via
+		// D3D11_SUBRESOURCE_DATA.
+		, m_pBuffer(std::make_shared<StructuredBuffer>(iMaxCount, static_cast<int>(sizeof(PARTICLE)),
+			std::vector<PARTICLE>(iMaxCount).data()))
 		, m_pSystemBuffer(std::make_shared<StructuredBuffer>(static_cast<int>(ceil(iMaxCount / 64.f)), 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS))
 		, m_pParticleCBuffer(StaticFindBindable<ConstantBuffer<PARTICLECBUFFER>>("Particle"))
 		, m_fElapsedTime(0.f)

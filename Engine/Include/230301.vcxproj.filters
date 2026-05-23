@@ -414,6 +414,21 @@
     <ClCompile Include="Bindable\MeshLoader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Core\MountPointRegistry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\ObjectFactory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Resource\Text.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Resource\Font.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Resource\FontManager.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Core\Window.h">
@@ -766,6 +781,21 @@
     </ClInclude>
     <ClInclude Include="Navigation\Recast\RecastAssert.h">
       <Filter>13. Navigation\02. Recast</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\MountPointRegistry.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\ObjectFactory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource\Text.h">
+      <Filter>14. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource\FontManager.h">
+      <Filter>14. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource\Font.h">
+      <Filter>14. UI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

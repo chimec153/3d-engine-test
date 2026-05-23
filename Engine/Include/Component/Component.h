@@ -44,6 +44,22 @@ namespace Engine
 		// hosts remain). GameObject is the only host type now.
 		class GameObject* m_pGameObjectOwner;
 
+		// GetHostTransform cache. Resolving the host Transform via
+		// GameObject::GetComponent<Transform>() runs dynamic_pointer_cast
+		// over every component in the owner's list — brutal in the inner
+		// loop of CollisionSphereToSphere.
+		//
+		// Cached as a shared_ptr (not weak_ptr): weak_ptr.lock() per call
+		// allocates a fresh shared_ptr control-block ref each time, which
+		// the profile showed dominating the post-fix hot path. shared_ptr
+		// cache lets the accessor return by const reference with no
+		// atomic ops. No cycle risk — Transform doesn't hold back-refs
+		// to sibling Components on the same GameObject. m_pCachedHostTr
+		// is the same pointer as m_pCachedHostTransform.get() and is
+		// kept so the *Raw accessor needs no .get() call per invocation.
+		mutable std::shared_ptr<class Transform> m_pCachedHostTransform;
+		mutable class Transform*                 m_pCachedHostTr = nullptr;
+
 	public:
 		void SetComponentType(COMPONENT_TYPE eType);
 		COMPONENT_TYPE GetComponentType() const;
@@ -53,12 +69,16 @@ namespace Engine
 		class GameObject* GetGameObjectOwner() const;
 		void SetGameObjectOwner(class GameObject* pOwner);
 
-		// Phase E5 — host-agnostic Transform accessor. Resolves the
-		// Drawable owner's Transform first, falls back to the GameObject
-		// owner's Transform Component. Lets Components (colliders, sound,
-		// animation, etc.) reach the host transform regardless of whether
-		// they're attached to a Drawable or a GameObject.
-		std::shared_ptr<class Transform> GetHostTransform() const;
+		// Phase E5 — host-agnostic Transform accessor. Resolves the host
+		// GameObject's Transform Component. Returns by const reference so
+		// callers in hot paths (e.g. CollisionSphereToSphere) don't pay
+		// the atomic ref-count traffic of returning a shared_ptr by
+		// value. Cached internally; the lookup is dynamic_pointer_cast
+		// over the owner's component list, done once per Component
+		// lifetime. Callers that need a raw pointer should use the *Raw
+		// accessor below to skip even the shared_ptr deref.
+		const std::shared_ptr<class Transform>& GetHostTransform() const;
+		class Transform*                        GetHostTransformRaw() const;
 		const std::list<std::shared_ptr<Component>>& GetChildList() const;
 		virtual void AddChild(const std::shared_ptr<Component>& pChild);
 		std::shared_ptr<Component> FindChild(COMPONENT_TYPE eType) const;

@@ -40,7 +40,9 @@ namespace Engine
 		HINSTANCE m_hInst;
 		bool m_bRun;
 		std::shared_ptr<Timer> pTimer;
-		bool bStop;
+		// bStop moved to Timer — game-time pause is owned by the same
+		// object that produces deltas. Use Window::GetInst()->GetTimer()
+		// ->Stop() / Resume() from callers.
 		int m_iWidth;
 		int m_iHeight;
 		bool bCursorEnable;
@@ -51,8 +53,6 @@ namespace Engine
 	public:
 		void SetPrePresentCallback(std::function<void()> cb);
 		std::shared_ptr<Timer> GetTimer()	const;
-		void Stop();
-		void Resume();
 		void CursorEnable();
 		void CursorDisable();
 		bool IsLockRotation()	const;

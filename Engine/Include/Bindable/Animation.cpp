@@ -347,13 +347,6 @@ namespace Engine
 
 		if (fNextTime >= m_pCurrentSequence->pSequence->GetMaxTime())
 		{
-			if (m_pCurrentSequence->pSequence->GetTag() == "Run")
-			{
-				OutputDebugStringA("MaxTime: ");
-				OutputDebugStringA(m_pCurrentSequence->pSequence->GetTag().c_str());
-				OutputDebugStringA("\n");
-			}
-
 			m_pCurrentSequence->ClearNotifies();
 
 			if (m_pCurrentSequence->pSequence->IsLoop())

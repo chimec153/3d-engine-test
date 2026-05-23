@@ -18,6 +18,12 @@ namespace Engine
     public:
         std::shared_ptr<class InputLayout> GetInputLayout()   const;
         std::shared_ptr<class InputLayout> GetInstInputLayout()   const;
+        // Back-fill the (instanced) input layout after the VS has been
+        // constructed. BindableManager creates VS bindables before the
+        // InputLayout pool exists, so the ctor's default-null layouts
+        // get attached here as soon as the matching IL is registered.
+        void SetInputLayout    (const std::shared_ptr<class InputLayout>& pIL) { m_pInputLayout     = pIL; }
+        void SetInstInputLayout(const std::shared_ptr<class InputLayout>& pIL) { m_pInputLayoutInst = pIL; }
 
     public:
         virtual void LoadShader() override;

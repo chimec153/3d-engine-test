@@ -265,7 +265,10 @@
     <ClCompile Include="Matrix.cpp" />
     <ClCompile Include="Render\MRT.cpp" />
     <ClCompile Include="Render\RenderManager.cpp" />
+    <ClCompile Include="Resource\Font.cpp" />
+    <ClCompile Include="Resource\FontManager.cpp" />
     <ClCompile Include="Resource\ResourceManager.cpp" />
+    <ClCompile Include="Resource\Text.cpp" />
     <ClCompile Include="Scene\Layer.cpp" />
     <ClCompile Include="Scene\Scene.cpp" />
     <ClCompile Include="Scene\SceneManager.cpp" />
@@ -383,7 +386,10 @@
     <ClInclude Include="Render\MRT.h" />
     <ClInclude Include="Render\RenderManager.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="Resource\Font.h" />
+    <ClInclude Include="Resource\FontManager.h" />
     <ClInclude Include="Resource\ResourceManager.h" />
+    <ClInclude Include="Resource\Text.h" />
     <ClInclude Include="Scene\Layer.h" />
     <ClInclude Include="Scene\Scene.h" />
     <ClInclude Include="Scene\SceneManager.h" />

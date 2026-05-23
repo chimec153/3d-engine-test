@@ -27,7 +27,13 @@ namespace Client
     {
     public:
         Attackable();
-        Attackable(int iMaxHP, int iAttackMin, int iAttackMax);
+        // bWithBloodParticle — opt-in for the on-hit blood particle
+        // emitter. Default false because every Attackable that opts in
+        // costs a per-frame CS dispatch + GPU upload (visible in the
+        // profile at ~6% when 30+ enemies each ran one). Only entities
+        // that actually need the visual (e.g. the player) should pass
+        // true.
+        Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle = false);
         Attackable(const Attackable& other);
         virtual ~Attackable() override = default;
 
@@ -36,6 +42,7 @@ namespace Client
         int m_iHP;
         int m_iAttackMin;
         int m_iAttackMax;
+        bool m_bWithBloodParticle = false;
         std::shared_ptr<Engine::PaperBurn>     m_pPaperBurn;
         std::shared_ptr<Engine::Particle>      m_pParticle;
         std::shared_ptr<Engine::Particle>      m_pBloodParticle;
@@ -48,13 +55,38 @@ namespace Client
         // (GameObject side) so this works regardless of host type.
         bool Attack(Attackable* pTargetAttackable) const;
         int GetAttack() const;
+        int GetHP()    const { return m_iHP; }
+        int GetMaxHP() const { return m_iMaxHP; }
         void StartPaperBurn();
+
+        // Stat-boost API — Player::ConsumeLevelUp routes the player's
+        // chosen card here. AddMaxHP also tops the current HP so a
+        // boost mid-combat acts like a heal.
+        void AddMaxHP(int iDelta)
+        {
+            m_iMaxHP += iDelta;
+            m_iHP    += iDelta;
+            if (m_iHP > m_iMaxHP) m_iHP = m_iMaxHP;
+            if (m_iHP < 0)        m_iHP = 0;
+        }
+        void AddAttack(int iDelta)
+        {
+            m_iAttackMin += iDelta;
+            m_iAttackMax += iDelta;
+            if (m_iAttackMin < 0) m_iAttackMin = 0;
+            if (m_iAttackMax < m_iAttackMin) m_iAttackMax = m_iAttackMin;
+        }
 
         std::shared_ptr<Engine::PaperBurn> GetPaperBurn()   const { return m_pPaperBurn; }
         std::shared_ptr<Engine::Particle>  GetParticle()    const { return m_pParticle; }
 
     public:
         virtual bool Init() override;
+        // Per-frame sync of the sibling Particle emitters' standalone
+        // Transforms to the host GameObject's Transform. Without this
+        // the particles spawn at world origin (Particle::Init creates a
+        // fresh Transform at (0,0,0) and never updates it from anywhere).
+        virtual void Update(float fDeltaTime) override;
         virtual std::shared_ptr<Engine::Component> Clone() override;
     };
 
