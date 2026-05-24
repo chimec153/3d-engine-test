@@ -1,6 +1,7 @@
 #pragma once
 #include "GameObject\GameObject.h"
 #include "Pathfinder.h"
+#include "EnemyData.h"
 #include <vector>
 #include <memory>
 
@@ -51,6 +52,12 @@ namespace Client
         // colour immediately.
         void SetMeshKind(MESH_KIND e);
 
+        // Apply a CSV-loaded EnemyDef: writes HP, speed, attack stats and
+        // the visual variant in one call. GameScene's spawn loop pulls a
+        // row from EnemyDatabase and calls this so a designer can rebalance
+        // by editing enemies.csv without touching code.
+        void ApplyDef(const EnemyDef& def);
+
     private:
         Engine::VoxelWorld* m_pVoxelWorld = nullptr;
         MESH_KIND           m_eMeshKind   = MESH_KIND::BOX;
@@ -68,13 +75,16 @@ namespace Client
         std::vector<Pathfinder::PathStep> m_Path;
         size_t m_iPathIdx = 0;
 
-        float m_fSpeed         = 2.0f;   // cells per second
+        float m_fSpeed         = 2.0f;   // cells per second; overwritten by ApplyDef
         float m_fBreakAccum    = 0.f;    // seconds spent breaking the current target cell
 
         // Health pool. Bullet collisions decrement m_iHP; 0 deactivates
         // the GameObject so the scene's prune pass removes it next frame.
-        int m_iMaxHP = 3;
-        int m_iHP    = 3;
+        // GameScene's spawn loop calls ApplyDef with an EnemyDatabase row,
+        // which rewrites these via SetMaxHP — the defaults here are only
+        // hit when something spawns an Enemy without going through ApplyDef.
+        int m_iMaxHP = 10;
+        int m_iHP    = m_iMaxHP;
 
         // Body collider so the player's bullets (tag "bullet_body") can
         // hit us. Set up + callback wired in Init.

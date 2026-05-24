@@ -17,6 +17,7 @@
 #include "../Shader/ShaderManager.h"
 #include "../Bindable/Topology.h"
 #include "../Bindable/BindableManager.h"
+#include "../Bindable/BindableRegistry.h"
 #include "../Bindable/VertexBuffer.h"
 #include "../Bindable/IndexBuffer.h"
 #include "../Bindable/Texture.h"
@@ -39,7 +40,7 @@
 #include "../Bindable/ColliderMesh.h"
 #include "../Bindable/GeometryShader.h"
 #include "../Bindable/ConstantBuffer.h"
-
+#include "../Resource/FontManager.h"
 
 namespace Engine
 {
@@ -107,6 +108,8 @@ namespace Engine
 
 		SceneManager::DestroyInst();
 
+		FontManager::DestroyInst();
+
 		ResourceManager::DestroyInst();
 
 		RenderManager::DestroyInst();
@@ -114,6 +117,12 @@ namespace Engine
 		ShaderManager::DestroyInst();
 
 		CInput::DestroyInst();
+
+		// Run every registered shutdown callback before the device dies.
+		// Catches non-Bindable D3D resource holders (e.g. DamageTextManager)
+		// that piggy-back on this registry so Client/Editor mains don't
+		// need per-app wiring.
+		BindableRegistry::DestroyAll();
 
 		Graphics::DestroyInst();
 

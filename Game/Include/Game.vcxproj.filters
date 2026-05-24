@@ -23,13 +23,7 @@
     <ClCompile Include="Scene\StartScene.cpp">
       <Filter>02. Scene</Filter>
     </ClCompile>
-    <ClCompile Include="UI\Button.cpp">
-      <Filter>03. UI</Filter>
-    </ClCompile>
     <ClCompile Include="UI\EnemyCountHUD.cpp">
-      <Filter>03. UI</Filter>
-    </ClCompile>
-    <ClCompile Include="UI\HPBar.cpp">
       <Filter>03. UI</Filter>
     </ClCompile>
     <ClCompile Include="UI\Inventory.cpp">
@@ -39,9 +33,6 @@
       <Filter>03. UI</Filter>
     </ClCompile>
     <ClCompile Include="UI\LevelUpChoices.cpp">
-      <Filter>03. UI</Filter>
-    </ClCompile>
-    <ClCompile Include="UI\XPBar.cpp">
       <Filter>03. UI</Filter>
     </ClCompile>
     <ClCompile Include="Object\PlayerState.cpp">
@@ -83,13 +74,7 @@
     <ClInclude Include="Scene\StartScene.h">
       <Filter>02. Scene</Filter>
     </ClInclude>
-    <ClInclude Include="UI\Button.h">
-      <Filter>03. UI</Filter>
-    </ClInclude>
     <ClInclude Include="UI\EnemyCountHUD.h">
-      <Filter>03. UI</Filter>
-    </ClInclude>
-    <ClInclude Include="UI\HPBar.h">
       <Filter>03. UI</Filter>
     </ClInclude>
     <ClInclude Include="UI\ItemIcon.h">
@@ -99,9 +84,6 @@
       <Filter>03. UI</Filter>
     </ClInclude>
     <ClInclude Include="UI\LevelUpChoices.h">
-      <Filter>03. UI</Filter>
-    </ClInclude>
-    <ClInclude Include="UI\XPBar.h">
       <Filter>03. UI</Filter>
     </ClInclude>
     <ClInclude Include="Object\State.h">

@@ -8,12 +8,12 @@ namespace Engine
 {
     class Font;
     class Text;
+    class Button;
 }
 
 namespace Client
 {
     class Player;
-    class Button;
 
     // Level-up choice modal — three weapon cards in the centre of the
     // screen. Polls Player::HasPendingLevelUp every frame; when it
@@ -43,7 +43,7 @@ namespace Client
         // level overlays. Text is a UIControl in its own right — it
         // owns its UIRenderer + Transform and renders itself; we
         // never bridge its texture into the Button.
-        std::shared_ptr<Button>       m_pBgButtons[3];
+        std::shared_ptr<Engine::Button> m_pBgButtons[3];
         std::shared_ptr<Engine::Font> m_pNameFont;
         std::shared_ptr<Engine::Font> m_pLvlFont;
         std::shared_ptr<Engine::Text> m_pNameTexts[3];

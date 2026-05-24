@@ -1,0 +1,6 @@
+# spawn.csv — global enemy spawn parameters. One data row.
+# Columns:
+#   enemy_interval — seconds between spawns
+#   enemy_radius   — cells from the player where enemies materialise
+enemy_interval,enemy_radius
+1.0,8.0

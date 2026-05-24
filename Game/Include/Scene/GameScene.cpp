@@ -4,6 +4,10 @@
 REGISTER_SCENE(Client::GameScene, GameScene)
 #include "../Object/Player.h"
 #include "../Object/WeaponDatabase.h"
+#include "../Object/EnemyDatabase.h"
+#include "../Object/SpawnConfig.h"
+#include "EnemySpawner.h"
+#include "GameWorldBuilder.h"
 #include "Bindable/BindableManager.h"
 #include "Bindable/Mesh.h"
 #include "Resource/ResourceManager.h"
@@ -18,10 +22,11 @@ REGISTER_SCENE(Client::GameScene, GameScene)
 #include "UI/Image.h"
 #include "UI/Frame.h"
 #include "../UI/Inventory.h"
-#include "../UI/HPBar.h"
-#include "../UI/XPBar.h"
+#include "UI/Gauge.h"
+#include "Core/Window.h"
 #include "../UI/LevelUpChoices.h"
 #include "../UI/EnemyCountHUD.h"
+#include "../UI/DamageText.h"
 #include "Input/Input.h"
 #include "Bindable/Camera.h"
 #include "Core/Graphics.h"
@@ -65,40 +70,12 @@ namespace Client
 		Engine::ResourceManager::GetInst()->LoadSequenceByTag("Idle",   "/Game/Mesh/Idle.seq");
 		Engine::ResourceManager::GetInst()->LoadSequenceByTag("Run",    "/Game/Mesh/Slow Run.seq");
 		Engine::ResourceManager::GetInst()->LoadSequenceByTag("Attack", "/Game/Mesh/Standing Melee Attack Downward.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Gun_Shoot.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_HitRecieve_2.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun_Pointing.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Gun_Shoot.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Neutral.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Idle_Sword.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Interact.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Kick_Left.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Kick_Right.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Punch_Left.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Punch_Right.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Roll.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Back.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Left.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Right.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Run_Shoot.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Sword_Slash.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Walk.seq");
-		//Engine::ResourceManager::GetInst()->LoadSequence("MedievalCharacterArmature_Wave.seq");
-
-		/*Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Attack.seq");
-		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Death.seq");
-		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Idle.seq");
-		Engine::ResourceManager::GetInst()->LoadSequence("FrogFrogArmature_Frog_Jump.seq");*/
 		return true;
 	}
 
 	bool GameScene::CreateTexture()
 	{
-		std::vector<const TCHAR*> vecTexture =
+		/*std::vector<const TCHAR*> vecTexture =
 		{
 			TEXT("/Game/Texture/LandScape/dirt.bmp"),
 			TEXT("/Game/Texture/LandScape/grass.bmp"),
@@ -142,15 +119,8 @@ namespace Client
 		Engine::StaticCreateBindable<Engine::Texture>("TerrainSpecular", vecSpecularTexture, TEXTURE_PATH, 22);
 		Engine::StaticCreateBindable<Engine::Texture>("TerrainBlend", vecBlendTexture, TEXTURE_PATH, 24);
 		Engine::StaticCreateBindable<Engine::Texture>("TerrainHeight", TEXT("/Game/Texture/LandScape/height2.png"), TEXTURE_PATH, 16);
-		Engine::StaticCreateBindable<Engine::Texture>("SkyBoxTexture", TEXT("/Game/Texture/TYbvO.png"), TEXTURE_PATH, 5);
+		Engine::StaticCreateBindable<Engine::Texture>("SkyBoxTexture", TEXT("/Game/Texture/TYbvO.png"), TEXTURE_PATH, 5);*/
 		Engine::StaticCreateBindable<Engine::Texture>("PaperBurn", TEXT("/Game/Texture/DefaultBurn.png"), TEXTURE_PATH, 4);
-		Engine::StaticCreateBindable<Engine::Texture>("QuickSlot", TEXT("/Game/Texture/item.png"), TEXTURE_PATH, 0);
-		Engine::StaticCreateBindable<Engine::Texture>("frame", TEXT("/Game/Texture/frame.png"), TEXTURE_PATH, 0);
-		Engine::StaticCreateBindable<Engine::Texture>("frame", TEXT("/Game/Texture/frame.png"), TEXTURE_PATH, 0);
-		Engine::StaticCreateBindable<Engine::Texture>("shovel_icon", TEXT("/Game/Texture/shovel_icon.png"), TEXTURE_PATH, 0);
-		Engine::StaticCreateBindable<Engine::Texture>("sword_icon", TEXT("/Game/Texture/sword_icon.png"), TEXTURE_PATH, 0);
-		Engine::StaticCreateBindable<Engine::Texture>("armor_icon", TEXT("/Game/Texture/armor_icon.png"), TEXTURE_PATH, 0);
-		Engine::StaticCreateBindable<Engine::Texture>("gun_icon", TEXT("/Game/Texture/gun_icon.png"), TEXTURE_PATH, 0);
 
 		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodAlbedo", TEXT("/Game/Texture/Decal/sgfjdepc_8K_Albedo.tga"), TEXTURE_PATH, 0);
 		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodNormal", TEXT("/Game/Texture/Decal/sgfjdepc_8K_Normal.tga"), TEXTURE_PATH, 1);
@@ -161,26 +131,8 @@ namespace Client
 
 	bool GameScene::CreateSounds()
 	{
-		Engine::ResourceManager::GetInst()->CreateSound("leather_inventory", "/Game/Sound/inventory_sound_effects/leather_inventory.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("metal-clash", "/Game/Sound/inventory_sound_effects/metal-clash.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("sword sound", "/Game/Sound/melee sounds/sword sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("step_rock_l", "/Game/Sound/sfx_step_rock_l.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("step_rock_r", "/Game/Sound/sfx_step_rock_r.flac", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-		Engine::ResourceManager::GetInst()->CreateSound("melee sound", "/Game/Sound/melee sounds/melee sound.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
+		//Engine::ResourceManager::GetInst()->CreateSound("leather_inventory", "/Game/Sound/inventory_sound_effects/leather_inventory.wav", SOUND_PATH, 0.5f, 5000.f, FMOD_2D, false);
 
-		//for (int i = 0; i < 37; ++i)
-		//{
-		//	char strSound[TEXT_LEN] = {};
-
-		//	sprintf_s(strSound, "hit%02d", i + 1);
-
-		//	std::string strPath = "hits\\";
-
-		//	strPath += strSound;
-		//	strPath += ".mp3.flac";
-
-		//	Engine::ResourceManager::GetInst()->CreateSound(strSound, strPath.c_str(), SOUND_PATH, 0.5f, 5000.f, FMOD_3D, false);
-		//}
 		return true;
 	}
 
@@ -188,114 +140,6 @@ namespace Client
 	{
 		Engine::StaticCreateBindable<Engine::Mesh>("Idle", "/Game/Mesh/Idle.mesh", MESH_PATH);
 		Engine::StaticCreateBindable<Engine::Mesh>("Idle2", "/Game/Mesh/Idle2.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("sword", "Sword.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("shovel", "Shovel.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("armor", "Armor_Leather.mesh", MESH_PATH);
-		//Engine::StaticCreateBindable<Engine::Mesh>("pistol", "Pistol_5.mesh", MESH_PATH);
-		return true;
-	}
-
-	bool GameScene::CreateTerrain()
-	{// Phase E5 — Terrain is a GameObject now.
-		if (auto pTerrain = CreateGameObject<Engine::Terrain>("Terrain", FindLayer(DEFAULT_LAYER)))
-		{
-			// Phase E7 — height map keeps Create* (different file path +
-			// dynamic-access flag for in-game edits). Diffuse/Normal/Specular
-			// were already registered in CreateTexture(); wire them in via
-			// the new Set* path so we don't redundantly create-or-find here.
-			pTerrain->CreateHeightMap("terrain", TEXT("/Game/Texture/terraintest.bmp"));
-			pTerrain->SetTerrainTexture(Engine::StaticFindBindable<Engine::Texture>("TerrainDiffuse"));
-			pTerrain->SetTerrainNormalTexture(Engine::StaticFindBindable<Engine::Texture>("TerrainNormal"));
-			pTerrain->SetTerrainSpecularTexture(Engine::StaticFindBindable<Engine::Texture>("TerrainSpecular"));
-
-			std::vector<float> vecPoints;
-			std::vector<int> vecTris;
-
-			pTerrain->GetPoints(vecPoints);
-			pTerrain->GetTris(vecTris);
-
-			Engine::Vector3 vMin(FLT_MAX, FLT_MAX, FLT_MAX);
-			Engine::Vector3 vMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-			for (size_t i = 0; i + 2 < vecPoints.size(); i += 3)
-			{
-				float x = vecPoints[i], y = vecPoints[i + 1], z = vecPoints[i + 2];
-				vMin.x = std::min(vMin.x, x); vMin.y = std::min(vMin.y, y); vMin.z = std::min(vMin.z, z);
-				vMax.x = std::max(vMax.x, x); vMax.y = std::max(vMax.y, y); vMax.z = std::max(vMax.z, z);
-			}
-
-			// 기본 config로 빌드 (또는 NavMeshConfig 수정해서 전달)
-			Engine::NavMeshConfig cfg;
-			cfg.fAgentRadius = 0.5f;   // 게임에 맞춰 조정
-			cfg.fAgentHeight = 1.8f;
-
-			auto pNavMesh = Engine::NavMesh::Build(vecPoints, vecTris, vMax, vMin, cfg);
-
-			if (pNavMesh)
-			{
-				// Terrain GameObject나 별도 NavMesh holder GameObject에 컴포넌트로 부착
-				if (auto pNavObj = CreateGameObject("NavMesh", FindLayer(DEFAULT_LAYER)))
-				{
-					pNavObj->AddComponent(pNavMesh);
-				}
-				// 이후 Agent 생성/이동에 사용
-			}
-			{
-				auto pDebugMesh = pNavMesh->CreateDebugMesh();
-
-				auto pDebugObj = CreateGameObject("NavDebug", FindLayer(DEFAULT_LAYER));
-				pDebugObj->AddComponent<Engine::Transform>("transform");
-				auto pMR = pDebugObj->AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
-				pMR->SetMesh(pDebugMesh);
-				pMR->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>("anisotropic_microfacet VSNoSkin"));
-				pMR->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>("anisotropic_microfacet PS_NoDiffuseNoSpecNoNormal"));
-				pMR->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
-				pMR->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
-				pMR->AddBindable(Engine::StaticFindBindable<Engine::RasterizerState>(WIREFRAME));
-			}
-
-			// Phase E5 — Terrain is a GameObject; Material is set on the
-			// MeshRendererComponent instead of via Drawable's SetMaterial.
-			// The MeshRenderer was already given a default material in
-			// Terrain::Init; the call here used to overwrite shininess.
-			// Re-introduce when MeshRenderer exposes a Material accessor
-			// that lets external setup override its existing material
-			// without a re-init round trip.
-
-			// Collider lookup via the GameObject's FindComponent.
-			std::shared_ptr<Engine::ColliderMesh> pTerrainCollider = std::static_pointer_cast<Engine::ColliderMesh>(pTerrain->FindComponent(Engine::COMPONENT_TYPE::COLLIDER_MESH));
-		}
-		return true;
-	}
-
-	bool GameScene::CreateMonster()
-	{
-		/*auto pMonster = CreateGameObject<Monster>("monster", FindLayer(DEFAULT_LAYER));
-		auto pTransform = pMonster->AddComponent<Engine::Transform>("transform");
-		auto m_pMeshRenderer = pMonster->AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
-		auto m_pAnimation = pMonster->AddComponent<Engine::Animation>("MonsterAnimation");
-
-		if (pTransform)
-		{
-			pTransform->SetPosition(20.f, 5.f, 10.f);
-			pTransform->SetScale(0.01f, 0.01f, 0.01f);
-		}
-
-		std::shared_ptr<Engine::Mesh> pMesh = Engine::StaticCreateBindable<Engine::Mesh>("Idle2", "/Game/Mesh/Idle2.mesh");
-		if (!pMesh)
-		{
-			pMesh = Engine::StaticFindBindable<Engine::Mesh>("Idle2");
-		}
-		if (m_pMeshRenderer)
-		{
-			m_pMeshRenderer->SetMesh(pMesh);
-			m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_ANIM_VS));
-			m_pMeshRenderer->SetPixelShader(Engine::StaticFindBindable<Engine::PixelShader>(STANDARD_PS));
-			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
-			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
-			m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::DepthStencilState>("OutLineMask"));
-			m_pMeshRenderer->SetAnimation(m_pAnimation);
-		}*/
 		return true;
 	}
 
@@ -341,6 +185,15 @@ namespace Client
 		// regardless of the host .exe's working directory.
 		WeaponDatabase::GetInst().LoadFromCSV("/Game/Data/Weapons/weapons.csv");
 
+		// Enemy catalogue + global spawn parameters. Same /Game mount as
+		// weapons.csv. Both stay at compiled-in defaults if the file is
+		// missing, so the game keeps running even when the CSV is wiped.
+		EnemyDatabase::GetInst().LoadFromCSV("/Game/Data/Enemies/enemies.csv");
+		SpawnConfig::GetInst().LoadFromCSV ("/Game/Data/Enemies/spawn.csv");
+
+		// Floating combat text — bake the glyph atlas once.
+		DamageTextManager::GetInst()->Init();
+
 		Engine::ResourceManager::GetInst()->LoadSkeleton("/Game/Mesh/Idle.skel");
 		//Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
 
@@ -383,40 +236,35 @@ namespace Client
 		// other y is unused.
 		m_pVoxelWorld = std::make_unique<Engine::VoxelWorld>(
 			this, FindLayer(DEFAULT_LAYER));
+		GameWorldBuilder::StampTestScene(*m_pVoxelWorld);
 
-		for (int x = 0; x < 48; ++x)
-			for (int z = 0; z < 48; ++z)
-				m_pVoxelWorld->SetBlock(x, 0, z, Engine::BlockType::Stone);
-
-		// Demo wall: a stone strip at x=24 spanning z=14..34. Enemies that
-		// spawn on one side of it and chase the player on the other side
-		// will choose "break a wall block" if it beats the detour cost.
-		for (int z = 14; z <= 34; ++z)
-		{
-			m_pVoxelWorld->SetBlock(24, kWallY, z, Engine::BlockType::Stone);
-		}
+		// Per-frame enemy spawning lives in a dedicated helper so
+		// GameScene's Update reads as a small list of dispatches.
+		m_pEnemySpawner = std::make_unique<EnemySpawner>(this, m_pVoxelWorld.get());
 
 		std::shared_ptr<Player> pPlayer = CreateGameObject<Player>("player", FindLayer(DEFAULT_LAYER), 100, 10, 15);
 		if (pPlayer) pPlayer->SetVoxelWorld(m_pVoxelWorld.get());
+		m_pPlayer = pPlayer;
 
-		// HPBar — UIControl-derived Component on a dedicated GameObject.
-		// Its child UIRenderers self-register with RenderManager's UI
-		// layer (UIRenderer::PreDraw), so Scene only seeds the target
-		// here and does not re-register anything per frame.
-		if (auto pHPBarObj = CreateGameObject<>("HPBar", FindLayer(DEFAULT_LAYER)))
+		// HP / XP gauges. Layout (rect) and ratio are pushed every frame
+		// from Update so window resize still tracks. Colors here match
+		// the old HPBar (red on dark grey) / XPBar (yellow on darker
+		// grey) constants verbatim.
+		if (auto pHPObj = CreateGameObject<>("HPBar", FindLayer(DEFAULT_LAYER)))
 		{
-			if (auto pHPBar = pHPBarObj->AddComponent<HPBar>("hpbar"))
+			if (auto pHP = pHPObj->AddComponent<Engine::Gauge>("hpbar"))
 			{
-				pHPBar->SetTarget(pPlayer);
+				pHP->SetColors(0xFF303030, 0xFF2030E0);
+				m_pHPGauge = pHP;
 			}
 		}
 
-		// XP gauge — same pattern, sits just above the HP bar.
-		if (auto pXPBarObj = CreateGameObject<>("XPBar", FindLayer(DEFAULT_LAYER)))
+		if (auto pXPObj = CreateGameObject<>("XPBar", FindLayer(DEFAULT_LAYER)))
 		{
-			if (auto pXPBar = pXPBarObj->AddComponent<XPBar>("xpbar"))
+			if (auto pXP = pXPObj->AddComponent<Engine::Gauge>("xpbar"))
 			{
-				pXPBar->SetTarget(pPlayer);
+				pXP->SetColors(0xFF202020, 0xFF20D0E0);
+				m_pXPGauge = pXP;
 			}
 		}
 
@@ -465,7 +313,35 @@ namespace Client
 	{
 		__super::Update(dt);   // Scene::Update auto-advances V2 drawables.
 
-		// HPBar's child UIRenderers self-register via their own PreDraw.
+		// HP / XP gauges — push current rect (so the bars follow window
+		// resize) and the ratio drawn from the player every frame. Same
+		// percentages the old HPBar/XPBar layout helpers encoded.
+		if (auto pPlayer = m_pPlayer.lock())
+		{
+			const float fSW = static_cast<float>(Engine::Window::GetInst()->GetWidth());
+			const float fSH = static_cast<float>(Engine::Window::GetInst()->GetHeight());
+			const float fFullW = fSW * 0.2f;
+			const float fBaseX = fSW * 0.025f;
+
+			if (auto pHP = m_pHPGauge.lock())
+			{
+				const float fH = fSH * 0.025f;
+				pHP->SetRectPx(fBaseX, fSH * 0.975f - fH, fFullW, fH);
+
+				const float fMax = static_cast<float>(pPlayer->GetMaxHP());
+				pHP->SetRatio(fMax > 0.f ? pPlayer->GetHP() / fMax : 0.f);
+			}
+
+			if (auto pXP = m_pXPGauge.lock())
+			{
+				const float fH = fSH * 0.0125f;
+				pXP->SetRectPx(fBaseX, fSH * 0.945f - fH, fFullW, fH);
+
+				const float fNext = static_cast<float>(pPlayer->GetXpToNext());
+				pXP->SetRatio(fNext > 0.f ? pPlayer->GetExp() / fNext : 0.f);
+			}
+		}
+
 		// EnemyCountHUD stays a plain class so we still drive it here.
 		if (m_pEnemyCountHUD)
 		{
@@ -475,50 +351,15 @@ namespace Client
 				[pHud]() { pHud->Render(); });
 		}
 
-		// Periodic enemy spawning — pick a random angle around the player
-		// every m_fEnemySpawnInterval seconds and drop a slow-chase Enemy
-		// on the voxel surface at that bearing.
-		if (!m_pVoxelWorld) return;
+		// Floating combat text — advance the pool every frame and queue
+		// its UI draw. m_CustomRenderList is cleared each frame so the
+		// AddCustomRender call needs to repeat.
+		DamageTextManager::GetInst()->Update(dt);
+		Engine::RenderManager::GetInst()->AddCustomRender(
+			Engine::RENDER_LAYER::UI,
+			[]() { DamageTextManager::GetInst()->Render(); });
 
-		m_fEnemySpawnAcc += dt;
-		if (m_fEnemySpawnAcc < m_fEnemySpawnInterval) return;
-		m_fEnemySpawnAcc -= m_fEnemySpawnInterval;
-
-		auto pLayer = FindLayer(DEFAULT_LAYER);
-		if (!pLayer) return;
-
-		auto pPlayer = pLayer->FindGameObject("player");
-		if (!pPlayer) return;
-		auto pPlayerTr = pPlayer->GetComponent<Engine::Transform>();
-		if (!pPlayerTr) return;
-
-		const float fAngle =
-			(rand() / static_cast<float>(RAND_MAX)) * 2.f * PI;
-		const Engine::Vector3 vPlayer = pPlayerTr->GetPosition();
-		const float fX = vPlayer.x + cosf(fAngle) * m_fEnemySpawnRadius;
-		const float fZ = vPlayer.z + sinf(fAngle) * m_fEnemySpawnRadius;
-
-		// Clamp to the test scene's 48×48 base stone slab so the spawned
-		// cell is always inside the navigable voxel volume.
-		const int cx = std::max(0, std::min(47,
-			static_cast<int>(std::floor(fX))));
-		const int cz = std::max(0, std::min(47,
-			static_cast<int>(std::floor(fZ))));
-
-		auto pEnemy = CreateGameObject<Enemy>("Enemy", pLayer);
-		if (!pEnemy) return;
-
-		// Alternate between the original box mesh and the new capsule mesh
-		// so both variants show up in the demo. Even spawns -> box, odd ->
-		// capsule (also recoloured green inside Enemy::SetMeshKind).
-		++m_iEnemySpawnIdx;
-		if ((m_iEnemySpawnIdx & 1) != 0)
-			pEnemy->SetMeshKind(Enemy::MESH_KIND::CAPSULE);
-
-		pEnemy->SetVoxelWorld(m_pVoxelWorld.get());
-		pEnemy->SetSpawnCell(cx, cz);
-		pEnemy->SetSpeed(m_fEnemyTestSpeed);
-		pEnemy->SetTarget(pPlayer);
+		if (m_pEnemySpawner) m_pEnemySpawner->Tick(dt);
 	}
 
 	void GameScene::Draw()

@@ -503,6 +503,14 @@ namespace Engine
 		Vector2 vSize;
 	}UICBUFFER, *PUICBUFFER;
 
+	// PS_UITint cbuffer — alpha-from-atlas + RGBA tint. Used by the
+	// floating combat-text renderer (and any future glyph-atlas UI).
+	typedef struct ENGINE_DLL alignas(16) _tagUITintBuffer
+	{
+		Vector4 vTint;   // (r, g, b, alpha_master). Default white opaque.
+		_tagUITintBuffer() : vTint(1.f, 1.f, 1.f, 1.f) {}
+	}UITINTBUFFER, *PUITINTBUFFER;
+
 	typedef struct alignas(16) ENGINE_DLL _tagFogCBuffer
 	{
 		Vector3 vFogColor;

@@ -390,6 +390,9 @@
     <ClCompile Include="Bindable\ColliderOBB.cpp">
       <Filter>04. Bindable\08. Collider</Filter>
     </ClCompile>
+    <ClCompile Include="UI\Button.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
     <ClCompile Include="UI\Frame.cpp">
       <Filter>14. UI</Filter>
     </ClCompile>
@@ -747,6 +750,9 @@
       <Filter>04. Bindable\08. Collider</Filter>
     </ClInclude>
     <ClInclude Include="UI\UIControl.h">
+      <Filter>14. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\Button.h">
       <Filter>14. UI</Filter>
     </ClInclude>
     <ClInclude Include="UI\Frame.h">

@@ -1,14 +1,6 @@
 #include "Client.h"
 #include "Scene/SceneManager.h"
 #include "Scene/GameScene.h"
-#include "Bindable/BindableRegistry.h"
-#include "Render/RenderManager.h"
-#include "Resource/ResourceManager.h"
-#include "Shader/ShaderManager.h"
-#include "Collision/CollisionManager.h"
-#include "Input/Input.h"
-#include "Thread/ThreadManager.h"
-#include "Core/Graphics.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     _In_opt_ HINSTANCE hPrevInstance,
@@ -25,16 +17,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     Engine::Window::GetInst()->Run();
 
-    // Shutdown order: release D3D-holding objects before the device.
-    Engine::SceneManager::DestroyInst();
-    Engine::RenderManager::DestroyInst();
-    Engine::ResourceManager::DestroyInst();
-    Engine::ShaderManager::DestroyInst();
-    Engine::CollisionManager::DestroyInst();
-    Engine::CInput::DestroyInst();
-    Engine::ThreadManager::DestroyInst();
-    Engine::BindableRegistry::DestroyAll();
-    Engine::Graphics::DestroyInst();
+    // Shutdown is centralised in Window::~Window — it tears down every
+    // engine-side manager (Scene, Render, Resource, Shader, Bindable
+    // caches, Graphics, etc.) in the correct order.
     Engine::Window::DestroyInst();
 
 	return 0;

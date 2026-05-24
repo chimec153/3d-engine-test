@@ -8,11 +8,14 @@ namespace Engine
 {
     class Collider;
     class VoxelWorld;
+    class Gauge;
 }
 
 namespace Client
 {
     class EnemyCountHUD;
+    class EnemySpawner;
+    class Player;
 
     class GAME_DLL GameScene :
         public Engine::Scene
@@ -27,27 +30,26 @@ namespace Client
         // / break / place; lifetime is bound to the scene.
         std::unique_ptr<Engine::VoxelWorld> m_pVoxelWorld;
 
-        // HPBar now lives as a UIControl-derived Component on a
-        // dedicated GameObject in the default layer (created in Init).
-        // Its child UIRenderers self-register with RenderManager via
-        // their own PreDraw, so the Scene holds no direct reference
-        // and re-registers nothing each frame.
+        // HP / XP gauges — Engine::Gauge Components on dedicated
+        // GameObjects in the default layer (created in Init). The
+        // Scene caches weak refs so Update can push the current ratio
+        // (HP/MaxHP, Exp/XpToNext) and the resize-tracking pixel rect
+        // each frame; the gauges' child UIRenderers self-register with
+        // RenderManager via their own PreDraw.
+        std::weak_ptr<Engine::Gauge>  m_pHPGauge;
+        std::weak_ptr<Engine::Gauge>  m_pXPGauge;
+        std::weak_ptr<Player>         m_pPlayer;
 
         // Top-right debug HUD showing the current live enemy count as a
         // procedural 5x7 bitmap-font number. Scene-owned plain class
         // (draws a procedural digit atlas — different render path).
         std::unique_ptr<EnemyCountHUD> m_pEnemyCountHUD;
 
-        // Periodic enemy spawning — drops an Enemy at a random angle
-        // around the player every m_fEnemySpawnInterval seconds.
-        float m_fEnemySpawnAcc      = 0.f;
-        float m_fEnemySpawnInterval = 1.f;
-        // Slow chase speed for testing; raise later for tuned gameplay.
-        float m_fEnemyTestSpeed     = 1.0f;
-        // Ring radius (cells) around the player where enemies materialise.
-        float m_fEnemySpawnRadius   = 8.f;
-        // Counter to alternate between Enemy mesh variants on each spawn.
-        int   m_iEnemySpawnIdx      = 0;
+        // Periodic enemy spawning. Owns its own accumulator + round-robin
+        // index so the scene's Update body stays a list of one-line
+        // dispatches. Reads SpawnConfig (cadence / radius) and
+        // EnemyDatabase (per-enemy stats) every tick.
+        std::unique_ptr<EnemySpawner>  m_pEnemySpawner;
 
     public:
         Engine::VoxelWorld* GetVoxelWorld() const { return m_pVoxelWorld.get(); }
@@ -57,10 +59,6 @@ namespace Client
         bool CreateTexture();
         bool CreateSounds();
         bool CreateMesh();
-        bool CreateTerrain();
-
-    public:
-        bool CreateMonster();
 
     public:
         // Create one Enemy at a fixed spawn cell, set the player as its target.

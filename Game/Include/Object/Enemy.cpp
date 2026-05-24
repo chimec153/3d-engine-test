@@ -5,6 +5,7 @@ REGISTER_GAMEOBJECT(Client::Enemy, Enemy)
 #include "Bullet.h"
 #include "Attackable.h"
 #include "Player.h"
+#include "../UI/DamageText.h"
 #include "../GameDefs.h"
 #include "Scene/Scene.h"
 #include "Scene/Layer.h"
@@ -212,6 +213,23 @@ namespace Client
             if (auto* pBullet = dynamic_cast<Bullet*>(pBulletGO))
                 iDmg = pBullet->GetDamage();
 
+        // Floating combat text — spawn a number at the enemy's head.
+        // Pure visual; the pool decides whether there's a slot free.
+        if (m_pTransform)
+        {
+            Engine::Vector3 vSpawn = m_pTransform->GetPosition();
+            vSpawn.y += 1.4f;   // above the body collider centre
+            // Provisional critical rule: top 20% rolls land as crit.
+            // Replace once weapons carry their own crit chance.
+            const bool bCritical = (std::rand() % 5) == 0;
+            const int iShown = bCritical ? iDmg * 2 : iDmg;
+            // Pass this enemy as an accumulation key so consecutive
+            // hits within ~0.35s fold into a single growing total
+            // instead of stacking pop-ups.
+            const uintptr_t hOwner = reinterpret_cast<uintptr_t>(this);
+            DamageTextManager::GetInst()->Spawn(vSpawn, iShown, bCritical, hOwner);
+        }
+
         m_iHP -= iDmg;
         if (m_iHP <= 0)
         {
@@ -258,6 +276,15 @@ namespace Client
                 m_pMeshRenderer->SetOverrideMaterial(0, 0, m_pMaterial);
             }
         }
+    }
+
+    void Enemy::ApplyDef(const EnemyDef& def)
+    {
+        SetMaxHP(def.iMaxHP);
+        SetSpeed(def.fSpeed);
+        m_fAttackRange    = def.fAttackRange;
+        m_fAttackCooldown = def.fAttackCooldown;
+        SetMeshKind(def.eKind == EnemyKind::Capsule ? MESH_KIND::CAPSULE : MESH_KIND::BOX);
     }
 
     void Enemy::SetSpawnCell(int x, int z)

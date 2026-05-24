@@ -1,9 +1,32 @@
+# Build intermediate / output directories
 Client/BinObj/*.*
 Engine/BinObj/*.*
 Editor/BinObj/*.*
+Game/BinObj/
 Client/Bin/*.*
 Engine/Bin/*.*
 Editor/Bin/*.*
+Game/Bin/
+
+# Header/Include is auto-populated by Engine/Include/Copy.bat — third-party ImGui is the only real source
+Header/Include/
+!Header/Include/ImGui/
+
+# Build artifacts
+*.exe
+*.exp
+*.ilk
+*.ipdb
+*.pdb
+*.cso
+
+# Visual Studio user / cache state
+.vs/
+*.suo
+*.db
+*.db-wal
+*.db-shm
+*.opendb
 .vs/230301/v17/Browse.VC.opendb
 .vs/230301/v17/ipch/AutoPCH/197469b91a094203/DRAWABLE.ipch
 .vs/230301/v17/ipch/AutoPCH/2814595b89b96471/COLLIDER.ipch
@@ -1460,3 +1483,5 @@ Client/Bin/Client_Debug.exe
 .vs/230301/v17/Solution.VC.db
 /Game/BinObj
 Game/Bin/Game_Debug.exp
+*.db
+/.vs

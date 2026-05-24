@@ -1,5 +1,6 @@
 #include "Transform.h"
 #include "../Core/Graphics.h"
+#include "../Core/Window.h"
 #include "BindableManager.h"
 #include "ConstantBuffer.h"
 #include "PointLight.h"
@@ -132,12 +133,45 @@ namespace Engine
 		}
 		else if (m_eCameraType == CAMERA_TYPE::UI)
 		{
-			// UI-flagged Transform with no UI camera registered: treat
-			// matWorld (Scale × Rotation × Translation) as the final
-			// clip-space matrix so the UI VS (output.pos = pos × g_matTransform)
-			// renders directly in NDC. Lets HPBar / future UI Components
-			// position quads in [-1, 1]² without an actual UI camera.
-			m_tBuffer.matWorldViewProject = m_tBuffer.matWorld;
+			// UI-flagged Transform: callers (UIControl / Button / Text)
+			// supply pixel-space coordinates — Transform position is the
+			// rect's *top-left* pixel and Transform scale is its pixel
+			// size. We build the NDC matrix the UI VS expects so a
+			// quad at pixel (X, Y) with size (W, H) lands on the
+			// matching back-buffer pixels regardless of resolution.
+			//
+			//   UIQuad maps [0..1] x [0..1] with (0,1) = top-left.
+			//   Final NDC:
+			//     NDC_X = (pxX + u*pxW) / SW * 2 - 1
+			//     NDC_Y = 1 - (pxY + (1-v)*pxH) / SH * 2
+			//   → Translate = (pxX/SW*2 - 1, 1 - (pxY+pxH)/SH*2)
+			//     Scale     = (pxW/SW*2,    pxH/SH*2)
+			const float fSW = static_cast<float>(Window::GetInst()->GetWidth());
+			const float fSH = static_cast<float>(Window::GetInst()->GetHeight());
+			if (fSW > 0.f && fSH > 0.f)
+			{
+				const float pxX = m_vPosition.x;
+				const float pxY = m_vPosition.y;
+				const float pxW = m_vScale.x;
+				const float pxH = m_vScale.y;
+				const float Sx = pxW / fSW * 2.f;
+				const float Sy = pxH / fSH * 2.f;
+				const float Tx = pxX / fSW * 2.f - 1.f;
+				const float Ty = 1.f - (pxY + pxH) / fSH * 2.f;
+
+				Matrix matClip =
+					Matrix::Scaling(Vector3(Sx, Sy, 1.f))
+					* Matrix::TranslateFromVector(Vector3(Tx, Ty, 0.f));
+				matClip.Transpose();
+				m_tBuffer.matWorldViewProject = matClip;
+			}
+			else
+			{
+				// Window not sized yet (very early frames) — fall back
+				// to the old NDC-direct behaviour so the cbuffer isn't
+				// left uninitialised.
+				m_tBuffer.matWorldViewProject = m_tBuffer.matWorld;
+			}
 		}
 
 		const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();

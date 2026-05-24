@@ -42,7 +42,7 @@ namespace Engine
 #define REGISTER_SCENE(TYPE, NAME) \
     namespace { \
         static const bool _reg_scene_##NAME = []() { \
-            Engine::SceneFactory::Register(#NAME, [](){ return new TYPE(); }); \
+            Engine::SceneFactory::Register(#NAME, [](){ return dbg_new TYPE(); }); \
             return true; \
         }(); \
     }
@@ -50,7 +50,7 @@ namespace Engine
 #define REGISTER_GAMEOBJECT(TYPE, NAME) \
     namespace { \
         static const bool _reg_go_##NAME = []() { \
-            Engine::GameObjectFactory::Register(#NAME, [](){ return new TYPE(); }); \
+            Engine::GameObjectFactory::Register(#NAME, [](){ return dbg_new TYPE(); }); \
             return true; \
         }(); \
     }

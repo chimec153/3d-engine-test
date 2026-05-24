@@ -1,6 +1,7 @@
 #include "Text.h"
 #include "Font.h"
 #include "FontManager.h"
+#include "../Bindable/Transform.h"
 #include "../Core/Graphics.h"
 #include "../Core/Window.h"
 #include "../Render/RenderManager.h"
@@ -43,8 +44,6 @@ namespace Engine
         , m_pFont(other.m_pFont)
         , m_strText(other.m_strText)
         , m_uColorRGBA(other.m_uColorRGBA)
-        , m_fNdcX(other.m_fNdcX), m_fNdcY(other.m_fNdcY)
-        , m_fNdcW(other.m_fNdcW), m_fNdcH(other.m_fNdcH)
         , m_eHAlign(other.m_eHAlign), m_eVAlign(other.m_eVAlign)
         , m_bLayoutDirty(true)
     {
@@ -52,10 +51,10 @@ namespace Engine
 
     bool Text::Init()
     {
-        // Text doesn't own a UIRenderer or Transform — the back-buffer
-        // D2D path handles its own placement. UIControl::Init still
-        // sets up the parent-side cbuffer machinery in case future
-        // subclasses use it; harmless here.
+        // UIControl::Init creates the shared pixel-space Transform.
+        // Text doesn't own a UIRenderer — D2D writes directly to the
+        // back-buffer in RenderD2D — so there's nothing else to set
+        // up here.
         return UIControl::Init();
     }
 
@@ -73,13 +72,6 @@ namespace Engine
             {
                 if (auto pSelf = wpSelf.lock()) pSelf->RenderD2D();
             });
-    }
-
-    void Text::SetRect(float fX, float fY, float fW, float fH)
-    {
-        if (m_fNdcX == fX && m_fNdcY == fY && m_fNdcW == fW && m_fNdcH == fH) return;
-        m_fNdcX = fX; m_fNdcY = fY; m_fNdcW = fW; m_fNdcH = fH;
-        m_bLayoutDirty = true;
     }
 
     void Text::SetFont(const std::shared_ptr<Font>& pFont)
@@ -148,18 +140,18 @@ namespace Engine
     void Text::RenderD2D()
     {
         if (m_strText.empty() || !m_pFont) return;
+        auto pTr = GetTransform();
+        if (!pTr) return;
 
-        // NDC → backbuffer pixel rect. NDC X spans [-1,+1] across the
-        // window width; NDC Y is bottom-up so flip to D2D's top-down
-        // pixel space.
-        const float fW = static_cast<float>(Window::GetInst()->GetWidth());
-        const float fH = static_cast<float>(Window::GetInst()->GetHeight());
-        if (fW <= 0.f || fH <= 0.f) return;
-
-        const float fPxX = (m_fNdcX + 1.f)             * 0.5f * fW;
-        const float fPxY = (1.f - (m_fNdcY + m_fNdcH)) * 0.5f * fH;
-        const float fPxW = m_fNdcW * 0.5f * fW;
-        const float fPxH = m_fNdcH * 0.5f * fH;
+        // UIControl's Transform stores pixel-space coordinates already:
+        // position = top-left pixel, scale = pixel size. No NDC math
+        // needed here — feed straight into D2D's pixel coord space.
+        const Vector3 vPos   = pTr->GetPosition();
+        const Vector3 vScale = pTr->GetScale();
+        const float fPxX = vPos.x;
+        const float fPxY = vPos.y;
+        const float fPxW = vScale.x;
+        const float fPxH = vScale.y;
         if (fPxW <= 0.f || fPxH <= 0.f) return;
 
         // Rebuild the layout when the box dimensions change (window

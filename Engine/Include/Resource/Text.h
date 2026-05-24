@@ -32,11 +32,9 @@ namespace Engine
         Text(const Text& other);
         virtual ~Text() override = default;
 
-        // NDC placement — bottom-left (fX, fY), size (fW, fH). The
-        // rectangle is converted to back-buffer pixels at paint time
-        // so the same NDC values look identical on any window size.
-        void SetRect(float fX, float fY, float fW, float fH);
-
+        // SetRect inherited from UIControl — pixel coords, (x, y)
+        // top-left, (w, h) size. Text never holds its own rect; the
+        // shared UIControl Transform owns placement.
         void SetFont (const std::shared_ptr<Font>& pFont);
         void SetString(const std::wstring& strText);
         // 0xRRGGBBAA.
@@ -72,12 +70,7 @@ namespace Engine
         std::wstring          m_strText;
         unsigned int          m_uColorRGBA = 0xFFFFFFFFu;
 
-        // NDC rect from SetRect. Y is bottom-up (NDC convention) —
-        // RenderD2D flips to D2D's top-down screen coords.
-        float                 m_fNdcX = 0.f;
-        float                 m_fNdcY = 0.f;
-        float                 m_fNdcW = 0.f;
-        float                 m_fNdcH = 0.f;
+        // Placement comes from the inherited UIControl Transform.
 
         HAlign                m_eHAlign = HAlign::Center;
         VAlign                m_eVAlign = VAlign::Center;

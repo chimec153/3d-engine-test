@@ -1,5 +1,5 @@
 #include "LevelUpChoices.h"
-#include "Button.h"
+#include "UI/Button.h"
 #include "../Object/Player.h"
 #include "../Object/WeaponData.h"
 #include "../Object/WeaponDatabase.h"
@@ -24,21 +24,19 @@ namespace Client
         //   - card height ~55% of the window height
         //   - card aspect ratio 2:3 (portrait)
         //   - 3 cards side-by-side, gap ~3% of window width between them
-        // Pixel → NDC at runtime so the layout looks the same on 16:9,
-        // 16:10 and ultra-wide displays.
+        // UIControl now takes pixel coords directly, so we no longer
+        // round-trip through NDC.
         constexpr float kCardHeightFrac  = 0.55f;
         constexpr float kSpacingFracW    = 0.03f;
         constexpr float kCardAspectWH    = 2.f / 3.f;     // w/h
 
         struct CardLayout
         {
-            float fCardW;     // NDC width
-            float fCardH;     // NDC height
-            float fSpacing;   // NDC spacing between cards
-            float fLeftX;     // NDC left edge of card 0
-            float fBaseY;     // NDC bottom edge of all cards
-            int   iCardPxW;   // Card pixel width — feeds Text rasteriser
-            int   iCardPxH;   // Card pixel height
+            float fCardW;     // Card pixel width
+            float fCardH;     // Card pixel height
+            float fSpacing;   // Pixel gap between adjacent cards
+            float fLeftX;     // Top-left pixel X of card 0
+            float fTopY;      // Top-left pixel Y of every card
         };
 
         CardLayout ComputeCardLayout()
@@ -46,19 +44,15 @@ namespace Client
             const float fScreenW = static_cast<float>(Engine::Window::GetInst()->GetWidth());
             const float fScreenH = static_cast<float>(Engine::Window::GetInst()->GetHeight());
 
-            const float fCardPxH = kCardHeightFrac * fScreenH;
-            const float fCardPxW = fCardPxH * kCardAspectWH;
-            const float fSpacePx = kSpacingFracW * fScreenW;
-
             CardLayout L;
-            L.fCardW   = 2.f * fCardPxW / fScreenW;
-            L.fCardH   = 2.f * fCardPxH / fScreenH;
-            L.fSpacing = 2.f * fSpacePx / fScreenW;
+            L.fCardH   = kCardHeightFrac * fScreenH;
+            L.fCardW   = L.fCardH * kCardAspectWH;
+            L.fSpacing = kSpacingFracW * fScreenW;
+
+            // Centre the row of cards on screen.
             const float fTotalW = 3.f * L.fCardW + 2.f * L.fSpacing;
-            L.fLeftX   = -0.5f * fTotalW;
-            L.fBaseY   = -0.5f * L.fCardH;
-            L.iCardPxW = (std::max)(64, static_cast<int>(fCardPxW));
-            L.iCardPxH = (std::max)(64, static_cast<int>(fCardPxH));
+            L.fLeftX = (fScreenW - fTotalW) * 0.5f;
+            L.fTopY  = (fScreenH - L.fCardH) * 0.5f;
             return L;
         }
 
@@ -113,30 +107,26 @@ namespace Client
 
         const auto L = LevelUpChoices_detail::ComputeCardLayout();
 
-        // Fonts are sized off the card pixel height so they read at the
-        // same on-screen size regardless of window resolution. Once
-        // built they're keyed by tag in FontManager — a second
-        // LevelUpChoices instance would reuse the same Font objects.
-        const float fNameSize = 14.f;// (std::max)(14.f, L.iCardPxH * 0.10f);
-        const float fLvlSize = 18.f;// (std::max)(18.f, L.iCardPxH * 0.14f);
+        // Font pixel sizes scale with the card height so the text reads
+        // at the same proportional size on any resolution. Once built
+        // they're keyed by tag in FontManager — a second LevelUpChoices
+        // instance would reuse the same Font objects.
+        const float fNameSize = (std::max)(14.f, L.fCardH * 0.10f);
+        const float fLvlSize  = (std::max)(18.f, L.fCardH * 0.14f);
         m_pNameFont = Engine::FontManager::GetInst()->CreateFont(
             "card_name", L"Arial", fNameSize, DWRITE_FONT_WEIGHT_BOLD);
         m_pLvlFont  = Engine::FontManager::GetInst()->CreateFont(
             "card_lvl",  L"Arial", fLvlSize,  DWRITE_FONT_WEIGHT_BOLD);
 
-        // Per-card text-region pixel sizes. Match the geometry of the
-        // overlay Buttons below (40% top band for the name, 30% bottom
-        // band for the level).
-        const int iNameTexH = static_cast<int>(L.iCardPxH * 0.40f);
-        const int iLvlTexH  = static_cast<int>(L.iCardPxH * 0.30f);
-
-        // Name-band Y centres at ~75% up the card (NDC +Y is up); level
-        // band sits at ~17% up. Heights match the texture heights so
-        // the bands cover the right pixel real-estate.
+        // Per-card text bands, all in pixels relative to the card's
+        // top-left (Y grows downward, matching the window pixel space
+        // UIControl now uses):
+        //   - name band: top ~5% to ~45% of card height
+        //   - level band: bottom ~70% to ~95% of card height
         const float fNameBandH = L.fCardH * 0.40f;
         const float fLvlBandH  = L.fCardH * 0.30f;
-        const float fNameBandY = L.fBaseY + L.fCardH * 0.55f;   // bottom edge
-        const float fLvlBandY  = L.fBaseY + L.fCardH * 0.05f;
+        const float fNameBandDY = L.fCardH * 0.05f;
+        const float fLvlBandDY  = L.fCardH * 0.65f;
 
         for (int i = 0; i < 3; ++i)
         {
@@ -144,30 +134,26 @@ namespace Client
 
             // Background button — coloured panel, owns the click handler.
             std::string tagBg = "button_card_bg_" + std::to_string(i);
-            m_pBgButtons[i] = CreateComponent<Button>(tagBg);
+            m_pBgButtons[i] = CreateComponent<Engine::Button>(tagBg);
             if (m_pBgButtons[i])
             {
-                m_pBgButtons[i]->SetRect(fX, L.fBaseY, L.fCardW, L.fCardH);
+                m_pBgButtons[i]->SetRect(fX, L.fTopY, L.fCardW, L.fCardH);
                 m_pBgButtons[i]->SetTexture(LevelUpChoices_detail::EnsureBlankCardTexture());
                 const int idx = i;
                 m_pBgButtons[i]->SetOnClick([this, idx]() { OnPick(idx); });
             }
 
-            // Text components — created *after* the Button so they
-            // appear later in m_ChildList and therefore render on top
-            // (UIRenderer's PreDraw is dispatched in child-list order,
-            // and RenderManager keeps that order in its UI custom-
-            // render queue).
+            // Text components — created after the Button so RenderUI's
+            // custom-render queue draws them on top of the panel.
             std::string tagName = "text_card_name_" + std::to_string(i);
             m_pNameTexts[i] = CreateComponent<Engine::Text>(tagName);
             if (m_pNameTexts[i])
             {
                 m_pNameTexts[i]->SetFont(m_pNameFont);
-                m_pNameTexts[i]->SetTextureSize(20, 20);
                 m_pNameTexts[i]->SetColor(0xFFFFFFFFu);
                 m_pNameTexts[i]->SetHAlign(Engine::Text::HAlign::Center);
                 m_pNameTexts[i]->SetVAlign(Engine::Text::VAlign::Center);
-                m_pNameTexts[i]->SetRect(0.f, 0.f, 20 / 1280.f, 20 / 720.f);
+                m_pNameTexts[i]->SetRect(fX, L.fTopY + fNameBandDY, L.fCardW, fNameBandH);
             }
 
             std::string tagLvl = "text_card_lvl_" + std::to_string(i);
@@ -175,11 +161,10 @@ namespace Client
             if (m_pLvlTexts[i])
             {
                 m_pLvlTexts[i]->SetFont(m_pLvlFont);
-                m_pLvlTexts[i]->SetTextureSize(L.iCardPxW, iLvlTexH);
                 m_pLvlTexts[i]->SetColor(0xFFFFFFFFu);
                 m_pLvlTexts[i]->SetHAlign(Engine::Text::HAlign::Center);
                 m_pLvlTexts[i]->SetVAlign(Engine::Text::VAlign::Center);
-                m_pLvlTexts[i]->SetRect(fX, fLvlBandY, L.fCardW, fLvlBandH);
+                m_pLvlTexts[i]->SetRect(fX, L.fTopY + fLvlBandDY, L.fCardW, fLvlBandH);
             }
         }
 

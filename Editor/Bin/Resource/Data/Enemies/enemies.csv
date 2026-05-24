@@ -1,0 +1,12 @@
+# enemies.csv — enemy catalogue. Loaded by EnemyDatabase at scene init.
+# Columns:
+#   id              — unique integer key
+#   name            — debug label
+#   kind            — Box | Capsule (drives mesh + material colour)
+#   max_hp          — int, bullet damage drains this
+#   speed           — cells / sec
+#   attack_range    — world units; melee triggers inside this distance
+#   attack_cooldown — seconds between melee hits
+id,name,kind,max_hp,speed,attack_range,attack_cooldown
+1,Box,Box,20,1.0,1.5,1.0
+2,Capsule,Capsule,15,1.0,1.5,1.0

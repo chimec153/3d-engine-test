@@ -6,3 +6,52 @@
 
 1차 변경: 복셀 기반의 지형 편집이 가능한 탑다운 뷰 타워 디펜스 게임
 로그라이크 요소: 3개의 타워중 선택 가능
+
+
+2차 변경: 2차원 복셀이 있는 뱀서라이크류 게임
+추가 시스템: 무기 조합 시스템
+
+버그 목록
+-그림자
+-복셀 인스턴싱 버그
+
+
+  구조적 리팩터링 (큰 작업)
+
+  1. Transform God class 분리 — 163줄, Position/Rotation/Scale + 계층 + 행렬 + CBuffer + 카메라 변환을
+   책임별로 분리. Engine 코어 변경이라 영향 범위 큼
+  2. Component ↔ Bindable 트리 구조 중복 — FindChild<T>, FindChilds<T>, GetChildList 패턴이 양쪽에
+  별도 구현. 공통 TreeNode 기반 추출 가능
+
+  게임 로직 / 데이터
+
+  3. 메시 생성 중복 — Enemy::EnsureEnemyMesh ↔ EnsureCapsuleEnemyMesh ↔ Bullet::ApplyShape.
+  MeshFactory 또는 프리셋 테이블로 통합
+  4. 폰트 시스템 임시방편 — Text가 백버퍼에 D2D 직접 렌더, FontManager::CreateFont가 호출마다 새 Font
+  생성. 캐싱/구조 재설계 필요
+  5. UI 앵커/좌표계 통일 — HPBar/Button/XPBar가 각자 픽셀 계산. UIControl에 SetRectByAnchor 같은 헬퍼
+  + 해상도 변경 시 자동 추적
+  6. Button 이벤트 시스템 — 현재 Button::Update에서 직접 Input 폴링. UIControl에 OnMouseDown/OnHover
+  가상 함수 도입
+  7. 레벨업 게임 상태 관리 — LevelUpChoices::m_bShown ↔ Player::HasPendingLevelUp 동기화가 모호.
+  GameState enum 도입 검토
+
+  Engine 부수 항목
+
+  8. BindableManager 의존성 과다 — 헤더 1개에 Window/Sampler/Material/FbxLoader 등 6개 include
+  9. ObjectFactory 매크로 — REGISTER_SCENE/REGISTER_GAMEOBJECT 거대 람다 매크로, 에러 추적 어려움
+  10. Animation 메모리 관리 일관성 — PSEQUENCEINFO raw + shared_ptr<Skeleton> 혼재
+  11. Mesh 에러 처리 — FAILED 시 assert(false) 후 pop_back, 부분 생성 상태 불명확
+
+  프로젝트 구조 마이너
+
+  12. Untitled-1.txt → Docs/ 이동
+  13. GameScene::SpawnEnemy() dead code — 호출처 없음 (Phase 4 작업 중 발견, surgical 원칙으로 보존)
+  14. GameScene::CreateTexture 대부분 주석 — 활성 5줄만 남음, 정리 가능
+
+  11.
+  - Bullet.cpp의 메시 생성 로직(ApplyShape)도 동일 패턴으로 데이터화 가능
+
+  12.
+  - Enemy.cpp의 색상/콜라이더 반경/Attackable 파라미터는 사용자가 선택지에서 제외 (Material 인스턴싱
+  영향 때문)

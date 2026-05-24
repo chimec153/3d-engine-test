@@ -224,6 +224,7 @@
     <ClCompile Include="Bindable\Material.cpp" />
     <ClCompile Include="Bindable\Mesh.cpp" />
     <ClCompile Include="Bindable\MeshLoader.cpp" />
+    <ClCompile Include="Bindable\MeshPresets.cpp" />
     <ClCompile Include="Bindable\Mouse.cpp" />
     <ClCompile Include="Bindable\NavMesh.cpp" />
     <ClCompile Include="Bindable\PaperBurn.cpp" />
@@ -278,6 +279,7 @@
     <ClCompile Include="Thread\LoadingThread.cpp" />
     <ClCompile Include="Thread\Thread.cpp" />
     <ClCompile Include="Thread\ThreadManager.cpp" />
+    <ClCompile Include="UI\Button.cpp" />
     <ClCompile Include="UI\Frame.cpp" />
     <ClCompile Include="UI\Gauge.cpp" />
     <ClCompile Include="UI\Image.cpp" />
@@ -319,6 +321,7 @@
     <ClInclude Include="Bindable\Material.h" />
     <ClInclude Include="Bindable\Mesh.h" />
     <ClInclude Include="Bindable\MeshLoader.h" />
+    <ClInclude Include="Bindable\MeshPresets.h" />
     <ClInclude Include="Bindable\MeshUtils.h" />
     <ClInclude Include="Bindable\Mouse.h" />
     <ClInclude Include="Bindable\NavMesh.h" />
@@ -400,6 +403,7 @@
     <ClInclude Include="Thread\Thread.h" />
     <ClInclude Include="Thread\ThreadManager.h" />
     <ClInclude Include="Types.h" />
+    <ClInclude Include="UI\Button.h" />
     <ClInclude Include="UI\Frame.h" />
     <ClInclude Include="UI\Gauge.h" />
     <ClInclude Include="UI\Image.h" />

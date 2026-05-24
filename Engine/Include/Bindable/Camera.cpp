@@ -268,6 +268,30 @@ namespace Engine
 		// TODO: insert return statement here
 	}
 
+	bool Camera::WorldToScreen(const Vector3& vWorld,
+		float& outPxX, float& outPxY, float& outW) const
+	{
+		// row-vector × ViewProject → clip space.
+		const Matrix& matVP = GetViewProject();
+		Vector4 clip = matVP.Transform(Vector4(vWorld.x, vWorld.y, vWorld.z, 1.f));
+		if (clip.w <= 1e-4f) return false;          // behind / at the camera plane
+
+		const float invW = 1.f / clip.w;
+		const float ndcX = clip.x * invW;
+		const float ndcY = clip.y * invW;
+		// Reject points outside the unit-cube depth range too — keeps
+		// pop-in clean (caller can choose to skip past-far points).
+		// Don't gate on X/Y; clamping happens naturally when caller
+		// renders to the back-buffer.
+
+		const float fSW = static_cast<float>(Window::GetInst()->GetWidth());
+		const float fSH = static_cast<float>(Window::GetInst()->GetHeight());
+		outPxX = (ndcX + 1.f) * 0.5f * fSW;
+		outPxY = (1.f - ndcY) * 0.5f * fSH;
+		outW   = clip.w;
+		return true;
+	}
+
 	float Camera::GetAngle() const noexcept
 	{
 		return m_fAngle;

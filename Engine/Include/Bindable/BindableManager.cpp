@@ -54,6 +54,7 @@ namespace Engine
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagGlobalCBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagDecalCBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagUICBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagUICBuffer> >::m_pInst = nullptr;
+	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagUITintBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagUITintBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPaperBurnCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagPaperBurnCBuffer> >::m_pInst = nullptr;
 	Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagFluidCBuffer> >* Engine::BindableManager<class Engine::ConstantBuffer<struct Engine::_tagFluidCBuffer> >::m_pInst = nullptr;
 
@@ -72,6 +73,11 @@ namespace Engine
 	template ENGINE_DLL std::shared_ptr<PixelShader> StaticFindBindable(const std::string& strTag);
 	template ENGINE_DLL std::shared_ptr<Texture> StaticFindBindable(const std::string& strTag);
 	template ENGINE_DLL std::shared_ptr<Topology> StaticFindBindable(const std::string& strTag);
+	// Game-side floating combat text reaches in for the UITint cbuffer.
+	// Other ConstantBuffer<T> get exported implicitly because Engine
+	// code itself calls StaticFindBindable on them; UITint has no
+	// in-engine user, so spell the export out explicitly here.
+	template ENGINE_DLL std::shared_ptr<ConstantBuffer<UITINTBUFFER>> StaticFindBindable(const std::string& strTag);
 
 	template<typename T>
 	inline BindableManager<T>::BindableManager()
@@ -169,6 +175,7 @@ namespace Engine
 		CreateBindable("FluidVS", TEXT("VertexShader.hlsl"), "VS_FLUID");
 		CreateBindable("EnvironmentVS", TEXT("VertexShader.hlsl"), "VS_ENV");
 		CreateBindable("UIVS", TEXT("UI.fx"), "VS_UI");
+		CreateBindable("UIVSInst", TEXT("UI.fx"), "VS_UIInst");
 
 #ifdef _DEBUG
 		// Position-only VS for the collider wireframe debug pass. Pre-
@@ -257,6 +264,8 @@ namespace Engine
 		CreateBindable("EnvironmentPS", TEXT("PixelShader.hlsl"), "PS_ENV");
 		CreateBindable("SolidPS", TEXT("PixelShader.hlsl"), "PS_SOLID");
 		CreateBindable("UIPS", TEXT("UI.fx"), "PS_UI");
+		CreateBindable("UIPSTint", TEXT("UI.fx"), "PS_UITint");
+		CreateBindable("UIPSInst", TEXT("UI.fx"), "PS_UIInst");
 	}
 
 	template <>
@@ -337,6 +346,13 @@ namespace Engine
 	inline BindableManager<class ConstantBuffer<UICBUFFER>>::BindableManager()
 	{
 		CreateBindable("UI", 5);
+	}
+
+	template <>
+	inline BindableManager<class ConstantBuffer<UITINTBUFFER>>::BindableManager()
+	{
+		// Register slot has to match PS_UITint's `cbuffer UITint : register(b10)`.
+		CreateBindable("UITint", 10);
 	}
 
 	template <>

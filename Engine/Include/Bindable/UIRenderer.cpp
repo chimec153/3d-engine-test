@@ -55,15 +55,11 @@ namespace Engine
 	{
 		__super::PreDraw(fDeltaTime);
 
-		// Phase E5 — register a generic render callback so RenderManager's
-		// UI pass invokes Bind without depending on UIRenderer's type.
-		std::weak_ptr<UIRenderer> wpSelf = std::dynamic_pointer_cast<UIRenderer>(shared_from_this());
-		RenderManager::GetInst()->AddCustomRender(m_eRenderLayer,
-			[wpSelf]()
-			{
-				if (auto pSelf = wpSelf.lock())
-					pSelf->Bind();
-			});
+		// First-class UI registration — no std::function indirection,
+		// RenderUI iterates m_UIList and calls Bind directly. m_eRenderLayer
+		// stays for informational use; the UI pass is the only consumer.
+		RenderManager::GetInst()->AddUIRenderer(
+			std::dynamic_pointer_cast<UIRenderer>(shared_from_this()));
 	}
 
 	void UIRenderer::Bind()

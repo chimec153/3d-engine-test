@@ -78,7 +78,12 @@ namespace Client
         m_pCollider = AddComponent<Engine::ColliderSphere>("bullet_body");
         if (m_pCollider)
         {
-            m_pCollider->SetRadius(0.18f);
+            // Hit radius is generous compared to the visual sphere
+            // (~0.125 world units). A slow orbital orb glancing past
+            // an enemy that's been blocked by the player's body needs
+            // some margin to register the BEGIN — undersized collider
+            // was the reason Orb felt like it phased through enemies.
+            m_pCollider->SetRadius(0.28f);
             m_pCollider->SetGroup(Engine::COLLISION_GROUP::BULLET);
             m_pCollider->SetMask(Engine::COLLISION_GROUP::ENEMY);
             // BEGIN callback — drives the OnHit enum (Vanish / Reflect /

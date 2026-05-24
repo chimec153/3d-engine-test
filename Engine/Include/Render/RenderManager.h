@@ -71,6 +71,14 @@ namespace Engine
 		// frame.
 		std::list<std::function<void()>> m_CustomRenderList[static_cast<int>(RENDER_LAYER::END)];
 
+		// Phase E5+ — first-class UIRenderer registration. UIRenderer is
+		// Engine-side so RenderManager can know its type directly (the
+		// CustomRender callback path stays for downstream/Client-side
+		// pieces like Trail / DamageText / EnemyCountHUD). PreDraw pushes
+		// here, RenderUI iterates and calls Bind() with no std::function
+		// indirection. Cleared each frame in Clear().
+		std::list<std::weak_ptr<class UIRenderer>> m_UIList;
+
 	private:
 		std::shared_ptr<class MRT> pMRT;
 		std::shared_ptr<class MRT> m_pDecalMRT;
@@ -197,6 +205,7 @@ namespace Engine
 		// Used by Client-side components (Trail, etc.) so RenderManager
 		// doesn't need to know their concrete types.
 		void AddCustomRender(RENDER_LAYER eLayer, std::function<void()> renderFn);
+		void AddUIRenderer(const std::shared_ptr<class UIRenderer>& p);
 		// Phase E5 — AddDrawable removed (no more live Drawable instances).
 		std::shared_ptr<class MRT> GetMRT()	const;
 

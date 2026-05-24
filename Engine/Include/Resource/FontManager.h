@@ -33,7 +33,7 @@ namespace Engine
         static FontManager* GetInst()
         {
             if (!m_pInst)
-                m_pInst = new FontManager;
+                m_pInst = dbg_new FontManager;
             return m_pInst;
         }
         static void DestroyInst()

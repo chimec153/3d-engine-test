@@ -51,6 +51,14 @@ namespace Engine
         const Matrix& GetViewProject()    const noexcept;
         const Vector3& CameraPosToWorldPos(const Vector2& vCameraPos)   const;
         const Vector3& ScreenPosToClipPos(const Vector2& vScreenPos)    const;
+        // World → screen pixels. Returns true if the point is in front of
+        // the camera (clip w > 0); outPxX/outPxY are the back-buffer
+        // pixel coords, outW is the clip-space w (useful for depth
+        // attenuation / size-with-distance). When the function returns
+        // false the world point is behind the camera and the outputs
+        // are not meaningful.
+        bool WorldToScreen(const Vector3& vWorld,
+                           float& outPxX, float& outPxY, float& outW) const;
         void SetCameraType(CAMERA_TYPE eType);
         CAMERA_TYPE GetCameraType() const noexcept { return m_eCameraType; }
 

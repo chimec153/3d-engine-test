@@ -60,7 +60,12 @@ namespace Client
         // weak so the bullet stays safe if the player is gone (we just
         // freeze in place — the lifetime guard will clean us up).
         std::weak_ptr<Engine::Transform> m_pOwner;
-        float m_fOrbitRadius  = 1.5f;
+        // Slightly outside the player's OBB body (half-width ~0.25 +
+        // some clearance) so an enemy that's been blocked by the body
+        // sits exactly in the orb's collision arc. Larger values look
+        // nicer visually but stop intersecting the row of enemies
+        // pressed against the player.
+        float m_fOrbitRadius  = 0.9f;
         float m_fOrbitAngle   = 0.f;   // radians
 
         // Spiral phase accumulator. Position-offset = right * amp * sin(t * freq).

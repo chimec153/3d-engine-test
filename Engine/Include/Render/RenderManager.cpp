@@ -33,6 +33,7 @@
 #include "../Bindable/Decal.h"
 #include "../Bindable/Particle.h"
 #include "../Bindable/PaperBurn.h"
+#include "../Bindable/UIRenderer.h"
 #include <algorithm>
 
 namespace
@@ -247,6 +248,11 @@ namespace Engine
 		int iLayer = static_cast<int>(eLayer);
 		assert(iLayer >= 0 && iLayer < static_cast<int>(RENDER_LAYER::END));
 		m_CustomRenderList[iLayer].push_back(std::move(renderFn));
+	}
+
+	void RenderManager::AddUIRenderer(const std::shared_ptr<UIRenderer>& p)
+	{
+		if (p) m_UIList.push_back(p);
 	}
 
 	void RenderManager::SetHDRWhiteSqr(float fWhiteSqr)
@@ -1221,6 +1227,7 @@ namespace Engine
 	void RenderManager::Clear()
 	{
 		m_DecalList.clear();
+		m_UIList.clear();
 
 		for (int i = 0; i < static_cast<int>(RENDER_LAYER::END); ++i)
 		{
@@ -1549,12 +1556,17 @@ namespace Engine
 
 		m_pAlphaBlend->Bind();
 
-		// Phase E5 — Drawable iterate / instancing removed (no live
-		// Drawable instances). Future UI Component-side render pass
-		// would hook in here (none active yet — UI hierarchy is dead).
+		// First-class UIRenderer pass — Components self-register here from
+		// PreDraw (RenderManager::AddUIRenderer). Direct Bind() call, no
+		// std::function indirection.
+		for (const auto& w : m_UIList)
+		{
+			if (auto p = w.lock()) p->Bind();
+		}
 
 		// Generic Component render callbacks for UI layer (e.g., editor
-		// selection-outline pass drawn on top of the final back-buffer image).
+		// selection-outline pass, EnemyCountHUD, DamageText — anything
+		// that isn't a UIRenderer).
 		for (const auto& fn : m_CustomRenderList[static_cast<int>(RENDER_LAYER::UI)])
 		{
 			if (fn) fn();
