@@ -3,6 +3,7 @@
 #include "../Object/Player.h"
 #include "../Object/WeaponData.h"
 #include "../Object/WeaponDatabase.h"
+#include "../Object/GameStateManager.h"
 #include "Bindable/Texture.h"
 #include "Bindable/BindableManager.h"
 #include "Core/Window.h"
@@ -270,18 +271,28 @@ namespace Client
 
     void LevelUpChoices::OnPick(int iCardIndex)
     {
-        if (!m_bShown) return;
+        if (GameStateManager::GetInst().GetState() != GameState::LevelUpModal) return;
         if (iCardIndex < 0 || iCardIndex >= 3) return;
 
-        if (auto pPlayer = m_pTarget.lock())
-        {
-            const int iWeaponId = m_iCardWeaponIds[iCardIndex];
-            pPlayer->ConsumeLevelUp(iWeaponId);
-        }
+        auto pPlayer = m_pTarget.lock();
+        if (!pPlayer) return;
 
-        Hide();
-        Engine::Window::GetInst()->GetTimer()->Resume();
-        m_bShown = false;
+        const int iWeaponId = m_iCardWeaponIds[iCardIndex];
+        pPlayer->ConsumeLevelUp(iWeaponId);
+
+        // Sequential drain: a multi-level pickup queues several pending
+        // cards. If more remain, re-roll and stay in the modal; only
+        // exit when the queue is empty. The single-pick path collapses
+        // to "consume → exit" because PendingLevelUpCount drops to 0.
+        if (pPlayer->HasPendingLevelUp())
+        {
+            RollCards();
+        }
+        else
+        {
+            Hide();
+            GameStateManager::GetInst().ExitModal();
+        }
     }
 
     void LevelUpChoices::Update(float fDeltaTime)
@@ -291,13 +302,15 @@ namespace Client
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
 
-        const bool bPending = pPlayer->HasPendingLevelUp();
-        if (bPending && !m_bShown)
+        // Open the modal once when the queue first appears — re-entry is
+        // guarded by GameStateManager's state, not a local boolean, so
+        // a clone or accidental hide can't leave the state stuck.
+        if (pPlayer->HasPendingLevelUp() &&
+            GameStateManager::GetInst().IsPlaying())
         {
             RollCards();
             Show();
-            Engine::Window::GetInst()->GetTimer()->Stop();
-            m_bShown = true;
+            GameStateManager::GetInst().EnterModal(GameState::LevelUpModal);
         }
     }
 

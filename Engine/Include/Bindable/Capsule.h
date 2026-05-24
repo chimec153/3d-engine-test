@@ -132,5 +132,19 @@ namespace Engine
         {
             Sphere::CreateSphereIndex(2 * iRings + 2, iSectors, vecIndex);
         }
+
+        // Composite — runs CreateCapsuleVertex + GetCapsuleVertexNormal
+        // + CreateCapsuleIndex in order, so callers don't repeat the
+        // 3-step pattern. Partial functions stay for callers that need
+        // to fill only one aspect.
+        template <typename T>
+        static void BuildMesh(int iRings, int iSector, float fCylinderHeight,
+                              std::vector<T>& outVerts,
+                              std::vector<unsigned int>& outInds)
+        {
+            CreateCapsuleVertex<T>   (iRings, iSector, fCylinderHeight, outVerts);
+            GetCapsuleVertexNormal<T>(iRings, iSector, fCylinderHeight, outVerts);
+            CreateCapsuleIndex       (iRings, iSector, outInds);
+        }
     };
 }

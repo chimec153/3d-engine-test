@@ -285,9 +285,20 @@ namespace Engine
         std::vector<unsigned int>   inds;
         VoxelMesher::Build(*rec->pChunk, verts, inds, lookup);
 
-        rec->pMR->SetMesh(
-            (verts.empty() || inds.empty())
-                ? nullptr
-                : std::make_shared<Mesh>(verts, inds));
+        std::shared_ptr<Mesh> pMesh;
+        if (!verts.empty() && !inds.empty())
+        {
+            pMesh = std::make_shared<Mesh>(verts, inds);
+            // Per-chunk unique tag: MeshRendererComponent::UpdateInstanceKey
+            // hashes Mesh->GetTag(). Without a unique tag every chunk would
+            // hash to the same key and land in one instance bucket, where
+            // TryRenderInstancedBucket draws only pFirst->GetMesh() for the
+            // whole bucket — copying chunk 0's geometry to every chunk.
+            pMesh->SetTag("VoxelChunkMesh_"
+                + std::to_string(cx) + "_"
+                + std::to_string(cy) + "_"
+                + std::to_string(cz));
+        }
+        rec->pMR->SetMesh(pMesh);
     }
 }

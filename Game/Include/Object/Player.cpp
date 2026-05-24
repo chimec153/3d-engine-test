@@ -325,17 +325,19 @@ namespace Client
 			m_iXp     -= m_iXpToNext;
 			++m_iLevel;
 			m_iXpToNext = 5 * m_iLevel;
-			m_bPendingLevelUp = true;
+			++m_iPendingLevelUps;   // counter so multi-level pickups queue cards
 		}
 	}
 
 	void Player::ConsumeLevelUp(int iWeaponId)
 	{
 		// LevelUpChoices passes a CSV weapon id (the picked card). New
-		// weapon ids open a fresh slot, existing ids bump the slot's level
-		// in-place — either way the pending flag clears so the modal hides.
+		// weapon ids open a fresh slot, existing ids bump the slot's
+		// level in-place — either way one pending card is consumed.
+		// The UI loops while PendingLevelUpCount() > 0 to drain a fat
+		// pickup's queued cards before closing the modal.
 		AddOrLevelUpWeapon(iWeaponId);
-		m_bPendingLevelUp = false;
+		if (m_iPendingLevelUps > 0) --m_iPendingLevelUps;
 	}
 
 	void Player::CollisionPlayerBodyStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
@@ -779,7 +781,7 @@ namespace Client
 		// the player's y-plane and snaps the projectile there (used by
 		// CursorShot — the projectile sits on the cursor and damages
 		// whatever walks into it during its lifetime).
-		Engine::Vector3 vSpawn = vPlayerPos + Engine::Vector3{ 0.f, -0.7f, 0.f };
+		Engine::Vector3 vSpawn = vPlayerPos + Engine::Vector3{ 0.f, kMuzzleYOffset, 0.f };
 		switch (pDef->eOrigin)
 		{
 		case SpawnOrigin::Front:
@@ -805,7 +807,7 @@ namespace Client
 					{
 						vSpawn = {
 							vCamPos.x + vRayDir.x * t,
-							vPlayerPos.y - 0.7f,
+							vPlayerPos.y + kMuzzleYOffset,
 							vCamPos.z + vRayDir.z * t };
 					}
 				}
@@ -829,6 +831,10 @@ namespace Client
 			auto pBullet = GetScene()->CreateGameObject<Bullet>("bullet", pLayer);
 			if (!pBullet) continue;
 			pBullet->Configure(*pDef, slot.iLevel, m_pTransform);
+			// vSpawn already bakes kMuzzleYOffset for the first frame;
+			// the orbital path also needs it to survive subsequent
+			// Bullet::Update calls that re-anchor to the owner pivot.
+			pBullet->SetOrbitYOffset(kMuzzleYOffset);
 			if (auto pBulletTr = pBullet->GetTransform())
 			{
 				pBulletTr->SetPosition(vSpawn);
@@ -855,7 +861,11 @@ namespace Client
 		if (!pLayer) return;
 
 		const int iCount = ComputeCount(*pDef, slot.iLevel);
-		const Engine::Vector3 vSpawn = m_pTransform->GetPosition();
+		// Same muzzle drop FireCooldownBurst uses — without it the orbs
+		// would circle at player pivot height (~kWallY+1) and never
+		// intersect enemy collider spheres (~kWallY+0.3).
+		const Engine::Vector3 vSpawn =
+			m_pTransform->GetPosition() + Engine::Vector3{ 0.f, kMuzzleYOffset, 0.f };
 		// Evenly distribute starting angles around the player so multiple
 		// orbs don't stack on top of each other. RY is interpreted as the
 		// initial orbit angle in Bullet::Configure (Orbital path).
@@ -870,6 +880,9 @@ namespace Client
 				pBulletTr->SetRY((6.2831853f * i) / iCount);
 			}
 			pBullet->Configure(*pDef, slot.iLevel, m_pTransform);
+			// Keep the orbital path at muzzle height — Bullet::Update
+			// adds this each frame to vCenter.y (the owner pivot).
+			pBullet->SetOrbitYOffset(kMuzzleYOffset);
 			slot.vecSustainedInstances.emplace_back(pBullet);
 		}
 	}

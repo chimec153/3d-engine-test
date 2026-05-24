@@ -189,6 +189,112 @@ namespace
 		pInstVS->PostBind();
 		return true;
 	}
+
+	// Instanced shadow fast path. Same sieve as TryRenderInstancedBucket
+	// (homogeneous bucket, no Animation, no decorator sibling), but uses
+	// VSInstShadow + the already-bound ShadowPS, depth-only output. The
+	// per-instance buffer is identical to the colour pass — GetInstData's
+	// first 192B = (WVP, WV, matLightWVP) and VSStandardInstIn's
+	// matCameraViewToLightClip semantic maps to the third matrix, which
+	// Transform::Bind() already filled with the per-MR light WVP. So no
+	// new instance-data writer is needed: same bytes drive both passes.
+	bool TryRenderShadowInstancedBucket(const std::list<std::shared_ptr<Engine::MeshRendererComponent>>& bucket)
+	{
+		if (bucket.size() < 2) return false;
+
+#ifdef _DEBUG
+		if (GetAsyncKeyState(VK_SPACE) & 0x8000)
+		{
+			return false;
+		}
+#endif
+
+		const auto& pFirst = bucket.front();
+		if (!pFirst || !pFirst->GetMesh()) return false;
+
+		// Skinned shadow instancing needs joint/socket per-instance data
+		// that GetInstData doesn't write — defer to solo path.
+		if (pFirst->GetAnimation()) return false;
+
+		if (auto* pOwner = pFirst->GetGameObjectOwner())
+		{
+			for (const auto& pSibling : pOwner->GetComponentList())
+			{
+				if (pSibling.get() == pFirst.get()) continue;
+				if (std::dynamic_pointer_cast<Engine::PaperBurn>(pSibling))
+					return false;
+			}
+		}
+
+		auto pInstVS = Engine::StaticFindBindable<Engine::VertexShader>(
+			"anisotropic_microfacet VSInstShadow");
+		if (!pInstVS) return false;
+		auto pInstIL = pInstVS->GetInstInputLayout();
+		if (!pInstIL) return false;
+		const int iInstSize = pInstIL->GetInstSize();
+		if (iInstSize <= 0) return false;
+
+		const int iCount = static_cast<int>(bucket.size());
+		std::vector<char> data(static_cast<size_t>(iInstSize) * iCount, 0);
+		int idx = 0;
+		for (const auto& pMR : bucket)
+		{
+			if (pMR) pMR->GetInstData(&data[idx * iInstSize], iInstSize);
+			++idx;
+		}
+
+		D3D11_BUFFER_DESC desc = {};
+		desc.ByteWidth = static_cast<UINT>(iInstSize) * iCount;
+		desc.Usage = D3D11_USAGE_IMMUTABLE;
+		desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		D3D11_SUBRESOURCE_DATA initData = {};
+		initData.pSysMem = data.data();
+
+		Engine::CPtr<ID3D11Buffer> pInstBuffer;
+		HRESULT hr = Engine::Graphics::GetInst()->GetDevice()->CreateBuffer(
+			&desc, &initData, &pInstBuffer);
+		if (FAILED(hr)) return false;
+
+		pInstIL->Bind();
+		pInstVS->Bind();
+
+		// Topology / rasterizer only. Skip the bucket's own InputLayout
+		// (would overwrite our instanced IL) and skip PS/Material/Textures
+		// /DSS — ShadowPS is bound by the caller and depth-only output
+		// discards material data.
+		for (const auto& b : pFirst->GetOtherBindables())
+		{
+			if (!b) continue;
+			switch (b->GetBindableType())
+			{
+			case Engine::BINDABLE_TYPE::TOPOLOGY:
+			case Engine::BINDABLE_TYPE::RASTERIZER_STATE:
+				b->Bind();
+				break;
+			default:
+				break;
+			}
+		}
+
+		pFirst->GetMesh()->DrawInst(iCount, iInstSize, pInstBuffer, pFirst->MakeMaterialResolver());
+
+		for (const auto& b : pFirst->GetOtherBindables())
+		{
+			if (!b) continue;
+			switch (b->GetBindableType())
+			{
+			case Engine::BINDABLE_TYPE::TOPOLOGY:
+			case Engine::BINDABLE_TYPE::RASTERIZER_STATE:
+				b->PostBind();
+				break;
+			default:
+				break;
+			}
+		}
+
+		pInstVS->PostBind();
+		return true;
+	}
 }
 
 namespace Engine
@@ -1056,13 +1162,67 @@ namespace Engine
 
 		pShadowPixelShader->Bind();
 
-		// Phase E5 — Drawable shadow iterate / instancing removed (no
-		// live Drawable instances). Shadow pass for MeshRenderer Components
-		// is a follow-up — currently no Component-side shadow registration
-		// exists; reintroduce when the engine wants character shadows on
-		// the GameObject path.
+		// Force a known depth-write DSS — RenderDecal leaves whatever
+		// state its PostBind restored (driver default isn't guaranteed
+		// to be write-ALL), so without this the shadow depth target may
+		// stay at its clear value (1.0) and every screen pixel reads as
+		// "lit", producing fShadowAttr=1 OR (with reversed compare)
+		// fShadowAttr=0 → blacked-out frame. Mirrors RenderCustomDepth's
+		// rationale (RenderManager.cpp:783-786).
+		if (m_pCustomDepthWriteState) m_pCustomDepthWriteState->Bind();
 
-		pShadowVertexShader->PostBind();
+		// Component-side shadow iterate (re-introduction after Phase E5
+		// removed the Drawable path). Walk every MeshRenderer bucket in
+		// the OPACUE layer depth-only through the dedicated ShadowVS /
+		// ShadowAnimVS. Transform::Bind() auto-populates g_matLightWVP
+		// from the active PointLight, so per-MR Transform bind alone
+		// wires the light-clip-space transform — no extra plumbing.
+		Graphics::GetInst()->ResetBindCache();
+
+		auto& mapBuckets = m_mapMeshInstance[static_cast<int>(RENDER_LAYER::OPACUE)];
+
+		for (auto& kv : mapBuckets)
+		{
+			auto& bucket = kv.second;
+			if (bucket.empty()) continue;
+
+			// Try DrawInstanced shadow path first (homogeneous, no Anim,
+			// no decorator). Returns false → fall through to solo iterate.
+			if (TryRenderShadowInstancedBucket(bucket)) continue;
+
+			for (const auto& pMR : bucket)
+			{
+				if (!pMR || !pMR->GetMesh()) continue;
+
+				GameObject* pOwner = pMR->GetGameObjectOwner();
+				std::shared_ptr<Transform> pTr =
+					pOwner ? pOwner->GetComponent<Transform>() : nullptr;
+				if (pTr) pTr->Bind();
+
+				// Skinned variant when the MR has Animation — the static
+				// VS transforms by g_matLightWVP directly, the anim VS
+				// first applies the bone palette from Animation::Bind().
+				const std::shared_ptr<Animation>& pAnim = pMR->GetAnimation();
+				const std::shared_ptr<VertexShader>& pSelVS =
+					pAnim ? pAnimShadowVertexShader : pShadowVertexShader;
+				pSelVS->Bind();
+				if (pAnim) pAnim->Bind();
+
+				// VB/IB/IL/Topology only. PS/Material/Textures skipped —
+				// ShadowPS already bound and depth-only output discards
+				// material data.
+				pMR->BindExceptShader();
+
+				pMR->GetMesh()->Draw(pMR->MakeMaterialResolver());
+
+				pMR->PostBindExceptShader();
+				if (pAnim) pAnim->PostBind();
+				pSelVS->PostBind();
+				if (pTr) pTr->PostBind();
+			}
+		}
+
+		if (m_pCustomDepthWriteState) m_pCustomDepthWriteState->PostBind();
 
 		pShadowPixelShader->PostBind();
 

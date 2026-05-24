@@ -1,7 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="Object\Pathfinder.cpp" />
+    <ClCompile Include="Object\FlowField.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
     <ClCompile Include="Object\Bullet.cpp">
       <Filter>01. Object</Filter>
     </ClCompile>
@@ -50,9 +52,25 @@
     <ClCompile Include="Object\MonsterState.cpp">
       <Filter>04. State</Filter>
     </ClCompile>
+    <ClCompile Include="Scene\EnemySpawner.cpp" />
+    <ClCompile Include="Scene\GameWorldBuilder.cpp" />
+    <ClCompile Include="UI\DamageText.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\EnemyDatabase.cpp">
+      <Filter>06. Data</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\SpawnConfig.cpp">
+      <Filter>06. Data</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\WeaponDatabase.cpp">
+      <Filter>06. Data</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Object\Pathfinder.h" />
+    <ClInclude Include="Object\FlowField.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
     <ClInclude Include="Object\Bullet.h">
       <Filter>01. Object</Filter>
     </ClInclude>
@@ -104,6 +122,27 @@
     <ClInclude Include="Object\MonsterState.h">
       <Filter>04. State</Filter>
     </ClInclude>
+    <ClInclude Include="Util\CSVLoader.h" />
+    <ClInclude Include="Scene\EnemySpawner.h" />
+    <ClInclude Include="Scene\GameWorldBuilder.h" />
+    <ClInclude Include="UI\DamageText.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\EnemyData.h">
+      <Filter>06. Data</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\EnemyDatabase.h">
+      <Filter>06. Data</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\SpawnConfig.h">
+      <Filter>06. Data</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\WeaponDatabase.h">
+      <Filter>06. Data</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\WeaponData.h">
+      <Filter>06. Data</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Copy.bat" />
@@ -123,6 +162,9 @@
     </Filter>
     <Filter Include="05. Component">
       <UniqueIdentifier>{b3f51d25-4ecb-428b-8f9c-8890afe7ede0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="06. Data">
+      <UniqueIdentifier>{ce30b49b-af12-4257-9553-69a741264bb7}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

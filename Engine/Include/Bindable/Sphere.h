@@ -88,6 +88,20 @@ namespace Engine
 
 
         static void CreateSphereIndex(int iRings, int iSectors, std::vector<unsigned int>& vecIndex);
+
+        // Composite — runs CreateSphereVertex + GetSphereVertexTexcoord
+        // + CreateSphereIndex in order, so callers don't repeat the
+        // 3-step pattern. Partial functions stay for callers that need
+        // to fill only one aspect (alternate normals, etc.).
+        template <typename T>
+        static void BuildMesh(int iRings, int iSectors,
+                              std::vector<T>& outVerts,
+                              std::vector<unsigned int>& outInds)
+        {
+            CreateSphereVertex<T>     (iRings, iSectors, outVerts);
+            GetSphereVertexTexcoord<T>(iRings, iSectors, outVerts);
+            CreateSphereIndex         (iRings, iSectors, outInds);
+        }
     };
 
 }

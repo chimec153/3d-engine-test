@@ -351,8 +351,12 @@ namespace Engine
 	template <>
 	inline BindableManager<class ConstantBuffer<UITINTBUFFER>>::BindableManager()
 	{
-		// Register slot has to match PS_UITint's `cbuffer UITint : register(b10)`.
-		CreateBindable("UITint", 10);
+		// Register slot has to match PS_UITint's `cbuffer UITint : register(b13)`.
+		// b10 was the original choice but conflicts with shared.hlsl's
+		// PaperBurn cbuffer (80 bytes vs UITint's 16) — D3D11 warned
+		// "constant buffer too small" and reads returned 0 (or PaperBurn
+		// leftovers), showing as a wrong tint colour.
+		CreateBindable("UITint", 13);
 	}
 
 	template <>
@@ -546,6 +550,18 @@ namespace Engine
 		if (auto pVSNoSkinInst = StaticFindBindable<VertexShader>("anisotropic_microfacet VSNoSkinInst"))
 		{
 			if (pStandardInst) pVSNoSkinInst->SetInstInputLayout(pStandardInst);
+		}
+		// VSInstShadow / VSSkinInstShadow share the same VSStandardInstIn
+		// input struct, so they reuse Standard_Inst. Without this attach,
+		// RenderShadow's instanced fast path reads GetInstInputLayout()
+		// as null and falls back to per-MR solo draws.
+		if (auto pVSInstShadow = StaticFindBindable<VertexShader>("anisotropic_microfacet VSInstShadow"))
+		{
+			if (pStandardInst) pVSInstShadow->SetInstInputLayout(pStandardInst);
+		}
+		if (auto pVSSkinInstShadow = StaticFindBindable<VertexShader>("anisotropic_microfacet VSSkinInstShadow"))
+		{
+			if (pStandardInst) pVSSkinInstShadow->SetInstInputLayout(pStandardInst);
 		}
 
 		D3D11_INPUT_ELEMENT_DESC descP = { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 };

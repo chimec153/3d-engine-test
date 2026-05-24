@@ -9,6 +9,8 @@
 #include "../Bindable/PixelShader.h"
 #include "../Bindable/Topology.h"
 #include "../Core/Graphics.h"
+#include "../Core/Window.h"
+#include "../Input/Input.h"
 #include "../Bindable/InputLayout.h"
 
 namespace Engine
@@ -34,7 +36,16 @@ namespace Engine
 		Component(control)
 		, m_tCBuffer(control.m_tCBuffer)
 		, m_pCBuffer(control.m_pCBuffer)
+		, m_tAnchor(control.m_tAnchor)
 	{
+		// m_iResizeToken intentionally NOT copied — the source's token
+		// keeps pointing at the source; the clone re-registers in Init.
+	}
+
+	UIControl::~UIControl()
+	{
+		if (m_iResizeToken >= 0 && Window::GetInst())
+			Window::GetInst()->UnregisterResizeCallback(m_iResizeToken);
 	}
 
 	void UIControl::SetStartUV(const Vector2& vUV)   { m_tCBuffer.vStartUV = vUV; }
@@ -62,6 +73,14 @@ namespace Engine
 		if (!__super::Init())
 			return false;
 
+		// Lazy lookup of the shared UI cbuffer (b5). The default ctor
+		// can't initialise it, so subclasses that go through the
+		// default constructor (Text, HPBar, …) still need a handle —
+		// fetch it here so any later PushUICBuffer-style code can rely
+		// on m_pCBuffer being non-null.
+		if (!m_pCBuffer)
+			m_pCBuffer = StaticFindBindable<ConstantBuffer<UICBUFFER>>("UI");
+
 		// Shared Transform for every UIControl subclass. Lives as a
 		// child Component so any UIControl created via CreateComponent
 		// on a parent UIControl picks the parent's Transform up
@@ -88,14 +107,63 @@ namespace Engine
 				}
 			}
 		}
+
+		// Register for window resize so any anchor spec set later
+		// (SetRectByAnchor[Frac]) gets re-resolved automatically.
+		// Raw `this` capture is safe — dtor unregisters before destruction.
+		if (m_iResizeToken < 0 && Window::GetInst())
+		{
+			m_iResizeToken = Window::GetInst()->RegisterResizeCallback(
+				[this](int, int) { RecomputeRectFromAnchor(); });
+		}
 		return true;
 	}
 
 	void UIControl::SetRect(float fX, float fY, float fW, float fH)
 	{
+		OnRectChanged(fX, fY, fW, fH);
+	}
+
+	void UIControl::OnRectChanged(float fX, float fY, float fW, float fH)
+	{
 		if (!m_pTransform) return;
 		m_pTransform->SetScale   (fW, fH, 1.f);
 		m_pTransform->SetPosition(fX, fY, 0.f);
+	}
+
+	void UIControl::SetRectByAnchor(Vector2 vAnchor, Vector2 vPivot, Vector2 vSizePx)
+	{
+		m_tAnchor.vAnchor   = vAnchor;
+		m_tAnchor.vPivot    = vPivot;
+		m_tAnchor.vSize     = vSizePx;
+		m_tAnchor.bSizeFrac = false;
+		m_tAnchor.bSet      = true;
+		RecomputeRectFromAnchor();
+	}
+
+	void UIControl::SetRectByAnchorFrac(Vector2 vAnchor, Vector2 vPivot, Vector2 vSizeFrac)
+	{
+		m_tAnchor.vAnchor   = vAnchor;
+		m_tAnchor.vPivot    = vPivot;
+		m_tAnchor.vSize     = vSizeFrac;
+		m_tAnchor.bSizeFrac = true;
+		m_tAnchor.bSet      = true;
+		RecomputeRectFromAnchor();
+	}
+
+	void UIControl::RecomputeRectFromAnchor()
+	{
+		if (!m_tAnchor.bSet) return;
+		auto* pWin = Window::GetInst();
+		if (!pWin) return;
+		const float fSW = static_cast<float>(pWin->GetWidth());
+		const float fSH = static_cast<float>(pWin->GetHeight());
+
+		const float fW = m_tAnchor.bSizeFrac ? m_tAnchor.vSize.x * fSW : m_tAnchor.vSize.x;
+		const float fH = m_tAnchor.bSizeFrac ? m_tAnchor.vSize.y * fSH : m_tAnchor.vSize.y;
+		const float fX = m_tAnchor.vAnchor.x * fSW - m_tAnchor.vPivot.x * fW;
+		const float fY = m_tAnchor.vAnchor.y * fSH - m_tAnchor.vPivot.y * fH;
+		OnRectChanged(fX, fY, fW, fH);
 	}
 
 	std::shared_ptr<UIRenderer> UIControl::AddUIRenderer(
@@ -133,9 +201,34 @@ namespace Engine
 		return pTr;
 	}
 
+	bool UIControl::HitTestMousePx() const
+	{
+		if (!m_pTransform) return false;
+		auto* pInput = CInput::GetInst();
+		if (!pInput) return false;
+		const float fMx = static_cast<float>(pInput->GetMouseX());
+		const float fMy = static_cast<float>(pInput->GetMouseY());
+		const Vector3 vPos   = m_pTransform->GetPosition();
+		const Vector3 vScale = m_pTransform->GetScale();
+		return fMx >= vPos.x && fMx <= vPos.x + vScale.x
+			&& fMy >= vPos.y && fMy <= vPos.y + vScale.y;
+	}
+
 	void UIControl::Update(float fDelatTime)
 	{
 		__super::Update(fDelatTime);
+
+		// Mouse-event dispatch. Disabled controls are already skipped by
+		// Component::Update before reaching here (the parent's iteration
+		// gates on IsEnable). No-op virtuals make the cost a few floats
+		// for widgets that don't care about input.
+		if (!HitTestMousePx()) return;
+		OnHover();
+		if (auto* pInput = CInput::GetInst())
+		{
+			if (pInput->IsMouseButtonDown(CInput::MOUSE_TYPE::LEFT))
+				OnMouseDown();
+		}
 	}
 
 	std::shared_ptr<Component> UIControl::Clone()

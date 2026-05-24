@@ -1,6 +1,15 @@
 # spawn.csv — global enemy spawn parameters. One data row.
 # Columns:
-#   enemy_interval — seconds between spawns
-#   enemy_radius   — cells from the player where enemies materialise
-enemy_interval,enemy_radius
-1.0,8.0
+#   enemy_interval    — seconds between spawns
+#   enemy_radius      — cells from the player where enemies materialise
+#   first_spawn_time  — scene-elapsed seconds before the first spawn
+#                       (grace period; 0 = start immediately)
+#   last_spawn_time   — scene-elapsed seconds after which spawns stop
+#                       (0 or negative = spawn forever)
+#   enemy_id          — EnemyDatabase id to spawn each tick
+#                       (≤ 0 = round-robin through every row)
+enemy_interval,enemy_radius,first_spawn_time,last_spawn_time,enemy_id
+0.5,8.0,0.1,30.0,1
+1.0,8.0,0.1,30.0,2
+0.3,8.0,30.0,0.0,3
+1.0,8.0,30.0,0.0,4

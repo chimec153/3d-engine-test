@@ -4,6 +4,7 @@
 #include "Graphics.h"
 #include "Timer.h"
 #include <functional>
+#include <unordered_map>
 
 namespace Engine
 {
@@ -50,8 +51,20 @@ namespace Engine
 		float m_fFixedTime;
 		std::function<void()> m_PrePresentCb;
 
+		// Listeners fired from WndProc's WM_SIZE after m_iWidth/m_iHeight
+		// are updated. Keyed by token so callers can unregister cleanly
+		// (UIControl unregisters in its dtor). The current window style is
+		// not user-resizable, so WM_SIZE only fires on minimize/restore
+		// today — the callback is still load-bearing as the *only* hook
+		// available if the window ever becomes resizable.
+		std::unordered_map<int, std::function<void(int, int)>> m_mapResizeCallbacks;
+		int m_iNextResizeToken = 0;
+
 	public:
 		void SetPrePresentCallback(std::function<void()> cb);
+
+		int RegisterResizeCallback(std::function<void(int iWidth, int iHeight)> cb);
+		void UnregisterResizeCallback(int iToken);
 		std::shared_ptr<Timer> GetTimer()	const;
 		void CursorEnable();
 		void CursorDisable();

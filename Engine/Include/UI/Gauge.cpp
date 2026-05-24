@@ -75,6 +75,11 @@ namespace Engine
 
     void Gauge::SetRectPx(float fX, float fY, float fW, float fH)
     {
+        OnRectChanged(fX, fY, fW, fH);
+    }
+
+    void Gauge::OnRectChanged(float fX, float fY, float fW, float fH)
+    {
         m_fX = fX;  m_fY = fY;  m_fW = fW;  m_fH = fH;
         ApplyRect();
     }

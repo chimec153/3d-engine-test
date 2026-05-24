@@ -4,8 +4,8 @@ REGISTER_GAMEOBJECT(Client::Orb, Orb)
 #include "Player.h"
 #include "Bindable/Transform.h"
 #include "Bindable/Mesh.h"
+#include "Bindable/MeshPresets.h"
 #include "Bindable/Material.h"
-#include "Bindable/Sphere.h"
 #include "Bindable/InputLayout.h"
 #include "Bindable/Topology.h"
 #include "Bindable/VertexShader.h"
@@ -22,16 +22,7 @@ namespace Client
         // Shared low-poly sphere geometry — every orb in the scene reuses it.
         std::shared_ptr<Engine::Mesh> EnsureOrbMesh()
         {
-            if (auto pCached = Engine::StaticFindBindable<Engine::Mesh>("OrbMesh"))
-                return pCached;
-
-            std::vector<Engine::VertexStandard> verts;
-            std::vector<unsigned int>           inds;
-            Engine::Sphere::CreateSphereVertex<Engine::VertexStandard>(6, 12, verts);
-            Engine::Sphere::GetSphereVertexTexcoord<Engine::VertexStandard>(6, 12, verts);
-            Engine::Sphere::CreateSphereIndex(6, 12, inds);
-
-            return Engine::StaticCreateBindable<Engine::Mesh>("OrbMesh", verts, inds);
+            return Engine::MeshPresets::UnitSphere(6, 12);
         }
 
         // One shared material so all orbs sit in the same instancing bucket

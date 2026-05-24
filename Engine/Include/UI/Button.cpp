@@ -1,9 +1,6 @@
 #include "Button.h"
-#include "../Bindable/Transform.h"
 #include "../Bindable/UIRenderer.h"
 #include "../Bindable/Texture.h"
-#include "../Input/Input.h"
-#include "../Types.h"
 
 namespace Engine
 {
@@ -28,32 +25,9 @@ namespace Engine
         if (m_pRenderer) m_pRenderer->SetTexture(pTex);
     }
 
-    bool Button::HitTestMousePx() const
+    void Button::OnMouseDown()
     {
-        auto pTr = GetTransform();
-        if (!pTr) return false;
-        auto* pInput = CInput::GetInst();
-        const float fMx = static_cast<float>(pInput->GetMouseX());
-        const float fMy = static_cast<float>(pInput->GetMouseY());
-        const Vector3 vPos   = pTr->GetPosition();
-        const Vector3 vScale = pTr->GetScale();
-        return fMx >= vPos.x && fMx <= vPos.x + vScale.x
-            && fMy >= vPos.y && fMy <= vPos.y + vScale.y;
-    }
-
-    void Button::Update(float fDeltaTime)
-    {
-        // Ticks child Components (Transform / UIRenderer lifecycle).
-        UIControl::Update(fDeltaTime);
-
-        if (!m_fnOnClick) return;
-
-        auto* pInput = CInput::GetInst();
-        if (pInput->IsMouseButtonDown(CInput::MOUSE_TYPE::LEFT) &&
-            HitTestMousePx())
-        {
-            m_fnOnClick();
-        }
+        if (m_fnOnClick) m_fnOnClick();
     }
 
     std::shared_ptr<Component> Button::Clone()

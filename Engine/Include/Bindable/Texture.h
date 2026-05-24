@@ -44,6 +44,7 @@ namespace Engine
 		CPtr<ID3D11Texture2D> GetTexture2D() const { return m_pTexture; }
 		DirectX::ScratchImage* GetImage()	const;
 		bool SaveTexture(const TCHAR* pFilePath, const std::string& strPathKey = TEXTURE_PATH);
+		bool SaveTexture2D(const TCHAR* pFilePath, const std::string& strPathKey = TEXTURE_PATH);
 		int GetImageWidth()	const noexcept;
 		int GetImageHeight()	const noexcept;
 		bool CreateTextureAndSRVAndUAV(int iWidth, int iHeight, DXGI_FORMAT eFormat, int iMipLevels = 1, int iArraySize = 1);

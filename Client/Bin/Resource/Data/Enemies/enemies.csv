@@ -2,11 +2,16 @@
 # Columns:
 #   id              — unique integer key
 #   name            — debug label
-#   kind            — Box | Capsule (drives mesh + material colour)
+#   kind            — Box | Capsule (drives mesh)
 #   max_hp          — int, bullet damage drains this
 #   speed           — cells / sec
 #   attack_range    — world units; melee triggers inside this distance
 #   attack_cooldown — seconds between melee hits
-id,name,kind,max_hp,speed,attack_range,attack_cooldown
-1,Box,Box,20,1.0,1.5,1.0
-2,Capsule,Capsule,15,1.0,1.5,1.0
+#   color_rgb       — 0xRRGGBB material diffuse colour
+#   attack_min      — int, melee damage low end (inclusive)
+#   attack_max      — int, melee damage high end (inclusive)
+id,name,kind,max_hp,speed,attack_range,attack_cooldown,color_rgb,attack_min,attack_max
+1,Box,Box,20,1.0,1.5,1.0,0xFF1A1A,1,2
+2,Capsule,Capsule,15,1.0,1.5,1.0,0x1AFF33,1,2
+3,Box,Box,40,2.0,1.5,1.0,0x1A1AFF,1,2
+4,Capsule,Capsule,30,1.0,1.5,1.0,0x1A1AFF,1,2

@@ -6,10 +6,9 @@ REGISTER_GAMEOBJECT(Client::Bullet, Bullet)
 #include "Bindable/ColliderSphere.h"
 #include "Bindable/Collider.h"
 #include "Bindable/Mesh.h"
+#include "Bindable/MeshPresets.h"
 #include "Bindable/Material.h"
 #include "Bindable/Texture.h"
-#include "Bindable/Sphere.h"
-#include "Bindable/Box.h"
 #include "Bindable/InputLayout.h"
 #include "Bindable/Topology.h"
 #include "Bindable/VertexShader.h"
@@ -34,19 +33,6 @@ namespace Client
             return { r, g, b, 1.f };
         }
 
-        // Flat unit triangle in the X-Y plane, single face, no UVs that
-        // matter (sampled colour comes from the material CB via
-        // STANDARD_SOLID_PS just like the sphere/box paths).
-        std::shared_ptr<Engine::Mesh> MakeTriangleMesh()
-        {
-            std::vector<Engine::VertexStandard> verts(3);
-            verts[0].pos = { 0.0f,  0.5f, 0.0f };
-            verts[1].pos = { 0.5f, -0.5f, 0.0f };
-            verts[2].pos = {-0.5f, -0.5f, 0.0f };
-            verts[0].normal = verts[1].normal = verts[2].normal = { 0.f, 0.f, -1.f };
-            std::vector<unsigned int> inds = { 0, 1, 2 };
-            return std::make_shared<Engine::Mesh>(verts, inds);
-        }
     }
 
     Bullet::Bullet() :
@@ -127,12 +113,24 @@ namespace Client
         m_iLevel    = iLevel;
         m_pOwner    = pOwner;
 
-        m_iDamage   = ComputeDamage(def, iLevel);
-        m_fSpeed    = ComputeSpeed (def, iLevel);
-        m_fLifetime = def.fLifetime;
-        m_fLifeAcc  = 0.f;
+        m_iDamage       = ComputeDamage(def, iLevel);
+        m_fSpeed        = ComputeSpeed (def, iLevel);
+        m_fAcceleration = def.fAcceleration;
+        m_fLifetime     = def.fLifetime;
+        m_fLifeAcc      = 0.f;
 
         ApplyShape(def.eShape, def.uColorRGB);
+
+        // Per-weapon size — drives both the visual scale and the
+        // collider radius (kept proportional to the legacy 0.28/0.25
+        // ratio so a default-size bullet collides exactly as before).
+        if (m_pTransform)
+            m_pTransform->SetScale(def.fSize, def.fSize, def.fSize);
+        if (m_pCollider)
+        {
+            constexpr float kColliderToVisual = 0.28f / 0.25f;
+            m_pCollider->SetRadius(def.fSize * kColliderToVisual);
+        }
 
         // Orbital bullets seed their starting angle from the player's yaw
         // so multiple orbs spread around the player instead of stacking.
@@ -159,27 +157,10 @@ namespace Client
         std::shared_ptr<Engine::Mesh> pMesh;
         switch (eShape)
         {
-        case ProjectileShape::Box:
-        {
-            auto verts = Engine::Box::CreateTextureVertex<Engine::VertexStandard>();
-            auto inds  = Engine::Box::GetTextureIndex();
-            pMesh = std::make_shared<Engine::Mesh>(verts, inds);
-            break;
-        }
-        case ProjectileShape::Triangle:
-            pMesh = Bullet_detail::MakeTriangleMesh();
-            break;
+        case ProjectileShape::Box:      pMesh = Engine::MeshPresets::UnitBox();         break;
+        case ProjectileShape::Triangle: pMesh = Engine::MeshPresets::UnitTriangle();    break;
         case ProjectileShape::Sphere:
-        default:
-        {
-            std::vector<Engine::VertexStandard> verts;
-            std::vector<unsigned int>           inds;
-            Engine::Sphere::CreateSphereVertex<Engine::VertexStandard>(8, 16, verts);
-            Engine::Sphere::GetSphereVertexTexcoord<Engine::VertexStandard>(8, 16, verts);
-            Engine::Sphere::CreateSphereIndex(8, 16, inds);
-            pMesh = std::make_shared<Engine::Mesh>(verts, inds);
-            break;
-        }
+        default:                        pMesh = Engine::MeshPresets::UnitSphere(8, 16); break;
         }
 
         m_pMeshRenderer->SetMesh(pMesh);
@@ -296,6 +277,13 @@ namespace Client
 
         if (!m_pTransform) return;
 
+        // Apply per-weapon acceleration before consuming m_fSpeed in the
+        // switch below. Orbital reads m_fSpeed as angular rad/sec, so a
+        // non-zero acceleration there is angular too — same field, same
+        // unit convention as fProjectileSpeed.
+        if (m_fAcceleration != 0.f)
+            m_fSpeed += m_fAcceleration * fDeltaTime;
+
         switch (m_eMovement)
         {
         case MovementType::Straight:
@@ -335,9 +323,13 @@ namespace Client
                 const Engine::Vector3 vCenter = pOwner->GetPosition();
                 const float ox = std::cos(m_fOrbitAngle) * m_fOrbitRadius;
                 const float oz = std::sin(m_fOrbitAngle) * m_fOrbitRadius;
+                // vCenter.y is the player's pivot (kWallY+1), but enemy
+                // colliders sit around kWallY+0.3 — apply the muzzle-Y
+                // offset Player pushed in via SetOrbitYOffset so the orb
+                // crosses enemy bodies instead of orbiting above them.
                 m_pTransform->SetPosition(
                     vCenter.x + ox,
-                    vCenter.y,
+                    vCenter.y + m_fOrbitYOffset,
                     vCenter.z + oz);
                 // Face outward so spiral/triangle visuals point along
                 // the tangent. Tangent yaw at angle θ is θ + π/2 in

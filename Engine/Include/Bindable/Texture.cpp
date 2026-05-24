@@ -371,6 +371,32 @@ namespace Engine
 		return true;
 	}
 
+	bool Texture::SaveTexture2D(const TCHAR* pFilePath, const std::string& strPathKey)
+	{
+		if (!m_pTexture)
+		{
+			return false;
+		}
+
+		TCHAR strFullPath[MAX_PATH] = {};
+
+		CPathManager::GetInst()->Resolve(pFilePath, strPathKey, strFullPath);
+
+		DirectX::ScratchImage image;
+
+		if (FAILED(DirectX::CaptureTexture(Graphics::GetInst()->GetDevice(), Graphics::GetInst()->GetDeviceContext(), m_pTexture.Get(), image)))
+		{
+			return false;
+		}
+
+		if (FAILED(DirectX::SaveToWICFile(*image.GetImage(0, 0, 0), DirectX::WIC_FLAGS::WIC_FLAGS_NONE, DirectX::GetWICCodec(DirectX::WIC_CODEC_BMP), strFullPath, nullptr, nullptr)))
+		{
+			return false;
+		}
+
+		return true;
+	}
+
 	int Texture::GetImageWidth() const noexcept
 	{
 		if (!m_pImage)

@@ -81,6 +81,18 @@ namespace Client
         float fProjectileSpeed = 8.f;    // world units / sec
         float fLifetime        = 2.f;    // seconds; Fixed/Orbital cap too
         int   iCount           = 1;      // projectiles per fire
+        // Visual scale of the bullet mesh. Collider radius scales
+        // proportionally so a bigger projectile both *looks* bigger
+        // and *hits* over a wider area. Default matches the legacy
+        // 0.25 uniform scale Bullet::Init used to hard-code.
+        float fSize            = 0.25f;
+        // Speed delta per second. Bullet::Update applies
+        //   speed += acceleration * dt
+        // each frame, so positive values accelerate the projectile and
+        // negative values decelerate it. 0 keeps the legacy constant-
+        // speed behaviour. Orbital weapons interpret fProjectileSpeed
+        // as angular rad/sec, so acceleration is angular too.
+        float fAcceleration    = 0.0f;
 
         // 0xRRGGBB packed. Used for the card colour and (for now) the
         // projectile material tint — no per-weapon texture pipeline yet.

@@ -11,12 +11,11 @@ namespace Engine
     class Texture;
 
     // Click-aware UI primitive. Same UIControl + child UIRenderer + child
-    // Transform composition as HPBar/XPBar, but exposes a click rect in
-    // NDC and a std::function callback. Update polls the engine's mouse
-    // state every frame; a left-button-down whose NDC coords fall inside
-    // the rect fires OnClick once. Pausing the game (Window::Stop) does
-    // NOT silence the button — input state is polled regardless of the
-    // time-scale gate so callers can use buttons inside paused modals.
+    // Transform composition as HPBar/XPBar; the click handler is wired
+    // through UIControl::OnMouseDown — the base polls input + hit-tests
+    // every frame, and Button's override fires the callback. Pausing the
+    // game (Timer::Stop) does NOT silence the button, since the base's
+    // poll runs regardless of the time-scale gate.
     class ENGINE_DLL Button : public UIControl
     {
     public:
@@ -30,14 +29,12 @@ namespace Engine
         void SetOnClick(std::function<void()> fnOnClick) { m_fnOnClick = std::move(fnOnClick); }
 
         virtual bool Init() override;
-        virtual void Update(float fDeltaTime) override;
         virtual std::shared_ptr<Component> Clone() override;
 
-    private:
-        // Test whether the mouse cursor (window pixels) falls inside
-        // the UIControl Transform's pixel rect.
-        bool HitTestMousePx() const;
+    protected:
+        virtual void OnMouseDown() override;
 
+    private:
         std::function<void()> m_fnOnClick;
 
         std::shared_ptr<UIRenderer> m_pRenderer;

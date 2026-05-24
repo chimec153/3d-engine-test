@@ -42,6 +42,13 @@ namespace Engine
         virtual void Update(float fDeltaTime) override;
         virtual std::shared_ptr<Component> Clone() override;
 
+    protected:
+        // Fans the resolved pixel rect out to the BG + Fill child
+        // Transforms (Fill width scaled by m_fRatio). Reached from
+        // SetRect (legacy callers), SetRectPx (Gauge's own setter)
+        // and the Window resize callback chain in UIControl.
+        virtual void OnRectChanged(float fX, float fY, float fW, float fH) override;
+
     private:
         std::shared_ptr<Transform>  m_pTransformBG;
         std::shared_ptr<Transform>  m_pTransformFill;

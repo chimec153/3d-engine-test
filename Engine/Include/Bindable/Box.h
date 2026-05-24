@@ -119,6 +119,17 @@ namespace Engine
         }
 
         static std::vector<unsigned int> GetTextureIndex();
+
+        // Composite — fills outVerts and outInds with the textured unit
+        // cube. Partial functions stay for sites that already pass them
+        // inline as rvalue arguments (BindableManager's "Box" registration).
+        template <typename T>
+        static void BuildMesh(std::vector<T>& outVerts,
+                              std::vector<unsigned int>& outInds)
+        {
+            outVerts = CreateTextureVertex<T>();
+            outInds  = GetTextureIndex();
+        }
     };
 
 }

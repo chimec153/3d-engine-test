@@ -35,6 +35,11 @@ namespace Client
         // of the legacy hard-coded -1 HP.
         int GetDamage() const { return m_iDamage; }
 
+        // Vertical offset applied to the orbital path relative to the
+        // owner's pivot. Player calls this with its muzzle-Y offset
+        // (-0.7 today) so the orb circles at enemy collider height.
+        void SetOrbitYOffset(float f) { m_fOrbitYOffset = f; }
+
         std::shared_ptr<Engine::Transform> GetTransform() const { return m_pTransform; }
 
         virtual bool Init() override;
@@ -51,10 +56,14 @@ namespace Client
         OnHitEvent   m_eOnHit    = OnHitEvent::Vanish;
         FireMode     m_eFireMode = FireMode::Cooldown;
 
-        int          m_iDamage   = 1;
-        float        m_fSpeed    = 8.f;
-        float        m_fLifetime = 2.f;
-        float        m_fLifeAcc  = 0.f;
+        int          m_iDamage       = 1;
+        float        m_fSpeed        = 8.f;
+        // Speed delta per second. Update applies speed += accel * dt
+        // each frame, so positive = accelerate, negative = decelerate.
+        // 0 keeps the legacy constant-speed behaviour.
+        float        m_fAcceleration = 0.f;
+        float        m_fLifetime     = 2.f;
+        float        m_fLifeAcc      = 0.f;
 
         // Orbital state. m_pOwner is the player transform we circle around;
         // weak so the bullet stays safe if the player is gone (we just
@@ -67,6 +76,11 @@ namespace Client
         // pressed against the player.
         float m_fOrbitRadius  = 0.9f;
         float m_fOrbitAngle   = 0.f;   // radians
+        // Vertical offset from the owner's pivot — Player's pivot sits
+        // ~kWallY+1 (body root) but enemy colliders centre at kWallY+0.3,
+        // so an unbiased Y would orbit a metre above their heads. Player
+        // pushes the matching muzzle offset here via SetOrbitYOffset.
+        float m_fOrbitYOffset = 0.f;
 
         // Spiral phase accumulator. Position-offset = right * amp * sin(t * freq).
         float m_fSpiralTime   = 0.f;

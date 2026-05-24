@@ -75,51 +75,6 @@ namespace Client
 
 	bool GameScene::CreateTexture()
 	{
-		/*std::vector<const TCHAR*> vecTexture =
-		{
-			TEXT("/Game/Texture/LandScape/dirt.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/sand.bmp"),
-			TEXT("/Game/Texture/LandScape/sand.bmp"),
-			TEXT("/Game/Texture/LandScape/sand.bmp"),
-			TEXT("/Game/Texture/LandScape/sand.bmp"),
-			TEXT("/Game/Texture/LandScape/sand.bmp"),
-		};
-
-		std::vector<const TCHAR*> vecNormalTexture =
-		{
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-		};
-
-		std::vector<const TCHAR*> vecSpecularTexture =
-		{
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-			TEXT("/Game/Texture/LandScape/grass.bmp"),
-		};
-
-		std::vector<const TCHAR*> vecBlendTexture =
-		{
-			TEXT("/Game/Texture/LandScape/baseAlpha.png"),
-			TEXT("/Game/Texture/LandScape/baseAlpha.png"),
-		};
-
-		Engine::StaticCreateBindable<Engine::Texture>("TerrainDiffuse", vecTexture, TEXTURE_PATH, 20);
-		Engine::StaticCreateBindable<Engine::Texture>("TerrainNormal", vecNormalTexture, TEXTURE_PATH, 21);
-		Engine::StaticCreateBindable<Engine::Texture>("TerrainSpecular", vecSpecularTexture, TEXTURE_PATH, 22);
-		Engine::StaticCreateBindable<Engine::Texture>("TerrainBlend", vecBlendTexture, TEXTURE_PATH, 24);
-		Engine::StaticCreateBindable<Engine::Texture>("TerrainHeight", TEXT("/Game/Texture/LandScape/height2.png"), TEXTURE_PATH, 16);
-		Engine::StaticCreateBindable<Engine::Texture>("SkyBoxTexture", TEXT("/Game/Texture/TYbvO.png"), TEXTURE_PATH, 5);*/
 		Engine::StaticCreateBindable<Engine::Texture>("PaperBurn", TEXT("/Game/Texture/DefaultBurn.png"), TEXTURE_PATH, 4);
 
 		Engine::StaticCreateBindable<Engine::Texture>("DecalBloodAlbedo", TEXT("/Game/Texture/Decal/sgfjdepc_8K_Albedo.tga"), TEXTURE_PATH, 0);
@@ -225,6 +180,24 @@ namespace Client
 			{
 				pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
 				pLight->GetTransform()->SetRX(1.f);
+
+				// Shrink shadow ortho to match this scene's scale. Player is
+				// authored at scale 0.01 (Player.cpp:442), so gameplay
+				// objects sit in a ~50-unit play radius. PointLight's
+				// default ortho is ±2500 — at a 2048² shadow map that's
+				// ~2.4 units/texel, so a ~1-unit player casts a shadow only
+				// 1-2 texels wide. Tighten to ±50 for ~0.05 units/texel.
+				float fSize = 15.f;
+				Engine::ORTHOINFO tOrtho = {};
+				tOrtho.fLeft   = -fSize;
+				tOrtho.fRight  =  fSize;
+				tOrtho.fTop    =  fSize;
+				tOrtho.fBottom = -fSize;
+				tOrtho.fNear   =   0.1f;
+				tOrtho.fFar    = 200.f;
+				pLight->SetOrthoInfo(tOrtho);
+
+				Engine::Graphics::GetInst()->SetLight(pLight);
 			}
 		}
 
@@ -246,15 +219,22 @@ namespace Client
 		if (pPlayer) pPlayer->SetVoxelWorld(m_pVoxelWorld.get());
 		m_pPlayer = pPlayer;
 
-		// HP / XP gauges. Layout (rect) and ratio are pushed every frame
-		// from Update so window resize still tracks. Colors here match
-		// the old HPBar (red on dark grey) / XPBar (yellow on darker
-		// grey) constants verbatim.
+		// HP / XP gauges. Layout is anchor-bound once (UIControl
+		// re-resolves the pixel rect on Window resize); only the ratio
+		// is pushed each frame from Update. Colors here match the old
+		// HPBar (red on dark grey) / XPBar (yellow on darker grey)
+		// constants verbatim. Anchor (0.025, 0.975) = 2.5% in from
+		// bottom-left corner; pivot (0,1) makes that the bar's own
+		// bottom-left, so the bar grows up-and-right from there.
 		if (auto pHPObj = CreateGameObject<>("HPBar", FindLayer(DEFAULT_LAYER)))
 		{
 			if (auto pHP = pHPObj->AddComponent<Engine::Gauge>("hpbar"))
 			{
 				pHP->SetColors(0xFF303030, 0xFF2030E0);
+				pHP->SetRectByAnchorFrac(
+					Engine::Vector2{ 0.025f, 0.975f },
+					Engine::Vector2{ 0.f,    1.f    },
+					Engine::Vector2{ 0.2f,   0.025f });
 				m_pHPGauge = pHP;
 			}
 		}
@@ -264,6 +244,10 @@ namespace Client
 			if (auto pXP = pXPObj->AddComponent<Engine::Gauge>("xpbar"))
 			{
 				pXP->SetColors(0xFF202020, 0xFF20D0E0);
+				pXP->SetRectByAnchorFrac(
+					Engine::Vector2{ 0.025f, 0.945f },
+					Engine::Vector2{ 0.f,    1.f    },
+					Engine::Vector2{ 0.2f,   0.0125f });
 				m_pXPGauge = pXP;
 			}
 		}
@@ -313,30 +297,19 @@ namespace Client
 	{
 		__super::Update(dt);   // Scene::Update auto-advances V2 drawables.
 
-		// HP / XP gauges — push current rect (so the bars follow window
-		// resize) and the ratio drawn from the player every frame. Same
-		// percentages the old HPBar/XPBar layout helpers encoded.
+		// HP / XP gauges — only the ratio needs per-frame push; the rect
+		// is anchor-bound at gauge creation and re-resolved by UIControl
+		// on Window resize.
 		if (auto pPlayer = m_pPlayer.lock())
 		{
-			const float fSW = static_cast<float>(Engine::Window::GetInst()->GetWidth());
-			const float fSH = static_cast<float>(Engine::Window::GetInst()->GetHeight());
-			const float fFullW = fSW * 0.2f;
-			const float fBaseX = fSW * 0.025f;
-
 			if (auto pHP = m_pHPGauge.lock())
 			{
-				const float fH = fSH * 0.025f;
-				pHP->SetRectPx(fBaseX, fSH * 0.975f - fH, fFullW, fH);
-
 				const float fMax = static_cast<float>(pPlayer->GetMaxHP());
 				pHP->SetRatio(fMax > 0.f ? pPlayer->GetHP() / fMax : 0.f);
 			}
 
 			if (auto pXP = m_pXPGauge.lock())
 			{
-				const float fH = fSH * 0.0125f;
-				pXP->SetRectPx(fBaseX, fSH * 0.945f - fH, fFullW, fH);
-
 				const float fNext = static_cast<float>(pPlayer->GetXpToNext());
 				pXP->SetRatio(fNext > 0.f ? pPlayer->GetExp() / fNext : 0.f);
 			}

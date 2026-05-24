@@ -37,7 +37,7 @@ namespace Editor
 	bool InGameScene::Init()
 	{
 		//Engine::MeshLoader::Load(TEXT("war.fbx"));
-		Engine::StaticCreateBindable<Engine::Mesh>("Idle", "war2.mesh", MESH_PATH);
+		Engine::StaticCreateBindable<Engine::Mesh>("Idle_War", "war2.mesh", MESH_PATH);
 		//Engine::StaticCreateBindable<Engine::Mesh>("Frog", "Frog.mesh", MESH_PATH);
 		//Engine::StaticCreateBindable<Engine::Mesh>("armor", "Armor_Leather.mesh", MESH_PATH);
 
@@ -148,6 +148,7 @@ namespace Editor
 			if (auto pLight = pLightObj->AddComponent<Engine::PointLight>("Light"))
 			{
 				pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
+				Engine::Graphics::GetInst()->SetLight(pLight);
 			}
 		}
 

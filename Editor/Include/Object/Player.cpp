@@ -27,7 +27,7 @@ namespace Editor
         m_pAnimation    = AddComponent<Engine::Animation>("anim");
 
         std::shared_ptr<Engine::Mesh> pMesh =
-            Engine::StaticFindBindable<Engine::Mesh>("Idle");
+            Engine::StaticFindBindable<Engine::Mesh>("Idle_War");
 
         std::shared_ptr<Engine::Skeleton> pSkeleton = std::make_shared<Engine::Skeleton>();
         pSkeleton->LoadFromPath("Idle.skel", MESH_PATH);

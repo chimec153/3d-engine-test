@@ -203,6 +203,18 @@ namespace Engine
 		m_bRun = false;
 	}
 
+	int Window::RegisterResizeCallback(std::function<void(int, int)> cb)
+	{
+		const int iToken = m_iNextResizeToken++;
+		m_mapResizeCallbacks.emplace(iToken, std::move(cb));
+		return iToken;
+	}
+
+	void Window::UnregisterResizeCallback(int iToken)
+	{
+		m_mapResizeCallbacks.erase(iToken);
+	}
+
 	bool Window::Init(const TCHAR* pTitle, const TCHAR* pClass, HINSTANCE hInst, WNDPROC proc, int iWidth, int iHeight)
 	{
 		m_hInst = hInst;
@@ -524,6 +536,28 @@ namespace Engine
 			else
 			{
 				CInput::GetInst()->Disable();
+			}
+			break;
+		case WM_SIZE:
+			// SIZE_MINIMIZED reports (0, 0) which would zero out every
+			// anchor-driven UI rect — skip it. Real resize / restore /
+			// maximize paths still notify.
+			if (wParam != SIZE_MINIMIZED && m_pInst)
+			{
+				const int iW = LOWORD(lParam);
+				const int iH = HIWORD(lParam);
+				if (iW > 0 && iH > 0 && (iW != m_pInst->m_iWidth || iH != m_pInst->m_iHeight))
+				{
+					m_pInst->m_iWidth = iW;
+					m_pInst->m_iHeight = iH;
+					// Copy first so a listener that unregisters itself
+					// inside the callback doesn't invalidate the iterator.
+					auto callbacks = m_pInst->m_mapResizeCallbacks;
+					for (auto& kv : callbacks)
+					{
+						if (kv.second) kv.second(iW, iH);
+					}
+				}
 			}
 			break;
 		case WM_DESTROY:

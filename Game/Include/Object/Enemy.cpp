@@ -4,6 +4,7 @@ REGISTER_GAMEOBJECT(Client::Enemy, Enemy)
 #include "Orb.h"
 #include "Bullet.h"
 #include "Attackable.h"
+#include "FlowField.h"
 #include "Player.h"
 #include "../UI/DamageText.h"
 #include "../GameDefs.h"
@@ -11,6 +12,7 @@ REGISTER_GAMEOBJECT(Client::Enemy, Enemy)
 #include "Scene/Layer.h"
 #include "Bindable/Transform.h"
 #include "Bindable/Mesh.h"
+#include "Bindable/MeshPresets.h"
 #include "Bindable/Material.h"
 #include "Bindable/InputLayout.h"
 #include "Bindable/Topology.h"
@@ -19,7 +21,6 @@ REGISTER_GAMEOBJECT(Client::Enemy, Enemy)
 #include "Bindable/ColliderSphere.h"
 #include "Bindable/BindableManager.h"
 #include "Component/MeshRendererComponent.h"
-#include "Bindable/Capsule.h"
 #include "Voxel/VoxelWorld.h"
 #include "Voxel/BlockType.h"
 #include "Types.h"
@@ -29,78 +30,27 @@ namespace Client
 {
     namespace
     {
-        // 0.6 x 0.6 x 0.6 cube centered on (0,0,0) in x/z, 0..0.6 in y.
+        // 0.6 x 0.6 x 0.6 cube centred on (0,0,0) in x/z, 0..0.6 in y.
         // transform.position = (cellX + 0.5, sy, cellZ + 0.5) puts the mesh
         // at the floor-level cell center.
         std::shared_ptr<Engine::Mesh> EnsureEnemyMesh()
         {
-            if (auto pCached = Engine::StaticFindBindable<Engine::Mesh>("EnemyMesh"))
-                return pCached;
-
-            const Engine::Vector3 lo(-0.3f, 0.0f, -0.3f);
-            const Engine::Vector3 hi( 0.3f, 0.6f,  0.3f);
-
-            struct Face { Engine::Vector3 n; Engine::Vector3 v[4]; };
-            const Face faces[6] = {
-                { { 1.f, 0.f, 0.f}, {{hi.x,hi.y,lo.z},{hi.x,hi.y,hi.z},{hi.x,lo.y,hi.z},{hi.x,lo.y,lo.z}} },
-                { {-1.f, 0.f, 0.f}, {{lo.x,hi.y,hi.z},{lo.x,hi.y,lo.z},{lo.x,lo.y,lo.z},{lo.x,lo.y,hi.z}} },
-                { { 0.f, 1.f, 0.f}, {{lo.x,hi.y,hi.z},{hi.x,hi.y,hi.z},{hi.x,hi.y,lo.z},{lo.x,hi.y,lo.z}} },
-                { { 0.f,-1.f, 0.f}, {{hi.x,lo.y,hi.z},{lo.x,lo.y,hi.z},{lo.x,lo.y,lo.z},{hi.x,lo.y,lo.z}} },
-                { { 0.f, 0.f, 1.f}, {{hi.x,hi.y,hi.z},{lo.x,hi.y,hi.z},{lo.x,lo.y,hi.z},{hi.x,lo.y,hi.z}} },
-                { { 0.f, 0.f,-1.f}, {{lo.x,hi.y,lo.z},{hi.x,hi.y,lo.z},{hi.x,lo.y,lo.z},{lo.x,lo.y,lo.z}} },
-            };
-            const DirectX::XMFLOAT2 uv[4] = { {0.f,0.f},{1.f,0.f},{1.f,1.f},{0.f,1.f} };
-
-            std::vector<Engine::VertexStandard> verts; verts.reserve(24);
-            std::vector<unsigned int> inds; inds.reserve(36);
-
-            for (int f = 0; f < 6; ++f)
-            {
-                const unsigned int base = static_cast<unsigned int>(verts.size());
-                for (int v = 0; v < 4; ++v)
-                {
-                    Engine::VertexStandard vs = {};
-                    vs.pos = faces[f].v[v];
-                    vs.normal = faces[f].n;
-                    vs.uv = uv[v];
-                    verts.push_back(vs);
-                }
-                inds.push_back(base + 0); inds.push_back(base + 1); inds.push_back(base + 2);
-                inds.push_back(base + 0); inds.push_back(base + 2); inds.push_back(base + 3);
-            }
-
-            return Engine::StaticCreateBindable<Engine::Mesh>("EnemyMesh", verts, inds);
+            return Engine::MeshPresets::AxisBox(
+                Engine::Vector3(-0.3f, 0.0f, -0.3f),
+                Engine::Vector3( 0.3f, 0.6f,  0.3f));
         }
 
         // Capsule variant — same footprint envelope as the box (~0.6 cell
         // span, feet at y=0) so the existing ColliderSphere stays correct.
         // CreateCapsuleVertex builds a radius-0.5 capsule centred at the
-        // origin; we scale x0.5 (radius -> 0.25) and lift so y=0..0.7.
+        // origin; the fScale=0.5 + fYLift formula puts feet on y=0 with
+        // total height ~0.7.
         std::shared_ptr<Engine::Mesh> EnsureCapsuleEnemyMesh()
         {
-            if (auto pCached = Engine::StaticFindBindable<Engine::Mesh>("EnemyCapsuleMesh"))
-                return pCached;
-
-            const int   iRings   = 6;
-            const int   iSectors = 12;
-            const float fCyl     = 0.4f;
-            const float fScale   = 0.5f;
-
-            std::vector<Engine::VertexStandard> verts;
-            std::vector<unsigned int>           inds;
-            Engine::Capsule::CreateCapsuleVertex<Engine::VertexStandard>(iRings, iSectors, fCyl, verts);
-            Engine::Capsule::GetCapsuleVertexNormal<Engine::VertexStandard>(iRings, iSectors, fCyl, verts);
-            Engine::Capsule::CreateCapsuleIndex(iRings, iSectors, inds);
-
-            const float fLift = (0.5f + fCyl * 0.5f) * fScale;
-            for (auto& v : verts)
-            {
-                v.pos.x *= fScale;
-                v.pos.y = v.pos.y * fScale + fLift;
-                v.pos.z *= fScale;
-            }
-
-            return Engine::StaticCreateBindable<Engine::Mesh>("EnemyCapsuleMesh", verts, inds);
+            const float fCyl   = 0.4f;
+            const float fScale = 0.5f;
+            const float fYLift = (0.5f + fCyl * 0.5f) * fScale;
+            return Engine::MeshPresets::UnitCapsule(6, 12, fCyl, fScale, fYLift);
         }
 
         // One shared material per variant so all box enemies land in one
@@ -285,16 +235,42 @@ namespace Client
         m_fAttackRange    = def.fAttackRange;
         m_fAttackCooldown = def.fAttackCooldown;
         SetMeshKind(def.eKind == EnemyKind::Capsule ? MESH_KIND::CAPSULE : MESH_KIND::BOX);
+
+        // Apply CSV-driven material colour, keyed per-id so two rows
+        // sharing the same id share one Material (and one instancing
+        // bucket). Different ids with the same colour just get separate
+        // Materials — harmless and keeps the key trivially derivable.
+        char szMatTag[48];
+        std::snprintf(szMatTag, sizeof(szMatTag), "EnemyMaterial_%d", def.iId);
+        auto pMat = Engine::StaticFindBindable<Engine::Material>(szMatTag);
+        if (!pMat) pMat = Engine::StaticCreateBindable<Engine::Material>(szMatTag);
+        if (pMat)
+        {
+            const float fR = ((def.uColorRGB >> 16) & 0xFF) / 255.f;
+            const float fG = ((def.uColorRGB >>  8) & 0xFF) / 255.f;
+            const float fB = ((def.uColorRGB      ) & 0xFF) / 255.f;
+            pMat->SetDiffuseColor (fR, fG, fB, 1.f);
+            pMat->SetEmissiveColor({ 0.f, 0.f, 0.f, 0.f });
+
+            m_pMaterial = pMat;
+            if (m_pMeshRenderer)
+            {
+                m_pMeshRenderer->SetMaterial(pMat);
+                m_pMeshRenderer->SetOverrideMaterial(0, 0, pMat);
+            }
+        }
+
+        // Melee damage range — Attackable already created in Init with
+        // legacy defaults; overwrite with the CSV row's values.
+        if (m_pAttackable)
+            m_pAttackable->SetAttackRange(def.iAttackMin, def.iAttackMax);
     }
 
     void Enemy::SetSpawnCell(int x, int z)
     {
         m_iCellX = x; m_iCellZ = z;
         if (m_pTransform) m_pTransform->SetPosition(CellCenter(x, z));
-        m_Path.clear();
-        m_iPathIdx    = 0;
         m_fBreakAccum = 0.f;
-        m_bHasPlan    = false;
     }
 
     Engine::Vector3 Enemy::CellCenter(int x, int z) const
@@ -319,26 +295,6 @@ namespace Client
         return true;
     }
 
-    bool Enemy::RecomputePathTo(int tx, int tz)
-    {
-        m_Path.clear();
-        m_iPathIdx = 0;
-        m_bHasPlan = false;
-        if (!m_pVoxelWorld) return false;
-        const bool bOk = Pathfinder::FindPath(
-            *m_pVoxelWorld,
-            m_iCellX, m_iCellZ,
-            tx, tz,
-            m_fSpeed, 64, m_Path);
-        if (bOk)
-        {
-            m_iPlannedTargetX = tx;
-            m_iPlannedTargetZ = tz;
-            m_bHasPlan = true;
-        }
-        return bOk;
-    }
-
     void Enemy::Update(float fDeltaTime)
     {
         __super::Update(fDeltaTime);
@@ -346,9 +302,9 @@ namespace Client
         if (!m_pVoxelWorld || !m_pTransform) return;
 
         // Periodic melee — when the target sits within m_fAttackRange the
-        // cooldown advances and a hit lands on expiry. Runs before pathing
+        // cooldown advances and a hit lands on expiry. Runs before steering
         // so a melee strike fires even when we've already arrived at the
-        // target's cell (the early-out below skips pathing in that case).
+        // target's cell (the early-out below skips movement in that case).
         m_fAttackAcc += fDeltaTime;
         if (m_fAttackAcc >= m_fAttackCooldown && m_pAttackable)
         {
@@ -369,80 +325,57 @@ namespace Client
         }
 
         int tx, tz;
-        if (!ResolveTargetCell(tx, tz))
-        {
-            // Lost the target — stand still.
-            return;
-        }
+        if (!ResolveTargetCell(tx, tz)) return;        // lost target — stand still
 
         // Already in the target's cell: stop. Next frame will recheck and chase
         // again if the target moved.
         if (tx == m_iCellX && tz == m_iCellZ)
         {
-            m_Path.clear();
-            m_iPathIdx = 0;
-            m_bHasPlan = false;
+            m_fBreakAccum = 0.f;
             return;
         }
 
-        // Plan / replan when there's no plan, the plan ran out, or the target
-        // moved to a different cell since we planned.
-        const bool bTargetMoved =
-            m_bHasPlan && (tx != m_iPlannedTargetX || tz != m_iPlannedTargetZ);
-        if (!m_bHasPlan || m_iPathIdx >= m_Path.size() || bTargetMoved)
-        {
-            if (!RecomputePathTo(tx, tz) || m_Path.empty()) return;
-        }
+        if (!m_pFlowField) return;                     // no field — stand still
 
-        Pathfinder::PathStep& step = m_Path[m_iPathIdx];
-
-        // World may have changed since planning — another enemy broke the
-        // wall, the player placed a new one, etc. Replan on mismatch.
-        const Engine::BlockType nowBlock = m_pVoxelWorld->GetBlock(step.x, kWallY, step.z);
-        const bool bSolidNow = Engine::IsSolid(nowBlock);
-        if (step.bBreak != bSolidNow)
+        int nextX = 0, nextZ = 0;
+        Engine::Vector3 vDir;
+        if (!m_pFlowField->Sample(m_iCellX, m_iCellZ, nextX, nextZ, vDir))
         {
-            RecomputePathTo(tx, tz);
+            // Outside the field window or unreachable. The spawner rebuilds
+            // when the player crosses a cell boundary, so this clears once
+            // we're back inside the window.
             return;
         }
 
-        if (step.bBreak)
+        // Validate the next cell against the live voxel state. The field
+        // is rebuilt only on goal-cell change, so a wall the player placed
+        // or another enemy broke mid-tick may not be in the field yet —
+        // re-check here so we always do the right thing this frame.
+        const Engine::BlockType bNext = m_pVoxelWorld->GetBlock(nextX, kWallY, nextZ);
+        if (Engine::IsSolid(bNext))
         {
-            const float fNeeded = Engine::BlockBreakTime(nowBlock);
-            if (fNeeded < 0.f)
-            {
-                RecomputePathTo(tx, tz);
-                return;
-            }
+            const float fNeeded = Engine::BlockBreakTime(bNext);
+            if (fNeeded < 0.f) return;                 // unbreakable — wait for rebuild
             m_fBreakAccum += fDeltaTime;
             if (m_fBreakAccum >= fNeeded)
             {
-                m_pVoxelWorld->SetBlock(step.x, kWallY, step.z, Engine::BlockType::Air);
+                m_pVoxelWorld->SetBlock(nextX, kWallY, nextZ, Engine::BlockType::Air);
                 m_fBreakAccum = 0.f;
-                step.bBreak   = false;
             }
             return;
         }
+        m_fBreakAccum = 0.f;
 
-        // Plain movement: slide toward the cell center at fSpeed. Y is
-        // fixed (kWallY) so no per-frame surface snap is needed.
-        const Engine::Vector3 vTarget = CellCenter(step.x, step.z);
+        // Slide along the field direction at fSpeed. Y is fixed (kWallY) so
+        // no per-frame surface snap is needed. Movement is continuous (no
+        // cell-center snapping) so diagonals look smooth.
         Engine::Vector3 vCur = m_pTransform->GetPosition();
-        Engine::Vector3 vDir = vTarget - vCur;
-        const float fDist = vDir.Length();
         const float fMove = m_fSpeed * fDeltaTime;
+        Engine::Vector3 vNew = vCur + vDir * fMove;
+        vNew.y = static_cast<float>(kWallY);
+        m_pTransform->SetPosition(vNew);
 
-        if (fMove >= fDist || fDist < 1e-4f)
-        {
-            m_pTransform->SetPosition(vTarget);
-            m_iCellX = step.x;
-            m_iCellZ = step.z;
-            ++m_iPathIdx;
-        }
-        else
-        {
-            vDir.Normalize();
-            m_pTransform->SetPosition(vCur + vDir * fMove);
-        }
+        m_iCellX = static_cast<int>(std::floor(vNew.x));
+        m_iCellZ = static_cast<int>(std::floor(vNew.z));
     }
 }

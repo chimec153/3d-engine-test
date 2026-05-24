@@ -76,6 +76,14 @@ namespace Client
             if (m_iAttackMin < 0) m_iAttackMin = 0;
             if (m_iAttackMax < m_iAttackMin) m_iAttackMax = m_iAttackMin;
         }
+        // Absolute setter — used by Enemy::ApplyDef to push a CSV-loaded
+        // damage range over the default the ctor baked in. Clamps to a
+        // sane order so a malformed (min > max) row doesn't break Attack.
+        void SetAttackRange(int iMin, int iMax)
+        {
+            m_iAttackMin = iMin < 0 ? 0 : iMin;
+            m_iAttackMax = iMax < m_iAttackMin ? m_iAttackMin : iMax;
+        }
 
         std::shared_ptr<Engine::PaperBurn> GetPaperBurn()   const { return m_pPaperBurn; }
         std::shared_ptr<Engine::Particle>  GetParticle()    const { return m_pParticle; }

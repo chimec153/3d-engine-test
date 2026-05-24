@@ -36,7 +36,10 @@ namespace Client
 
     private:
         std::weak_ptr<Player> m_pTarget;
-        bool m_bShown = false;   // mirrors the Stop/Resume gate
+        // m_bShown removed — modal visibility is now owned by
+        // GameStateManager (state == GameState::LevelUpModal).
+        // Multi-level pickups drain Player::PendingLevelUpCount() by
+        // re-rolling on each OnPick until the queue empties.
 
         // Each card has one background Button (coloured panel, owns the
         // OnClick handler) plus two Text components for the name and

@@ -15,10 +15,12 @@ const static float2 g_vUIUV[4] =
     { 1.f, 1.f},
 };
 
-// Standalone tint cbuffer for the tinted UI pixel shader. Register
-// b10 to avoid collision with the existing UI cbuffer at b5 — old
-// UI code paths keep working unchanged.
-cbuffer UITint : register(b10)
+// Standalone tint cbuffer for the tinted UI pixel shader. Slots
+// b0-b12 are taken by shared.hlsl cbuffers (PaperBurn lives at b10,
+// Fog at b12). b13 is the first free slot — picking it avoids the
+// "constant buffer too small" warning that bound a 16-byte UITint
+// over the 80-byte PaperBurn slot.
+cbuffer UITint : register(b13)
 {
     float4 g_vUITint;   // (r, g, b, alpha_master)
 }
@@ -28,6 +30,13 @@ VSMultiOut VS_UI(uint iVertexID :   SV_VertexID)
     VSMultiOut output = (VSMultiOut)0;
 
     output.pos = mul(g_vUIPosition[iVertexID], g_matTransform);
+    // UV sub-region remap — caller pushes the b5 UI cbuffer per-draw
+    // (EnemyCountHUD picks a digit cell; Text pushes the full-quad
+    // (0,0)-(1,1) so its glyph atlas samples end-to-end). The earlier
+    // Phase-E5 cleanup orphaned this push for UIControl-style callers,
+    // which collapsed every UV to (0,0). Callers that don't need a
+    // sub-region must still push (0,0)/(1,1) so a previous draw's
+    // sub-region doesn't leak.
     output.uv = g_vUIUV[iVertexID] * (g_vUIEndUV - g_vUIStartUV) + g_vUIStartUV;
 
     return output;

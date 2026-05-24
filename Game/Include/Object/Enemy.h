@@ -1,8 +1,6 @@
 #pragma once
 #include "GameObject\GameObject.h"
-#include "Pathfinder.h"
 #include "EnemyData.h"
-#include <vector>
 #include <memory>
 
 namespace Engine
@@ -18,11 +16,13 @@ namespace Engine
 namespace Client
 {
     class Attackable;
+    class FlowField;
 
     // Tower-defense-style enemy that chases a target GameObject (typically the
-    // Player). Each path is planned with grid A* on the voxel world and treats
-    // entering a solid block as "break it first" (cost += BlockBreakTime). When
-    // the target moves, the next plan picks up the target's new cell.
+    // Player). Steering reads a shared FlowField (one Dijkstra solution for
+    // the whole army), and entering a solid cell triggers a per-enemy
+    // break-in-place pause sized by BlockBreakTime. The flow field is owned
+    // by EnemySpawner and rebuilt when the player crosses cell boundaries.
     class Enemy :
         public Engine::GameObject
     {
@@ -37,6 +37,7 @@ namespace Client
 
     public:
         void SetVoxelWorld(Engine::VoxelWorld* pWorld) { m_pVoxelWorld = pWorld; }
+        void SetFlowField(FlowField* pField) { m_pFlowField = pField; }
         // 2D world — enemies live on the floor layer; the y of the spawn
         // cell is implicit (Client::kWallY for body positioning).
         void SetSpawnCell(int x, int z);
@@ -60,6 +61,7 @@ namespace Client
 
     private:
         Engine::VoxelWorld* m_pVoxelWorld = nullptr;
+        FlowField*          m_pFlowField  = nullptr;
         MESH_KIND           m_eMeshKind   = MESH_KIND::BOX;
         std::shared_ptr<Engine::Transform>             m_pTransform;
         std::shared_ptr<Engine::MeshRendererComponent> m_pMeshRenderer;
@@ -71,9 +73,6 @@ namespace Client
         // 2D occupied cell. Y is fixed at Client::kWallY for transform
         // positioning so we only track xz.
         int m_iCellX = 0, m_iCellZ = 0;
-
-        std::vector<Pathfinder::PathStep> m_Path;
-        size_t m_iPathIdx = 0;
 
         float m_fSpeed         = 2.0f;   // cells per second; overwritten by ApplyDef
         float m_fBreakAccum    = 0.f;    // seconds spent breaking the current target cell
@@ -97,14 +96,7 @@ namespace Client
         float m_fAttackCooldown = 1.0f;
         float m_fAttackAcc      = 0.f;
 
-        // World cell the last path was planned against — used to detect when
-        // the player has moved enough to warrant a fresh A* run.
-        int  m_iPlannedTargetX = 0;
-        int  m_iPlannedTargetZ = 0;
-        bool m_bHasPlan        = false;
-
         bool ResolveTargetCell(int& tx, int& tz) const;
-        bool RecomputePathTo(int tx, int tz);
         Engine::Vector3 CellCenter(int x, int z) const;
 
     public:

@@ -145,10 +145,12 @@ namespace Client
         int  m_iLevel       = 1;
         int  m_iXp          = 0;      // XP accumulated in the current level
         int  m_iXpToNext    = 5;      // XP needed to advance to the next level
-        // Latched flag — AddExp sets this when a level boundary was just
-        // crossed. LevelUpChoices consumes the flag (and applies a stat
-        // boost) once the player picks a card.
-        bool m_bPendingLevelUp = false;
+        // Counter — AddExp increments once per level boundary crossed in
+        // a single call (a fat XP pickup can cross multiple levels).
+        // LevelUpChoices consumes one per card pick, looping until the
+        // counter drains; this avoids the old boolean's lost-level-up
+        // bug where AddExp(20) at level 1 would queue only one card.
+        int  m_iPendingLevelUps = 0;
 
     private:
         // Get the aim yaw the next projectile should fly along. Honours
@@ -192,11 +194,15 @@ namespace Client
         int  GetXpToNext() const { return m_iXpToNext; }
 
         // Level-up handshake between Player and the LevelUpChoices UI:
-        //   HasPendingLevelUp — true while a card must still be picked.
-        //   ConsumeLevelUp     — UI calls this with the choice index
-        //                        (0/1/2) to apply the boost and clear
-        //                        the flag.
-        bool HasPendingLevelUp() const { return m_bPendingLevelUp; }
+        //   HasPendingLevelUp — true while any card must still be picked.
+        //   PendingLevelUpCount — how many picks remain (lets the UI
+        //                        re-roll for sequential level-ups
+        //                        without closing the modal).
+        //   ConsumeLevelUp     — UI calls this with the chosen weapon
+        //                        id to apply the boost and decrement
+        //                        the pending counter.
+        bool HasPendingLevelUp()    const { return m_iPendingLevelUps > 0; }
+        int  PendingLevelUpCount()  const { return m_iPendingLevelUps; }
         void ConsumeLevelUp(int iChoice);
 
         // Apply a hit from an external attacker. Mirrors the frogclaw

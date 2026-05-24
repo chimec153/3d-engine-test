@@ -48,6 +48,7 @@
 #include "Animation/Skeleton.h"
 #include "Bindable/PointLight.h"
 #include "Bindable/Sphere.h"
+#include "Bindable/MeshPresets.h"
 #include "Render/MRT.h"
 #include "Bindable/Particle.h"
 #include "Bindable/Cloth.h"
@@ -2685,6 +2686,81 @@ namespace Editor
 				ImGui::EndPopup();
 			}
 
+			// One-click cube spawner — useful for shadow / lighting tests.
+			// Mirrors Bullet's static-mesh setup (UnitBox + NoSkin VS +
+			// solid PS + Standard IL/Topology + cloned default Material).
+			ImGui::SameLine();
+			if (ImGui::Button("+ Add Cube"))
+			{
+				if (auto pLayer = pScene->FindLayer(DEFAULT_LAYER))
+				{
+					static int s_iCubeCount = 0;
+					std::string strName = "Cube" + std::to_string(s_iCubeCount++);
+
+					// Spawn 5 units in front of the current camera so the
+					// new cube lands in the editor view regardless of where
+					// the user has flown the camera. (0,0,0) default would
+					// often be off-screen.
+					Engine::Vector3 vSpawnPos = { 0.f, 0.f, 0.f };
+					if (auto pCam = Engine::Graphics::GetInst()->GetCamera())
+					{
+						if (auto pCamTr = pCam->GetTransform())
+						{
+							vSpawnPos = pCamTr->GetPosition()
+								+ pCamTr->GetAxis(Engine::AXIS_TYPE::Z) * 5.f;
+						}
+					}
+
+					// Diagnostic: log nullptrs to VS Output. If any pointer
+					// below is 00000000, that Bindable isn't registered and
+					// the cube can't render — message tells us which one.
+					auto pMesh = Engine::MeshPresets::UnitBox();
+					auto pVS   = Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_VS);
+					auto pPS   = Engine::StaticFindBindable<Engine::PixelShader> (STANDARD_SOLID_PS);
+					auto pIL   = Engine::StaticFindBindable<Engine::InputLayout>("Standard");
+					auto pTop  = Engine::StaticFindBindable<Engine::Topology>("TriangleList");
+					auto pSrcMat = Engine::StaticFindBindable<Engine::Material>("Material");
+					char dbg[256];
+					sprintf_s(dbg, "[AddCube] mesh=%p vs=%p ps=%p il=%p top=%p mat=%p\n",
+						(void*)pMesh.get(), (void*)pVS.get(), (void*)pPS.get(),
+						(void*)pIL.get(), (void*)pTop.get(), (void*)pSrcMat.get());
+					OutputDebugStringA(dbg);
+
+					if (auto pNewObj = pScene->CreateGameObject(strName, pLayer))
+					{
+						if (auto pTr = pNewObj->AddComponent<Engine::Transform>("transform"))
+						{
+							pTr->SetPosition(vSpawnPos);
+						}
+						if (auto pMR = pNewObj->AddComponent<Engine::MeshRendererComponent>("mesh_renderer"))
+						{
+							pMR->SetMesh(pMesh);
+							pMR->SetVertexShader(pVS);
+							pMR->SetPixelShader (pPS);
+							if (pIL)  pMR->AddBindable(pIL);
+							if (pTop) pMR->AddBindable(pTop);
+
+							if (pSrcMat)
+							{
+								auto pMat = std::static_pointer_cast<Engine::Material>(pSrcMat->Clone());
+								// Mirror Bullet's full material init. PS_Multi's
+								// non-emissive term collapses to 0 when both
+								// materialFraction and vSpecColor default to 0,
+								// so spec must be non-zero for the albedo term
+								// to survive. Emissive kept tiny so the cube
+								// still shows clear shadow contrast.
+								pMat->SetDiffuseColor (0.8f, 0.8f, 0.8f, 1.f);
+								pMat->SetSpecularColor(1.f, 1.f, 1.f, 1.f);
+								pMat->SetEmissiveColor({ 0.05f, 0.05f, 0.05f, 1.f });
+								pMR->SetMaterial(pMat);
+								pMR->SetOverrideMaterial(0, 0, pMat);
+							}
+						}
+						m_pSelectedObject = pNewObj;
+					}
+				}
+			}
+
 			ImGui::Separator();
 
 			const auto& layerList = pScene->GetLayerList();
@@ -2775,7 +2851,16 @@ namespace Editor
 		ImGui::Text("Type: %d", static_cast<int>(pComponent->GetComponentType()));
 		CRef_ImGuiWindow(pComponent);
 
-		if (auto pTrans = pComponent->GetTransform())
+		// Transform component itself: Component::GetTransform() returns
+		// nullptr by default and Transform doesn't override it, so without
+		// this dynamic_cast the Transform tree node renders no values.
+		// Camera/PointLight bypass via their own GetTransform() override
+		// (they own an internal m_pTransform).
+		if (auto pAsTrans = std::dynamic_pointer_cast<Engine::Transform>(pComponent))
+		{
+			TransformBuffer_ImGuiWindow(pAsTrans);
+		}
+		else if (auto pTrans = pComponent->GetTransform())
 		{
 			TransformBuffer_ImGuiWindow(pTrans);
 		}

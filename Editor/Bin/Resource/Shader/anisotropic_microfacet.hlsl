@@ -559,7 +559,18 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     shadowpos.y = 1.f - shadowpos.y;
     
     float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
-    
+    //return fShadowAttr;
+    // DEBUG: triple uniform check.
+    //   R = g_vProjectValues alive (b3 cbuffer's first field)
+    //   G = matCameraViewToLightClip row 0 alive
+    //   B = matCameraViewToLightClip row 3 alive (translation row)
+    // Any channel black = that uniform is zero → cbuffer not updated / not bound.
+    //return float4(
+    //    saturate(length(g_vProjectValues.xyz)),
+    //    saturate(length(g_matCameraViewToLightClip[0].xyz)),
+    //    saturate(length(g_matCameraViewToLightClip[3].xyz)),
+    //    1.f);
+
     float4 decal0 = g_DecalTexture0.Sample(g_sPoint, input.uv);
     float4 decal1 = g_DecalTexture1.Sample(g_sPoint, input.uv);
     float4 decal2 = g_DecalTexture2.Sample(g_sPoint, input.uv);
@@ -636,7 +647,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     //float3 outgoingLight = BRDF * envColor.xyz * max(NDotL, 0.0);
     
     float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
-    + (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) /** fShadowAttr*/;
+    + (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
 
     // Per-pixel emissive from MRT4 (written by BasePass PS variants).
     // Added after shadow attenuation so emissive isn't darkened by shadow;

@@ -32,9 +32,9 @@ namespace Editor
     {
         Engine::CInput::GetInst()->ClearActions();
         Engine::ResourceManager::GetInst()->Clear();
-        Engine::BindableManager<Engine::Mesh>::GetInst()->Clear();
-        Engine::BindableManager<Engine::Texture>::GetInst()->Clear();
-        Engine::BindableManager<Engine::Material>::GetInst()->Clear();
+        //Engine::BindableManager<Engine::Mesh>::GetInst()->Clear();
+        //Engine::BindableManager<Engine::Texture>::GetInst()->Clear();
+        //Engine::BindableManager<Engine::Material>::GetInst()->Clear();
     }
 
     bool ProjectModule::Load(const std::wstring& dllPath)

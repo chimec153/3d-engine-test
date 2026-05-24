@@ -169,7 +169,7 @@ namespace Engine
 		float fSpecPower;
 		float fFraction;
 		DirectX::XMFLOAT2 vRoughness;
-		bool bUsePaperBurn;
+		int bUsePaperBurn;
 
 		_tagMaterial() :
 			diffuseColor()

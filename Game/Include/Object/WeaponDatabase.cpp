@@ -83,7 +83,7 @@ namespace Client
         auto rows = CSVLoader::Load(strPath);
         m_vecWeapons.reserve(rows.size());
 
-        // Expected column order (15 fields):
+        // Expected column order (17 fields):
         //   0  id
         //   1  name
         //   2  spawn_origin
@@ -99,6 +99,8 @@ namespace Client
         //  12  color_rgb
         //  13  level_up_field
         //  14  level_up_amount
+        //  15  size            (visual scale; collider radius derives)
+        //  16  acceleration    (speed delta / sec; 0 = constant speed)
         for (const auto& row : rows)
         {
             if (row.size() < 15) continue;   // malformed row — skip silently
@@ -120,6 +122,11 @@ namespace Client
             def.uColorRGB       = ToColor (row[12]);
             def.eLevelUpField   = ParseLevelUpField(row[13]);
             def.fLevelUpAmount  = ToFloat (row[14]);
+            // Back-compat — shorter old rows keep WeaponDef defaults
+            // (size 0.25 = legacy hard-coded scale, acceleration 0 =
+            // constant speed).
+            if (row.size() > 15) def.fSize         = ToFloat(row[15]);
+            if (row.size() > 16) def.fAcceleration = ToFloat(row[16]);
 
             m_mapIdToIndex[def.iId] = m_vecWeapons.size();
             m_vecWeapons.push_back(def);

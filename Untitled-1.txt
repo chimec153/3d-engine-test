@@ -11,9 +11,9 @@
 2차 변경: 2차원 복셀이 있는 뱀서라이크류 게임
 추가 시스템: 무기 조합 시스템
 
-버그 목록
--그림자
--복셀 인스턴싱 버그
+할일 목록
+- 그림자 버그 수정
+- 복셀 인스턴싱 버그 수정
 
 
   구조적 리팩터링 (큰 작업)
@@ -25,16 +25,8 @@
 
   게임 로직 / 데이터
 
-  3. 메시 생성 중복 — Enemy::EnsureEnemyMesh ↔ EnsureCapsuleEnemyMesh ↔ Bullet::ApplyShape.
-  MeshFactory 또는 프리셋 테이블로 통합
   4. 폰트 시스템 임시방편 — Text가 백버퍼에 D2D 직접 렌더, FontManager::CreateFont가 호출마다 새 Font
   생성. 캐싱/구조 재설계 필요
-  5. UI 앵커/좌표계 통일 — HPBar/Button/XPBar가 각자 픽셀 계산. UIControl에 SetRectByAnchor 같은 헬퍼
-  + 해상도 변경 시 자동 추적
-  6. Button 이벤트 시스템 — 현재 Button::Update에서 직접 Input 폴링. UIControl에 OnMouseDown/OnHover
-  가상 함수 도입
-  7. 레벨업 게임 상태 관리 — LevelUpChoices::m_bShown ↔ Player::HasPendingLevelUp 동기화가 모호.
-  GameState enum 도입 검토
 
   Engine 부수 항목
 
@@ -48,9 +40,6 @@
   12. Untitled-1.txt → Docs/ 이동
   13. GameScene::SpawnEnemy() dead code — 호출처 없음 (Phase 4 작업 중 발견, surgical 원칙으로 보존)
   14. GameScene::CreateTexture 대부분 주석 — 활성 5줄만 남음, 정리 가능
-
-  11.
-  - Bullet.cpp의 메시 생성 로직(ApplyShape)도 동일 패턴으로 데이터화 가능
 
   12.
   - Enemy.cpp의 색상/콜라이더 반경/Attackable 파라미터는 사용자가 선택지에서 제외 (Material 인스턴싱
