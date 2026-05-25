@@ -14,6 +14,8 @@ namespace Engine
 
 namespace Client
 {
+    class IBulletMovement;
+
     // Phase E5 — Bullet migrated from Drawable to GameObject. Configure()
     // is called by Player::SpawnWeapon right after CreateGameObject<Bullet>;
     // it specialises the projectile to the WeaponDef's movement / on-hit /
@@ -23,7 +25,7 @@ namespace Client
     {
     public:
         Bullet();
-        virtual ~Bullet() override = default;
+        virtual ~Bullet() override;
 
         // Specialise this bullet to a weapon def at a specific level.
         //   pOwner is the player Transform used by Orbital movement to
@@ -35,10 +37,23 @@ namespace Client
         // of the legacy hard-coded -1 HP.
         int GetDamage() const { return m_iDamage; }
 
+        // Multiply split children remember the enemy that spawned them and
+        // must never interact with it again — otherwise the two children,
+        // born inside that enemy's collider, instantly re-hit it. Both
+        // Enemy::OnCollision (skip damage) and Bullet::OnBeginCollision
+        // (skip vanish) consult this. The raw pointer is used only for
+        // identity comparison, never dereferenced, so a since-freed enemy
+        // is harmless (the child lives only a frame or two).
+        bool IsIgnoring(const Engine::GameObject* pObj) const
+        {
+            return m_pIgnoreTarget != nullptr && m_pIgnoreTarget == pObj;
+        }
+
         // Vertical offset applied to the orbital path relative to the
         // owner's pivot. Player calls this with its muzzle-Y offset
         // (-0.7 today) so the orb circles at enemy collider height.
-        void SetOrbitYOffset(float f) { m_fOrbitYOffset = f; }
+        // Forwarded to the movement strategy — no-op for non-orbital types.
+        void SetOrbitYOffset(float f);
 
         std::shared_ptr<Engine::Transform> GetTransform() const { return m_pTransform; }
 
@@ -51,8 +66,12 @@ namespace Client
         std::shared_ptr<Engine::ColliderSphere>        m_pCollider;
         std::shared_ptr<Engine::Particle>              m_pTrail;
 
+        // Per-frame motion delegated to a Strategy. Concrete strategy owns
+        // its own state (orbit angle, spiral phase, owner pointer) so this
+        // class no longer carries movement-specific fields.
+        std::unique_ptr<IBulletMovement> m_pMovement;
+
         // Behaviour copied from WeaponDef at Configure time.
-        MovementType m_eMovement = MovementType::Straight;
         OnHitEvent   m_eOnHit    = OnHitEvent::Vanish;
         FireMode     m_eFireMode = FireMode::Cooldown;
 
@@ -65,34 +84,21 @@ namespace Client
         float        m_fLifetime     = 2.f;
         float        m_fLifeAcc      = 0.f;
 
-        // Orbital state. m_pOwner is the player transform we circle around;
-        // weak so the bullet stays safe if the player is gone (we just
-        // freeze in place — the lifetime guard will clean us up).
+        // Owner transform kept here so SpawnSplitChildren can re-thread
+        // it into the children's Configure call.
         std::weak_ptr<Engine::Transform> m_pOwner;
-        // Slightly outside the player's OBB body (half-width ~0.25 +
-        // some clearance) so an enemy that's been blocked by the body
-        // sits exactly in the orb's collision arc. Larger values look
-        // nicer visually but stop intersecting the row of enemies
-        // pressed against the player.
-        float m_fOrbitRadius  = 0.9f;
-        float m_fOrbitAngle   = 0.f;   // radians
-        // Vertical offset from the owner's pivot — Player's pivot sits
-        // ~kWallY+1 (body root) but enemy colliders centre at kWallY+0.3,
-        // so an unbiased Y would orbit a metre above their heads. Player
-        // pushes the matching muzzle offset here via SetOrbitYOffset.
-        float m_fOrbitYOffset = 0.f;
-
-        // Spiral phase accumulator. Position-offset = right * amp * sin(t * freq).
-        float m_fSpiralTime   = 0.f;
 
         // Multiply tracking: spawned children inherit weapon id/level but
         // are flagged as children so they hit-Vanish (no infinite split).
         int  m_iWeaponId = -1;
         int  m_iLevel    = 1;
         bool m_bIsChild  = false;
+        // Enemy a split child must not interact with (the one that spawned
+        // it). nullptr for normal bullets. See IsIgnoring.
+        Engine::GameObject* m_pIgnoreTarget = nullptr;
 
         void OnBeginCollision(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);
         void ApplyShape(ProjectileShape eShape, unsigned int uColorRGB);
-        void SpawnSplitChildren();
+        void SpawnSplitChildren(Engine::GameObject* pIgnore);
     };
 }

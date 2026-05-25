@@ -189,6 +189,40 @@ namespace Engine
 		m_tMaterial.bUsePaperBurn = true;
 	}
 
+	void Material::SetShadingModel(int iModel)
+	{
+		m_tMaterial.iShadingModel = iModel;
+	}
+
+	int Material::GetShadingModel() const
+	{
+		return m_tMaterial.iShadingModel;
+	}
+
+	void Material::SetHitFlash(const Vector3& vColor, float fIntensity)
+	{
+		m_tMaterial.vHitFlash.x = vColor.x;
+		m_tMaterial.vHitFlash.y = vColor.y;
+		m_tMaterial.vHitFlash.z = vColor.z;
+		m_tMaterial.vHitFlash.w = fIntensity;
+	}
+
+	void Material::SetHitFlashIntensity(float fIntensity)
+	{
+		m_tMaterial.vHitFlash.w = fIntensity;
+	}
+
+	float Material::GetHitFlashIntensity() const
+	{
+		return m_tMaterial.vHitFlash.w;
+	}
+
+	void Material::TickHitFlash(float fDeltaTime, float fDecayPerSecond)
+	{
+		float fNext = m_tMaterial.vHitFlash.w - fDeltaTime * fDecayPerSecond;
+		m_tMaterial.vHitFlash.w = fNext > 0.f ? fNext : 0.f;
+	}
+
 	void Material::SetTexture(int iSlotIdx, const std::shared_ptr<Texture>& pTexture)
 	{
 		if (iSlotIdx < 0 || iSlotIdx >= kMaterialSlotCount) return;

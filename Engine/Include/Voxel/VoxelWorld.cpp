@@ -123,6 +123,10 @@ namespace Engine
                 {
                     pVoxelMat->SetDiffuseColor(0.3f, 0.6f, 0.3f, 1.f);
                     pVoxelMat->SetEmissiveColor({ 0.f, 0.f, 0.f, 0.f });
+                    // 캐릭터·복셀 모두 Toon — 단일 공유 머티리얼이라 setter 한 번이면
+                    // 모든 청크에 적용. Enemy처럼 per-instance Clone이 필요 없음(hit
+                    // flash 같은 인스턴스 파라미터를 쓰지 않으므로 인스턴싱 유지).
+                    pVoxelMat->SetShadingModel(Engine::SHADING_MODEL_TOON);
                 }
             }
             if (pVoxelMat) rec.pMR->SetMaterial(pVoxelMat);

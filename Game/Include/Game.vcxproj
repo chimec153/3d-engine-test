@@ -194,7 +194,12 @@
   <ItemGroup>
     <ClCompile Include="Object\Attackable.cpp" />
     <ClCompile Include="Object\Bullet.cpp" />
+    <ClCompile Include="Object\Movement\BulletMovementFactory.cpp" />
+    <ClCompile Include="Object\Movement\OrbitalMovement.cpp" />
+    <ClCompile Include="Object\Movement\SpiralMovement.cpp" />
+    <ClCompile Include="Object\Movement\StraightMovement.cpp" />
     <ClCompile Include="Object\Enemy.cpp" />
+    <ClCompile Include="Object\EnemyMeshRenderer.cpp" />
     <ClCompile Include="Object\EnemyDatabase.cpp" />
     <ClCompile Include="Object\FlowField.cpp" />
     <ClCompile Include="Object\GameStateManager.cpp" />
@@ -212,16 +217,27 @@
     <ClCompile Include="Scene\GameScene.cpp" />
     <ClCompile Include="Scene\GameWorldBuilder.cpp" />
     <ClCompile Include="Scene\StartScene.cpp" />
+    <ClCompile Include="Scene\WeaponComboScene.cpp" />
     <ClCompile Include="UI\DamageText.cpp" />
     <ClCompile Include="UI\EnemyCountHUD.cpp" />
     <ClCompile Include="UI\Inventory.cpp" />
     <ClCompile Include="UI\ItemIcon.cpp" />
     <ClCompile Include="UI\LevelUpChoices.cpp" />
+    <ClCompile Include="UI\StartMenu.cpp" />
+    <ClCompile Include="UI\WeaponCombiner.cpp" />
+    <ClCompile Include="UI\WeaponHUD.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Object\Attackable.h" />
     <ClInclude Include="Object\Bullet.h" />
+    <ClInclude Include="Object\Movement\BulletMovementFactory.h" />
+    <ClInclude Include="Object\Movement\FixedMovement.h" />
+    <ClInclude Include="Object\Movement\IBulletMovement.h" />
+    <ClInclude Include="Object\Movement\OrbitalMovement.h" />
+    <ClInclude Include="Object\Movement\SpiralMovement.h" />
+    <ClInclude Include="Object\Movement\StraightMovement.h" />
     <ClInclude Include="Object\Enemy.h" />
+    <ClInclude Include="Object\EnemyMeshRenderer.h" />
     <ClInclude Include="Object\EnemyData.h" />
     <ClInclude Include="Object\EnemyDatabase.h" />
     <ClInclude Include="Object\FlowField.h" />
@@ -243,11 +259,15 @@
     <ClInclude Include="Scene\GameScene.h" />
     <ClInclude Include="Scene\GameWorldBuilder.h" />
     <ClInclude Include="Scene\StartScene.h" />
+    <ClInclude Include="Scene\WeaponComboScene.h" />
     <ClInclude Include="UI\DamageText.h" />
     <ClInclude Include="UI\EnemyCountHUD.h" />
     <ClInclude Include="UI\Inventory.h" />
     <ClInclude Include="UI\ItemIcon.h" />
     <ClInclude Include="UI\LevelUpChoices.h" />
+    <ClInclude Include="UI\StartMenu.h" />
+    <ClInclude Include="UI\WeaponCombiner.h" />
+    <ClInclude Include="UI\WeaponHUD.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Copy.bat" />

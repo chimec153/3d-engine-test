@@ -33,12 +33,13 @@ namespace Client
 		SetComponentType(Engine::COMPONENT_TYPE::NONE);
 	}
 
-	Attackable::Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle)	:
+	Attackable::Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle, bool bWithPaperBurn)	:
 		m_iMaxHP(iMaxHP)
 		, m_iHP(iMaxHP)
 		, m_iAttackMin(iAttackMin)
 		, m_iAttackMax(iAttackMax)
 		, m_bWithBloodParticle(bWithBloodParticle)
+		, m_bWithPaperBurn(bWithPaperBurn)
 	{
 		SetComponentType(Engine::COMPONENT_TYPE::NONE);
 	}
@@ -50,6 +51,7 @@ namespace Client
 		, m_iAttackMin(other.m_iAttackMin)
 		, m_iAttackMax(other.m_iAttackMax)
 		, m_bWithBloodParticle(other.m_bWithBloodParticle)
+		, m_bWithPaperBurn(other.m_bWithPaperBurn)
 		, m_pPaperBurn(other.m_pPaperBurn)
 		, m_pParticle(other.m_pParticle)
 		, m_pBloodParticle(other.m_pBloodParticle)
@@ -91,9 +93,13 @@ namespace Client
 		Engine::GameObject* pOwnerGameObject = GetGameObjectOwner();
 		if (!pOwnerGameObject) return true;
 
-		m_pPaperBurn = CreateSiblingComponent<Engine::PaperBurn>(
-			pOwnerGameObject,
-			"paperburn", Engine::StaticFindBindable<Engine::Texture>("PaperBurn"));
+		// Opt-out: enemies dissolve per-instance via EnemyMeshRenderer's
+		// instance stream and must not carry a PaperBurn sibling (it would
+		// disqualify their bucket from the DrawInstanced fast path).
+		if (m_bWithPaperBurn)
+			m_pPaperBurn = CreateSiblingComponent<Engine::PaperBurn>(
+				pOwnerGameObject,
+				"paperburn", Engine::StaticFindBindable<Engine::Texture>("PaperBurn"));
 
 		if (m_pPaperBurn)
 		{

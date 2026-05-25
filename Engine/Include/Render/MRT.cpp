@@ -4,7 +4,8 @@
 namespace Engine
 {
 	MRT::MRT(const std::vector<DXGI_FORMAT>& format, UINT iSlot,
-		DXGI_FORMAT eDepthTextureFormat, DXGI_FORMAT eDSVFormat, DXGI_FORMAT eDepthSRVFormat) :
+		DXGI_FORMAT eDepthTextureFormat, DXGI_FORMAT eDSVFormat, DXGI_FORMAT eDepthSRVFormat,
+		DXGI_FORMAT eStencilSRVFormat) :
 		m_pDSV(nullptr)
 		, m_pPrevDSV(nullptr)
 		, m_iSlot(iSlot)
@@ -55,6 +56,25 @@ namespace Engine
 		{
 			assert(false);
 			return;
+		}
+
+		// UE CustomStencil 패턴: D24S8 텍스처에 stencil 채널 SRV를 따로 생성.
+		// 호출자가 eStencilSRVFormat을 명시한 경우에만 — 일반 디퍼드 GBuffer
+		// 타겟 등 stencil 읽기가 없는 케이스엔 nullptr 유지.
+		if (eStencilSRVFormat != DXGI_FORMAT_UNKNOWN)
+		{
+			D3D11_SHADER_RESOURCE_VIEW_DESC tStencilSRVDesc = {};
+			tStencilSRVDesc.Format = eStencilSRVFormat;
+			tStencilSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+			tStencilSRVDesc.Texture2D.MipLevels = 1;
+			tStencilSRVDesc.Texture2D.MostDetailedMip = 0;
+
+			if (FAILED(Graphics::GetInst()->GetDevice()->CreateShaderResourceView(
+				*pDepthTexture, &tStencilSRVDesc, &m_pStencilSRV)))
+			{
+				assert(false);
+				return;
+			}
 		}
 
 		for (size_t i = 0; i < format.size(); ++i)
@@ -121,6 +141,11 @@ namespace Engine
 	Engine::CPtr<ID3D11ShaderResourceView> MRT::GetDepthSRV() const
 	{
 		return m_pDepthSRV;
+	}
+
+	Engine::CPtr<ID3D11ShaderResourceView> MRT::GetStencilSRV() const
+	{
+		return m_pStencilSRV;
 	}
 
 	CPtr<ID3D11DepthStencilView> MRT::GetDSV() const
@@ -274,6 +299,12 @@ namespace Engine
 		Graphics::GetInst()->GetDeviceContext()->GSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAddressof());
 		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAddressof());
 		Graphics::GetInst()->GetDeviceContext()->CSSetShaderResources(iSlot, 1, m_pDepthSRV.GetAddressof());
+	}
+
+	void MRT::SetStencilSRV(UINT iSlot)
+	{
+		if (!m_pStencilSRV) return;
+		Graphics::GetInst()->GetDeviceContext()->PSSetShaderResources(iSlot, 1, m_pStencilSRV.GetAddressof());
 	}
 
 	void MRT::ResetSRV(UINT iSlot)

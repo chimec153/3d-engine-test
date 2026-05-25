@@ -17,6 +17,7 @@ namespace Client
 {
     class Attackable;
     class FlowField;
+    class EnemyMeshRenderer;
 
     // Tower-defense-style enemy that chases a target GameObject (typically the
     // Player). Steering reads a shared FlowField (one Dijkstra solution for
@@ -64,7 +65,7 @@ namespace Client
         FlowField*          m_pFlowField  = nullptr;
         MESH_KIND           m_eMeshKind   = MESH_KIND::BOX;
         std::shared_ptr<Engine::Transform>             m_pTransform;
-        std::shared_ptr<Engine::MeshRendererComponent> m_pMeshRenderer;
+        std::shared_ptr<EnemyMeshRenderer>             m_pMeshRenderer;
         std::shared_ptr<Engine::Material>              m_pMaterial;
 
         // Weak ref so the enemy doesn't keep the player alive past scene exit.
@@ -76,6 +77,14 @@ namespace Client
 
         float m_fSpeed         = 2.0f;   // cells per second; overwritten by ApplyDef
         float m_fBreakAccum    = 0.f;    // seconds spent breaking the current target cell
+
+        // Death dissolve. On HP<=0 the enemy enters a dissolving state instead
+        // of vanishing instantly: m_fDissolve advances each frame and is fed to
+        // EnemyMeshRenderer's per-instance PaperTime (the EnemyPSInst dissolve).
+        // The GameObject deactivates once fully burned (~kDissolveTime).
+        bool  m_bDying    = false;
+        float m_fDissolve = 0.f;
+        static constexpr float kDissolveTime = 3.0f;
 
         // Health pool. Bullet collisions decrement m_iHP; 0 deactivates
         // the GameObject so the scene's prune pass removes it next frame.

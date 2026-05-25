@@ -160,16 +160,29 @@ namespace Engine
 		}
 	}TRANSFORMBUFFER, * PTRANSFORMBUFFER;
 
+	// UE 모델 매핑: ShadingModelID(GBuffer 패킹)·MID 스칼라(HitFlash).
+	// 80바이트 이후 필드는 런타임 전용 — Material::Save/Load는 80바이트
+	// 까지만 직렬화하므로 .mesh 파일 호환 유지.
+	enum ENGINE_SHADING_MODEL : int
+	{
+		SHADING_MODEL_DEFAULT_LIT = 0,
+		SHADING_MODEL_TOON        = 1,
+		SHADING_MODEL_UNLIT       = 2,
+	};
+
 	ENGINE_DLL typedef struct alignas(16) _tagMaterial
 	{
-		Vector4 diffuseColor;
-		Vector4 ambientColor;
-		Vector4 specularColor;
-		Vector4 emissiveColor;
-		float fSpecPower;
-		float fFraction;
-		DirectX::XMFLOAT2 vRoughness;
-		int bUsePaperBurn;
+		Vector4 diffuseColor;       // offset   0
+		Vector4 ambientColor;       // offset  16
+		Vector4 specularColor;      // offset  32
+		Vector4 emissiveColor;      // offset  48
+		float fSpecPower;           // offset  64
+		float fFraction;            // offset  68
+		DirectX::XMFLOAT2 vRoughness; // offset 72 (8B)
+		int bUsePaperBurn;          // offset  80 (HLSL bool == 4B)
+		int iShadingModel;          // offset  84
+		int _padShading[2];         // offset  88 (8B pad → next float4 aligned to 96)
+		Vector4 vHitFlash;          // offset  96 (xyz=color, w=intensity 0..1)
 
 		_tagMaterial() :
 			diffuseColor()
@@ -180,6 +193,9 @@ namespace Engine
 			, fFraction()
 			, vRoughness()
 			, bUsePaperBurn()
+			, iShadingModel(SHADING_MODEL_DEFAULT_LIT)
+			, _padShading{0, 0}
+			, vHitFlash(0.f, 0.f, 0.f, 0.f)
 		{
 		}
 	}MATERIAL, * PMATERIAL;
@@ -190,6 +206,17 @@ namespace Engine
 		Matrix matCameraViewToLightClip;
 		Matrix matInvView;
 	}PERSPECTIVEBUFFER, * PPERSPECTIVEBUFFER;
+
+	// UE의 outline post-process material 파라미터에 대응. RenderManager가
+	// RenderOutline()에서 매 프레임 갱신해 b14에 바인드.
+	ENGINE_DLL typedef struct alignas(16) _tagOutlineBuffer
+	{
+		Vector4 vOutlineColor    = Vector4(0.f, 0.f, 0.f, 1.f);     // stencil == 1
+		Vector4 vOutlineColorAlt = Vector4(1.f, 0.7f, 0.f, 1.f);    // stencil >= 2
+		DirectX::XMFLOAT2 vTexelSize = {0.f, 0.f};
+		int iThickness = 2;
+		int _pad = 0;
+	}OUTLINECBUFFER, * POUTLINECBUFFER;
 
 	ENGINE_DLL typedef struct _tagLineColliderInfo
 	{

@@ -50,6 +50,13 @@ namespace Engine
 		// through voxel walls, outline targets, etc.).
 		bool         m_bRenderCustomDepth = false;
 
+		// UE CustomStencil 패턴: 1..255 사이의 값을 부여하면 RenderCustomDepth
+		// 패스가 OMSetDepthStencilState의 StencilRef로 사용 → D24S8 타겟의
+		// stencil 채널에 REPLACE 기록. 외곽선 PS가 stencil 값별로 색을 분기
+		// (예: 1=적군 빨강, 2=상호작용 노랑). 0이면 외곽선 패스 무참여.
+		// 이 값을 1 이상으로 지정하면 m_bRenderCustomDepth 도 자동으로 켜짐.
+		uint8_t      m_iCustomStencil = 0;
+
 	public:
 		// Direct accessors / mutators (mirror Drawable's existing API).
 		void SetMesh(const std::shared_ptr<class Mesh>& p);
@@ -97,6 +104,15 @@ namespace Engine
 		void EnableCustomDepth(bool b) { m_bRenderCustomDepth = b; }
 		bool IsCustomDepthEnabled() const { return m_bRenderCustomDepth; }
 
+		// 1..255: 외곽선 패스 참여 + 스텐실 값으로 색 분기. 0: 미참여.
+		// 1 이상 값을 주면 자동으로 CustomDepth 도 enable.
+		void SetCustomStencil(uint8_t iVal)
+		{
+			m_iCustomStencil = iVal;
+			if (iVal > 0) m_bRenderCustomDepth = true;
+		}
+		uint8_t GetCustomStencil() const { return m_iCustomStencil; }
+
 		size_t GetInstanceKey() const;
 		void   UpdateInstanceKey();
 
@@ -107,7 +123,13 @@ namespace Engine
 		// roughness / fraction = 44 bytes). Layout mirrors the legacy
 		// Drawable::GetInstData so the same "_Inst" input-layout convention
 		// continues to work.
-		void GetInstData(char* pData, int iSize) const;
+		//
+		// virtual so a game-side subclass (e.g. Client::EnemyMeshRenderer)
+		// can append extra per-instance attributes (hit-flash colour,
+		// dissolve time) after the base 236-byte block. RenderManager's
+		// colour + shadow instancing paths both call this through the base
+		// pointer, so the override is picked up in both.
+		virtual void GetInstData(char* pData, int iSize) const;
 
 	public:
 		// Render orchestration (mirrors Drawable's Bind / DrawShadow / etc.).

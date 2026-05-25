@@ -1,6 +1,7 @@
 #include "Client.h"
 #include "Scene/SceneManager.h"
 #include "Scene/GameScene.h"
+#include "Scene/StartScene.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     _In_opt_ HINSTANCE hPrevInstance,
@@ -13,7 +14,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         return -1;
     }
 
-    Engine::SceneManager::GetInst()->CreateScene<Client::GameScene>();
+    Engine::SceneManager::GetInst()->CreateScene<Client::StartScene>();
 
     Engine::Window::GetInst()->Run();
 

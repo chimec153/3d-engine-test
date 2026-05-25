@@ -64,6 +64,17 @@ namespace Engine
         void SetRoughnessY(float y);
         void UsePaperBurn();
 
+        // UE의 머티리얼 Shading Model 드롭다운 + MID 스칼라 파라미터에 대응.
+        // ShadingModel: 0=DefaultLit(기존 PBR), 1=Toon(밴드 NDotL+하드 림), 2=Unlit
+        // HitFlash: xyz=색, w=강도(0..1). PS에서 baseColor와 lerp.
+        // TickHitFlash: 강도를 dt*decay만큼 감쇠 — 게임 측 매 프레임 호출용.
+        void SetShadingModel(int iModel);
+        int  GetShadingModel() const;
+        void SetHitFlash(const Vector3& vColor, float fIntensity);
+        void SetHitFlashIntensity(float fIntensity);
+        float GetHitFlashIntensity() const;
+        void TickHitFlash(float fDeltaTime, float fDecayPerSecond = 6.f);
+
         // Texture slot access. `iSlotIdx` is the Material slot index (0~6),
         // NOT the underlying t-register. Use SlotRegisterToIndex to map
         // from a t-register if needed.

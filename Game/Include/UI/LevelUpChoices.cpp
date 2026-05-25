@@ -198,8 +198,11 @@ namespace Client
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
 
-        const auto& vecAll = WeaponDatabase::GetInst().All();
-        if (vecAll.empty())
+        // Pool = the crafted weapons equipped in the combo scene (≤10).
+        // The CSV catalogue no longer feeds the cards directly; only the
+        // player's chosen loadout appears in the stage.
+        const std::vector<int> vecPoolIds = WeaponDatabase::GetInst().EquippedLiveIds();
+        if (vecPoolIds.empty())
         {
             for (int i = 0; i < 3; ++i)
             {
@@ -217,11 +220,11 @@ namespace Client
 
         std::vector<int> vecUnowned;
         std::vector<int> vecOwnedIds = vecOwned;
-        for (const auto& def : vecAll)
+        for (int id : vecPoolIds)
         {
             const bool bAlreadyOwn =
-                std::find(vecOwned.begin(), vecOwned.end(), def.iId) != vecOwned.end();
-            if (!bAlreadyOwn && !bSlotsFull) vecUnowned.push_back(def.iId);
+                std::find(vecOwned.begin(), vecOwned.end(), id) != vecOwned.end();
+            if (!bAlreadyOwn && !bSlotsFull) vecUnowned.push_back(id);
         }
 
         std::vector<int> vecPool;

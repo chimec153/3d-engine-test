@@ -268,6 +268,10 @@ PSOut PS(VSOut input)
     }
     output.value2.w = g_fMaterialFraction;
 
+    // UE MID-스타일 히트 플래시 + ShadingModelID 패킹 (value3.w).
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
+
     return output;
 }
 
@@ -290,6 +294,9 @@ PSOut PS_NoSpecMap(VSOut input)
 
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
+
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
 
     return output;
 }
@@ -314,6 +321,9 @@ PSOut PS_NoNormalMap(VSOut input)
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
 
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
+
     return output;
 }
 
@@ -336,6 +346,9 @@ PSOut PS_NoSpecMapNoNormalMap(VSOut input)
 
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
+
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
 
     return output;
 }
@@ -360,6 +373,9 @@ PSOut PS_NoDiffuseNoSpecMapNoNormalMap(VSOut input)
     output.value4.xyz = g_vEmissiveColor.xyz;
     output.value4.w = 1.f;
 
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
+
     return output;
 }
 
@@ -382,6 +398,9 @@ PSOut PS_NoTexture(VSOut input)
 
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
+
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
 
     return output;
 }
@@ -435,6 +454,9 @@ PSOut PS_Terrain(VS_Terrain_Out input)
 
     output.value4.xyz = g_vEmissiveColor.xyz * vEmissive;
     output.value4.w = 1.f;
+
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
 
     return output;
 }
@@ -558,18 +580,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     shadowpos.y = 1.f - shadowpos.y;
     
-    float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
-    //return fShadowAttr;
-    // DEBUG: triple uniform check.
-    //   R = g_vProjectValues alive (b3 cbuffer's first field)
-    //   G = matCameraViewToLightClip row 0 alive
-    //   B = matCameraViewToLightClip row 3 alive (translation row)
-    // Any channel black = that uniform is zero → cbuffer not updated / not bound.
-    //return float4(
-    //    saturate(length(g_vProjectValues.xyz)),
-    //    saturate(length(g_matCameraViewToLightClip[0].xyz)),
-    //    saturate(length(g_matCameraViewToLightClip[3].xyz)),
-    //    1.f);
+    float4 fShadowAttr = 1.f;//g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
 
     float4 decal0 = g_DecalTexture0.Sample(g_sPoint, input.uv);
     float4 decal1 = g_DecalTexture1.Sample(g_sPoint, input.uv);
@@ -646,22 +657,53 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     //float3 outgoingLight = BRDF * envColor.xyz * max(NDotL, 0.0);
     
+    // UE-style Shading Model 분기: BasePass가 value3.w(0..1)로 ShadingModelID 패킹,
+    // 여기서 디코드해 라이팅 모델을 선택. 환경(DefaultLit)·캐릭터(Toon)·UI(Unlit) 혼용.
+    uint shadingId = (uint)round(value3.w * 255.0);
+
+    float3 emissive = g_GBufferTexture4.Sample(g_sPoint, input.uv).xyz;
+
+    float3 worldPixelPos = mul(float4(viewPos, 1.f), g_matInvView).xyz;
+    float3 worldCamPos   = mul(float4(0.f, 0.f, 0.f, 1.f), g_matInvView).xyz;
+
+    if (shadingId == SHADING_MODEL_UNLIT)
+    {
+        float3 unlitOut = albedo + emissive;
+        unlitOut = ApplyFog(unlitOut, worldCamPos.y, worldPixelPos - worldCamPos);
+        return float4(unlitOut, 1.f);
+    }
+
+    if (shadingId == SHADING_MODEL_TOON)
+    {
+        // 3단 셀쉐이딩 + 하드 림. 그림자는 NDotL 밴드와 곱해 셰도우 컷오프 유지.
+        const float fBandCount = 3.0;
+        float ndlRaw = saturate(dot(normal, light));
+        float ndlToon = floor(ndlRaw * fBandCount + 0.0001) / fBandCount;
+        // 림: 시야와 거의 직각인 픽셀에 하드 라인. 메탈 캐릭터에선 specColor를
+        // 따라가도록 vSpecColor와 곱.
+        float fRim = 1.0 - saturate(dot(normal, view));
+        fRim = smoothstep(0.55, 0.85, fRim);
+        float3 toonLit = albedo * C.rgb * ndlToon * fShadowAttr.x
+                       + fRim * vSpecColor;
+        toonLit += emissive;
+        toonLit = ApplyFog(toonLit, worldCamPos.y, worldPixelPos - worldCamPos);
+        return float4(toonLit, 1.f);
+    }
+
+    // SHADING_MODEL_DEFAULT_LIT — 기존 마이크로페이셋 BRDF.
     float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
     + (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
 
     // Per-pixel emissive from MRT4 (written by BasePass PS variants).
     // Added after shadow attenuation so emissive isn't darkened by shadow;
     // fog still applies below.
-    float3 emissive = g_GBufferTexture4.Sample(g_sPoint, input.uv).xyz;
     finalColor.xyz += emissive;
 
     // ApplyFog needs world-space data for both args. Pass camera world Y
     // (g_matInvView row 3 column = camera position) as eyePosY, and the
     // world-space camera→pixel vector as eyeToPixel.
-    float3 worldPixelPos = mul(float4(viewPos, 1.f), g_matInvView).xyz;
-    float3 worldCamPos   = mul(float4(0.f, 0.f, 0.f, 1.f), g_matInvView).xyz;
     finalColor.xyz = ApplyFog(finalColor.xyz, worldCamPos.y, worldPixelPos - worldCamPos);
-    
+
     return finalColor;
     
     //return saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV) * fShadowAttr;
@@ -778,6 +820,9 @@ PSOut PSInst(VSInstOut input)
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
 
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
+
     return output;
 }
 
@@ -800,6 +845,9 @@ PSOut PS_NoSpecInst(VSInstOut input)
 
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
+
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
 
     return output;
 }
@@ -826,6 +874,9 @@ PSOut PS_NoNormalInst(VSInstOut input)
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
 
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
+
     return output;
 }
 
@@ -850,6 +901,9 @@ PSOut PS_NoSpecNoNormalInst(VSInstOut input)
 
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
+
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
 
     return output;
 }
@@ -876,6 +930,9 @@ PSOut PS_NoDiffuseNoSpecNoNormalInst(VSInstOut input)
     output.value4.xyz = g_vEmissiveColor.xyz;
     output.value4.w = 1.f;
 
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
+
     return output;
 }
 
@@ -898,6 +955,9 @@ PSOut PS_NoTextureInst(VSInstOut input)
 
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
+
+    output.value0.xyz = ApplyHitFlash(output.value0.xyz);
+    output.value3.w = EncodeShadingId();
 
     return output;
 }

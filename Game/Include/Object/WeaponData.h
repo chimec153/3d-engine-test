@@ -13,6 +13,7 @@ namespace Client
         Front,      // A small offset directly in front of the player.
         Around,     // The player's own position (radial / orbital weapons).
         Mouse,      // Mouse-cursor world position on the player's y-plane.
+        Random,     // A random point in a ring around the player (y-plane).
         COUNT,
     };
 
@@ -53,14 +54,15 @@ namespace Client
 
     // Which stat the level-up bump touches. The amount column means
     // different things per field: Damage / Count are additive integers,
-    // Cooldown is a multiplier (e.g. 0.9 = -10%/level), Speed is additive
-    // world-units/sec.
+    // Cooldown is a multiplier (e.g. 0.9 = -10%/level), Speed and Size are
+    // additive (world-units/sec and uniform scale respectively).
     enum class LevelUpField
     {
         Damage,
         Cooldown,
         Count,
         Speed,
+        Size,
         COUNT_,    // suffixed because COUNT collides with the enum name on
                    // older MSVC parses inside macro contexts
     };
@@ -135,5 +137,14 @@ namespace Client
         if (def.eLevelUpField == LevelUpField::Speed)
             s += def.fLevelUpAmount * static_cast<float>(iLevel - 1);
         return s;
+    }
+    inline float ComputeSize(const WeaponDef& def, int iLevel)
+    {
+        float sz = def.fSize;
+        if (def.eLevelUpField == LevelUpField::Size)
+            sz += def.fLevelUpAmount * static_cast<float>(iLevel - 1);
+        // Defensive floor — a zero/negative scale would collapse the mesh
+        // and the derived collider radius.
+        return sz < 0.01f ? 0.01f : sz;
     }
 }

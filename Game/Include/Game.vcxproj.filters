@@ -66,6 +66,31 @@
     <ClCompile Include="Object\WeaponDatabase.cpp">
       <Filter>06. Data</Filter>
     </ClCompile>
+    <ClCompile Include="Object\Movement\BulletMovementFactory.cpp" />
+    <ClCompile Include="Object\GameStateManager.cpp" />
+    <ClCompile Include="Object\Movement\OrbitalMovement.cpp">
+      <Filter>07. Movement</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Movement\SpiralMovement.cpp">
+      <Filter>07. Movement</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Movement\StraightMovement.cpp">
+      <Filter>07. Movement</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\UIObjects.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\WeaponHUD.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\EnemyMeshRenderer.cpp">
+      <Filter>05. Component</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\StartMenu.cpp" />
+    <ClCompile Include="UI\WeaponCombiner.cpp" />
+    <ClCompile Include="Scene\WeaponComboScene.cpp">
+      <Filter>02. Scene</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Object\FlowField.h">
@@ -143,6 +168,37 @@
     <ClInclude Include="Object\WeaponData.h">
       <Filter>06. Data</Filter>
     </ClInclude>
+    <ClInclude Include="Object\Movement\BulletMovementFactory.h" />
+    <ClInclude Include="Object\GameStateManager.h" />
+    <ClInclude Include="Object\Movement\IBulletMovement.h">
+      <Filter>07. Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Movement\OrbitalMovement.h">
+      <Filter>07. Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Movement\SpiralMovement.h">
+      <Filter>07. Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Movement\StraightMovement.h">
+      <Filter>07. Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\UIObjects.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\WeaponHUD.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\EnemyMeshRenderer.h">
+      <Filter>05. Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Movement\FixedMovement.h">
+      <Filter>07. Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\StartMenu.h" />
+    <ClInclude Include="UI\WeaponCombiner.h" />
+    <ClInclude Include="Scene\WeaponComboScene.h">
+      <Filter>02. Scene</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Copy.bat" />
@@ -165,6 +221,9 @@
     </Filter>
     <Filter Include="06. Data">
       <UniqueIdentifier>{ce30b49b-af12-4257-9553-69a741264bb7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="07. Movement">
+      <UniqueIdentifier>{ca02ad20-ade7-4f5f-a07f-f2ed8d621b61}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

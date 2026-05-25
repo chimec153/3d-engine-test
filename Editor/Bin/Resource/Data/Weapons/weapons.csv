@@ -13,10 +13,11 @@
 #   lifetime       — seconds before despawn (Fixed/Orbital use this too)
 #   count          — projectiles per fire
 #   color_rgb      — 0xRRGGBB packed colour (card + projectile tint)
-#   level_up_field — Damage | Cooldown | Count | Speed
+#   level_up_field — Damage | Cooldown | Count | Speed | Size
 #   level_up_amount — bump per level. Damage/Count add (int part);
 #                     Cooldown multiplies (0.9 = -10%/lvl);
-#                     Speed adds (world units / sec).
+#                     Speed adds (world units / sec);
+#                     Size adds (uniform scale; collider radius follows).
 #   size           — visual scale (uniform). Collider radius scales
 #                     proportionally so larger bullets hit a larger area.
 #                     0.25 reproduces the legacy hard-coded value.

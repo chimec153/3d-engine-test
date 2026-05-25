@@ -13,10 +13,11 @@
 #   lifetime       — seconds before despawn (Fixed/Orbital use this too)
 #   count          — projectiles per fire
 #   color_rgb      — 0xRRGGBB packed colour (card + projectile tint)
-#   level_up_field — Damage | Cooldown | Count | Speed
+#   level_up_field — Damage | Cooldown | Count | Speed | Size
 #   level_up_amount — bump per level. Damage/Count add (int part);
 #                     Cooldown multiplies (0.9 = -10%/lvl);
-#                     Speed adds (world units / sec).
+#                     Speed adds (world units / sec);
+#                     Size adds (uniform scale; collider radius follows).
 #   size           — visual scale (uniform). Collider radius scales
 #                     proportionally so larger bullets hit a larger area.
 #                     0.25 reproduces the legacy hard-coded value.
@@ -24,10 +25,10 @@
 #                     negative = decelerate, 0 = constant speed.
 #                     Orbital weapons interpret this as angular rad/sec².
 id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,projectile_speed,lifetime,count,color_rgb,level_up_field,level_up_amount,size,acceleration
-1,Arrow,Front,Straight,Cooldown,Vanish,Sphere,5,0.30,9.0,2.0,1,0xFFCC33,Damage,2,0.25,10.0
+1,Arrow,Front,Straight,Cooldown,Vanish,Sphere,5,0.30,9.0,2.0,1,0xFFCC33,Count,2,0.25,10.0
 2,Orb,Around,Orbital,Sustained,NoChange,Sphere,3,0.00,2.5,9999.0,2,0x3399FF,Count,1,0.25,0.0
-3,Boomerang,Front,Spiral,Cooldown,Reflect,Triangle,4,0.70,6.0,2.5,1,0x66CC66,Damage,2,0.25,0.0
-4,Mine,Front,Fixed,Cooldown,Vanish,Box,12,1.20,0.0,4.0,1,0xCC3333,Damage,4,0.25,0.0
+3,Boomerang,Front,Spiral,Cooldown,Reflect,Triangle,4,0.70,6.0,2.5,1,0x66CC66,Count,2,0.25,0.0
+4,Mine,Front,Fixed,Cooldown,Vanish,Box,12,1.20,0.0,4.0,1,0xCC3333,Count,4,0.25,0.0
 5,Splitter,Front,Straight,Cooldown,Multiply,Sphere,3,0.80,7.0,2.0,1,0x9933CC,Count,1,0.25,0.0
-6,CursorShot,Mouse,Fixed,Cooldown,Vanish,Triangle,8,0.90,0.0,1.2,1,0x33CCCC,Damage,3,0.25,0.0
-7,ShieldOrb,Around,Orbital,Sustained,Reflect,Box,2,0.00,1.5,9999.0,1,0x888888,Damage,1,0.25,0.0
+6,CursorShot,Mouse,Fixed,Cooldown,Vanish,Triangle,8,0.90,0.0,1.2,1,0x33CCCC,Count,3,0.25,0.0
+7,ShieldOrb,Around,Orbital,Sustained,Reflect,Box,2,0.00,1.5,9999.0,1,0x888888,Count,1,0.25,0.0

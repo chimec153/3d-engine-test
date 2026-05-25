@@ -36,12 +36,19 @@ namespace Engine
             const char* pTag = "MeshPreset.Triangle";
             if (auto pCached = StaticFindBindable<Mesh>(pTag)) return pCached;
 
+            // Bullet sits at RX=-π/2 + RY=yaw, so local +Y → world forward
+            // and local +Z → world up. We want the triangle's front face
+            // to be the world-up side so a top-down camera can see it;
+            // that means the front face must be local +Z. With our
+            // CW-front convention, two faces are emitted (indices
+            // {0,1,2} and {0,2,1}) so the projectile reads from either
+            // side regardless of camera angle.
             std::vector<VertexStandard> verts(3);
             verts[0].pos = { 0.0f,  0.5f, 0.0f };
             verts[1].pos = { 0.5f, -0.5f, 0.0f };
             verts[2].pos = {-0.5f, -0.5f, 0.0f };
-            verts[0].normal = verts[1].normal = verts[2].normal = { 0.f, 0.f, -1.f };
-            std::vector<unsigned int> inds = { 0, 1, 2 };
+            verts[0].normal = verts[1].normal = verts[2].normal = { 0.f, 0.f, 1.f };
+            std::vector<unsigned int> inds = { 0, 2, 1,   0, 1, 2 };
             return StaticCreateBindable<Mesh>(pTag, verts, inds);
         }
 

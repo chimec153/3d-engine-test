@@ -20,6 +20,7 @@ namespace Client
             std::string v = ToLower(s);
             if (v == "around") return SpawnOrigin::Around;
             if (v == "mouse")  return SpawnOrigin::Mouse;
+            if (v == "random") return SpawnOrigin::Random;
             return SpawnOrigin::Front;
         }
         MovementType ParseMovement(const std::string& s)
@@ -57,6 +58,7 @@ namespace Client
             if (v == "cooldown") return LevelUpField::Cooldown;
             if (v == "count")    return LevelUpField::Count;
             if (v == "speed")    return LevelUpField::Speed;
+            if (v == "size")     return LevelUpField::Size;
             return LevelUpField::Damage;
         }
 
@@ -132,6 +134,20 @@ namespace Client
             m_vecWeapons.push_back(def);
         }
 
+        // Re-apply session-crafted weapons so they survive this reload
+        // (GameScene calls LoadFromCSV on entry, which clears the vectors
+        // above). Fresh ids avoid colliding with the CSV rows just loaded;
+        // the equip flags are preserved and each entry's live id is
+        // refreshed so EquippedLiveIds keeps pointing at the right rows.
+        for (auto& crafted : m_vecCrafted)
+        {
+            WeaponDef def = crafted.def;
+            def.iId = NextId();
+            m_mapIdToIndex[def.iId] = m_vecWeapons.size();
+            m_vecWeapons.push_back(def);
+            crafted.iLiveId = def.iId;
+        }
+
         return m_vecWeapons.size();
     }
 
@@ -140,5 +156,72 @@ namespace Client
         auto it = m_mapIdToIndex.find(iId);
         if (it == m_mapIdToIndex.end()) return nullptr;
         return &m_vecWeapons[it->second];
+    }
+
+    int WeaponDatabase::NextId() const
+    {
+        int iMax = 0;
+        for (const auto& def : m_vecWeapons)
+            iMax = (std::max)(iMax, def.iId);
+        return iMax + 1;
+    }
+
+    int WeaponDatabase::Add(const WeaponDef& defIn)
+    {
+        WeaponDef def = defIn;
+        def.iId = NextId();
+        m_mapIdToIndex[def.iId] = m_vecWeapons.size();
+        m_vecWeapons.push_back(def);
+
+        CraftedEntry entry;
+        entry.def       = def;
+        entry.bEquipped = false;   // equipped manually in the combo scene
+        entry.iLiveId   = def.iId;
+        m_vecCrafted.push_back(entry);
+        return def.iId;
+    }
+
+    const WeaponDef& WeaponDatabase::CraftedDef(int iIndex) const
+    {
+        return m_vecCrafted[iIndex].def;
+    }
+
+    bool WeaponDatabase::IsEquipped(int iIndex) const
+    {
+        if (iIndex < 0 || iIndex >= static_cast<int>(m_vecCrafted.size())) return false;
+        return m_vecCrafted[iIndex].bEquipped;
+    }
+
+    int WeaponDatabase::EquippedCount() const
+    {
+        int n = 0;
+        for (const auto& e : m_vecCrafted)
+            if (e.bEquipped) ++n;
+        return n;
+    }
+
+    bool WeaponDatabase::ToggleEquip(int iIndex)
+    {
+        if (iIndex < 0 || iIndex >= static_cast<int>(m_vecCrafted.size())) return false;
+        CraftedEntry& e = m_vecCrafted[iIndex];
+        if (!e.bEquipped)
+        {
+            if (EquippedCount() >= kMaxEquipped) return false;   // cap — stays off
+            e.bEquipped = true;
+        }
+        else
+        {
+            e.bEquipped = false;
+        }
+        return e.bEquipped;
+    }
+
+    std::vector<int> WeaponDatabase::EquippedLiveIds() const
+    {
+        std::vector<int> out;
+        for (const auto& e : m_vecCrafted)
+            if (e.bEquipped && e.iLiveId >= 0)
+                out.push_back(e.iLiveId);
+        return out;
     }
 }

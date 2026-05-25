@@ -2,6 +2,8 @@
 #include "Core/ObjectFactory.h"
 REGISTER_GAMEOBJECT(Client::Bullet, Bullet)
 #include "WeaponDatabase.h"
+#include "Movement/BulletMovementFactory.h"
+#include "Movement/IBulletMovement.h"
 #include "Bindable/Transform.h"
 #include "Bindable/ColliderSphere.h"
 #include "Bindable/Collider.h"
@@ -18,7 +20,6 @@ REGISTER_GAMEOBJECT(Client::Bullet, Bullet)
 #include "Component/MeshRendererComponent.h"
 #include "Scene/Scene.h"
 #include "Scene/Layer.h"
-#include <cmath>
 
 namespace Client
 {
@@ -36,14 +37,17 @@ namespace Client
     }
 
     Bullet::Bullet() :
-        m_eMovement(MovementType::Straight)
-        , m_eOnHit(OnHitEvent::Vanish)
+        m_eOnHit(OnHitEvent::Vanish)
         , m_eFireMode(FireMode::Cooldown)
         , m_iDamage(5)
         , m_fSpeed(8.f)
         , m_fLifetime(2.f)
     {
     }
+
+    // Defined here (not =default in the header) so unique_ptr<IBulletMovement>
+    // can be instantiated against a forward declaration in Bullet.h.
+    Bullet::~Bullet() = default;
 
     bool Bullet::Init()
     {
@@ -106,7 +110,6 @@ namespace Client
     void Bullet::Configure(const WeaponDef& def, int iLevel,
                            std::weak_ptr<Engine::Transform> pOwner)
     {
-        m_eMovement = def.eMovement;
         m_eOnHit    = def.eOnHit;
         m_eFireMode = def.eFireMode;
         m_iWeaponId = def.iId;
@@ -124,22 +127,23 @@ namespace Client
         // Per-weapon size — drives both the visual scale and the
         // collider radius (kept proportional to the legacy 0.28/0.25
         // ratio so a default-size bullet collides exactly as before).
+        // ComputeSize folds in the per-level bump when the weapon's
+        // level_up_field is Size, otherwise it returns def.fSize unchanged.
+        const float fSize = ComputeSize(def, iLevel);
         if (m_pTransform)
-            m_pTransform->SetScale(def.fSize, def.fSize, def.fSize);
+            m_pTransform->SetScale(fSize, fSize, fSize);
         if (m_pCollider)
         {
             constexpr float kColliderToVisual = 0.28f / 0.25f;
-            m_pCollider->SetRadius(def.fSize * kColliderToVisual);
+            m_pCollider->SetRadius(fSize * kColliderToVisual);
         }
 
-        // Orbital bullets seed their starting angle from the player's yaw
-        // so multiple orbs spread around the player instead of stacking.
-        // Player::SpawnWeapon picks a phase offset for each instance via
-        // an extra rotation around Y; the Y rotation passed in becomes
-        // the initial orbit angle here. Phase 0 sits along world -Z (the
-        // default forward direction).
-        if (m_eMovement == MovementType::Orbital && m_pTransform)
-            m_fOrbitAngle = m_pTransform->GetRY();
+        // Swap in the movement strategy. Orbital's OnAttached seeds the
+        // starting angle from the bullet transform yaw, which Player sets
+        // per-instance for orb spread; other types ignore it.
+        m_pMovement = MakeBulletMovement(def.eMovement, pOwner);
+        if (m_pMovement && m_pTransform)
+            m_pMovement->OnAttached(*m_pTransform);
 
         // Tint the trail too so the streak matches the projectile colour.
         if (m_pTrail)
@@ -148,6 +152,11 @@ namespace Client
             m_pTrail->SetStartColor({ col.x, col.y, col.z, 1.0f });
             m_pTrail->SetEndColor  ({ col.x, col.y, col.z, 0.0f });
         }
+    }
+
+    void Bullet::SetOrbitYOffset(float f)
+    {
+        if (m_pMovement) m_pMovement->SetYOffset(f);
     }
 
     void Bullet::ApplyShape(ProjectileShape eShape, unsigned int uColorRGB)
@@ -183,6 +192,11 @@ namespace Client
     void Bullet::OnBeginCollision(Engine::Collider* /*pSrc*/, Engine::Collider* pDest, float /*fDeltaTime*/)
     {
         if (!pDest) return;
+        // Split child born inside its spawning enemy — ignore that enemy
+        // entirely (no vanish here, no damage on the Enemy side) so the
+        // Multiply hit doesn't immediately re-hit it. The child still
+        // collides normally with every other enemy.
+        if (IsIgnoring(pDest->GetGameObjectOwner())) return;
         // Bullets only respond to enemy bodies. The collider mask already
         // filters the pair list to ENEMY, but the tag check guards against
         // future additions sharing the BULLET/ENEMY pair (e.g. friendly
@@ -213,8 +227,9 @@ namespace Client
 
         case OnHitEvent::Multiply:
             // Spawn two fanned children, then despawn ourselves so the
-            // count doesn't keep doubling on subsequent enemies.
-            if (!m_bIsChild) SpawnSplitChildren();
+            // count doesn't keep doubling on subsequent enemies. The
+            // just-hit enemy is passed through so the children ignore it.
+            if (!m_bIsChild) SpawnSplitChildren(pDest->GetGameObjectOwner());
             InActivate();
             break;
 
@@ -225,7 +240,7 @@ namespace Client
         }
     }
 
-    void Bullet::SpawnSplitChildren()
+    void Bullet::SpawnSplitChildren(Engine::GameObject* pIgnore)
     {
         auto* pScene = GetScene();
         if (!pScene || !m_pTransform) return;
@@ -249,6 +264,8 @@ namespace Client
             pChild->m_bIsChild = true;
             // After Configure, override on-hit so the child can't split.
             pChild->m_eOnHit = OnHitEvent::Vanish;
+            // Ignore the enemy we just hit so the child doesn't re-damage it.
+            pChild->m_pIgnoreTarget = pIgnore;
             if (auto pTr = pChild->GetTransform())
             {
                 pTr->SetPosition(vPos);
@@ -277,71 +294,15 @@ namespace Client
 
         if (!m_pTransform) return;
 
-        // Apply per-weapon acceleration before consuming m_fSpeed in the
-        // switch below. Orbital reads m_fSpeed as angular rad/sec, so a
+        // Apply per-weapon acceleration before handing m_fSpeed to the
+        // strategy. Orbital reads m_fSpeed as angular rad/sec, so a
         // non-zero acceleration there is angular too — same field, same
         // unit convention as fProjectileSpeed.
         if (m_fAcceleration != 0.f)
             m_fSpeed += m_fAcceleration * fDeltaTime;
 
-        switch (m_eMovement)
-        {
-        case MovementType::Straight:
-        {
-            // Local +Y is world-forward at the configured RX=-π/2 + RY=yaw.
-            float fDist = fDeltaTime * m_fSpeed;
-            m_pTransform->AddPosition(
-                m_pTransform->GetAxis(Engine::AXIS_TYPE::Y) * fDist);
-            break;
-        }
-        case MovementType::Spiral:
-        {
-            m_fSpiralTime += fDeltaTime;
-            const float fDist = fDeltaTime * m_fSpeed;
-            m_pTransform->AddPosition(
-                m_pTransform->GetAxis(Engine::AXIS_TYPE::Y) * fDist);
-            // Perpendicular sway: right axis is the bullet's local X
-            // (after the RX=-π/2 + RY chain, local X is world-right).
-            const float fAmp = 1.5f;
-            const float fFreq = 6.f;
-            const float fSide = std::cos(m_fSpiralTime * fFreq) * fAmp * fDeltaTime;
-            m_pTransform->AddPosition(
-                m_pTransform->GetAxis(Engine::AXIS_TYPE::X) * fSide);
-            break;
-        }
-        case MovementType::Fixed:
-            // Sits still until lifetime expires (e.g. mines, cursor-shots).
-            break;
-        case MovementType::Orbital:
-        {
-            // Sweep angle, then snap position relative to the owner.
-            // m_fSpeed for Orbital encodes angular speed in rad/sec.
-            m_fOrbitAngle += fDeltaTime * m_fSpeed;
-            auto pOwner = m_pOwner.lock();
-            if (pOwner)
-            {
-                const Engine::Vector3 vCenter = pOwner->GetPosition();
-                const float ox = std::cos(m_fOrbitAngle) * m_fOrbitRadius;
-                const float oz = std::sin(m_fOrbitAngle) * m_fOrbitRadius;
-                // vCenter.y is the player's pivot (kWallY+1), but enemy
-                // colliders sit around kWallY+0.3 — apply the muzzle-Y
-                // offset Player pushed in via SetOrbitYOffset so the orb
-                // crosses enemy bodies instead of orbiting above them.
-                m_pTransform->SetPosition(
-                    vCenter.x + ox,
-                    vCenter.y + m_fOrbitYOffset,
-                    vCenter.z + oz);
-                // Face outward so spiral/triangle visuals point along
-                // the tangent. Tangent yaw at angle θ is θ + π/2 in
-                // world space; combine with the engine's forward
-                // convention forward=(-sin, 0, -cos).
-                m_pTransform->SetRY(-m_fOrbitAngle - 1.5707963f);
-            }
-            break;
-        }
-        default:
-            break;
-        }
+        if (m_pMovement)
+            m_pMovement->Update(*m_pTransform, m_fSpeed, fDeltaTime);
 
         // Lifetime — Sustained weapons pass a huge lifetime so this
         // effectively never trips for orbital orbs.

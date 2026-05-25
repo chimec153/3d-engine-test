@@ -213,17 +213,40 @@ cbuffer light : register(b1)
     float g_fSpotConeExponent;
 };
 
+// UE 모델 매핑: ShadingModelID(BasePass→GBuffer 패킹 후 DeferredLight에서 분기)·
+// MID 스칼라 파라미터(HitFlash). C++의 MATERIAL 구조체 메모리 레이아웃과
+// 정확히 같은 오프셋이어야 함 (Types.h _tagMaterial 주석 참조).
+#define SHADING_MODEL_DEFAULT_LIT 0
+#define SHADING_MODEL_TOON        1
+#define SHADING_MODEL_UNLIT       2
+
 cbuffer material : register(b2)
 {
-    float4 g_vDiffuseColor;
-    float4 g_vAmbientColor;
-    float4 g_vSpecularColor;
-    float4 g_vEmissiveColor;
-    float g_fMaterialSpecPower;
-    float g_fMaterialFraction;
-    float2 g_vMaterialRoughness;
-    bool g_bMaterialUsePaperBurn;
+    float4 g_vDiffuseColor;        //  0
+    float4 g_vAmbientColor;        // 16
+    float4 g_vSpecularColor;       // 32
+    float4 g_vEmissiveColor;       // 48
+    float g_fMaterialSpecPower;    // 64
+    float g_fMaterialFraction;     // 68
+    float2 g_vMaterialRoughness;   // 72
+    bool g_bMaterialUsePaperBurn;  // 80 (HLSL bool == 4B)
+    int g_iShadingModel;           // 84
+    // 88..95: 자동 패딩 (다음 float4를 96 정렬)
+    float4 g_vHitFlash;            // 96 (xyz=color, w=intensity)
 };
+
+// BasePass PS 변종 공용 헬퍼.
+//   ApplyHitFlash    : 알베도와 g_vHitFlash.rgb를 강도(w)로 lerp.
+//   EncodeShadingId  : value3.w(0..1)로 패킹. PS_Multi가 ID 디코드 후 분기.
+float3 ApplyHitFlash(float3 vBaseColor)
+{
+    return lerp(vBaseColor, g_vHitFlash.rgb, saturate(g_vHitFlash.a));
+}
+
+float EncodeShadingId()
+{
+    return (float)g_iShadingModel / 255.0;
+}
 
 cbuffer GBufferProject : register(b3)
 {

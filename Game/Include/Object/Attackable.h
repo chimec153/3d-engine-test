@@ -33,7 +33,13 @@ namespace Client
         // profile at ~6% when 30+ enemies each ran one). Only entities
         // that actually need the visual (e.g. the player) should pass
         // true.
-        Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle = false);
+        // bWithPaperBurn — opt-in for the sibling PaperBurn dissolve component.
+        // Default true preserves Player/legacy. Enemy passes false: enemies do
+        // their dissolve per-instance via EnemyMeshRenderer's instance stream,
+        // and a PaperBurn sibling would force RenderManager's instancing fast
+        // path to bail (it conservatively skips buckets with decorator
+        // siblings), dropping every enemy back to a solo draw.
+        Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle = false, bool bWithPaperBurn = true);
         Attackable(const Attackable& other);
         virtual ~Attackable() override = default;
 
@@ -43,6 +49,7 @@ namespace Client
         int m_iAttackMin;
         int m_iAttackMax;
         bool m_bWithBloodParticle = false;
+        bool m_bWithPaperBurn = true;
         std::shared_ptr<Engine::PaperBurn>     m_pPaperBurn;
         std::shared_ptr<Engine::Particle>      m_pParticle;
         std::shared_ptr<Engine::Particle>      m_pBloodParticle;

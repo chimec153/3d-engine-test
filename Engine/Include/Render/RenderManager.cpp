@@ -451,14 +451,34 @@ namespace Engine
 
 		m_pDecalMRT->SetTag("DecalMRT");
 
-		// Phase V8 — CustomDepth target. Depth-only, no color RTs. Same
-		// resolution as the main back buffer (MRT auto-sizes from Window).
-		// Sampled at t19 in CompositeCustomDepth().
+		// UE CustomDepth + CustomStencil target. R32 depth-only에서 D24S8로
+		// 승격 — outline 패스가 stencil 채널로 라인 색을 분기하기 위함.
+		// Sampled at t19(depth) + t29(stencil) in CompositeCustomDepth/RenderOutline.
 		{
 			const std::vector<DXGI_FORMAT> noColor = {};
 			m_pCustomDepth = std::make_shared<MRT>(noColor, 0,
-				DXGI_FORMAT_R32_TYPELESS, DXGI_FORMAT_D32_FLOAT, DXGI_FORMAT_R32_FLOAT);
+				DXGI_FORMAT_R24G8_TYPELESS,
+				DXGI_FORMAT_D24_UNORM_S8_UINT,
+				DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
+				DXGI_FORMAT_X24_TYPELESS_G8_UINT);
 			if (m_pCustomDepth) m_pCustomDepth->SetTag("CustomDepth");
+
+			// Depth + Stencil REPLACE: 모든 픽셀에 대해 OMSetDepthStencilState
+			// 의 StencilRef(= 각 MR의 CustomStencil 값)로 stencil 기록.
+			D3D11_DEPTH_STENCIL_DESC dsDesc = {};
+			dsDesc.DepthEnable = TRUE;
+			dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+			dsDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+			dsDesc.StencilEnable = TRUE;
+			dsDesc.StencilReadMask = 0xFF;
+			dsDesc.StencilWriteMask = 0xFF;
+			dsDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+			dsDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+			dsDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+			dsDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+			dsDesc.BackFace = dsDesc.FrontFace;
+			Graphics::GetInst()->GetDevice()->CreateDepthStencilState(
+				&dsDesc, &m_pCustomDepthStencilDSS);
 		}
 
 #ifdef _DEBUG
@@ -668,6 +688,18 @@ namespace Engine
 		m_pCustomDepthCompositeBlend = StaticFindBindable<BlendState>("AlphaBlend");
 		m_pCustomDepthWriteState     = StaticFindBindable<DepthStencilState>("Basic");
 
+		// UE outline post-process material 대응. PS만 신규, 나머지(VS/Blend/DSS)는
+		// 이미 등록된 풀스크린 패스 리소스를 그대로 재사용.
+		m_pOutlinePS      = StaticFindBindable<PixelShader>("OutlinePS");
+		m_pOutlineBlend   = StaticFindBindable<BlendState>("AlphaBlend");
+		m_pOutlineDSS     = StaticFindBindable<DepthStencilState>("NoDepth");
+		// b14는 D3D11 cbuffer 슬롯 범위(b0..b13) 밖. UI.fx UITint와 같은 b13 공유 —
+		// Outline 패스가 RenderUI 직전이라 슬롯 충돌 없음.
+		m_pOutlineCBuffer = std::make_shared<ConstantBuffer<OUTLINECBUFFER>>(13);
+		m_tOutlineCBuffer.vTexelSize.x = 1.f / Window::GetInst()->GetWidth();
+		m_tOutlineCBuffer.vTexelSize.y = 1.f / Window::GetInst()->GetHeight();
+		if (m_pOutlineCBuffer) m_pOutlineCBuffer->UpdateBuffer(m_tOutlineCBuffer);
+
 		m_pFogCBuffer = std::make_shared<ConstantBuffer<FOGCBUFFER>>(12);
 
 		if (!m_pFogCBuffer) 
@@ -751,6 +783,10 @@ namespace Engine
 		RenderBlur();
 
 		PostProcessing();
+
+		// UE outline post-process material 대응. backbuffer가 활성인 시점
+		// (PostProcessing → HDR 출력 이후)에 알파블렌드로 라인만 덧칠.
+		RenderOutline();
 
 		RenderUI();
 
@@ -880,16 +916,20 @@ namespace Engine
 		}
 		if (!bAny) return;
 
-		m_pCustomDepth->Clear(D3D11_CLEAR_DEPTH);
+		// D24S8 — depth + stencil 동시 클리어 (외곽선 패스에서 stencil 읽음).
+		m_pCustomDepth->Clear((D3D11_CLEAR_FLAG)(D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL));
 
 		// Depth-only render: 0 color RTs + CustomDepth's DSV. The MRT
 		// helper handles the 0-RT case (OMSetRenderTargets(0, nullptr, DSV)).
 		m_pCustomDepth->SetTargets();
 
-		// Standard depth-write state. CustomDepth doesn't care about the
-		// MR's own DSS (e.g. OutLineMask's stencil writes) — we want a
-		// clean LESS_EQUAL + write ALL.
-		if (m_pCustomDepthWriteState) m_pCustomDepthWriteState->Bind();
+		// UE CustomStencil 패턴: per-MR로 StencilRef를 바꿔야 하므로 Bindable
+		// 래퍼(상수 ref)를 우회해 OMSetDepthStencilState 직접 호출. 패스 진입
+		// 직전 상태 백업, 종료 후 복구.
+		auto* pCtxCD = Graphics::GetInst()->GetDeviceContext();
+		ID3D11DepthStencilState* pPrevDSS = nullptr;
+		UINT iPrevStencilRef = 0;
+		pCtxCD->OMGetDepthStencilState(&pPrevDSS, &iPrevStencilRef);
 
 		Graphics::GetInst()->ResetBindCache();
 
@@ -902,6 +942,13 @@ namespace Engine
 			for (const auto& pMR : kv.second)
 			{
 				if (!pMR || !pMR->IsCustomDepthEnabled()) continue;
+
+				// 매 MR마다 stencil ref 갱신. CustomStencil이 0인 MR도
+				// CustomDepth는 그리되 stencil은 0으로 기록 → outline 패스가
+				// 자동 무시. (1 이상만 라인이 보임.)
+				pCtxCD->OMSetDepthStencilState(
+					m_pCustomDepthStencilDSS.Get(),
+					(UINT)pMR->GetCustomStencil());
 
 				GameObject* pOwner = pMR->GetGameObjectOwner();
 				std::shared_ptr<Transform> pTr =
@@ -954,7 +1001,9 @@ namespace Engine
 			}
 		}
 
-		if (m_pCustomDepthWriteState) m_pCustomDepthWriteState->PostBind();
+		// CustomDepth DSS 직전 상태 복구.
+		pCtxCD->OMSetDepthStencilState(pPrevDSS, iPrevStencilRef);
+		if (pPrevDSS) pPrevDSS->Release();
 
 		m_pCustomDepth->ResetTargets();
 	}
@@ -984,6 +1033,9 @@ namespace Engine
 		if (m_pCustomDepthCompositeBlend) m_pCustomDepthCompositeBlend->Bind();
 
 		auto* pCtx = Graphics::GetInst()->GetDeviceContext();
+		// VS_Multi는 SV_VertexID만 사용 — IL/VB가 필요 없음. 직전 RenderCustomDepth
+		// 가 남긴 stale IL이 그대로 있으면 D3D11이 "VB 너무 작음" 경고. 명시 해제.
+		pCtx->IASetInputLayout(nullptr);
 		pCtx->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
 		pCtx->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 		pCtx->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
@@ -1382,6 +1434,63 @@ namespace Engine
 		RenderHDR();
 
 		m_pPrevAverageLightBuffer.swap(m_pAverageLightBuffer);
+	}
+
+	void RenderManager::RenderOutline()
+	{
+		// 외곽선 셰이더가 아직 안 올라왔거나, CustomDepth/Stencil이 없으면 skip.
+		if (!m_pOutlinePS || !m_pCustomDepth || !pMultiVertexShader) return;
+		if (!m_pCustomDepth->GetStencilSRV()) return;
+
+		// CustomDepth에 그릴 MR이 하나라도 있었는지 — 없으면 패스 전체 skip.
+		auto& mapBuckets = m_mapMeshInstance[static_cast<int>(RENDER_LAYER::OPACUE)];
+		bool bAny = false;
+		for (auto& kv : mapBuckets)
+		{
+			if (kv.second.empty()) continue;
+			const auto& pFirst = kv.second.front();
+			if (pFirst && pFirst->IsCustomDepthEnabled() && pFirst->GetCustomStencil() > 0)
+			{
+				bAny = true; break;
+			}
+		}
+		if (!bAny) return;
+
+		// CBuffer 갱신 — 매 프레임 텍셀 사이즈/색/두께 반영.
+		m_tOutlineCBuffer.vTexelSize.x = 1.f / Window::GetInst()->GetWidth();
+		m_tOutlineCBuffer.vTexelSize.y = 1.f / Window::GetInst()->GetHeight();
+		m_pOutlineCBuffer->UpdateBuffer(m_tOutlineCBuffer);
+		m_pOutlineCBuffer->Bind();
+
+		// CustomDepth는 GetDepthSRV()는 안 쓰지만 stencil SRV는 t29에 필요.
+		m_pCustomDepth->SetStencilSRV(29);
+
+		if (m_pOutlineDSS)   m_pOutlineDSS->Bind();
+		if (m_pOutlineBlend) m_pOutlineBlend->Bind();
+
+		auto* pCtx = Graphics::GetInst()->GetDeviceContext();
+		// VS_Multi는 SV_VertexID만 사용 — IL/VB가 필요 없음. 직전 패스의 IL이
+		// 남아 있으면 D3D11이 "VB 너무 작음" 경고. 명시적으로 nullptr 해제.
+		pCtx->IASetInputLayout(nullptr);
+		pCtx->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+		pCtx->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+		pCtx->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+		pMultiVertexShader->Bind();
+		m_pOutlinePS->Bind();
+
+		pCtx->Draw(4, 0);
+
+		m_pOutlinePS->PostBind();
+		pMultiVertexShader->PostBind();
+
+		if (m_pOutlineBlend) m_pOutlineBlend->PostBind();
+		if (m_pOutlineDSS)   m_pOutlineDSS->PostBind();
+
+		// t29 슬롯 해제 — 다음 프레임의 다른 패스가 같은 슬롯을 GBuffer 등으로
+		// 쓸 수 있으므로 명시적으로 unbind.
+		ID3D11ShaderResourceView* pNull = nullptr;
+		pCtx->PSSetShaderResources(29, 1, &pNull);
 	}
 
 	void RenderManager::Clear()

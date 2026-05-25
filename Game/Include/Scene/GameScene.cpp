@@ -27,6 +27,7 @@ REGISTER_SCENE(Client::GameScene, GameScene)
 #include "../UI/LevelUpChoices.h"
 #include "../UI/EnemyCountHUD.h"
 #include "../UI/DamageText.h"
+#include "../UI/WeaponHUD.h"
 #include "Input/Input.h"
 #include "Bindable/Camera.h"
 #include "Core/Graphics.h"
@@ -37,6 +38,7 @@ REGISTER_SCENE(Client::GameScene, GameScene)
 #include "Sound/Sound.h"
 #include "../Object/Tree.h"
 #include "../Object/Enemy.h"
+#include "../Object/EnemyMeshRenderer.h"
 #include "Render/RenderManager.h"
 #include "Core/PathManager.h"
 #include "Bindable/PointLight.h"
@@ -131,6 +133,12 @@ namespace Client
 		//Engine::MeshLoader::Load(TEXT("Slow Run.fbx"));
 
 		CreateMesh();
+
+		// Register the game-side enemy shaders + 256-byte instance input
+		// layout before any enemy spawns. Enemies render through these
+		// (EnemyMeshRenderer) so same-kind enemies batch into one
+		// DrawInstanced call while keeping per-instance hit flash + dissolve.
+		EnemyMeshRenderer::RegisterShaders();
 
 		// Static weapon catalogue. The DB is a singleton so Player and
 		// LevelUpChoices both find the same rows without threading a
@@ -260,6 +268,16 @@ namespace Client
 			if (auto pLevelUp = pLevelUpObj->AddComponent<LevelUpChoices>("levelup"))
 			{
 				pLevelUp->SetTarget(pPlayer);
+			}
+		}
+
+		// Top-left HUD listing owned weapons + current level. Polls
+		// Player::GetOwnedWeaponIds / GetOwnedWeaponLevel each frame.
+		if (auto pWeaponHUDObj = CreateGameObject<>("WeaponHUD", FindLayer(DEFAULT_LAYER)))
+		{
+			if (auto pWeaponHUD = pWeaponHUDObj->AddComponent<WeaponHUD>("weaponhud"))
+			{
+				pWeaponHUD->SetTarget(pPlayer);
 			}
 		}
 

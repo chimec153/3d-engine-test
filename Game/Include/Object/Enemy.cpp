@@ -21,6 +21,7 @@ REGISTER_GAMEOBJECT(Client::Enemy, Enemy)
 #include "Bindable/ColliderSphere.h"
 #include "Bindable/BindableManager.h"
 #include "Component/MeshRendererComponent.h"
+#include "EnemyMeshRenderer.h"
 #include "Voxel/VoxelWorld.h"
 #include "Voxel/BlockType.h"
 #include "Types.h"
@@ -91,17 +92,34 @@ namespace Client
 
     Enemy::Enemy() = default;
 
+    namespace
+    {
+        // UE의 Dynamic Material Instance(MID)와 동등. 공유 베이스 머티리얼을
+        // 적마다 복제해 hit flash 강도가 인접 적과 분리되도록 함.
+        // 트레이드오프: MeshRenderer instance key가 머티리얼 태그로 잡히므로
+        // 각 적이 별 버킷에 들어가 RenderManager의 DrawInstanced fast path를
+        // 잃음(=enemy당 solo draw). 시각적 정확성을 우선.
+        std::shared_ptr<Engine::Material> CloneEnemyMaterial(
+            const std::shared_ptr<Engine::Material>& pBase)
+        {
+            if (!pBase) return nullptr;
+            return std::static_pointer_cast<Engine::Material>(pBase->Clone());
+        }
+    }
+
     bool Enemy::Init()
     {
         if (!__super::Init()) return false;
 
         m_pTransform    = AddComponent<Engine::Transform>("transform");
-        m_pMeshRenderer = AddComponent<Engine::MeshRendererComponent>("mesh_renderer");
+        m_pMeshRenderer = AddComponent<EnemyMeshRenderer>("mesh_renderer");
 
-        // Variant materials are shared across all enemies of the same kind so
-        // the RenderManager instancing bucket's representative material
-        // matches every member's colour.
-        m_pMaterial = EnsureEnemyMaterial(m_eMeshKind);
+        // UE MID 패턴: 변종 베이스 머티리얼을 클론해 per-enemy 인스턴스 보유.
+        // hit flash 같은 per-instance 파라미터가 같은 변종 옆 적에게 번지지 않음.
+        m_pMaterial = CloneEnemyMaterial(EnsureEnemyMaterial(m_eMeshKind));
+
+        // Toon 셰이딩으로 캐릭터/적만 셀쉐이딩 (환경 voxel은 DefaultLit 유지).
+        if (m_pMaterial) m_pMaterial->SetShadingModel(Engine::SHADING_MODEL_TOON);
 
         if (m_pMeshRenderer)
         {
@@ -116,10 +134,17 @@ namespace Client
                 // the per-variant colour wins.
                 m_pMeshRenderer->SetOverrideMaterial(0, 0, m_pMaterial);
             }
-            m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_VS));
-            m_pMeshRenderer->SetPixelShader (Engine::StaticFindBindable<Engine::PixelShader> (STANDARD_SOLID_PS));
+            // Game-side enemy shaders (EnemyInst.hlsl). RenderManager derives
+            // the instanced VS/PS by appending "Inst" to these tags, so the
+            // DrawInstanced fast path reaches EnemyVSInst/EnemyPSInst which read
+            // per-instance hit flash + dissolve from the instance stream.
+            m_pMeshRenderer->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(EnemyMeshRenderer::kVSTag));
+            m_pMeshRenderer->SetPixelShader (Engine::StaticFindBindable<Engine::PixelShader> (EnemyMeshRenderer::kPSTag));
             m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::InputLayout>("Standard"));
             m_pMeshRenderer->AddBindable(Engine::StaticFindBindable<Engine::Topology>("TriangleList"));
+
+            // UE CustomStencil — 적은 stencil=1 (외곽선 PS에서 g_vOutlineColor).
+            m_pMeshRenderer->SetCustomStencil(1);
         }
 
         // Body collider — same y range (0..0.6) as the mesh, centred on x/z.
@@ -142,7 +167,10 @@ namespace Client
         // Melee attack source. Stats are modest — Attackable picks a random
         // value in [min, max] per hit, and Player::OnHitBy routes it through
         // its own Attackable so the existing Hit/Die state transitions fire.
-        m_pAttackable = AddComponent<Attackable>("attackable", 1, 1, 2);
+        // No blood particle, and no PaperBurn sibling: enemies dissolve
+        // per-instance via EnemyMeshRenderer so the bucket stays eligible for
+        // the DrawInstanced fast path.
+        m_pAttackable = AddComponent<Attackable>("attackable", 1, 1, 2, false, false);
 
         return true;
     }
@@ -150,6 +178,9 @@ namespace Client
     void Enemy::OnCollision(Engine::Collider* /*pSrc*/, Engine::Collider* pDest, float /*fDeltaTime*/)
     {
         if (!pDest) return;
+        // Already dying — ignore further hits so we don't re-drop the orb or
+        // restart the dissolve.
+        if (m_bDying) return;
         // Only react to player bullets. Other colliders (player body,
         // other enemies, future melee hitboxes) pass through.
         if (pDest->GetTag() != "bullet_body") return;
@@ -161,7 +192,13 @@ namespace Client
         int iDmg = 1;
         if (auto* pBulletGO = pDest->GetGameObjectOwner())
             if (auto* pBullet = dynamic_cast<Bullet*>(pBulletGO))
+            {
+                // A Multiply split child ignores the enemy that spawned it —
+                // skip damage (and the hit-flash / combat text below) so the
+                // first-hit enemy isn't struck again by its own fragments.
+                if (pBullet->IsIgnoring(this)) return;
                 iDmg = pBullet->GetDamage();
+            }
 
         // Floating combat text — spawn a number at the enemy's head.
         // Pure visual; the pool decides whether there's a slot free.
@@ -179,6 +216,11 @@ namespace Client
             const uintptr_t hOwner = reinterpret_cast<uintptr_t>(this);
             DamageTextManager::GetInst()->Spawn(vSpawn, iShown, bCritical, hOwner);
         }
+
+        // UE MID `SetScalarParameterValue("HitFlash", 1.0)` 대응.
+        // BasePass PS의 ApplyHitFlash가 baseColor와 흰색을 lerp.
+        // Update의 TickHitFlash가 매 프레임 감쇠.
+        if (m_pMaterial) m_pMaterial->SetHitFlash(Engine::Vector3(1.f, 1.f, 1.f), 1.f);
 
         m_iHP -= iDmg;
         if (m_iHP <= 0)
@@ -202,7 +244,10 @@ namespace Client
                     }
                 }
             }
-            InActivate();
+            // Begin the death dissolve instead of vanishing immediately.
+            // Enemy::Update advances m_fDissolve, feeds it to the renderer's
+            // per-instance PaperTime, and deactivates once fully burned.
+            m_bDying = true;
         }
     }
 
@@ -210,11 +255,9 @@ namespace Client
     {
         m_eMeshKind = e;
 
-        // Swap to the shared material for this variant. Both the material
-        // tag and the mesh tag now differ between box and capsule, so the
-        // RenderManager instancing bucket key splits cleanly and the
-        // bucket's representative material colour matches every member.
-        m_pMaterial = EnsureEnemyMaterial(e);
+        // 변종 변경 시에도 per-enemy 머티리얼 인스턴스 유지 (MID 패턴).
+        m_pMaterial = CloneEnemyMaterial(EnsureEnemyMaterial(e));
+        if (m_pMaterial) m_pMaterial->SetShadingModel(Engine::SHADING_MODEL_TOON);
 
         if (m_pMeshRenderer)
         {
@@ -252,11 +295,17 @@ namespace Client
             pMat->SetDiffuseColor (fR, fG, fB, 1.f);
             pMat->SetEmissiveColor({ 0.f, 0.f, 0.f, 0.f });
 
-            m_pMaterial = pMat;
-            if (m_pMeshRenderer)
+            // UE MID 패턴: 베이스(=BindableManager에 등록된 공유본)는 색만 보관,
+            // 실제 렌더는 per-enemy 클론에 toon+hit flash 등 인스턴스 상태 보유.
+            m_pMaterial = CloneEnemyMaterial(pMat);
+            if (m_pMaterial)
             {
-                m_pMeshRenderer->SetMaterial(pMat);
-                m_pMeshRenderer->SetOverrideMaterial(0, 0, pMat);
+                m_pMaterial->SetShadingModel(Engine::SHADING_MODEL_TOON);
+                if (m_pMeshRenderer)
+                {
+                    m_pMeshRenderer->SetMaterial(m_pMaterial);
+                    m_pMeshRenderer->SetOverrideMaterial(0, 0, m_pMaterial);
+                }
             }
         }
 
@@ -298,6 +347,19 @@ namespace Client
     void Enemy::Update(float fDeltaTime)
     {
         __super::Update(fDeltaTime);
+
+        // Dissolving: drive per-instance PaperTime and deactivate once the
+        // shader has fully clipped the body. Skip AI / movement / hit-flash.
+        if (m_bDying)
+        {
+            m_fDissolve += fDeltaTime;
+            if (m_pMeshRenderer) m_pMeshRenderer->SetDissolveTime(m_fDissolve);
+            if (m_fDissolve >= kDissolveTime) InActivate();
+            return;
+        }
+
+        // 히트 플래시 강도 감쇠 — 약 1/6초에 0으로 회귀(SetHitFlash와 짝).
+        if (m_pMaterial) m_pMaterial->TickHitFlash(fDeltaTime);
 
         if (!m_pVoxelWorld || !m_pTransform) return;
 

@@ -235,6 +235,8 @@ namespace Engine
 		CreateBindable("MultiPS", TEXT("anisotropic_microfacet.hlsl"), "PS_Multi");
 		CreateBindable("ShadowPS", TEXT("Shadow.hlsl"), "ShadowPS");
 		CreateBindable("CustomDepthCompositePS", TEXT("customdepth_composite.hlsl"), "PS_CustomDepthComposite");
+		// UE outline post-process material 대응 — CustomDepth+Stencil sobel.
+		CreateBindable("OutlinePS", TEXT("Outline.hlsl"), "PS_Outline");
 
 		CreateBindable("anisotropic_microfacet PS_NoTexture", TEXT("anisotropic_microfacet.hlsl"), "PS_NoTexture");
 		CreateBindable("anisotropic_microfacet PS_Terrain", TEXT("anisotropic_microfacet.hlsl"), "PS_Terrain");

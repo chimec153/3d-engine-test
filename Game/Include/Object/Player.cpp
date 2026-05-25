@@ -36,6 +36,7 @@ REGISTER_GAMEOBJECT_EX(Player, new Client::Player(100, 1, 5))
 #include "Scene/Scene.h"
 #include "../Scene/GameScene.h"
 #include <cmath>
+#include <cstdlib>
 
 namespace Client
 {
@@ -554,11 +555,13 @@ namespace Client
 		ChangeLowerState(std::make_unique<PlayerLowerIdleState>());
 		ChangeUpperState(std::make_unique<PlayerUpperIdleState>());
 
-		// Grant the basic weapon (Arrow, id=1 in weapons.csv) so the
-		// player can damage enemies before the first level-up card.
-		// Without this the player can't earn XP — no damage means no
-		// kills, no orbs, no level-ups, no further weapons.
-		AddOrLevelUpWeapon(1);
+		// Grant a starting weapon so the player can damage enemies before
+		// the first level-up card (no damage → no kills → no orbs → no
+		// level-ups). Prefer the first weapon equipped in the combo
+		// scene's loadout; fall back to Arrow (id=1) when nothing is
+		// equipped so a straight-to-stage run isn't left weaponless.
+		const std::vector<int> vecLoadout = WeaponDatabase::GetInst().EquippedLiveIds();
+		AddOrLevelUpWeapon(vecLoadout.empty() ? 1 : vecLoadout.front());
 
 		return true;
 	}
@@ -813,6 +816,16 @@ namespace Client
 				}
 			}
 			break;
+		case SpawnOrigin::Random:
+		{
+			// A random point on the player's y-plane in a ring around them
+			// (2..6 units), so area weapons rain down at unpredictable
+			// spots near the player instead of from the muzzle.
+			const float fAngle  = (static_cast<float>(std::rand()) / RAND_MAX) * (2.f * PI);
+			const float fRadius = 2.f + (static_cast<float>(std::rand()) / RAND_MAX) * 4.f;
+			vSpawn = vSpawn + Engine::Vector3{ cosf(fAngle) * fRadius, 0.f, sinf(fAngle) * fRadius };
+			break;
+		}
 		default:
 			break;
 		}

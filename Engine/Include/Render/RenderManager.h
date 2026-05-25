@@ -90,6 +90,16 @@ namespace Engine
 		std::shared_ptr<class PixelShader> m_pCustomDepthCompositePS;
 		std::shared_ptr<class BlendState> m_pCustomDepthCompositeBlend;
 		std::shared_ptr<class DepthStencilState> m_pCustomDepthWriteState;
+		// UE CustomStencil: D24S8 타겟에 depth+stencil REPLACE. Bindable 래퍼
+		// 대신 native ID3D11DepthStencilState — 매 MR마다 StencilRef를 바꿔
+		// OMSetDepthStencilState 직접 호출하기 위함(기존 DSS 래퍼는 ref 상수).
+		CPtr<ID3D11DepthStencilState> m_pCustomDepthStencilDSS;
+		// UE outline post-process material 대응 패스 리소스.
+		std::shared_ptr<class PixelShader>                       m_pOutlinePS;
+		std::shared_ptr<class ConstantBuffer<OUTLINECBUFFER>>    m_pOutlineCBuffer;
+		std::shared_ptr<class BlendState>                        m_pOutlineBlend;
+		std::shared_ptr<class DepthStencilState>                 m_pOutlineDSS;
+		OUTLINECBUFFER                                           m_tOutlineCBuffer;
 #ifdef _DEBUG
 		std::shared_ptr<class VertexShader> pNullVertexShader;
 		std::shared_ptr<class PixelShader> pNullPixelShader;
@@ -228,6 +238,15 @@ namespace Engine
 		void RenderOpaqueInst();
 		void RenderCustomDepth();
 		void CompositeCustomDepth();
+		// UE의 outline post-process material과 동일 위치(After Tonemapping).
+		// 풀스크린 PS가 CustomDepth+Stencil sobel 후 backbuffer에 알파블렌드.
+		void RenderOutline();
+
+	public:
+		// 외곽선 색·두께 런타임 조정용 (UE PP material 스칼라/벡터 파라미터 대응).
+		void SetOutlineColor(const Vector4& vColor)    { m_tOutlineCBuffer.vOutlineColor    = vColor; }
+		void SetOutlineColorAlt(const Vector4& vColor) { m_tOutlineCBuffer.vOutlineColorAlt = vColor; }
+		void SetOutlineThickness(int iThickness)       { m_tOutlineCBuffer.iThickness = iThickness; }
 		void RenderAlpha();
 		void RenderLight();
 		void RenderShadow();
