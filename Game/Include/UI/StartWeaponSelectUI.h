@@ -41,21 +41,38 @@ namespace Client
     private:
         static constexpr int kMaxItems = 10;
 
+        // Screen-pixel rect for mouse hit-testing the hover tooltip.
+        struct Rect { float x = 0.f, y = 0.f, w = 0.f, h = 0.f; };
+        static bool InRect(float mx, float my, const Rect& r)
+        {
+            return mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h;
+        }
+
         std::weak_ptr<Player>           m_pTarget;
         std::shared_ptr<Engine::Font>   m_pTitleFont;
         std::shared_ptr<Engine::Font>   m_pItemFont;
         std::shared_ptr<Engine::Text>   m_pTitle;
         std::shared_ptr<Engine::Button> m_pItemButtons[kMaxItems];
         std::shared_ptr<Engine::Text>   m_pItemTexts[kMaxItems];
+        Rect                            m_ItemRect[kMaxItems];   // hover hit-test
         int                             m_iItemWeaponIds[kMaxItems];
         int                             m_iCount = 0;
         bool                            m_bShownLocal = false;
         std::function<void()>           m_fnChosen;
+
+        // Hover tooltip — a dark panel + multi-line text showing the weapon's
+        // detail stats; follows the cursor while hovering a row. Created last so
+        // it draws above the rows; hidden until a hover is detected. Mirrors the
+        // between-round shop (TowerIntermissionUI).
+        std::shared_ptr<Engine::Button> m_pTooltipBg;
+        std::shared_ptr<Engine::Text>   m_pTooltipText;
 
         void Show();
         void Hide();
         // Fill the rows from the player's crafted weapons (first kMaxItems).
         void BuildList();
         void OnPick(int iIndex);
+        // Poll the mouse to show a weapon-detail tooltip when hovering a row.
+        void HandleTooltip();
     };
 }

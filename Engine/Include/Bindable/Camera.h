@@ -38,10 +38,25 @@ namespace Engine
         float m_fNear;
         CAMERA_TYPE m_eCameraType;
 
+        // Trauma-based screen shake. AddTrauma accumulates a [0,1] kick;
+        // Update decays it and bakes a smooth sine-noise offset into the
+        // view matrix only (the Transform is left untouched so the
+        // player-follow and Update-phase picking still read a clean
+        // position). Offset is along the camera's screen-plane axes.
+        float   m_fTrauma     = 0.f;
+        float   m_fShakeTime  = 0.f;
+        Vector3 m_vShakeOffset = Vector3(0.f, 0.f, 0.f);
+
+    private:
+        void UpdateShake(float fDeltaTime);
+
     public:
         const Matrix& GetView()  const noexcept;
         virtual void Reset() override;
         void UpdateView();
+        // Add a screen-shake impulse (clamped to [0,1]). Bosses fire this
+        // on death; the shake eases out over the next few frames.
+        void AddTrauma(float fAmount);
         const Matrix& GetInvView() const noexcept;
         void SetProjectType(PROJECT_TYPE eType);
         float GetAngle() const noexcept;
@@ -49,8 +64,8 @@ namespace Engine
         float GetNear() const noexcept;
         const Matrix& GetProjectMatrix()    const noexcept;
         const Matrix& GetViewProject()    const noexcept;
-        const Vector3& CameraPosToWorldPos(const Vector2& vCameraPos)   const;
-        const Vector3& ScreenPosToClipPos(const Vector2& vScreenPos)    const;
+        Vector3 CameraPosToWorldPos(const Vector2& vCameraPos)   const;
+        Vector3 ScreenPosToClipPos(const Vector2& vScreenPos)    const;
         // World → screen pixels. Returns true if the point is in front of
         // the camera (clip w > 0); outPxX/outPxY are the back-buffer
         // pixel coords, outW is the clip-space w (useful for depth

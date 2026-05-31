@@ -30,13 +30,18 @@ REGISTER_GAMEOBJECT_EX(Player, new Client::Player(100, 1, 5))
 #include "AggroTarget.h"
 #include "Bindable/Decal.h"
 #include "Vfx/FootstepManager.h"
+#include "Vfx/VfxManager.h"
+#include "Vfx/MuzzleFlashManager.h"
 #include "Bindable/ColliderLine.h"
 #include "Bindable/UIRenderer.h"
 #include "../UI/Inventory.h"
 #include "Bindable/SoundBindable.h"
+#include "Render/RenderManager.h"
+#include "Core/Window.h"
 #include "Bullet.h"
 #include "Orb.h"
 #include "WeaponDatabase.h"
+#include "TowerManager.h"
 #include "Wallet.h"
 #include "../GameDefs.h"
 #include "PlayerState.h"
@@ -53,7 +58,7 @@ namespace Client
 		, m_iInitHP(iMaxHP)
 		, m_iInitAttackMin(iAttackMin)
 		, m_iInitAttackMax(iAttackMax)
-		, m_fSpeed(5.f)
+		, m_fSpeed(3.f)
 		, m_fRollSpeed(7.f)
 		, m_iMaxShadowFrame(15)
 		, m_fCameraDist(2.f)
@@ -315,6 +320,8 @@ namespace Client
 			ChangeLowerState(std::make_unique<PlayerLowerDieState>());
 		else
 			ChangeLowerState(std::make_unique<PlayerLowerHitState>());
+		// Periodic enemy melee = contact/DoT → chip feedback only (no strobe).
+		Engine::RenderManager::GetInst()->SetChipRed(0.25f);
 	}
 
 	int Player::GetHP()    const { return m_pAttackable ? m_pAttackable->GetHP()    : 0; }
@@ -328,6 +335,54 @@ namespace Client
 	float Player::GetDamageReduction() const
 	{
 		return m_pAttackable ? m_pAttackable->GetDamageReduction() : 0.f;
+	}
+
+	void Player::TriggerImpactFeedback()
+	{
+		// Throttle: chained projectile hits collapse into a single reaction so
+		// the screen doesn't strobe. The cooldown ticks down in Update.
+		if (m_fImpactCooldown > 0.f) return;
+		m_fImpactCooldown = 0.25f;
+
+		Engine::RenderManager::GetInst()->AddDamageFlash(0.5f);
+		if (auto pCamera = Engine::Graphics::GetInst()->GetCamera())
+			pCamera->AddTrauma(0.3f);
+		Engine::Window::GetInst()->GetTimer()->RequestHitStop(0.06f, 0.05f);
+	}
+
+	void Player::UpdateDamageFeedback(float fDeltaTime)
+	{
+		if (m_fImpactCooldown > 0.f)
+		{
+			m_fImpactCooldown -= fDeltaTime;
+			if (m_fImpactCooldown < 0.f) m_fImpactCooldown = 0.f;
+		}
+
+		// Low-HP overlay: ramps in below 35% HP, full near 0. Pushed every
+		// frame so it persists independently of the per-hit feedback.
+		const int iMax = GetMaxHP();
+		const float fRatio = iMax > 0 ? static_cast<float>(GetHP()) / iMax : 1.f;
+		constexpr float kLowHpStart = 0.35f;
+		float fLowHp = 0.f;
+		if (fRatio < kLowHpStart && GetHP() > 0)
+			fLowHp = (kLowHpStart - fRatio) / kLowHpStart;   // 0..1
+		Engine::RenderManager::GetInst()->SetLowHp(fLowHp);
+
+		// Heartbeat SFX, faster as HP drops. Silent when healthy or dead.
+		if (fLowHp > 0.f)
+		{
+			m_fHeartAcc += fDeltaTime;
+			const float fInterval = 1.1f - 0.6f * fLowHp;   // ~1.1s → ~0.5s
+			if (m_fHeartAcc >= fInterval)
+			{
+				m_fHeartAcc = 0.f;
+				Engine::ResourceManager::GetInst()->Play_Sound("player_heartbeat");
+			}
+		}
+		else
+		{
+			m_fHeartAcc = 0.f;
+		}
 	}
 
 	void Player::AddExp(int iAmount)
@@ -359,29 +414,61 @@ namespace Client
 		if (m_iPendingLevelUps > 0) --m_iPendingLevelUps;
 	}
 
-	void Player::ApplyStatUpgrade(StatUpgrade eStat)
+	void Player::ApplyStatUpgrade(const std::string& strKey, float fAmount)
 	{
-		switch (eStat)
+		// Push a tower HP / defence bump onto every already-placed attack tower
+		// (newly-placed towers pick up the cumulative bonus at Tower::Init via
+		// TowerManager). Attack + fire-rate buffs are read live at fire time, so
+		// they need no retroactive pass.
+		auto buffLiveTowers = [this](int iHP, float fDef)
 		{
-		case StatUpgrade::MoveSpeed:
-			m_fSpeed *= 1.12f;                 // +12% walk speed
-			break;
-		case StatUpgrade::MaxHP:
-			if (m_pAttackable) m_pAttackable->AddMaxHP(25);   // +25 max HP (heals)
-			break;
-		case StatUpgrade::Attack:
-			m_fDamageMult += 0.15f;            // +15% bullet damage
-			break;
-		case StatUpgrade::CritChance:
-			m_fCritChance += 0.10f;            // +10% crit chance
-			if (m_fCritChance > 1.f) m_fCritChance = 1.f;
-			break;
-		case StatUpgrade::Defense:
-			if (m_pAttackable) m_pAttackable->AddDamageReduction(0.08f);  // +8% reduction
-			break;
-		default:
-			break;
+			Engine::Scene* pScene = GetScene();
+			if (!pScene) return;
+			auto pLayer = pScene->FindLayer(DEFAULT_LAYER);
+			if (!pLayer) return;
+			for (const auto& p : pLayer->GetGameObjectList())
+			{
+				if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
+				if (auto pa = p->GetComponent<Attackable>())
+				{
+					if (iHP  != 0)   pa->AddMaxHP(iHP);
+					if (fDef != 0.f) pa->AddDamageReduction(fDef);
+				}
+			}
+		};
+
+		// Effect dispatch keyed by the levelups.csv `key`; fAmount is that
+		// row's magnitude (so designers tune values in the CSV).
+		auto& tm = TowerManager::GetInst();
+		if      (strKey == "move_speed_flat") m_fSpeed += fAmount;
+		else if (strKey == "move_speed_pct")  m_fSpeed *= (1.f + fAmount);
+		else if (strKey == "max_hp_flat")   { if (m_pAttackable) m_pAttackable->AddMaxHP(static_cast<int>(fAmount)); }
+		else if (strKey == "max_hp_pct")
+		{
+			if (m_pAttackable)
+			{
+				int iAdd = static_cast<int>(GetMaxHP() * fAmount);
+				if (iAdd < 1) iAdd = 1;
+				m_pAttackable->AddMaxHP(iAdd);
+			}
 		}
+		else if (strKey == "attack_pct")    m_fDamageMult += fAmount;
+		else if (strKey == "attack_flat")   m_iFlatDamage += static_cast<int>(fAmount);
+		else if (strKey == "crit_chance")
+		{
+			m_fCritChance += fAmount;
+			if (m_fCritChance > 1.f) m_fCritChance = 1.f;
+		}
+		else if (strKey == "crit_damage")   m_fCritMult += fAmount;
+		else if (strKey == "defense")     { if (m_pAttackable) m_pAttackable->AddDamageReduction(fAmount); }
+		else if (strKey == "gold_gain")     m_fGoldMult += fAmount;
+		else if (strKey == "xp_gain")       m_fXpMult += fAmount;
+		else if (strKey == "tower_attack")    tm.AddTowerAtk(fAmount);
+		else if (strKey == "tower_fire_rate") tm.AddTowerFireRate(fAmount);
+		else if (strKey == "tower_defense") { tm.AddTowerDef(fAmount); buffLiveTowers(0, fAmount); }
+		else if (strKey == "tower_hp")      { tm.AddTowerHP(static_cast<int>(fAmount)); buffLiveTowers(static_cast<int>(fAmount), 0.f); }
+		// Unknown key → no-op (the card still consumes a pending level-up).
+
 		if (m_iPendingLevelUps > 0) --m_iPendingLevelUps;
 	}
 
@@ -408,6 +495,12 @@ namespace Client
 				}
 				pOwner->InActivate();
 			}
+			// Gold / XP gain-rate upgrades scale the pickup (floor at 1 so a
+			// reward never rounds away to nothing).
+			iMoney = static_cast<int>(iMoney * m_fGoldMult);
+			iXp    = static_cast<int>(iXp   * m_fXpMult);
+			if (iMoney < 1) iMoney = 1;
+			if (iXp    < 1) iXp    = 1;
 			Wallet::GetInst().Add(iMoney);
 			AddExp(iXp);
 			return;
@@ -429,6 +522,8 @@ namespace Client
 						ChangeLowerState(std::make_unique<PlayerLowerDieState>());
 					else
 						ChangeLowerState(std::make_unique<PlayerLowerHitState>());
+					// Discrete projectile hit → dramatic reaction (throttled).
+					TriggerImpactFeedback();
 				}
 				pOwner->InActivate();
 			}
@@ -450,6 +545,9 @@ namespace Client
 			{
 				ChangeLowerState(std::make_unique<PlayerLowerHitState>());
 			}
+			// Body contact = contact/DoT → chip feedback only (no strobe).
+			if (pAttacker)
+				Engine::RenderManager::GetInst()->SetChipRed(0.25f);
 		}
 	}
 
@@ -638,6 +736,11 @@ namespace Client
 		ChangeLowerState(std::make_unique<PlayerLowerIdleState>());
 		ChangeUpperState(std::make_unique<PlayerUpperIdleState>());
 
+		// Low-HP heartbeat SFX. Re-triggered per beat by UpdateDamageFeedback,
+		// so no looping. Placeholder asset (Effect/Hit.mp3); LoadSoundBindable
+		// returns null and the caller no-ops if the file is absent.
+		Engine::ResourceManager::GetInst()->CreateSound("player_heartbeat", "Effect/Hit.mp3");
+
 		// Starting weapon is no longer auto-granted here — GameScene drives
 		// it: the player picks one in the StartSelect panel at game start
 		// (which calls AddOrLevelUpWeapon), or GameScene seeds Arrow (id=1) as
@@ -776,6 +879,10 @@ namespace Client
 	{
 		__super::Update(fDeltaTime);
 
+		// Per-frame damage feedback: tick the impact throttle, push the
+		// low-HP overlay strength, and pace the low-HP heartbeat.
+		UpdateDamageFeedback(fDeltaTime);
+
 		// Top-down voxel mode: position/Y is fully owned by Input (snap-to-
 		// surface). Gravity/terrain-fall logic was retired with the move to
 		// voxels; UpdateState still runs so Idle/Run animations sync.
@@ -906,6 +1013,13 @@ namespace Client
 		const Engine::Vector3 vForward(-sinf(fAimYaw), 0.f, -cosf(fAimYaw));
 		const Engine::Vector3 vRight(cosf(fAimYaw), 0.f, -sinf(fAimYaw));
 
+		// One-frame muzzle flash at the gun barrel (player pivot dropped to
+		// muzzle height, nudged forward along the aim like the Front bullet
+		// spawn). Fires once per cooldown burst regardless of bullet count.
+		MuzzleFlashManager::GetInst()->Spawn(
+			vPlayerPos + Engine::Vector3{ 0.f, kMuzzleYOffset, 0.f } + vForward * 0.6f,
+			vForward);
+
 		// Resolve the spawn anchor by the WeaponDef's origin. Front
 		// matches the legacy bullet muzzle (kept the same offsets so
 		// gameplay timing/aim doesn't shift); Around drops the projectile
@@ -993,6 +1107,9 @@ namespace Client
 			// Player stat scaling: attack-up multiplier, plus a per-bullet crit
 			// roll (crit doubles this bullet's damage).
 			{
+				// Flat bonus folds into the base first so the attack multiplier
+				// and a crit roll both scale it.
+				if (m_iFlatDamage > 0) pBullet->AddDamage(m_iFlatDamage);
 				float fScale = m_fDamageMult;
 				if (m_fCritChance > 0.f &&
 					(static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) < m_fCritChance)
@@ -1205,6 +1322,22 @@ namespace Client
 				RespawnBeams(m_vecWeaponSlots.back());
 			else
 				RespawnSustainedInstances(m_vecWeaponSlots.back());
+		}
+	}
+
+	void Player::RemoveWeapon(int iWeaponId)
+	{
+		for (auto it = m_vecWeaponSlots.begin(); it != m_vecWeaponSlots.end(); ++it)
+		{
+			if (it->iWeaponId != iWeaponId) continue;
+			// Drop the slot's live instances (same teardown the respawn paths
+			// use) so selling a Sustained / Follow / Beam weapon leaves no
+			// orphaned orbs, pets, or laser lines behind.
+			for (auto& wp : it->vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+			for (auto& wp : it->vecPets)               if (auto sp = wp.lock()) sp->InActivate();
+			for (auto& wp : it->vecBeams)              if (auto sp = wp.lock()) sp->InActivate();
+			m_vecWeaponSlots.erase(it);
+			return;
 		}
 	}
 

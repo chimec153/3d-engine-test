@@ -50,6 +50,12 @@ namespace Client
         // Round survival countdown (top-centre). Shows seconds left to survive.
         std::weak_ptr<Engine::Text>   m_pRoundTimerText;
 
+        // Boss HP bar (top-centre, below the round timer). Hidden until a boss
+        // is alive; Update pushes the ratio from the spawner's tracked boss and
+        // the name text shows its label. Both toggle Enable/Disable per frame.
+        std::weak_ptr<Engine::Gauge>  m_pBossHPGauge;
+        std::weak_ptr<Engine::Text>   m_pBossNameText;
+
         // Installable-tower hotbar (bottom-right): one colour-coded icon per
         // tower type with the remaining count (owned - placed) on it. Index
         // 0 = attack (key 1), 1 = heal (key 2). Icons dim to grey at 0 left;

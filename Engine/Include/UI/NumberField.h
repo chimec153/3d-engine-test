@@ -44,6 +44,12 @@ namespace Engine
         virtual bool Init() override;
         virtual std::shared_ptr<Component> Clone() override;
 
+    protected:
+        // Follow SetRect (e.g. when a ScrollView re-places this field) by
+        // laying the slider + edit box out within the new rect. Without this a
+        // NumberField placed in a ScrollView wouldn't move when scrolled.
+        virtual void OnRectChanged(float fX, float fY, float fW, float fH) override;
+
     private:
         float ClampRound(float fValue) const;
 

@@ -68,15 +68,15 @@ namespace Client
         std::vector<std::weak_ptr<Engine::Particle>> m_hitPool;
         std::vector<std::weak_ptr<Engine::Particle>> m_deathPool;
         std::vector<std::weak_ptr<Engine::Particle>> m_burnPool;
-        int m_iHitNext   = 0;
-        int m_iDeathNext = 0;
-        int m_iBurnNext  = 0;
+        int m_iHitNext    = 0;
+        int m_iDeathNext  = 0;
+        int m_iBurnNext   = 0;
 
-        static constexpr int kHitEmitters   = 6;
-        static constexpr int kDeathEmitters = 2;
-        static constexpr int kBurnEmitters  = 6;
-        static constexpr int kHitBurst      = 30;   // particles per hit
-        static constexpr int kDeathBurst    = 140;  // particles per death
-        static constexpr int kBurnBurst     = 3;    // flames per burn sub-tick
+        static constexpr int kHitEmitters    = 6;
+        static constexpr int kDeathEmitters  = 2;
+        static constexpr int kBurnEmitters   = 6;
+        static constexpr int kHitBurst       = 30;   // particles per hit
+        static constexpr int kDeathBurst     = 140;  // particles per death
+        static constexpr int kBurnBurst      = 3;    // flames per burn sub-tick
     };
 }

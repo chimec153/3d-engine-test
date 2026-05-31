@@ -5,6 +5,7 @@ REGISTER_GAMEOBJECT(Client::HealTower, HealTower)
 #include "AggroTarget.h"
 #include "Vfx/FragmentShatterManager.h"
 #include "TowerManager.h"
+#include "TowerData.h"
 #include "GameStateManager.h"
 #include "../GameDefs.h"
 #include "Bindable/Decal.h"
@@ -118,10 +119,22 @@ namespace Client
             }
         }
 
+        // Base stats from towers.csv (falls back to the GameDefs constants when
+        // no heal row is loaded). Heal amount / interval / radius are cached on
+        // members; HP / defence / aggro drive the tower object.
+        const TowerDef* pDef = TowerDatabase::GetInst().FirstOfKind(TowerKind::Heal);
+        const int   iBaseHP  = pDef ? pDef->iHP    : kHealTowerHP;
+        const float fBaseDef = pDef ? pDef->fDefense : 0.f;
+        const int   iAggro   = pDef ? pDef->iAggro : kTowerAggro;
+        m_iHealAmount   = pDef ? pDef->iHealAmount   : kHealAmount;
+        m_fHealInterval = pDef ? pDef->fHealInterval : kHealInterval;
+        m_fHealRadius   = pDef ? pDef->fHealRadius   : kHealRadius;
+
         // HP + aggro so enemies attack it like any tower; breaks at 0.
         // Impact-flash burst on hit (last arg true), no blood/paper-burn.
-        m_pAttackable = AddComponent<Attackable>("tower_hp", kHealTowerHP, 0, 0, false, false, true);
-        AddComponent<AggroTarget>("aggro", kTowerAggro);
+        m_pAttackable = AddComponent<Attackable>("tower_hp", iBaseHP, 0, 0, false, false, true);
+        if (m_pAttackable && fBaseDef != 0.f) m_pAttackable->AddDamageReduction(fBaseDef);
+        AddComponent<AggroTarget>("aggro", iAggro);
 
         // World-anchored HP bar — see Tower::Init for the contract. Seed is
         // a zero rect so we don't flash a full-width bar before the first
@@ -160,7 +173,7 @@ namespace Client
                 pDecal->SetMaterial(pMat);
             }
             pDecal->StartFade();
-            pDecal->SetMaxFadeTime(kHealInterval);
+            pDecal->SetMaxFadeTime(m_fHealInterval);
             return pDecal;
         };
         m_pRingDecal = makeDecal("heal_ring_decal");
@@ -246,9 +259,9 @@ namespace Client
 
         // Charge the heal pulse.
         m_fHealAcc += fDeltaTime;
-        if (m_fHealAcc >= kHealInterval)
+        if (m_fHealInterval > 0.f && m_fHealAcc >= m_fHealInterval)
         {
-            m_fHealAcc -= kHealInterval;
+            m_fHealAcc -= m_fHealInterval;
             HealNearbyAllies();
             m_pRingDecal->SetFadeTime(0.f);
         }
@@ -264,10 +277,10 @@ namespace Client
         if (m_pTransform)
         {
             constexpr float kBoxH = 2.0f;
-            const float fFill = m_fHealAcc / kHealInterval;   // 0..1
+            const float fFill = m_fHealInterval > 0.f ? m_fHealAcc / m_fHealInterval : 0.f;   // 0..1
             const Engine::Vector3 vPos = m_pTransform->GetPosition();
             const Engine::Vector3 vCentre(vPos.x, static_cast<float>(kWallY), vPos.z);
-            const float fRingD = kHealRadius * 2.f;
+            const float fRingD = m_fHealRadius * 2.f;
 
             if (m_pRingDecal)
             {
@@ -288,7 +301,7 @@ namespace Client
         if (!pLayer) return;
 
         const Engine::Vector3 vPos = m_pTransform->GetPosition();
-        const float fR2 = kHealRadius * kHealRadius;
+        const float fR2 = m_fHealRadius * m_fHealRadius;
 
         for (const auto& p : pLayer->GetGameObjectList())
         {
@@ -303,7 +316,7 @@ namespace Client
             const float dz = e.z - vPos.z;
             if (dx * dx + dz * dz > fR2) continue;
             if (auto pHP = p->GetComponent<Attackable>())
-                pHP->Heal(kHealAmount);
+                pHP->Heal(m_iHealAmount);
         }
     }
 }

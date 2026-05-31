@@ -52,6 +52,13 @@ namespace Client
         int  GetWeaponId() const   { return m_iWeaponId; }
         void SetWeaponId(int iId)   { m_iWeaponId = iId; }
 
+        // Immediate removal for a shop SELL (no death squish): tears down the
+        // tower's owned scene instances (orbiting sustained bullets + beams),
+        // then InActivates. The owned-count decrement + gold refund are handled
+        // by the shop, so unlike the HP-0 death path this does NOT touch
+        // TowerManager (see Tower::Update's break branch).
+        void Despawn();
+
         virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
 
@@ -74,6 +81,16 @@ namespace Client
 
         Engine::VoxelWorld* m_pVoxelWorld = nullptr;
 
+        // Death squish — when HP hits 0 the cube does a quick squash-and-stretch
+        // (flattens, widens) before bursting into shards. m_fSquish advances each
+        // frame; at kSquishTime the shatter fires and the tower deactivates.
+        // The slot release / instance teardown happen the moment it breaks.
+        bool  m_bSquishing = false;
+        float m_fSquish    = 0.f;
+        static constexpr float kSquishTime   = 0.18f;
+        static constexpr float kSquishFlatY  = 0.20f;
+        static constexpr float kSquishWideXZ = 1.40f;
+
         // This tower's weapon (live id). Seeded in Init from TowerManager's
         // placement default; reassigned per-tower by the shop.
         int   m_iWeaponId    = -1;
@@ -82,6 +99,16 @@ namespace Client
         // Targeting radius (world units). Enemies farther than this are
         // ignored so a tower only engages what's near it.
         float m_fRange       = 12.f;
+
+        // Base combat stats from towers.csv (TowerDatabase). They modify the
+        // tower's equipped WEAPON the same way the player's stats do: m_fAttack
+        // scales bullet damage, m_fAttackSpeed scales the fire rate (shortens
+        // cooldown), and a per-shot crit roll multiplies damage by m_fCritMult.
+        // Seeded in Init; defaults give the pre-CSV behaviour.
+        float m_fAttack      = 1.f;
+        float m_fAttackSpeed = 1.f;
+        float m_fCritChance  = 0.f;
+        float m_fCritMult    = 2.f;
 
         // Sustained weapons spawn persistent instances (orbiting blades / aura)
         // around the tower instead of firing on a cooldown. Tracked so a weapon

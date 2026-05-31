@@ -82,12 +82,6 @@ namespace Engine
 	void Skeleton::SetSRV()
 	{
 		m_pBuffer->SetSRV(30);
-
-#ifdef _DEBUG
-		std::vector<Matrix> vecBone(m_pBuffer->GetCount());
-
-		m_pBuffer->ReadBuffer(&vecBone[0], 0, sizeof(Matrix) * m_pBuffer->GetCount());
-#endif
 	}
 
 	void Skeleton::ResetSRV()

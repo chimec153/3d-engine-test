@@ -180,3 +180,34 @@ float4 PS_DeathRing(BeamVSOut input) : SV_TARGET
     float  a = cover * ramp.a * BeamSoftFade(input.pos.xy, input.pos.z);
     return float4(ramp.rgb * input.color.rgb, a);
 }
+
+// Procedural muzzle flash — an 8-spoke polar starburst drawn from uv with no
+// texture. The CPU bakes a fast-decay life envelope into color.rgb (HDR, so the
+// core feeds bloom) and a per-flash random seed into color.a (0..1) that rotates
+// the spokes so repeated shots differ. Camera-facing quad; reuses VS_Beam /
+// BeamVtx. ADDITIVE (ONE/ONE) — alpha is ignored by the blend.
+float4 PS_Muzzle(BeamVSOut input) : SV_TARGET
+{
+    // uv.x runs along the fire direction (0 = barrel side, 1 = forward), uv.y
+    // across it. The CPU orients + elongates the quad so +X here is the aim, so
+    // the flash blasts one way instead of being a symmetric star.
+    float2 p = input.uv * 2.f - 1.f;
+    float  r = length(p);
+    float  a = atan2(p.y, p.x);                 // 0 = forward, +-PI = behind
+    float  fwd = saturate(p.x / (r + 1e-3f));   // forward hemisphere mask (cos a)
+
+    // Forward cone -- a teardrop of flame blasting out of the barrel; nothing
+    // behind (fwd = 0 there).
+    float cone = saturate(1.f - r) * pow(fwd, 1.5f);
+
+    // A few sharp forward spikes, jittered per-flash by the seed (color.a).
+    float spikes = pow(abs(cos(a * 3.f + input.color.a * 6.2831853f)), 10.f)
+                   * pow(fwd, 2.f) * saturate(1.f - r);
+
+    // Hot core at the muzzle (quad centre) -- a small bright pop at the barrel.
+    float core = pow(saturate(1.f - r * 1.8f), 4.f);
+
+    float intensity = saturate(core + cone + spikes);
+    float fSoft = BeamSoftFade(input.pos.xy, input.pos.z);
+    return float4(input.color.rgb * intensity * fSoft, 1.f);                   // additive
+}

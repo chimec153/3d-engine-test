@@ -1,4 +1,5 @@
 #include "Camera.h"
+#include <cmath>
 #include "Transform.h"
 #include "../Input/Input.h"
 #include "../Core/Window.h"
@@ -69,7 +70,10 @@ namespace Engine
 		mat.v[1] = m_pTransform->GetAxis(AXIS_TYPE::Y);
 		mat.v[2] = m_pTransform->GetAxis(AXIS_TYPE::Z);
 
-		const Vector3& vPosition = m_pTransform->GetPosition();
+		// Bake the shake offset into the view only — the Transform's
+		// position stays clean so the player-follow and picking are
+		// unaffected (m_vShakeOffset is zero unless trauma is active).
+		const Vector3 vPosition = m_pTransform->GetPosition() + m_vShakeOffset;
 
 		mat.v[0].w = -static_cast<Vector3>(mat.v[0]).Dot(vPosition);
 		mat.v[1].w = -static_cast<Vector3>(mat.v[1]).Dot(vPosition);
@@ -148,7 +152,7 @@ namespace Engine
 		}
 	}
 
-	const Vector3& Camera::CameraPosToWorldPos(const Vector2& vCameraPos) const
+	Vector3 Camera::CameraPosToWorldPos(const Vector2& vCameraPos) const
 	{
 		const Matrix& matProject = GetProjectMatrix();
 
@@ -159,14 +163,70 @@ namespace Engine
 		vViewPos.x = vCameraPos.x / matProject[0][0] * vViewPos.z;
 		vViewPos.y = vCameraPos.y / matProject[1][1] * vViewPos.z;
 
-		return m_pTransform->GetRotationTranslationMatrix().TransformCoord(vViewPos);
+		// Reconstruct the world point from the camera's *live* position + basis
+		// instead of the cached rotation-translation matrix. SetPosition (the
+		// camera-follow in Player::Input) updates m_vPosition immediately, but
+		// m_matRotationTranslation is only rebuilt in Transform::PostUpdate — so
+		// during Update-phase picking the cached matrix still holds last frame's
+		// camera position while the caller's ray origin (GetPosition) is current.
+		// Mixing the two skews the ray by the camera's per-frame movement, so
+		// picking drifts whenever the player (and thus camera) is moving. The
+		// basis (m_vAxis) is constant here — the camera's rotation never changes
+		// — so this is identical to the matrix path but with the current origin.
+		return m_pTransform->GetPosition()
+			+ m_pTransform->GetAxis(AXIS_TYPE::X) * vViewPos.x
+			+ m_pTransform->GetAxis(AXIS_TYPE::Y) * vViewPos.y
+			+ m_pTransform->GetAxis(AXIS_TYPE::Z) * vViewPos.z;
 	}
 
 	void Camera::Update(float fDeltaTime)
 	{
 		__super::Update(fDeltaTime);
 
+		UpdateShake(fDeltaTime);
+
 		UpdateView();
+	}
+
+	void Camera::AddTrauma(float fAmount)
+	{
+		m_fTrauma += fAmount;
+		if (m_fTrauma > 1.f) m_fTrauma = 1.f;
+		if (m_fTrauma < 0.f) m_fTrauma = 0.f;
+	}
+
+	void Camera::UpdateShake(float fDeltaTime)
+	{
+		// Tuned subtle: ~0.3s total, small screen-plane displacement.
+		constexpr float kTraumaDecay    = 1.2f;   // per second → ~0.3s at trauma 0.35
+		constexpr float kMaxShakeOffset = 0.06f;  // world units at full trauma
+
+		if (m_fTrauma > 0.f)
+		{
+			m_fTrauma -= kTraumaDecay * fDeltaTime;
+			if (m_fTrauma < 0.f) m_fTrauma = 0.f;
+		}
+		m_fShakeTime += fDeltaTime;
+
+		// Quadratic ease-out so the shake fades smoothly, not linearly.
+		const float fShake = m_fTrauma * m_fTrauma;
+		if (fShake <= 0.f || !m_pTransform)
+		{
+			m_vShakeOffset = Vector3(0.f, 0.f, 0.f);
+			return;
+		}
+
+		// Smooth pseudo-noise from summed sines at incommensurate
+		// frequencies — avoids <random> (banned here: the global `epsilon`
+		// macro mangles its headers) while still looking non-periodic.
+		const float t = m_fShakeTime;
+		const float ox = sinf(t * 47.0f)         * 0.6f + sinf(t * 23.3f)        * 0.4f;
+		const float oy = sinf(t * 53.0f + 1.7f)  * 0.6f + sinf(t * 19.1f + 0.5f) * 0.4f;
+		const float fMag = kMaxShakeOffset * fShake;
+
+		m_vShakeOffset =
+			m_pTransform->GetAxis(AXIS_TYPE::X) * (ox * fMag) +
+			m_pTransform->GetAxis(AXIS_TYPE::Y) * (oy * fMag);
 	}
 
 	void Camera::SetCameraType(CAMERA_TYPE eType)
@@ -258,14 +318,13 @@ namespace Engine
 		m_pTransform->AddPosition(m_pTransform->GetAxis(AXIS_TYPE::Y) * fDeltaTime * -m_fSpeed);
 	}
 
-	const Vector3& Camera::ScreenPosToClipPos(const Vector2& vScreenPos) const
+	Vector3 Camera::ScreenPosToClipPos(const Vector2& vScreenPos) const
 	{
 		return {
 		vScreenPos.x / Window::GetInst()->GetWidth() * 2.f - 1.f,
 		vScreenPos.y / Window::GetInst()->GetHeight() * 2.f - 1.f,
 		m_fNear
 		};
-		// TODO: insert return statement here
 	}
 
 	bool Camera::WorldToScreen(const Vector3& vWorld,

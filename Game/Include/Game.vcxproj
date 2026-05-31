@@ -224,6 +224,7 @@
     <ClCompile Include="Object\SpawnConfig.cpp" />
     <ClCompile Include="Object\UIObjects.cpp" />
     <ClCompile Include="Object\WeaponDatabase.cpp" />
+    <ClCompile Include="Object\TowerDatabase.cpp" />
     <ClCompile Include="Object\Trail.cpp" />
     <ClCompile Include="Object\Tree.cpp" />
     <ClCompile Include="Object\Tower.cpp" />
@@ -232,6 +233,7 @@
     <ClCompile Include="Object\Vfx\BeamRenderManager.cpp" />
     <ClCompile Include="Object\Vfx\TrailRenderManager.cpp" />
     <ClCompile Include="Object\Vfx\DeathBurstManager.cpp" />
+    <ClCompile Include="Object\Vfx\MuzzleFlashManager.cpp" />
     <ClCompile Include="Object\Vfx\SpawnTelegraphManager.cpp" />
     <ClCompile Include="Object\TowerPlacementController.cpp" />
     <ClCompile Include="Scene\EnemySpawner.cpp" />
@@ -297,6 +299,7 @@
     <ClInclude Include="Object\Vfx\BeamRenderManager.h" />
     <ClInclude Include="Object\Vfx\TrailRenderManager.h" />
     <ClInclude Include="Object\Vfx\DeathBurstManager.h" />
+    <ClInclude Include="Object\Vfx\MuzzleFlashManager.h" />
     <ClInclude Include="Object\Vfx\SpawnTelegraphManager.h" />
     <ClInclude Include="Object\TowerManager.h" />
     <ClInclude Include="Object\AggroTarget.h" />
@@ -304,6 +307,7 @@
     <ClInclude Include="Object\Wallet.h" />
     <ClInclude Include="Object\WeaponData.h" />
     <ClInclude Include="Object\WeaponDatabase.h" />
+    <ClInclude Include="Object\TowerData.h" />
     <ClInclude Include="Util\CSVLoader.h" />
     <ClInclude Include="Util\JsonLoader.h" />
     <ClInclude Include="Scene\EnemySpawner.h" />

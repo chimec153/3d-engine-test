@@ -43,6 +43,15 @@ namespace Engine
         void SetOnChange(std::function<void(float)> fn) { m_fnOnChange = std::move(fn); }
         void SetOnCommit(std::function<void(float)> fn) { m_fnOnCommit = std::move(fn); }
 
+        // Text mode: edit a free string (A-Z, digits, space) instead of a float.
+        // Call SetTextMode(true) right after creation, then SetText/GetText and
+        // SetOnCommitText. The numeric API (SetValue / OnChange / OnCommit) is
+        // inert while in text mode.
+        void SetTextMode(bool bText) { m_bTextMode = bText; }
+        void SetText(const std::wstring& wStr);
+        std::wstring GetText() const { return m_strBuf; }
+        void SetOnCommitText(std::function<void(const std::wstring&)> fn) { m_fnOnCommitText = std::move(fn); }
+
         virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
         virtual std::shared_ptr<Component> Clone() override;
@@ -51,7 +60,8 @@ namespace Engine
         void Relayout();         // place the box + text from m_fRect
         void UpdateText();       // push the display string (+caret) to the Text
         void ApplyFocusVisual(); // swap the box texture on focus change
-        void PollKeyboard();     // edit m_strBuf from DIK key edges
+        void PollKeyboard();     // edit m_strBuf from DIK key edges (numeric)
+        void PollText();         // edit m_strBuf as free text (text mode)
         void Commit();           // fire onCommit with the parsed value
         std::wstring Format(float fValue) const;
 
@@ -68,11 +78,13 @@ namespace Engine
         bool  m_bFocused    = false;
         bool  m_bFocusShown = false;   // box highlight state last applied
         bool  m_bTyping     = false;   // m_strBuf is a raw typed string, not Format()
+        bool  m_bTextMode   = false;   // edit a string (name) instead of a float
 
         std::wstring m_strBuf;         // current edited text (formatted or typed)
         std::wstring m_strShown;       // last string pushed to m_pText (re-bake guard)
 
         std::function<void(float)> m_fnOnChange;
         std::function<void(float)> m_fnOnCommit;
+        std::function<void(const std::wstring&)> m_fnOnCommitText;
     };
 }

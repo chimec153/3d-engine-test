@@ -16,6 +16,7 @@ namespace Engine
 namespace Client
 {
     class FlowField;
+    class Enemy;
     struct RoundDef;
     struct RoundSpawn;
 
@@ -57,6 +58,10 @@ namespace Client
         // next round starts on a clean field.
         void ClearEnemies();
 
+        // The boss materialised this round, if it's still alive (the HUD reads
+        // its HP for the boss bar). Empty once it dies / before it spawns.
+        std::shared_ptr<Enemy> GetBoss() const { return m_wpBoss.lock(); }
+
     private:
         Engine::Scene*       m_pScene = nullptr;
         Engine::VoxelWorld*  m_pWorld = nullptr;
@@ -68,6 +73,15 @@ namespace Client
         // every frame — a stationary committed tower's Rebuild is then a cached
         // no-op. Weak so a destroyed tower drops out and forces a re-search.
         std::weak_ptr<Engine::GameObject> m_wpCommittedGoal;
+
+        // Full goal re-selection / field rebuild is throttled to ~10 Hz. The
+        // 129×129 flow field is a Dijkstra; re-running it every frame as the
+        // player walks (the goal cell churns on each cell-cross) dominated the
+        // CPU. Enemies tolerate a field this stale — they keep their committed
+        // target between reselects and sample the existing field. Accumulator
+        // carries elapsed time since the last reselect.
+        float                  m_fGoalReselectAcc = 0.f;
+        static constexpr float kGoalReselectInterval = 0.1f;
 
         // Per-spawn-entry runtime accumulator. One element per
         // m_pCurrentRound->vecSpawns entry. Reset on StartRound.
@@ -117,6 +131,9 @@ namespace Client
         // One boss per boss round — set true after MaterialiseBoss so the
         // tick loop doesn't keep re-spawning it. Reset in StartRound.
         bool            m_bBossSpawned  = false;
+        // The boss instance, for the HUD's boss HP bar. Weak so it drops out
+        // when the boss dies / the scene frees it. Set in MaterialiseBoss.
+        std::weak_ptr<Enemy> m_wpBoss;
 
         // Boss is materialised directly (no telegraph) when the round
         // elapsed crosses fSpawnTime. Picks a point on the same edge ring

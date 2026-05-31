@@ -22,6 +22,24 @@ namespace Client
         int  CurrentWeaponId() const         { return m_iWeaponId; }
         void SetCurrentWeaponId(int iId)      { m_iWeaponId = iId; }
 
+        // Global tower stat buffs from the level-up menu. Attack + fire-rate are
+        // read by every tower at use-time (so all towers benefit immediately);
+        // HP + defence are cumulative bonuses applied to a tower at placement
+        // (Tower::Init) and pushed onto already-placed towers when the card is
+        // picked (Player::ApplyStatUpgrade). All reset for a new game.
+        float TowerAtkMult() const           { return m_fTowerAtkMult; }
+        float TowerFireRateMult() const      { return m_fTowerFireRateMult; }
+        int   TowerBonusHP() const           { return m_iTowerBonusHP; }
+        float TowerBonusDef() const          { return m_fTowerBonusDef; }
+        void  AddTowerAtk(float f)           { m_fTowerAtkMult += f; }
+        void  AddTowerFireRate(float f)      { m_fTowerFireRateMult += f; }
+        void  AddTowerHP(int i)              { m_iTowerBonusHP += i; }
+        void  AddTowerDef(float f)
+        {
+            m_fTowerBonusDef += f;
+            if (m_fTowerBonusDef > 0.9f) m_fTowerBonusDef = 0.9f;   // matches Attackable clamp
+        }
+
         // Full reset for a new game (game over -> restart). This singleton lives
         // for the whole process, so without an explicit reset the bought-tower
         // counts and the unplaced-tower weapon queue carry over between runs.
@@ -31,6 +49,10 @@ namespace Client
             m_iTowersOwned     = 0;
             m_iHealTowersOwned = 0;
             m_vecReserve.clear();
+            m_fTowerAtkMult      = 1.f;
+            m_fTowerFireRateMult = 1.f;
+            m_iTowerBonusHP      = 0;
+            m_fTowerBonusDef     = 0.f;
         }
 
         // Tower inventory: how many towers the player has bought (placed +
@@ -102,6 +124,12 @@ namespace Client
         int m_iWeaponId        = -1;
         int m_iTowersOwned     = 0;
         int m_iHealTowersOwned = 0;
+
+        // Level-up tower buffs (see accessors above).
+        float m_fTowerAtkMult      = 1.f;
+        float m_fTowerFireRateMult = 1.f;
+        int   m_iTowerBonusHP      = 0;
+        float m_fTowerBonusDef     = 0.f;
 
         // Weapon id per unplaced attack tower (front = next placed). -1 = use
         // the current default. Size tracks owned - placed (see AddTower etc.).

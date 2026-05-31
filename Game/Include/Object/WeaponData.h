@@ -219,8 +219,12 @@ namespace Client
         // projectile material tint — no per-weapon texture pipeline yet.
         unsigned int uColorRGB = 0xFFFFFF;
 
-        LevelUpField eLevelUpField = LevelUpField::Damage;
-        float        fLevelUpAmount = 1.f;
+        // Per-level bump for EACH stat, indexed by LevelUpField (0 = that stat
+        // doesn't grow on level-up). A weapon can now level several stats at
+        // once (the combiner's level-up category is multi-select). Cooldown is
+        // a multiplier (e.g. 0.9 = -10%/level; 0 = unchanged); Damage / Count
+        // are additive ints; Speed / Size are additive floats.
+        float fLevelUpAmt[static_cast<size_t>(LevelUpField::COUNT_)] = {};
 
         // Impact modules (bit flags from ImpactModule). Damage is the baseline
         // and is always present; Knockback / Gather are optional add-ons the
@@ -259,6 +263,20 @@ namespace Client
         int  iEvolvesInto    = 0;
         int  iEvolveMinLevel = 0;
         bool bShopAvailable  = true;
+
+        // Per-weapon shop price (weapons_v2.csv col 26). 0 / blank / missing =
+        // fall back to the global kWeaponPrice default. Drives buy, merge, and
+        // sell-refund in the intermission shop, so a weapon can be made cheaper
+        // or pricier than the baseline individually.
+        int  iPrice          = 0;
+
+        // Appearance window in the shop / start pick (weapons_v2.csv cols 27-28).
+        // iMinRound: first round it can appear (0/1 = from the start). iMaxRound:
+        // last round it appears (0 = no cap, available for the rest of the run).
+        // The shop filters by the upcoming round: a weapon shows while
+        // iMinRound <= round and (iMaxRound == 0 || round <= iMaxRound).
+        int  iMinRound       = 0;
+        int  iMaxRound       = 0;
     };
 
     // Hard cap on a spiralling-orbit radius (used when fRadialSpeed > 0). Once
@@ -268,21 +286,26 @@ namespace Client
     constexpr float kMaxOrbitRadius = 200.f;
 
     // Level-aware stat lookups. Centralised here so Bullet (damage / speed)
-    // and Player slots (cooldown / count) read the same formulas — the
-    // level-up CSV column only touches one field per weapon, the other
-    // three pass through untouched.
+    // and Player slots (cooldown / count) read the same formulas — each weapon
+    // can level any subset of the stats (fLevelUpAmt[field] != 0).
+    // Per-field level-up amount (0 = that stat doesn't grow). Helper so the
+    // Compute* readers stay terse.
+    inline float LevelUpAmt(const WeaponDef& def, LevelUpField f)
+    {
+        return def.fLevelUpAmt[static_cast<size_t>(f)];
+    }
     inline int ComputeDamage(const WeaponDef& def, int iLevel)
     {
         int d = def.iDamage;
-        if (def.eLevelUpField == LevelUpField::Damage)
-            d += static_cast<int>(def.fLevelUpAmount * static_cast<float>(iLevel - 1));
+        d += static_cast<int>(LevelUpAmt(def, LevelUpField::Damage) * static_cast<float>(iLevel - 1));
         return d;
     }
     inline float ComputeCooldown(const WeaponDef& def, int iLevel)
     {
         float c = def.fCooldown;
-        if (def.eLevelUpField == LevelUpField::Cooldown)
-            c *= std::pow(def.fLevelUpAmount, static_cast<float>(iLevel - 1));
+        const float m = LevelUpAmt(def, LevelUpField::Cooldown);
+        if (m > 0.f)   // multiplier; 0 = "not a level-up stat"
+            c *= std::pow(m, static_cast<float>(iLevel - 1));
         // Defensive floor — a runaway negative cooldown would spawn a
         // bullet every frame.
         return c < 0.05f ? 0.05f : c;
@@ -290,22 +313,19 @@ namespace Client
     inline int ComputeCount(const WeaponDef& def, int iLevel)
     {
         int n = def.iCount;
-        if (def.eLevelUpField == LevelUpField::Count)
-            n += static_cast<int>(def.fLevelUpAmount * static_cast<float>(iLevel - 1));
+        n += static_cast<int>(LevelUpAmt(def, LevelUpField::Count) * static_cast<float>(iLevel - 1));
         return n < 1 ? 1 : n;
     }
     inline float ComputeSpeed(const WeaponDef& def, int iLevel)
     {
         float s = def.fProjectileSpeed;
-        if (def.eLevelUpField == LevelUpField::Speed)
-            s += def.fLevelUpAmount * static_cast<float>(iLevel - 1);
+        s += LevelUpAmt(def, LevelUpField::Speed) * static_cast<float>(iLevel - 1);
         return s;
     }
     inline float ComputeSize(const WeaponDef& def, int iLevel)
     {
         float sz = def.fSize;
-        if (def.eLevelUpField == LevelUpField::Size)
-            sz += def.fLevelUpAmount * static_cast<float>(iLevel - 1);
+        sz += LevelUpAmt(def, LevelUpField::Size) * static_cast<float>(iLevel - 1);
         // Defensive floor — a zero/negative scale would collapse the mesh
         // and the derived collider radius.
         return sz < 0.01f ? 0.01f : sz;

@@ -57,6 +57,27 @@ namespace Engine
             DIK_BACK, DIK_RETURN, DIK_NUMPADENTER,
         };
 
+        // Text-mode keys: A-Z (case from Shift), space, and the Shift modifiers.
+        // Registered in addition to kPolledKeys so a text EditBox can type names.
+        struct LetterKey { unsigned char dik; wchar_t lower; wchar_t upper; };
+        const LetterKey kLetters[] = {
+            { DIK_A, L'a', L'A' }, { DIK_B, L'b', L'B' }, { DIK_C, L'c', L'C' },
+            { DIK_D, L'd', L'D' }, { DIK_E, L'e', L'E' }, { DIK_F, L'f', L'F' },
+            { DIK_G, L'g', L'G' }, { DIK_H, L'h', L'H' }, { DIK_I, L'i', L'I' },
+            { DIK_J, L'j', L'J' }, { DIK_K, L'k', L'K' }, { DIK_L, L'l', L'L' },
+            { DIK_M, L'm', L'M' }, { DIK_N, L'n', L'N' }, { DIK_O, L'o', L'O' },
+            { DIK_P, L'p', L'P' }, { DIK_Q, L'q', L'Q' }, { DIK_R, L'r', L'R' },
+            { DIK_S, L's', L'S' }, { DIK_T, L't', L'T' }, { DIK_U, L'u', L'U' },
+            { DIK_V, L'v', L'V' }, { DIK_W, L'w', L'W' }, { DIK_X, L'x', L'X' },
+            { DIK_Y, L'y', L'Y' }, { DIK_Z, L'z', L'Z' },
+        };
+        const unsigned char kTextKeys[] = {
+            DIK_A, DIK_B, DIK_C, DIK_D, DIK_E, DIK_F, DIK_G, DIK_H, DIK_I, DIK_J,
+            DIK_K, DIK_L, DIK_M, DIK_N, DIK_O, DIK_P, DIK_Q, DIK_R, DIK_S, DIK_T,
+            DIK_U, DIK_V, DIK_W, DIK_X, DIK_Y, DIK_Z, DIK_SPACE, DIK_LSHIFT, DIK_RSHIFT,
+        };
+        const size_t kMaxNameLen = 16;
+
         constexpr unsigned int kBoxRGB      = 0x202830;    // input panel
         constexpr unsigned int kBoxFocusRGB = 0x33424E;    // brighter when focused
         constexpr unsigned int kBoxDimRGB   = 0x171B1F;
@@ -80,9 +101,14 @@ namespace Engine
         // Register the digit / edit keys once (CInput::Init only registers the
         // gameplay keys). Guard against duplicates with FindKey.
         if (auto* pInput = CInput::GetInst())
+        {
             for (unsigned char k : kPolledKeys)
                 if (pInput->FindKey(k) == nullptr)
                     pInput->AddKey(k);
+            for (unsigned char k : kTextKeys)
+                if (pInput->FindKey(k) == nullptr)
+                    pInput->AddKey(k);
+        }
 
         m_pBox = CreateComponent<Button>("editbox_bg");
         if (m_pBox) m_pBox->SetTexture(SolidTex("editbox_bg", kBoxRGB, 0xFF));
@@ -118,6 +144,13 @@ namespace Engine
         m_fValue  = fValue;
         m_strBuf  = Format(fValue);
         UpdateText();   // text only — avoid re-issuing SetRect (a Text re-bake) per drag frame
+    }
+
+    void EditBox::SetText(const std::wstring& wStr)
+    {
+        m_bTyping = false;
+        m_strBuf  = wStr;
+        UpdateText();
     }
 
     void EditBox::SetEnabled(bool bEnabled)
@@ -175,12 +208,59 @@ namespace Engine
     void EditBox::Commit()
     {
         m_bTyping = false;
+        if (m_bTextMode) { if (m_fnOnCommitText) m_fnOnCommitText(m_strBuf); return; }
         if (m_fnOnCommit) m_fnOnCommit(m_fValue);
+    }
+
+    void EditBox::PollText()
+    {
+        using namespace EditBox_detail;
+        auto* pInput = CInput::GetInst();
+        if (!pInput) return;
+
+        bool bChanged = false;
+        const bool bShift = pInput->IsKey(CInput::KEY_STATE::PRESS, DIK_LSHIFT)
+                         || pInput->IsKey(CInput::KEY_STATE::PRESS, DIK_RSHIFT);
+
+        for (const LetterKey& lk : kLetters)
+            if (pInput->IsKey(CInput::KEY_STATE::DOWN, lk.dik) && m_strBuf.size() < kMaxNameLen)
+            {
+                m_strBuf += (bShift ? lk.upper : lk.lower);
+                bChanged = true;
+            }
+        for (const KeyChar& kc : kDigits)
+            if (pInput->IsKey(CInput::KEY_STATE::DOWN, kc.dik) && m_strBuf.size() < kMaxNameLen)
+            {
+                m_strBuf += kc.ch;
+                bChanged = true;
+            }
+        if (pInput->IsKey(CInput::KEY_STATE::DOWN, DIK_SPACE) && m_strBuf.size() < kMaxNameLen)
+        {
+            m_strBuf += L' ';
+            bChanged = true;
+        }
+        if (pInput->IsKey(CInput::KEY_STATE::DOWN, DIK_BACK) && !m_strBuf.empty())
+        {
+            m_strBuf.pop_back();
+            bChanged = true;
+        }
+        if (pInput->IsKey(CInput::KEY_STATE::DOWN, DIK_RETURN)
+         || pInput->IsKey(CInput::KEY_STATE::DOWN, DIK_NUMPADENTER))
+        {
+            Commit();
+            m_bFocused = false;
+            ApplyFocusVisual();
+            UpdateText();
+            return;
+        }
+        // Mark "typing" so a click-away blur commits the name (mirrors numeric).
+        if (bChanged) { m_bTyping = true; UpdateText(); }
     }
 
     void EditBox::PollKeyboard()
     {
         using namespace EditBox_detail;
+        if (m_bTextMode) { PollText(); return; }
         auto* pInput = CInput::GetInst();
         if (!pInput) return;
 

@@ -51,6 +51,12 @@ namespace Client
         // m_iHP; reaching 0 deactivates the enemy GameObject.
         void SetMaxHP(int iHP) { m_iMaxHP = iHP; m_iHP = iHP; }
         int  GetHP() const { return m_iHP; }
+        int  GetMaxHP() const { return m_iMaxHP; }
+        // True for entries from enemies.json bosses[] (set in ApplyDef). The
+        // HUD shows a boss HP bar while one of these is alive.
+        bool IsBoss() const { return m_bIsBoss; }
+        // Display label (enemies.json strName) — used as the boss bar caption.
+        const std::string& GetName() const { return m_strName; }
         // Safe to call before or after Init: pre-Init it just stores the
         // kind for Init to pick up; post-Init it swaps the mesh + material
         // colour immediately.
@@ -128,6 +134,35 @@ namespace Client
         float m_fDissolve = 0.f;
         static constexpr float kDissolveTime = 3.0f;
 
+        // Death squish — on the killing blow the body does a quick squash-and-
+        // stretch (flattens vertically, widens) before bursting into shards.
+        // m_fSquish advances each frame; at kSquishTime the shatter fires and
+        // the GameObject deactivates. m_fDeathBaseScale caches the pre-squish
+        // uniform scale so the curve and the shard size aren't read from the
+        // already-deformed transform.
+        bool  m_bSquishing      = false;
+        float m_fSquish         = 0.f;
+        float m_fDeathBaseScale = 1.f;
+        static constexpr float kSquishTime   = 0.18f;  // seconds
+        static constexpr float kSquishFlatY  = 0.20f;  // final Y scale factor
+        static constexpr float kSquishWideXZ = 1.40f;  // final XZ scale factor
+
+        // The enemy's true uniform scale (set by ApplyDef from the hitbox
+        // radius). Both squish effects animate around this rather than the
+        // live transform scale, so a transient hit squish never feeds into
+        // the death squish / shard size or accumulates across hits.
+        float m_fBaseScale = 1.f;
+
+        // Hit squish — a brief elastic squash-and-stretch on every non-fatal
+        // hit (juice). The body quickly squashes vertically + widens, then
+        // springs back to m_fBaseScale over kHitSquishTime via a sin pulse
+        // (0→1→0). The death squish takes precedence when the hit is fatal.
+        bool  m_bHitSquish      = false;
+        float m_fHitSquish      = 0.f;
+        static constexpr float kHitSquishTime   = 0.14f;  // seconds
+        static constexpr float kHitSquishFlatY  = 0.72f;  // peak Y scale factor
+        static constexpr float kHitSquishWideXZ = 1.18f;  // peak XZ scale factor
+
         // Health pool. Bullet collisions decrement m_iHP; 0 deactivates
         // the GameObject so the scene's prune pass removes it next frame.
         // GameScene's spawn loop calls ApplyDef with an EnemyDatabase row,
@@ -142,6 +177,10 @@ namespace Client
         // swarmling (1 / 1) feel meaningfully different to harvest.
         int m_iGoldReward = 1;
         int m_iXpReward   = 1;
+
+        // Display name (enemies.json strName), copied in ApplyDef. Used by the
+        // HUD's boss HP bar caption.
+        std::string m_strName;
 
         // === Phase 2: behavior + specials ===
         //
@@ -292,6 +331,10 @@ namespace Client
         // Slam: damage every enemy/player inside fRadius. No mesh, no
         // particles — just damage + a small shared VFX burst at centre.
         void ApplySlamDamage(float fRadius, int iDamage);
+        // Burst the body into fragment shards (the death "pop"). Uses the cached
+        // pre-squish scale so shard size matches the original body, not the
+        // flattened one. Called at the end of the death squish.
+        void ShatterBody();
 
     public:
         // Materialise called by spawner to flip on boss visuals

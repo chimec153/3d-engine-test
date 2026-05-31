@@ -193,6 +193,47 @@ cbuffer FinalPassConstants : register(b0)
     float DOFFarValueY : packoffset(c1);
 }
 
+// Radial boss-death shockwaves. Filled by RenderManager (SHOCKWAVECBUFFER).
+// When g_iShockwaveCount == 0 the warp is skipped entirely.
+cbuffer Shockwave : register(b13)
+{
+    float4 g_Shockwaves[4];     // xy = centre UV, z = radius (UV), w = amplitude
+    int    g_iShockwaveCount;
+    float  g_fShockwaveThickness;
+    float  g_fShockwaveAspect;
+    float  _shockPad;
+}
+
+// Offset a UV along any active expanding rings. Each ring pushes pixels
+// outward just past the wavefront and pulls them in just behind it
+// (antisymmetric across the band) — the classic refraction look.
+float2 ApplyShockwave(float2 uv)
+{
+    float2 offset = float2(0.0, 0.0);
+
+    [loop]
+    for (int i = 0; i < g_iShockwaveCount; ++i)
+    {
+        float2 center = g_Shockwaves[i].xy;
+        float  radius = g_Shockwaves[i].z;
+        float  amp    = g_Shockwaves[i].w;
+
+        // Aspect-correct so the ring is circular in screen pixels.
+        float2 d = uv - center;
+        d.x *= g_fShockwaveAspect;
+        float dist = length(d);
+
+        float sd = (dist - radius) / g_fShockwaveThickness;   // signed, ring-relative
+        float falloff = saturate(1.0 - abs(sd));
+        float wave = sin(sd * 3.14159265) * falloff;
+
+        float2 dir = dist > 1e-5 ? (uv - center) / dist : float2(0.0, 0.0);
+        offset += dir * wave * amp;
+    }
+
+    return uv + offset;
+}
+
 float3 ToneMapping(float3 HDRColor)
 {
     float LScale = dot(HDRColor, LUM_FACTOR.xyz);
@@ -211,7 +252,12 @@ float3 DistanceDOF(float3 colorFocus, float3 colorBlurred, float depth)
 
 float4 FinalPassPS(VS_HDR_OUTPUT input) :   SV_TARGET
 {
-    float3 color = HDRTexture.Sample(g_sPoint, input.uv.xy).xyz;
+    // Warp only the scene-colour sample along any active shockwaves.
+    // Depth / DOF / bloom keep the original UV to avoid edge artefacts.
+    // Linear sampling here so the warped fetch stays smooth (identical to
+    // point sampling at the 1:1 texel centres when no warp is active).
+    float2 warpUV = ApplyShockwave(input.uv.xy);
+    float3 color = HDRTexture.Sample(g_sLinear, warpUV).xyz;
     
     float depth = g_DepthTexture0.Sample(g_sPoint, input.uv.xy);
     

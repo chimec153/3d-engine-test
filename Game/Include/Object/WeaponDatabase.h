@@ -30,6 +30,16 @@ namespace Client
         const std::vector<WeaponDef>& All() const { return m_vecWeapons; }
         size_t Count() const { return m_vecWeapons.size(); }
 
+        // Overwrite the loaded weapon with the given id in place (the id is
+        // kept). Used by the weapon editor (WeaponComboScene) to apply edits to
+        // a weapons_v2.csv weapon. Returns false if no such id is loaded.
+        bool UpdateWeapon(int iId, const WeaponDef& def);
+
+        // Write the whole loaded catalogue back out in the weapons_v2.csv v2
+        // column format (enum tokens, px-scaled speed/accel, hex colour). Used
+        // by the editor to persist edits. Returns rows written.
+        size_t SaveToCSV(const std::string& strPath) const;
+
         // Inserts a runtime-crafted weapon (WeaponComboScene). The id is
         // assigned here (max existing + 1) and returned. The def is also
         // kept in a session-persistent registry so it survives a later
@@ -66,7 +76,10 @@ namespace Client
         // Ids the shop may sell: every loaded weapon (weapons_v2.csv catalogue
         // plus re-applied crafted) flagged shop_available. Evolution-only forms
         // set shop_available=0 so they only arrive by evolving.
-        std::vector<int> ShopWeaponIds() const;
+        // iRound = the upcoming/current round; only weapons whose appearance
+        // window [iMinRound, iMaxRound] contains it are returned (iMaxRound 0 =
+        // no upper bound). Pass <= 0 to disable the round gate (all unlocked).
+        std::vector<int> ShopWeaponIds(int iRound) const;
 
         // Cross-run persistence of the crafted registry.
         //   LoadCrafted — reads the saved registry into m_vecCrafted ONCE

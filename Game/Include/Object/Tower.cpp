@@ -9,6 +9,7 @@ REGISTER_GAMEOBJECT(Client::Tower, Tower)
 #include "Vfx/FragmentShatterManager.h"
 #include "WeaponData.h"
 #include "WeaponDatabase.h"
+#include "TowerData.h"
 #include "GameStateManager.h"
 #include "../GameDefs.h"
 #include "Bindable/Transform.h"
@@ -30,11 +31,26 @@ REGISTER_GAMEOBJECT(Client::Tower, Tower)
 #include "UI/Gauge.h"
 #include <cmath>
 #include <cfloat>
+#include <cstdlib>
 
 namespace Client
 {
     Tower::Tower() = default;
     Tower::~Tower() = default;
+
+    void Tower::Despawn()
+    {
+        // Same instance teardown as the HP-0 break branch in Update: the
+        // orbiting sustained bullets + laser beams are scene-owned and held
+        // here only by weak_ptr, so they'd outlive the tower without this.
+        for (auto& wp : m_vecSustained)
+            if (auto sp = wp.lock()) sp->InActivate();
+        m_vecSustained.clear();
+        for (auto& wp : m_vecBeams)
+            if (auto sp = wp.lock()) sp->InActivate();
+        m_vecBeams.clear();
+        InActivate();
+    }
 
     bool Tower::Init()
     {
@@ -75,12 +91,40 @@ namespace Client
         // shop can reassign it per-tower afterward (SetWeaponId).
         m_iWeaponId = TowerManager::GetInst().CurrentWeaponId();
 
+        // Base stats from towers.csv (falls back to the GameDefs constants when
+        // no row is loaded). These drive HP / defence / range / aggro below and
+        // the weapon-scaling combat stats used in the fire path.
+        const TowerDef* pTowerDef = TowerDatabase::GetInst().FirstOfKind(TowerKind::Attack);
+        const int   iBaseHP    = pTowerDef ? pTowerDef->iHP    : kTowerHP;
+        const float fBaseDef   = pTowerDef ? pTowerDef->fDefense : 0.f;
+        const int   iAggro     = pTowerDef ? pTowerDef->iAggro : kTowerAggro;
+        if (pTowerDef)
+        {
+            m_fAttack      = pTowerDef->fAttack;
+            m_fAttackSpeed = pTowerDef->fAttackSpeed;
+            m_fCritChance  = pTowerDef->fCritChance;
+            m_fCritMult    = pTowerDef->fCritMult;
+            m_fRange       = pTowerDef->fRange;
+        }
+
         // Health (enemies melee this down) — no melee of its own, no blood /
         // paper-burn siblings, but it DOES get the impact-flash burst (last
         // arg true) so a hit reads visually. AggroTarget makes enemies prefer
         // towers over the player so they form the front line.
-        m_pAttackable = AddComponent<Attackable>("tower_hp", kTowerHP, 0, 0, false, false, true);
-        AddComponent<AggroTarget>("aggro", kTowerAggro);
+        m_pAttackable = AddComponent<Attackable>("tower_hp", iBaseHP, 0, 0, false, false, true);
+        // Apply the tower's base defence, then the cumulative level-up tower HP
+        // / defence buffs so a tower placed after those upgrades starts stronger
+        // (already-placed towers were bumped when the card was picked — see
+        // Player::ApplyStatUpgrade).
+        if (m_pAttackable)
+        {
+            if (fBaseDef != 0.f) m_pAttackable->AddDamageReduction(fBaseDef);
+            const int   iBonusHP = TowerManager::GetInst().TowerBonusHP();
+            const float fBonusDef = TowerManager::GetInst().TowerBonusDef();
+            if (iBonusHP  != 0)   m_pAttackable->AddMaxHP(iBonusHP);
+            if (fBonusDef != 0.f) m_pAttackable->AddDamageReduction(fBonusDef);
+        }
+        AddComponent<AggroTarget>("aggro", iAggro);
 
         // Body collider so enemy projectiles can shoot the tower down. Own
         // TOWER group masking only BULLET (EnemyBullet's mask now includes
@@ -129,24 +173,44 @@ namespace Client
     {
         __super::Update(fDeltaTime);
 
-        // Broken — enemies meleed the HP to 0. Remove the tower.
+        // Death squish: flatten + widen the cube over kSquishTime, then burst it
+        // into shards and remove. The slot release / instance teardown already
+        // ran when it broke (below), so this only animates the body and pops it.
+        if (m_bSquishing)
+        {
+            m_fSquish += fDeltaTime;
+            float t = m_fSquish / kSquishTime;
+            if (t > 1.f) t = 1.f;
+            const float ease = 1.f - (1.f - t) * (1.f - t);
+            const float sy  = 1.f + (kSquishFlatY  - 1.f) * ease;
+            const float sxz = 1.f + (kSquishWideXZ - 1.f) * ease;
+            if (m_pTransform) m_pTransform->SetScale(sxz, sy, sxz);
+            if (m_fSquish >= kSquishTime)
+            {
+                // Burst the body into fragment shards (same CPU-shatter path the
+                // enemy death uses). The cube is 1.6 tall on a pivot at the floor
+                // top, so its centre of mass sits +0.8 above the pivot; shards
+                // rest just above the floor (pivot y). Shards inherit the tower
+                // material (blue, fading to red with damage). fScale = 1 assumes
+                // tower_fragment.mesh was baked at the tower's real size.
+                if (m_pTransform)
+                {
+                    const Engine::Vector3 vBase = m_pTransform->GetPosition();
+                    Engine::Vector3 vBody = vBase;
+                    vBody.y += 0.8f;
+                    FragmentShatterManager::GetInst()->SpawnShatter(
+                        FragmentShatterManager::VARIANT::TOWER,
+                        vBody, 0.5f, m_pMaterial, vBase.y + 0.1f);
+                }
+                InActivate();
+            }
+            return;
+        }
+
+        // Broken — enemies meleed the HP to 0. Free the slot + tear down owned
+        // instances now, then start the death squish (shatter fires at its end).
         if (m_pAttackable && m_pAttackable->GetHP() <= 0)
         {
-            // Burst the body into fragment shards (same CPU-shatter path the
-            // enemy death uses). The cube is 1.6 tall on a pivot at the floor
-            // top, so its centre of mass sits +0.8 above the pivot; shards rest
-            // just above the floor (pivot y). Shards inherit the tower material
-            // (blue, fading to red with damage). fScale = 1 assumes
-            // tower_fragment.mesh was baked at the tower's real size.
-            if (m_pTransform)
-            {
-                const Engine::Vector3 vBase = m_pTransform->GetPosition();
-                Engine::Vector3 vBody = vBase;
-                vBody.y += 0.8f;
-                FragmentShatterManager::GetInst()->SpawnShatter(
-                    FragmentShatterManager::VARIANT::TOWER,
-                    vBody, 0.5f, m_pMaterial, vBase.y + 0.1f);
-            }
             // Give up the owned slot: a destroyed tower must be re-bought in the
             // shop before another can be placed (the placement controller gates
             // on live-count < TowersOwned, so without this the freed cell would
@@ -162,10 +226,11 @@ namespace Client
             for (auto& wp : m_vecBeams)
                 if (auto sp = wp.lock()) sp->InActivate();
             m_vecBeams.clear();
-            // Snap the HP bar off-screen before deactivating so it doesn't
-            // linger as a stuck full-width strip on the last rendered frame.
+            // Snap the HP bar off-screen so it doesn't linger as a stuck
+            // full-width strip while the body squishes.
             if (m_pHpBar) m_pHpBar->SetRectPx(0.f, 0.f, 0.f, 0.f);
-            InActivate();
+            m_bSquishing = true;
+            m_fSquish    = 0.f;
             return;
         }
 
@@ -275,7 +340,11 @@ namespace Client
             return;
         }
 
-        const float fCooldown = ComputeCooldown(*pDef, m_iLevel);
+        // Fire rate = the tower's base attack speed (towers.csv) times the
+        // level-up fire-rate buff; both shorten the cooldown (mult > 1 = faster).
+        float fCooldown = ComputeCooldown(*pDef, m_iLevel);
+        const float fRateMult = TowerManager::GetInst().TowerFireRateMult() * m_fAttackSpeed;
+        if (fRateMult > 0.f) fCooldown /= fRateMult;
         m_fCooldownAcc += fDeltaTime;
         if (m_fCooldownAcc < fCooldown) return;
 
@@ -374,6 +443,17 @@ namespace Client
             auto pBullet = pScene->CreateGameObject<Bullet>("bullet", pLayer);
             if (!pBullet) continue;
             pBullet->Configure(def, m_iLevel, m_pTransform);
+            // Damage scaling, player-style: tower base attack x the level-up
+            // tower-atk buff, then a per-shot crit roll multiplies by crit_mult.
+            // (crit uses std::rand like Player — <random> is banned here, see
+            // the epsilon-macro note in the codebase memory.)
+            {
+                float fScale = m_fAttack * TowerManager::GetInst().TowerAtkMult();
+                if (m_fCritChance > 0.f &&
+                    (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) < m_fCritChance)
+                    fScale *= m_fCritMult;
+                pBullet->ScaleDamage(fScale);
+            }
             pBullet->SetVoxelWorld(m_pVoxelWorld);
             // Orbital weapons re-anchor to the owner pivot each frame. The
             // tower pivot sits at y = kWallY, so lift the orbit +0.3 to circle
@@ -420,6 +500,9 @@ namespace Client
             // than the player. Non-orbital Sustained types just fly/sit per
             // their movement from the tower (Fixed = aura at the tower).
             pBullet->Configure(def, m_iLevel, m_pTransform);
+            // Base attack x level-up buff (no per-shot crit roll on persistent
+            // orbiting instances — crit is a per-fire event).
+            pBullet->ScaleDamage(m_fAttack * TowerManager::GetInst().TowerAtkMult());
             pBullet->SetVoxelWorld(m_pVoxelWorld);
             pBullet->SetOrbitYOffset(0.3f);
             m_vecSustained.emplace_back(pBullet);

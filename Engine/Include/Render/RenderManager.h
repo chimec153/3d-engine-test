@@ -153,6 +153,30 @@ namespace Engine
 		FOGCBUFFER m_tFogCBuffer;
 		std::shared_ptr<class ConstantBuffer<FOGCBUFFER>> m_pFogCBuffer;
 
+		// Boss-death radial shockwaves. Animated CPU-side in Update() and
+		// uploaded to b13; HDR.fx FinalPassPS warps the tonemap resolve
+		// along each expanding ring. Entries self-expire when fAge >= fLife.
+		struct ShockwaveInst
+		{
+			Vector2 vCenterUV;
+			float   fAge;
+			float   fLife;
+			float   fMaxRadius;
+			float   fAmplitude;
+		};
+		std::vector<ShockwaveInst> m_Shockwaves;
+		SHOCKWAVECBUFFER m_tShockwaveCBuffer;
+		std::shared_ptr<class ConstantBuffer<SHOCKWAVECBUFFER>> m_pShockwaveCBuffer;
+
+		// Player damage-feedback overlays, packed into the same b13 cbuffer.
+		// Gameplay sets these via the Set*/Add* methods below; UpdateShockwaves
+		// decays the transient ones and uploads them with the shockwave data.
+		float m_fDamageFlash = 0.f;   // sharp single-hit red flash (decays)
+		float m_fChipTarget  = 0.f;   // chip-red set each contact frame (target)
+		float m_fChipRed     = 0.f;   // chip-red actual (eases toward target, decays)
+		float m_fLowHp       = 0.f;   // low-HP strength, held by gameplay
+		float m_fFxTime      = 0.f;   // free-running clock for the vignette pulse
+
 		// Per-frame instancing tally — each successful instanced bucket
 		// appends its member count here. The vector preserves render
 		// order, which is the sort-by-(VS,PS,Material) order from
@@ -216,6 +240,23 @@ namespace Engine
 		// doesn't need to know their concrete types.
 		void AddCustomRender(RENDER_LAYER eLayer, std::function<void()> renderFn);
 		void AddUIRenderer(const std::shared_ptr<class UIRenderer>& p);
+		// Spawn a radial screen-distortion shockwave centred on a world
+		// point (projected to screen UV via the active camera). Used for
+		// boss deaths — the ring expands and fades over fLife seconds.
+		void AddShockwave(const Vector3& vWorldPos, float fLife = 0.35f,
+			float fMaxRadius = 0.5f, float fAmplitude = 0.02f);
+
+		// Player damage-feedback overlays (HDR.fx FinalPassPS, b13).
+		//   AddDamageFlash — sharp full-screen red flash for a single big hit;
+		//                    it decays each frame. Max-merged so a stronger
+		//                    flash wins.
+		//   SetChipRed     — call each frame contact/DoT damage lands; the
+		//                    subtle red edge eases up to this and fades when
+		//                    the calls stop (prevents per-tick strobing).
+		//   SetLowHp       — held 0..1 low-HP strength (vignette + desaturate).
+		void AddDamageFlash(float fStrength);
+		void SetChipRed(float fStrength);
+		void SetLowHp(float fStrength);
 		// Phase E5 — AddDrawable removed (no more live Drawable instances).
 		std::shared_ptr<class MRT> GetMRT()	const;
 
@@ -255,6 +296,7 @@ namespace Engine
 		void RenderBlur();
 		void RenderUI();
 		void PostProcessing();
+		void UpdateShockwaves(float fDeltaTime);
 		void Clear();
 #ifdef _DEBUG
 		void RenderDebug();

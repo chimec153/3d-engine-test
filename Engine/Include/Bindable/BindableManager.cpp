@@ -301,6 +301,9 @@ namespace Engine
 		CreateBindable("DeathStarPS",    TEXT("Beam.fx"), "PS_DeathStar");
 		CreateBindable("DeathDiamondPS", TEXT("Beam.fx"), "PS_DeathDiamond");
 		CreateBindable("DeathRingPS",    TEXT("Beam.fx"), "PS_DeathRing");
+		// Procedural muzzle flash: 8-spoke polar starburst, no texture. Additive
+		// HDR (core blooms). Reuse BeamVS / BeamVtx.
+		CreateBindable("MuzzlePS",       TEXT("Beam.fx"), "PS_Muzzle");
 	}
 
 	template <>

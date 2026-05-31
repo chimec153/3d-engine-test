@@ -52,9 +52,8 @@ namespace Client
         std::shared_ptr<Engine::Text> m_pNameTexts[3];
         std::shared_ptr<Engine::Text> m_pLvlTexts[3];
 
-        // Stat upgrade shown on each card (a Player::StatUpgrade value, stored
-        // as int to keep this header free of the full Player include). -1 =
-        // empty slot.
+        // LevelUpDatabase catalogue index shown on each card (-1 = empty slot).
+        // Kept as a plain int so this header needs no extra include.
         int m_iCardStats[3] = { -1, -1, -1 };
 
         void Show();

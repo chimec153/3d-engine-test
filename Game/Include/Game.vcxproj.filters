@@ -40,6 +40,9 @@
     <ClCompile Include="Object\Vfx\DeathBurstManager.cpp">
       <Filter>09. VFX</Filter>
     </ClCompile>
+    <ClCompile Include="Object\Vfx\MuzzleFlashManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
     <ClCompile Include="Object\Vfx\SpawnTelegraphManager.cpp">
       <Filter>09. VFX</Filter>
     </ClCompile>
@@ -100,6 +103,9 @@
       <Filter>06. Data</Filter>
     </ClCompile>
     <ClCompile Include="Object\WeaponDatabase.cpp">
+      <Filter>06. Data</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\TowerDatabase.cpp">
       <Filter>06. Data</Filter>
     </ClCompile>
     <ClCompile Include="Object\Movement\BulletMovementFactory.cpp" />
@@ -209,6 +215,9 @@
     <ClInclude Include="Object\Vfx\DeathBurstManager.h">
       <Filter>09. VFX</Filter>
     </ClInclude>
+    <ClInclude Include="Object\Vfx\MuzzleFlashManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
     <ClInclude Include="Object\Vfx\SpawnTelegraphManager.h">
       <Filter>09. VFX</Filter>
     </ClInclude>
@@ -289,6 +298,9 @@
       <Filter>06. Data</Filter>
     </ClInclude>
     <ClInclude Include="Object\WeaponData.h">
+      <Filter>06. Data</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\TowerData.h">
       <Filter>06. Data</Filter>
     </ClInclude>
     <ClInclude Include="Object\Movement\BulletMovementFactory.h" />

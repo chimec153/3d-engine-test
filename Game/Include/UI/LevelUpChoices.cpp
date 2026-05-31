@@ -1,6 +1,7 @@
 #include "LevelUpChoices.h"
 #include "UI/Button.h"
 #include "../Object/Player.h"
+#include "../Object/LevelUpDatabase.h"
 #include "../Object/GameStateManager.h"
 #include "Bindable/Texture.h"
 #include "Bindable/BindableManager.h"
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <cwchar>
 #include <string>
 #include <vector>
 
@@ -88,19 +90,32 @@ namespace Client
             return EnsureSolidTexture("levelup_blank", 0x222222);
         }
 
-        // Display data for each stat-upgrade card.
-        struct StatInfo { const wchar_t* label; const wchar_t* effect; unsigned int rgb; };
-        StatInfo GetStatInfo(int eStat)
+        // Widen an ASCII card string (loaded from levelups.csv) for the Text UI.
+        std::wstring ToW(const std::string& s) { return std::wstring(s.begin(), s.end()); }
+
+        // Build a card's effect line from its template + amount, so the number
+        // lives only in the `amount` column (no duplication). Tokens:
+        //   {a} -> raw amount (e.g. 12, 0.5, 3)
+        //   {p} -> percent of amount (amount*100 as an integer, with %).
+        std::wstring FormatEffect(const std::string& strTemplate, float fAmount)
         {
-            switch (static_cast<Player::StatUpgrade>(eStat))
+            wchar_t raw[32]; std::swprintf(raw, 32, L"%g", fAmount);
+            const int iPct = static_cast<int>(fAmount * 100.f + (fAmount < 0.f ? -0.5f : 0.5f));
+            wchar_t pct[32]; std::swprintf(pct, 32, L"%d%%", iPct);
+
+            std::wstring s = ToW(strTemplate);
+            auto replaceAll = [](std::wstring& str, const std::wstring& from, const std::wstring& to)
             {
-            case Player::StatUpgrade::MoveSpeed:  return { L"Move Speed", L"+12% Speed",  0x2A6FB0 };
-            case Player::StatUpgrade::MaxHP:      return { L"Max HP",     L"+25 HP",      0x2E8B40 };
-            case Player::StatUpgrade::Attack:     return { L"Attack",     L"+15% Damage", 0xB03030 };
-            case Player::StatUpgrade::CritChance: return { L"Crit",       L"+10% Crit",   0xB07020 };
-            case Player::StatUpgrade::Defense:    return { L"Defense",    L"+8% Defense", 0x5A5AB0 };
-            default:                              return { L"?",          L"",            0x606060 };
-            }
+                size_t pos = 0;
+                while ((pos = str.find(from, pos)) != std::wstring::npos)
+                {
+                    str.replace(pos, from.size(), to);
+                    pos += to.size();
+                }
+            };
+            replaceAll(s, L"{a}", raw);
+            replaceAll(s, L"{p}", pct);
+            return s;
         }
     }
 
@@ -203,37 +218,49 @@ namespace Client
 
     void LevelUpChoices::RollCards()
     {
-        // Pick 3 distinct random stat upgrades (partial Fisher-Yates over the
-        // StatUpgrade enum). std::rand matches the rest of the game.
-        const int kStatCount = static_cast<int>(Player::StatUpgrade::COUNT);
-        std::vector<int> pool;
-        pool.reserve(kStatCount);
-        for (int s = 0; s < kStatCount; ++s) pool.push_back(s);
-        for (int i = 0; i < kStatCount && i < 3; ++i)
+        using namespace LevelUpChoices_detail;
+        // Draw 3 distinct cards from the data-driven catalogue by weighted draw
+        // without replacement — each row's `weight` (lower for percent options)
+        // is its relative odds. std::rand matches the rest of the game.
+        const auto& cards = LevelUpDatabase::GetInst().All();
+        const int n = static_cast<int>(cards.size());
+        std::vector<int> remaining;
+        remaining.reserve(n);
+        for (int s = 0; s < n; ++s) remaining.push_back(s);
+
+        std::vector<int> pool;   // chosen catalogue indices, in draw order
+        for (int pick = 0; pick < 3 && !remaining.empty(); ++pick)
         {
-            const int j = i + std::rand() % (kStatCount - i);
-            std::swap(pool[i], pool[j]);
+            int iTotal = 0;
+            for (int s : remaining) iTotal += cards[s].weight;
+            int r = (iTotal > 0) ? (std::rand() % iTotal) : 0;
+            int sel = 0;
+            for (size_t k = 0; k < remaining.size(); ++k)
+            {
+                r -= cards[remaining[k]].weight;
+                if (r < 0) { sel = static_cast<int>(k); break; }
+            }
+            pool.push_back(remaining[sel]);
+            remaining.erase(remaining.begin() + sel);
         }
 
         for (int i = 0; i < 3; ++i)
         {
-            const int eStat = (i < static_cast<int>(pool.size())) ? pool[i] : -1;
-            m_iCardStats[i] = eStat;
-            if (eStat < 0)
+            const int idx = (i < static_cast<int>(pool.size())) ? pool[i] : -1;
+            m_iCardStats[i] = idx;
+            if (idx < 0)
             {
-                if (m_pBgButtons[i])
-                    m_pBgButtons[i]->SetTexture(LevelUpChoices_detail::EnsureBlankCardTexture());
+                if (m_pBgButtons[i]) m_pBgButtons[i]->SetTexture(EnsureBlankCardTexture());
                 if (m_pNameTexts[i]) m_pNameTexts[i]->SetString(L"");
                 if (m_pLvlTexts[i])  m_pLvlTexts[i]->SetString(L"");
                 continue;
             }
 
-            const auto info = LevelUpChoices_detail::GetStatInfo(eStat);
+            const LevelUpDef& d = cards[idx];
             if (m_pBgButtons[i])
-                m_pBgButtons[i]->SetTexture(LevelUpChoices_detail::EnsureSolidTexture(
-                    "levelup_stat_" + std::to_string(eStat), info.rgb));
-            if (m_pNameTexts[i]) m_pNameTexts[i]->SetString(info.label);
-            if (m_pLvlTexts[i])  m_pLvlTexts[i]->SetString(info.effect);
+                m_pBgButtons[i]->SetTexture(EnsureSolidTexture("levelup_" + d.key, d.colorRGB));
+            if (m_pNameTexts[i]) m_pNameTexts[i]->SetString(ToW(d.name));
+            if (m_pLvlTexts[i])  m_pLvlTexts[i]->SetString(FormatEffect(d.effect, d.amount));
         }
     }
 
@@ -245,9 +272,10 @@ namespace Client
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
 
-        const int eStat = m_iCardStats[iCardIndex];
-        if (eStat < 0) return;
-        pPlayer->ApplyStatUpgrade(static_cast<Player::StatUpgrade>(eStat));
+        const int idx = m_iCardStats[iCardIndex];
+        const auto& cards = LevelUpDatabase::GetInst().All();
+        if (idx < 0 || idx >= static_cast<int>(cards.size())) return;
+        pPlayer->ApplyStatUpgrade(cards[idx].key, cards[idx].amount);
 
         // Sequential drain: a multi-level pickup queues several picks. If more
         // remain, re-roll and stay in the modal; only exit when the queue is

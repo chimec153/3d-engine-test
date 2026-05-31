@@ -6,8 +6,11 @@
 REGISTER_SCENE(Client::GameScene, GameScene)
 #include "../Object/Player.h"
 #include "../Object/WeaponDatabase.h"
+#include "../Object/TowerData.h"
 #include "../Object/EnemyDatabase.h"
 #include "../Object/RoundDatabase.h"
+#include "../Object/LevelUpDatabase.h"
+#include "../Object/Enemy.h"
 #include "EnemySpawner.h"
 #include "GameWorldBuilder.h"
 #include "Bindable/BindableManager.h"
@@ -51,6 +54,7 @@ REGISTER_SCENE(Client::GameScene, GameScene)
 #include "../Object/Vfx/BeamRenderManager.h"
 #include "../Object/Vfx/TrailRenderManager.h"
 #include "../Object/Vfx/DeathBurstManager.h"
+#include "../Object/Vfx/MuzzleFlashManager.h"
 #include "../Object/Vfx/FragmentShatterManager.h"
 #include "../Object/Vfx/HealAuraManager.h"
 #include "../Object/Vfx/SpawnTelegraphManager.h"
@@ -173,11 +177,13 @@ namespace Client
 		// path via PathManager internally — /Game/ is mounted at
 		// <exe-dir>\Resource\ by CPathManager::Init, so this works
 		// regardless of the host .exe's working directory.
-		// Restore crafted weapons from disk (load-once) BEFORE LoadFromCSV,
-		// so its re-apply pass assigns them fresh live ids and they enter
-		// the equipped pool / starting-weapon pick.
-		//WeaponDatabase::GetInst().LoadCrafted("/Game/Data/Weapons/crafted.csv");
 		WeaponDatabase::GetInst().LoadFromCSV("/Game/Data/Weapons/weapons_v2.csv");
+
+		// Tower stat catalogue (base HP / attack / defense / fire-rate / crit /
+		// range / price, plus heal-tower params). Same /Game mount; Tower,
+		// HealTower and the shop read it, falling back to the GameDefs
+		// constants when a row/column is missing.
+		TowerDatabase::GetInst().LoadFromCSV("/Game/Data/towers.csv");
 
 		// Enemy catalogue + round schedule, both JSON. Same /Game mount as
 		// weapons.csv. enemies.json defines the archetype catalogue (HP,
@@ -185,6 +191,9 @@ namespace Client
 		// drives the per-round spawn windows + hp/damage multipliers.
 		EnemyDatabase::GetInst().LoadFromJSON("/Game/Data/Enemies/enemies.json");
 		RoundDatabase::GetInst().LoadFromJSON("/Game/Data/Enemies/rounds.json");
+
+		// Level-up card catalogue (data-driven stat-upgrade menu).
+		LevelUpDatabase::GetInst().LoadFromCSV("/Game/Data/levelups.csv");
 
 		// Floating combat text — bake the glyph atlas once.
 		DamageTextManager::GetInst()->Init();
@@ -206,6 +215,9 @@ namespace Client
 
 		// Enemy-death bursts — puff cloud / sparkles / smoke ring (ramp LUT).
 		DeathBurstManager::GetInst()->Init();
+
+		// Muzzle flashes — procedural 8-spoke starburst billboards (reuse beam pipeline).
+		MuzzleFlashManager::GetInst()->Init();
 
 		Engine::ResourceManager::GetInst()->LoadSkeleton("/Game/Mesh/Idle.skel");
 		//Engine::ResourceManager::GetInst()->LoadSkeleton("Frog.skel");
@@ -375,6 +387,42 @@ namespace Client
 					Engine::Vector2{ 0.4f,  0.045f });
 				pTimer->SetString(L"");
 				m_pRoundTimerText = pTimer;
+			}
+		}
+
+		// Boss HP bar — wide bar just under the round timer, with a name caption
+		// above it. Created hidden; Update enables both while a boss is alive and
+		// pushes the ratio (boss HP / max HP). Crimson fill on dark grey.
+		if (auto pBossObj = CreateGameObject<>("BossHPBar", FindLayer(DEFAULT_LAYER)))
+		{
+			if (auto pBoss = pBossObj->AddComponent<Engine::Gauge>("bosshp"))
+			{
+				pBoss->SetColors(0xFF202020u, 0xFF2828D8u);   // 0xAABBGGRR: crimson fill
+				pBoss->SetRectByAnchorFrac(
+					Engine::Vector2{ 0.5f,  0.12f },
+					Engine::Vector2{ 0.5f,  0.f   },
+					Engine::Vector2{ 0.5f,  0.022f });
+				pBoss->Disable();
+				m_pBossHPGauge = pBoss;
+			}
+		}
+		if (auto pBossNameObj = CreateGameObject<>("BossNameHUD", FindLayer(DEFAULT_LAYER)))
+		{
+			if (auto pName = pBossNameObj->AddComponent<Engine::Text>("bossname"))
+			{
+				auto pFont = Engine::FontManager::GetInst()->CreateFont(
+					"hud_boss", L"Arial", 22.f, DWRITE_FONT_WEIGHT_BOLD);
+				pName->SetFont(pFont);
+				pName->SetColor(0xFFC050FFu);
+				pName->SetHAlign(Engine::Text::HAlign::Center);
+				pName->SetVAlign(Engine::Text::VAlign::Center);
+				pName->SetRectByAnchorFrac(
+					Engine::Vector2{ 0.5f,  0.085f },
+					Engine::Vector2{ 0.5f,  0.f    },
+					Engine::Vector2{ 0.5f,  0.035f });
+				pName->SetString(L"");
+				pName->Disable();
+				m_pBossNameText = pName;
 			}
 		}
 
@@ -667,6 +715,34 @@ namespace Client
 			}
 		}
 
+		// Boss HP bar — show while the spawner's tracked boss is alive (active
+		// and HP > 0); otherwise hide both the bar and the name caption.
+		{
+			std::shared_ptr<Enemy> pBoss =
+				m_pEnemySpawner ? m_pEnemySpawner->GetBoss() : nullptr;
+			const bool bShow = pBoss && pBoss->IsActive() && pBoss->GetHP() > 0;
+			if (auto pGauge = m_pBossHPGauge.lock())
+			{
+				if (bShow)
+				{
+					const float fMax = static_cast<float>(pBoss->GetMaxHP());
+					pGauge->SetRatio(fMax > 0.f ? pBoss->GetHP() / fMax : 0.f);
+					pGauge->Enable();
+				}
+				else pGauge->Disable();
+			}
+			if (auto pName = m_pBossNameText.lock())
+			{
+				if (bShow)
+				{
+					const std::string& s = pBoss->GetName();
+					pName->SetString(std::wstring(s.begin(), s.end()));
+					pName->Enable();
+				}
+				else pName->Disable();
+			}
+		}
+
 		// EnemyCountHUD + floating damage text draw through the UI
 		// custom-render queue, which RenderUI runs AFTER the UIRenderer
 		// components — so they'd otherwise sit on TOP of the level-up /
@@ -721,6 +797,11 @@ namespace Client
 			Engine::RENDER_LAYER::ALPHA,
 			[]() { DeathBurstManager::GetInst()->Render(); });
 
+		// Muzzle flashes — additive starburst billboards in the ALPHA pass.
+		Engine::RenderManager::GetInst()->AddCustomRender(
+			Engine::RENDER_LAYER::ALPHA,
+			[]() { MuzzleFlashManager::GetInst()->Render(); });
+
 		// Pre-spawn warning circles — ground quads in the ALPHA pass.
 		Engine::RenderManager::GetInst()->AddCustomRender(
 			Engine::RENDER_LAYER::ALPHA,
@@ -742,6 +823,7 @@ namespace Client
 		DamageTextManager::GetInst()->Update(dt);
 		FootstepManager::GetInst()->Update(dt);
 		DeathBurstManager::GetInst()->Update(dt);
+		MuzzleFlashManager::GetInst()->Update(dt);
 
 		if (m_pEnemySpawner) m_pEnemySpawner->Tick(dt);
 

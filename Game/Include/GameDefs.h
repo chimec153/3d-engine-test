@@ -30,8 +30,9 @@ namespace Client
     // new weapon in the between-round shop. Tunable — orbs drop one per enemy
     // kill, so a round of N enemies earns N * kOrbMoney.
     constexpr int kOrbMoney    = 10;
-    constexpr int kWeaponPrice = 50;
+    constexpr int kWeaponPrice = 30;
     constexpr int kTowerPrice  = 30;   // cost to buy one more placeable tower
+    constexpr int kMaxTowers   = 5;    // hard cap on ALL owned towers combined (attack + heal, placed + unplaced); shop blocks buying past it
 
     // Aggro + tower durability. Enemies path to and attack the highest-aggro
     // active target; towers out-aggro the player so they form the front line.

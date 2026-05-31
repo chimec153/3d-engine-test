@@ -368,10 +368,6 @@ namespace Engine
 
 		m_tCBuffer.vRootPos = vRootPos;
 
-#ifdef _DEBUG
-		std::vector<TRANSFORM> vecSrc(m_pBuffer->GetCount());
-		m_pBuffer->ReadBuffer(&vecSrc[0], 0, sizeof(TRANSFORM) * m_pBuffer->GetCount());
-#endif
 		if (m_pBuffer)
 		{
 			m_pBuffer->SetSRV(iSlot);

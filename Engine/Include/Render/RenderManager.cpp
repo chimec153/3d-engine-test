@@ -632,6 +632,9 @@ namespace Engine
 
 		m_pHDRCBuffer = std::make_shared<ConstantBuffer<HDRCBUFFER>>();
 
+		// Shockwave distortion buffer — bound at b13 during RenderHDR.
+		m_pShockwaveCBuffer = std::make_shared<ConstantBuffer<SHOCKWAVECBUFFER>>(13);
+
 		m_tDownScaleCBuffer.iResX = Window::GetInst()->GetWidth() / 4;
 		m_tDownScaleCBuffer.iResY = Window::GetInst()->GetHeight() / 4;
 
@@ -739,6 +742,101 @@ namespace Engine
 		m_tDownScaleCBuffer.fAdaptation = fDeltaTime * m_fAdaptationSpeed;
 
 		m_pDownScaleCBuffer->UpdateBuffer(m_tDownScaleCBuffer);
+
+		UpdateShockwaves(fDeltaTime);
+	}
+
+	void RenderManager::AddShockwave(const Vector3& vWorldPos, float fLife,
+		float fMaxRadius, float fAmplitude)
+	{
+		auto pCamera = Graphics::GetInst()->GetCamera();
+		if (!pCamera) return;
+
+		// Project the world point to back-buffer pixels, then to UV. A point
+		// behind the camera has no on-screen ring, so skip it.
+		float px = 0.f, py = 0.f, w = 0.f;
+		if (!pCamera->WorldToScreen(vWorldPos, px, py, w)) return;
+
+		ShockwaveInst inst;
+		inst.vCenterUV = Vector2(
+			px / static_cast<float>(Window::GetInst()->GetWidth()),
+			py / static_cast<float>(Window::GetInst()->GetHeight()));
+		inst.fAge       = 0.f;
+		inst.fLife      = fLife;
+		inst.fMaxRadius = fMaxRadius;
+		inst.fAmplitude = fAmplitude;
+		m_Shockwaves.push_back(inst);
+	}
+
+	void RenderManager::AddDamageFlash(float fStrength)
+	{
+		if (fStrength > m_fDamageFlash) m_fDamageFlash = fStrength;   // max-merge
+		if (m_fDamageFlash > 1.f) m_fDamageFlash = 1.f;
+	}
+
+	void RenderManager::SetChipRed(float fStrength)
+	{
+		// Keep the strongest request this frame; UpdateShockwaves eases to it.
+		if (fStrength > m_fChipTarget) m_fChipTarget = fStrength;
+		if (m_fChipTarget > 1.f) m_fChipTarget = 1.f;
+	}
+
+	void RenderManager::SetLowHp(float fStrength)
+	{
+		m_fLowHp = fStrength < 0.f ? 0.f : (fStrength > 1.f ? 1.f : fStrength);
+	}
+
+	void RenderManager::UpdateShockwaves(float fDeltaTime)
+	{
+		// Age + expire active rings.
+		for (auto it = m_Shockwaves.begin(); it != m_Shockwaves.end(); )
+		{
+			it->fAge += fDeltaTime;
+			if (it->fAge >= it->fLife) it = m_Shockwaves.erase(it);
+			else                       ++it;
+		}
+
+		// Pack up to 4 into the cbuffer. Ring radius expands 0→max while the
+		// amplitude fades out, so the wavefront thins as it travels.
+		int iCount = static_cast<int>(m_Shockwaves.size());
+		if (iCount > 4) iCount = 4;
+		for (int i = 0; i < iCount; ++i)
+		{
+			const ShockwaveInst& s = m_Shockwaves[i];
+			const float t = s.fLife > 0.f ? (s.fAge / s.fLife) : 1.f;   // 0..1
+			const float fRadius   = t * s.fMaxRadius;
+			const float fStrength = s.fAmplitude * (1.f - t);
+			m_tShockwaveCBuffer.vShockwaves[i] =
+				Vector4(s.vCenterUV.x, s.vCenterUV.y, fRadius, fStrength);
+		}
+
+		m_tShockwaveCBuffer.iCount     = iCount;
+		m_tShockwaveCBuffer.fThickness = 0.12f;
+		m_tShockwaveCBuffer.fAspect    = Window::GetInst()->GetWidth()
+			/ static_cast<float>(Window::GetInst()->GetHeight());
+
+		// Player damage-feedback overlays. Flash decays fast (sharp single
+		// hits); chip eases up to this frame's target then bleeds off once
+		// contact stops (no per-tick strobe); low-HP is held by gameplay.
+		constexpr float kFlashDecay = 6.f;
+		constexpr float kChipRise   = 12.f;
+		constexpr float kChipDecay  = 3.f;
+		m_fDamageFlash -= kFlashDecay * fDeltaTime;
+		if (m_fDamageFlash < 0.f) m_fDamageFlash = 0.f;
+		if (m_fChipTarget > m_fChipRed)
+			m_fChipRed += (m_fChipTarget - m_fChipRed) * std::min(1.f, kChipRise * fDeltaTime);
+		else
+			m_fChipRed -= kChipDecay * fDeltaTime;
+		if (m_fChipRed < 0.f) m_fChipRed = 0.f;
+		m_fChipTarget = 0.f;   // consumed; gameplay re-sets it next frame
+		m_fFxTime += fDeltaTime;
+
+		m_tShockwaveCBuffer.fDamageFlash = m_fDamageFlash;
+		m_tShockwaveCBuffer.fChipRed     = m_fChipRed;
+		m_tShockwaveCBuffer.fLowHp       = m_fLowHp;
+		m_tShockwaveCBuffer.fFxTime      = m_fFxTime;
+
+		m_pShockwaveCBuffer->UpdateBuffer(m_tShockwaveCBuffer);
 	}
 
 	void RenderManager::PreRender()
@@ -1598,6 +1696,9 @@ namespace Engine
 	void RenderManager::RenderHDR()
 	{
 		m_pHDRCBuffer->Bind();
+
+		// Shockwave distortion params (b13). iCount==0 → shader no-ops.
+		m_pShockwaveCBuffer->Bind();
 
 		m_pHDRTexture->SetSRV(0, 0);
 

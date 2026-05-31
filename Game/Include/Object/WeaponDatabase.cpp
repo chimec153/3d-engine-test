@@ -70,6 +70,33 @@ namespace Client
             if (v == "size")     return LevelUpField::Size;
             return LevelUpField::Damage;
         }
+        // Fill out[] (indexed by LevelUpField) from ';'-separated field tokens +
+        // matching amounts, so a weapon can level several stats. Spaces are
+        // stripped; empty/unknown tokens skipped; single values need no ';'.
+        void ParseLevelUps(const std::string& fields, const std::string& amounts, float out[])
+        {
+            auto split = [](const std::string& s)
+            {
+                std::vector<std::string> v; std::string cur;
+                for (char c : s)
+                {
+                    if (c == ';') { v.push_back(cur); cur.clear(); }
+                    else if (c != ' ' && c != '\t') cur += c;
+                }
+                v.push_back(cur);
+                return v;
+            };
+            const std::vector<std::string> f = split(fields);
+            const std::vector<std::string> a = split(amounts);
+            for (size_t k = 0; k < f.size(); ++k)
+            {
+                if (f[k].empty()) continue;
+                const LevelUpField lf = ParseLevelUpField(f[k]);
+                const float amt = (k < a.size() && !a[k].empty())
+                                ? static_cast<float>(std::atof(a[k].c_str())) : 0.f;
+                out[static_cast<size_t>(lf)] = amt;
+            }
+        }
         AimMode ParseAimMode(const std::string& s)
         {
             std::string v = ToLower(s);
@@ -88,6 +115,70 @@ namespace Client
             if (v == "spark")  return TrailStyle::Spark;
             if (v == "comet")  return TrailStyle::Comet;
             return TrailStyle::Tracer;   // default / "tracer" / unknown
+        }
+
+        // Enum -> CSV token, inverse of the Parse* above (tokens must match the
+        // parsers' lowercased comparisons). Used by SaveToCSV.
+        const char* OriginTok(SpawnOrigin e)
+        {
+            switch (e) { case SpawnOrigin::Around: return "around";
+                         case SpawnOrigin::Mouse:  return "mouse";
+                         case SpawnOrigin::Random: return "random";
+                         default:                  return "front"; }
+        }
+        const char* MoveTok(MovementType e)
+        {
+            switch (e) { case MovementType::Spiral:  return "spiral";
+                         case MovementType::Fixed:   return "fixed";
+                         case MovementType::Orbital: return "orbital";
+                         case MovementType::Homing:  return "homing";
+                         case MovementType::Aimed:   return "aimed";
+                         case MovementType::Follow:  return "follow";
+                         default:                    return "straight"; }
+        }
+        const char* FireTok(FireMode e)
+        {
+            return e == FireMode::Sustained ? "sustained" : "cooldown";
+        }
+        const char* OnHitTok(OnHitEvent e)
+        {
+            switch (e) { case OnHitEvent::NoChange: return "nochange";
+                         case OnHitEvent::Reflect:  return "reflect";
+                         case OnHitEvent::Multiply: return "multiply";
+                         case OnHitEvent::Field:    return "field";
+                         case OnHitEvent::Chain:    return "chain";
+                         default:                   return "vanish"; }
+        }
+        const char* ShapeTok(ProjectileShape e)
+        {
+            switch (e) { case ProjectileShape::Box:      return "box";
+                         case ProjectileShape::Triangle: return "triangle";
+                         default:                        return "sphere"; }
+        }
+        const char* LevelUpTok(LevelUpField e)
+        {
+            switch (e) { case LevelUpField::Cooldown: return "cooldown";
+                         case LevelUpField::Count:    return "count";
+                         case LevelUpField::Speed:    return "speed";
+                         case LevelUpField::Size:     return "size";
+                         default:                     return "damage"; }
+        }
+        const char* AimTok(AimMode e)
+        {
+            switch (e) { case AimMode::LowestHP: return "lowesthp";
+                         case AimMode::Random:   return "random";
+                         case AimMode::Forward:  return "forward";
+                         case AimMode::Cursor:   return "cursor";
+                         case AimMode::Radial:   return "radial";
+                         default:                return "nearest"; }
+        }
+        const char* TrailTok(TrailStyle e)
+        {
+            switch (e) { case TrailStyle::None:   return "none";
+                         case TrailStyle::Plasma: return "plasma";
+                         case TrailStyle::Spark:  return "spark";
+                         case TrailStyle::Comet:  return "comet";
+                         default:                 return "tracer"; }
         }
 
         // strtol/strtof tolerate trailing garbage (commas already split
@@ -124,7 +215,9 @@ namespace Client
         //   5  on_hit           14  level_up_amount    23  evolve_min_level
         //   6  shape            15  size               24  shop_available (0/1)
         //   7  damage           16  acceleration       25  trail_style
-        //   8  cooldown         17  aim_mode
+        //   8  cooldown         17  aim_mode           26  price (0=default)
+        //                                              27  min_round (0=start)
+        //                                              28  max_round (0=no cap)
         // Unknown enum values fall back via the Parse* defaults: movement
         // Follow -> Straight, on_hit Chain -> Vanish (until Phases 4 / 3 land).
         for (const auto& row : rows)
@@ -148,8 +241,10 @@ namespace Client
             def.fLifetime       = ToFloat (row[10]);
             def.iCount          = ToInt   (row[11]);
             def.uColorRGB       = ToColor (row[12]);
-            def.eLevelUpField   = ParseLevelUpField(row[13]);
-            def.fLevelUpAmount  = ToFloat (row[14]);
+            // Level-up: col 13 = field token(s), col 14 = amount(s), each
+            // ';'-separated so a weapon can level several stats. A single value
+            // (no ';') loads exactly as before.
+            ParseLevelUps(row[13], row[14], def.fLevelUpAmt);
             // Back-compat — shorter old rows keep WeaponDef defaults
             // (size 0.25 = legacy hard-coded scale, acceleration 0 =
             // constant speed).
@@ -177,6 +272,28 @@ namespace Client
             // Tracer-trail preset (col 25). Size-guarded: a row without it
             // keeps WeaponDef's Tracer default (the standard streak).
             if (row.size() > 25) def.eTrailStyle     = ParseTrailStyle(row[25]);
+            // Per-weapon shop price (col 26). 0 / blank / missing => the shop
+            // falls back to kWeaponPrice, so a row without it keeps the baseline.
+            if (row.size() > 26) def.iPrice          = ToInt(row[26]);
+            // Appearance window (cols 27-28). min 0/blank = from the start;
+            // max 0/blank = no upper limit (appears for the rest of the run).
+            if (row.size() > 27) def.iMinRound       = ToInt(row[27]);
+            if (row.size() > 28) def.iMaxRound       = ToInt(row[28]);
+            // Editor-written columns (29-37). All size-guarded so a shorter file
+            // still loads with WeaponDef defaults; SaveToCSV emits these once the
+            // catalogue is saved from the in-game weapon editor.
+            //   29 orbit_radius   32 gather_pull    35 burn_duration
+            //   30 radial_speed   33 gather_radius  36 slow_factor
+            //   31 impact_mask    34 burn_damage    37 slow_duration
+            if (row.size() > 29) def.fOrbitRadius    = ToFloat(row[29]);
+            if (row.size() > 30) def.fRadialSpeed    = ToFloat(row[30]);
+            if (row.size() > 31) def.uImpactMask     = static_cast<unsigned int>(ToInt(row[31]));
+            if (row.size() > 32) def.fGatherPull     = ToFloat(row[32]);
+            if (row.size() > 33) def.fGatherRadius   = ToFloat(row[33]);
+            if (row.size() > 34) def.iBurnDamage     = ToInt  (row[34]);
+            if (row.size() > 35) def.fBurnDuration   = ToFloat(row[35]);
+            if (row.size() > 36) def.fSlowFactor     = ToFloat(row[36]);
+            if (row.size() > 37) def.fSlowDuration   = ToFloat(row[37]);
 
             // Sustained weapons persist (their lifetime column is 0 by
             // convention) -- mirror the combiner and hand them a huge lifetime
@@ -243,6 +360,95 @@ namespace Client
         return def.iId;
     }
 
+    bool WeaponDatabase::UpdateWeapon(int iId, const WeaponDef& def)
+    {
+        auto it = m_mapIdToIndex.find(iId);
+        if (it == m_mapIdToIndex.end()) return false;
+        WeaponDef d = def;
+        d.iId = iId;   // id is immutable — keep the catalogue key stable
+        m_vecWeapons[it->second] = d;
+        return true;
+    }
+
+    size_t WeaponDatabase::SaveToCSV(const std::string& strPath) const
+    {
+        using namespace WeaponDatabase_detail;
+        char szResolved[MAX_PATH] = {};
+        Engine::CPathManager::GetInst()->ResolveMB(strPath.c_str(), ROOT_PATH, szResolved);
+
+        std::ofstream file(szResolved, std::ios::trunc);
+        if (!file.is_open()) return 0;
+
+        // Comment + header. CSVLoader skips '#' lines and discards the first
+        // non-comment line as the header, so the first weapon row is preserved.
+        file << "# Weapon data table v2 — saved by the in-game weapon editor.\n";
+        file << "id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,"
+                "projectile_speed,lifetime,count,color,level_up_field,level_up_amount,"
+                "size,acceleration,aim_mode,spread_deg,max_hits,damage_interval,knockback,"
+                "evolves_into,evolve_min_level,shop_available,trail_style,price,min_round,max_round,"
+                "orbit_radius,radial_speed,impact_mask,gather_pull,gather_radius,"
+                "burn_damage,burn_duration,slow_factor,slow_duration\n";
+
+        char hex[16];
+        for (const auto& d : m_vecWeapons)
+        {
+            if (d.iId < 0) continue;   // skip the sentinel/blank
+            std::snprintf(hex, sizeof(hex), "0x%06X", d.uColorRGB & 0xFFFFFFu);
+            // Level-up field/amount lists (';'-joined, non-zero stats only).
+            std::string lvlF, lvlA;
+            for (int k = 0; k < static_cast<int>(LevelUpField::COUNT_); ++k)
+            {
+                if (d.fLevelUpAmt[k] == 0.f) continue;
+                if (!lvlF.empty()) { lvlF += ';'; lvlA += ';'; }
+                lvlF += LevelUpTok(static_cast<LevelUpField>(k));
+                char num[24];
+                std::snprintf(num, sizeof(num), "%g", d.fLevelUpAmt[k]);
+                lvlA += num;
+            }
+            if (lvlF.empty()) { lvlF = "damage"; lvlA = "0"; }   // no level-up
+            file << d.iId << ','
+                 << d.strName << ','
+                 << OriginTok(d.eOrigin)   << ','
+                 << MoveTok  (d.eMovement) << ','
+                 << FireTok  (d.eFireMode) << ','
+                 << OnHitTok (d.eOnHit)    << ','
+                 << ShapeTok (d.eShape)    << ','
+                 << d.iDamage              << ','
+                 << d.fCooldown            << ','
+                 // speed + accel are stored in px/sec (loader divides by kPxPerCell).
+                 << (d.fProjectileSpeed * kPxPerCell) << ','
+                 << d.fLifetime            << ','
+                 << d.iCount               << ','
+                 << hex                    << ','
+                 << lvlF                   << ','
+                 << lvlA                   << ','
+                 << d.fSize                << ','
+                 << (d.fAcceleration * kPxPerCell) << ','
+                 << AimTok(d.eAimMode)     << ','
+                 << d.fSpreadDeg           << ','
+                 << d.iMaxHits             << ','
+                 << d.fDamageInterval      << ','
+                 << d.fKnockback           << ','
+                 << d.iEvolvesInto         << ','
+                 << d.iEvolveMinLevel      << ','
+                 << (d.bShopAvailable ? 1 : 0) << ','
+                 << TrailTok(d.eTrailStyle) << ','
+                 << d.iPrice               << ','
+                 << d.iMinRound            << ','
+                 << d.iMaxRound            << ','
+                 << d.fOrbitRadius         << ','
+                 << d.fRadialSpeed         << ','
+                 << d.uImpactMask          << ','
+                 << d.fGatherPull          << ','
+                 << d.fGatherRadius        << ','
+                 << d.iBurnDamage          << ','
+                 << d.fBurnDuration        << ','
+                 << d.fSlowFactor          << ','
+                 << d.fSlowDuration        << '\n';
+        }
+        return m_vecWeapons.size();
+    }
+
     const WeaponDef& WeaponDatabase::CraftedDef(int iIndex) const
     {
         return m_vecCrafted[iIndex].def;
@@ -306,16 +512,22 @@ namespace Client
         return out;
     }
 
-    std::vector<int> WeaponDatabase::ShopWeaponIds() const
+    std::vector<int> WeaponDatabase::ShopWeaponIds(int iRound) const
     {
-        // The shop buy pool: every loaded weapon flagged shop_available.
-        // Evolution-only forms (shop_available=0) are excluded so they only
-        // arrive by evolving. Re-applied crafted weapons default to
-        // shop-available, so they appear here alongside the v2 catalogue.
+        // The shop buy pool: every loaded weapon flagged shop_available whose
+        // appearance window contains iRound — i.e. iMinRound <= iRound and
+        // (iMaxRound == 0 || iRound <= iMaxRound). Evolution-only forms
+        // (shop_available=0) are excluded so they only arrive by evolving.
+        // Re-applied crafted weapons default to shop-available + 0/0 (always), so
+        // they appear alongside the v2 catalogue. iRound <= 0 = no round gate.
         std::vector<int> out;
         for (const auto& def : m_vecWeapons)
-            if (def.iId >= 0 && def.bShopAvailable)
-                out.push_back(def.iId);
+        {
+            if (def.iId < 0 || !def.bShopAvailable) continue;
+            if (iRound > 0 && def.iMinRound > iRound) continue;   // not yet unlocked
+            if (iRound > 0 && def.iMaxRound > 0 && iRound > def.iMaxRound) continue;   // window passed
+            out.push_back(def.iId);
+        }
         return out;
     }
 
@@ -355,8 +567,11 @@ namespace Client
             def.fLifetime        = ToFloat (row[9]);
             def.iCount           = ToInt   (row[10]);
             def.uColorRGB        = ToColor (row[11]);
-            def.eLevelUpField    = static_cast<LevelUpField>   (ToInt(row[12]));
-            def.fLevelUpAmount   = ToFloat (row[13]);
+            {
+                int iLf = ToInt(row[12]);   // legacy single level-up field
+                if (iLf < 0 || iLf >= static_cast<int>(LevelUpField::COUNT_)) iLf = 0;
+                def.fLevelUpAmt[iLf] = ToFloat(row[13]);
+            }
             def.fSize            = ToFloat (row[14]);
             def.fAcceleration    = ToFloat (row[15]);
             entry.bEquipped      = ToInt(row[16]) != 0;
@@ -408,6 +623,10 @@ namespace Client
         for (const auto& entry : m_vecCrafted)
         {
             const WeaponDef& d = entry.def;
+            // Legacy single level-up column: emit the first stat that levels.
+            int   iLf = 0; float fLa = 0.f;
+            for (int k = 0; k < static_cast<int>(LevelUpField::COUNT_); ++k)
+                if (d.fLevelUpAmt[k] != 0.f) { iLf = k; fLa = d.fLevelUpAmt[k]; break; }
             file << d.strName << ','
                  << static_cast<int>(d.eOrigin)    << ','
                  << static_cast<int>(d.eMovement)  << ','
@@ -420,8 +639,8 @@ namespace Client
                  << d.fLifetime        << ','
                  << d.iCount           << ','
                  << d.uColorRGB        << ','
-                 << static_cast<int>(d.eLevelUpField) << ','
-                 << d.fLevelUpAmount   << ','
+                 << iLf                << ','
+                 << fLa                << ','
                  << d.fSize            << ','
                  << d.fAcceleration    << ','
                  << (entry.bEquipped ? 1 : 0) << ','

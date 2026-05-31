@@ -30,6 +30,9 @@ REGISTER_GAMEOBJECT(Client::Enemy, Enemy)
 #include "EnemyMeshRenderer.h"
 #include "Voxel/VoxelWorld.h"
 #include "Voxel/BlockType.h"
+#include "Core/Graphics.h"
+#include "Bindable/Camera.h"
+#include "Render/RenderManager.h"
 #include "Types.h"
 #include <cmath>
 
@@ -276,7 +279,7 @@ namespace Client
 
     void Enemy::TakeDamage(int iDmg, const Engine::Vector3* pSource)
     {
-        if (m_bDying) return;
+        if (m_bDying || m_bSquishing) return;
 
         // Front-arc shield (shieldbearer). Only effective when the hit has
         // a known source position AND we have a known target to face. The
@@ -334,6 +337,13 @@ namespace Client
         // Update의 TickHitFlash가 매 프레임 감쇠.
         if (m_pMaterial) m_pMaterial->SetHitFlash(Engine::Vector3(1.f, 1.f, 1.f), 1.f);
 
+        // Squash-and-stretch pop on hit (juice). (Re)start the elastic each
+        // hit; Update springs it back to m_fBaseScale. If this blow is fatal
+        // the death squish below overrides it (Update checks m_bSquishing
+        // first), so it only plays on survivable hits.
+        m_bHitSquish = true;
+        m_fHitSquish = 0.f;
+
         m_iHP -= iDmg;
         if (m_iHP <= 0)
         {
@@ -345,7 +355,9 @@ namespace Client
             {
                 Engine::Vector3 vDeath = m_pTransform->GetPosition();
                 vDeath.y += 0.4f;
-                const float fScale = m_pTransform->GetScale().x;
+                // Use the true base scale, not the live transform — a hit
+                // squish may have the body mid-deform on the killing blow.
+                const float fScale = m_fBaseScale;
                 Engine::Vector3 vCol(1.f, 1.f, 1.f);
                 if (m_pMaterial)
                 {
@@ -353,6 +365,17 @@ namespace Client
                     vCol = Engine::Vector3(c.x, c.y, c.z);
                 }
                 DeathBurstManager::GetInst()->SpawnBurst(vDeath, fScale, vCol);
+
+                // Boss death juice — subtle camera shake + a radial screen
+                // shockwave centred on the corpse (RenderManager warps the HDR
+                // resolve along an expanding ring). Regular enemies skip this
+                // so the effect stays special to boss kills.
+                if (m_bIsBoss)
+                {
+                    if (auto pCamera = Engine::Graphics::GetInst()->GetCamera())
+                        pCamera->AddTrauma(0.35f);
+                    Engine::RenderManager::GetInst()->AddShockwave(vDeath);
+                }
             }
 
             // Drop a pickup orb at the enemy's current position before
@@ -386,32 +409,38 @@ namespace Client
             // the data-baseline of the spawn-id archetype.
             if (m_iSplitCount > 0 && !m_strSplitId.empty())
                 SpawnMinions(m_strSplitId, m_iSplitCount, 0.6f);
-            // Shatter the body into GPU mesh-particles and remove it at once
-            // (no slow corpse dissolve): FragmentShatterManager bursts the
-            // pre-fractured shards at the body, tinted with the enemy colour.
-            if (m_pTransform)
-            {
-                // Shards scale with the enemy's rendered body size (its uniform
-                // transform scale, derived from the JSON hitboxRadius), so a big
-                // monster bursts into big shards and a small one into small.
-                const float fEnemyScale = m_pTransform->GetScale().x;
-                const Engine::Vector3 vFeet = m_pTransform->GetPosition();
-                Engine::Vector3 vBody = vFeet;
-                vBody.y += 0.3f * fEnemyScale;   // centre of mass scales with the body
-                // Shards rest just above the floor the enemy stood on (feet y),
-                // not a global plane — the voxel arena floor sits well above 0.
-                // Pass the enemy material so shards inherit its colour + toon.
-                const FragmentShatterManager::VARIANT eVar =
-                    (m_eMeshKind == MESH_KIND::CAPSULE)
-                        ? FragmentShatterManager::VARIANT::CAPSULE
-                        : FragmentShatterManager::VARIANT::BOX;
-                const float fScale = (m_eMeshKind == MESH_KIND::CAPSULE
-                    ? kShatterScaleCapsule : kShatterScaleBox) * fEnemyScale;
-                FragmentShatterManager::GetInst()->SpawnShatter(
-                    eVar, vBody, fScale, m_pMaterial, vFeet.y + 0.1f);
-            }
-            InActivate();
+            // Enter the death squish: the body flattens/widens for kSquishTime,
+            // then ShatterBody() bursts it (driven from Update). Size the curve
+            // off the true base scale (a hit squish may be mid-deform) and drop
+            // the hit squish so the two don't fight.
+            m_fDeathBaseScale = m_fBaseScale;
+            m_bHitSquish = false;
+            m_bSquishing = true;
+            m_fSquish    = 0.f;
         }
+    }
+
+    void Enemy::ShatterBody()
+    {
+        if (!m_pTransform) return;
+        // Shards scale with the enemy's rendered body size (the cached pre-squish
+        // uniform scale, derived from the JSON hitboxRadius), so a big monster
+        // bursts into big shards and a small one into small.
+        const float fEnemyScale = m_fDeathBaseScale;
+        const Engine::Vector3 vFeet = m_pTransform->GetPosition();
+        Engine::Vector3 vBody = vFeet;
+        vBody.y += 0.3f * fEnemyScale;   // centre of mass scales with the body
+        // Shards rest just above the floor the enemy stood on (feet y), not a
+        // global plane — the voxel arena floor sits well above 0. Pass the enemy
+        // material so shards inherit its colour + toon.
+        const FragmentShatterManager::VARIANT eVar =
+            (m_eMeshKind == MESH_KIND::CAPSULE)
+                ? FragmentShatterManager::VARIANT::CAPSULE
+                : FragmentShatterManager::VARIANT::BOX;
+        const float fScale = (m_eMeshKind == MESH_KIND::CAPSULE
+            ? kShatterScaleCapsule : kShatterScaleBox) * fEnemyScale;
+        FragmentShatterManager::GetInst()->SpawnShatter(
+            eVar, vBody, fScale, m_pMaterial, vFeet.y + 0.1f);
     }
 
     void Enemy::SetMeshKind(MESH_KIND e)
@@ -442,6 +471,7 @@ namespace Client
         m_fAttackCooldown = def.fAttackCooldown;
         m_iGoldReward     = def.iGoldReward;
         m_iXpReward       = def.iXpReward;
+        m_strName         = def.strName;
         SetMeshKind(def.eKind == EnemyKind::Capsule ? MESH_KIND::CAPSULE : MESH_KIND::BOX);
 
         // Body size from JSON hitboxRadius (px → cell via kPxPerCell).
@@ -454,6 +484,7 @@ namespace Client
         const float fPresetHalfW  = 0.3f;
         const float fScale        = fTargetRadius / fPresetHalfW;
         if (m_pTransform) m_pTransform->SetScale(fScale, fScale, fScale);
+        m_fBaseScale = fScale;
         if (m_pCollider)
         {
             m_pCollider->SetRadius(fTargetRadius);
@@ -629,6 +660,30 @@ namespace Client
     {
         __super::Update(fDeltaTime);
 
+        // Death squish: flatten + widen the body over kSquishTime, then burst it
+        // into shards and remove. Skip AI / movement; keep the hit flash decaying
+        // (the killing blow pinned it to white). easeOut gives a quick snap.
+        if (m_bSquishing)
+        {
+            if (m_pMaterial) m_pMaterial->TickHitFlash(fDeltaTime);
+            m_fSquish += fDeltaTime;
+            float t = m_fSquish / kSquishTime;
+            if (t > 1.f) t = 1.f;
+            const float ease = 1.f - (1.f - t) * (1.f - t);
+            const float sy  = 1.f + (kSquishFlatY  - 1.f) * ease;
+            const float sxz = 1.f + (kSquishWideXZ - 1.f) * ease;
+            if (m_pTransform)
+                m_pTransform->SetScale(m_fDeathBaseScale * sxz,
+                                       m_fDeathBaseScale * sy,
+                                       m_fDeathBaseScale * sxz);
+            if (m_fSquish >= kSquishTime)
+            {
+                ShatterBody();
+                InActivate();
+            }
+            return;
+        }
+
         // Dissolving: drive per-instance PaperTime and deactivate once the
         // shader has fully clipped the body. Skip AI / movement, but KEEP
         // decaying the hit flash — the killing blow set it to full white
@@ -646,6 +701,30 @@ namespace Client
 
         // 히트 플래시 강도 감쇠 — 약 1/6초에 0으로 회귀(SetHitFlash와 짝).
         if (m_pMaterial) m_pMaterial->TickHitFlash(fDeltaTime);
+
+        // Hit squish — brief elastic squash that springs back to the base
+        // scale. sin(pi*t) pulses 0→1→0 so the body returns exactly to
+        // m_fBaseScale with no drift. Nothing else touches scale on alive
+        // frames, so this has exclusive control until it completes.
+        if (m_bHitSquish && m_pTransform)
+        {
+            m_fHitSquish += fDeltaTime;
+            float t = m_fHitSquish / kHitSquishTime;
+            if (t >= 1.f)
+            {
+                m_bHitSquish = false;
+                m_pTransform->SetScale(m_fBaseScale, m_fBaseScale, m_fBaseScale);
+            }
+            else
+            {
+                const float pulse = sinf(3.14159265f * t);   // 0→1→0
+                const float sy  = 1.f + (kHitSquishFlatY  - 1.f) * pulse;
+                const float sxz = 1.f + (kHitSquishWideXZ - 1.f) * pulse;
+                m_pTransform->SetScale(m_fBaseScale * sxz,
+                                       m_fBaseScale * sy,
+                                       m_fBaseScale * sxz);
+            }
+        }
 
         if (!m_pVoxelWorld || !m_pTransform) return;
 

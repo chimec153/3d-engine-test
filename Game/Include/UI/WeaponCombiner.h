@@ -12,6 +12,7 @@ namespace Engine
     class Font;
     class ScrollView;
     class NumberField;
+    class EditBox;
 }
 
 namespace Client
@@ -73,11 +74,10 @@ namespace Client
 
     private:
         static constexpr int kCatCount = 9;
-        // Registry display capacity (right-hand loadout panel). The equip
-        // loadout cap (10) lives in WeaponDatabase::kMaxEquipped; this is
-        // a couple larger so you can craft spares and swap which ten are
-        // equipped.
-        static constexpr int kRegCells = 12;
+        // Weapon-list capacity (right-hand panel). Sized to hold the whole
+        // weapons_v2 catalogue so every weapon is selectable for editing;
+        // weapons beyond this are not shown (logged-free cap).
+        static constexpr int kRegCells = 24;
 
         // One inventory click. Detects a double-click (same icon twice
         // within kDoubleClickSec) and equips on the second hit.
@@ -90,23 +90,29 @@ namespace Client
         // Repaints the impact category after a toggle: dims/brightens each
         // impact icon by equipped state and updates the impact slot display.
         void RefreshImpactSlot();
-        // Builds a WeaponDef from the six equipped slots (no name/id; those
-        // are set when crafting). Valid only when all slots are filled —
-        // used by OnCraft and by the live power-score preview.
+        // Same as RefreshImpactSlot but for the multi-select level-up category:
+        // dims/brightens each level-up icon by selection + shows the count.
+        void RefreshLevelUpSlot();
+        // Builds a WeaponDef from the current editor state (slots + number
+        // fields). Valid only when all card slots are filled — used by OnSave
+        // and by the live power-score preview.
         WeaponDef AssembleWeaponDef() const;
-        // Assembles the WeaponDef from the six slots and registers it.
-        void OnCraft();
+        // Save the current editor state back onto the selected weapons_v2
+        // weapon (m_iEditId), preserving fields the editor doesn't control
+        // (id / name / colour / price / evolution / shop_available / trail),
+        // then persist the whole catalogue to weapons_v2.csv.
+        void OnSave();
+        // Load an existing weapons_v2 weapon's attributes into the editor for
+        // editing (reverse-maps the def onto the card slots + number fields).
+        void LoadWeaponIntoEditor(int iWeaponId);
         // Toggles Sustained (persistent) fire mode: greys the cooldown +
         // lifetime number fields and recolours the toggle button.
         void OnSustainToggle();
-        // Single click on a registry cell — toggles that crafted weapon's
-        // equip state (respecting the loadout cap) and refreshes.
+        // Single click on a registry cell — selects that weapons_v2 weapon and
+        // loads it into the editor.
         void OnRegistryClick(int iCell);
-        // Right click on a registry cell — permanently destroys that crafted
-        // weapon and refreshes.
-        void OnRegistryDestroy(int iCell);
-        // Repaints the registry cells + header from WeaponDatabase's
-        // crafted list and equip flags.
+        // Repaints the registry cells + header from the weapons_v2 catalogue,
+        // highlighting the one currently being edited.
         void RefreshRegistry();
 
         // Slot widgets, indexed by category.
@@ -121,6 +127,10 @@ namespace Client
         // (Damage baseline + Knockback + Gather). Holds the palette indices of
         // the equipped impact cards instead of using the single m_iSlot entry.
         std::vector<int>                m_impactSel;
+        // Level-up category is multi-select too: a weapon can grow several
+        // stats per level. Palette indices of the chosen level-up cards (its
+        // m_iSlot entry is unused, like CAT_IMPACT).
+        std::vector<int>                m_levelUpSel;
 
         // Part-card catalogue loaded from parts.csv (or built-in defaults).
         // m_iSlot and the inventory icons index into this.
@@ -130,12 +140,11 @@ namespace Client
         std::vector<std::shared_ptr<Engine::Button>> m_iconButtons;
         std::vector<std::shared_ptr<Engine::Text>>   m_iconTexts;
 
-        // Per-row horizontal scroll for the inventory icon rows — one
-        // Engine::ScrollView per category. A row with more cards than fit
-        // before the loadout panel scrolls under the mouse wheel. The icons
-        // stay this control's direct children (so they render unchanged); the
-        // ScrollViews only re-place and show/hide them.
-        std::shared_ptr<Engine::ScrollView> m_rowScroll[kCatCount];
+        // Single vertical scroll for the whole left attribute panel: card
+        // categories show their cards as a wrapped grid, numeric categories
+        // (and the three core-stat fields) show a NumberField, and everything
+        // is registered with this one view so the column scrolls as a unit.
+        std::shared_ptr<Engine::ScrollView> m_pInvScroll;
 
         // Numeric inputs replacing the LIFETIME / FIRERATE / SIZE / ACCEL card
         // rows: keyboard-typeable + slider fields (Engine::NumberField). The
@@ -146,9 +155,19 @@ namespace Client
         std::shared_ptr<Engine::NumberField> m_pNumCooldown;
         std::shared_ptr<Engine::NumberField> m_pNumSize;
         std::shared_ptr<Engine::NumberField> m_pNumAccel;
+        // Core stat fields (top strip) — editable now that the combiner is a
+        // full weapon editor. AssembleWeaponDef reads these for iDamage /
+        // iCount / fProjectileSpeed (previously hard-coded).
+        std::shared_ptr<Engine::NumberField> m_pNumDamage;
+        std::shared_ptr<Engine::NumberField> m_pNumCount;
+        std::shared_ptr<Engine::NumberField> m_pNumSpeed;
         std::shared_ptr<Engine::Button>      m_pSustainBtn;
         std::shared_ptr<Engine::Text>        m_pSustainText;
         bool                                 m_bSustained = false;
+
+        // Editable weapon name (text-mode EditBox in the top bar). Read at save
+        // time; populated from the selected weapon in LoadWeaponIntoEditor.
+        std::shared_ptr<Engine::EditBox>     m_pNameBox;
 
         std::shared_ptr<Engine::Button> m_pCraftButton;
         std::shared_ptr<Engine::Text>   m_pCraftText;
@@ -159,16 +178,27 @@ namespace Client
         std::shared_ptr<Engine::Button> m_pBackButton;
         std::shared_ptr<Engine::Text>   m_pBackText;
 
-        // Right-hand "crafted weapons" loadout panel.
-        std::shared_ptr<Engine::Text>   m_pRegHeader;
-        std::shared_ptr<Engine::Button> m_pRegButton[kRegCells];
-        std::shared_ptr<Engine::Text>   m_pRegText[kRegCells];
+        // Right-hand weapon-list panel: every weapons_v2 weapon, click to edit.
+        // The list scrolls vertically (the catalogue can exceed the panel
+        // height); RefreshRegistry lays cells in content space + registers them
+        // with the scroll view, which clips/scrolls them to its viewport.
+        std::shared_ptr<Engine::Text>       m_pRegHeader;
+        std::shared_ptr<Engine::Button>     m_pRegButton[kRegCells];
+        std::shared_ptr<Engine::Text>       m_pRegText[kRegCells];
+        std::shared_ptr<Engine::ScrollView> m_pRegScroll;
+        // Cached cell geometry (set in Init, used by RefreshRegistry).
+        float m_fRegX0 = 0.f, m_fRegTopY = 0.f, m_fRegCellW = 0.f;
+        float m_fRegCellH = 0.f, m_fRegRowH = 0.f, m_fRegGapX = 0.f;
 
         std::shared_ptr<Engine::Font>   m_pTitleFont;
         std::shared_ptr<Engine::Font>   m_pMidFont;
         std::shared_ptr<Engine::Font>   m_pSmallFont;
 
         bool  m_bCraftReady       = false;
+
+        // The weapons_v2 weapon currently loaded for editing (its id). -1 = none
+        // selected; OnSave refuses until a weapon is picked from the list.
+        int   m_iEditId           = -1;
 
         // Double-click tracking. m_fTime is monotonic scene time.
         float m_fTime             = 0.f;

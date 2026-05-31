@@ -12,6 +12,8 @@ namespace Engine
 		, fFrameTime(0.f)
 		, m_fScale(1.f)
 		, m_fDeltaTime(0.f)
+		, m_fHitStopScale(1.f)
+		, m_fHitStopRemain(0.f)
 		, m_bStop(false)
 	{
 	}
@@ -31,7 +33,7 @@ namespace Engine
 		// game is paused, return zero so every consumer (Input, Scene,
 		// per-object Update) naturally no-ops without each having to
 		// branch on a "paused" flag.
-		return m_bStop ? 0.f : (m_fDeltaTime * m_fScale);
+		return m_bStop ? 0.f : (m_fDeltaTime * m_fScale * m_fHitStopScale);
 	}
 
 	constexpr float Timer::GetFPS() const noexcept
@@ -42,6 +44,13 @@ namespace Engine
 	void Timer::SetScale(float fScale) noexcept
 	{
 		m_fScale = fScale;
+	}
+
+	void Timer::RequestHitStop(float fDuration, float fScale) noexcept
+	{
+		// Max-merge so a weaker request can't shorten an active stronger one.
+		if (fDuration > m_fHitStopRemain) m_fHitStopRemain = fDuration;
+		if (fScale    < m_fHitStopScale)  m_fHitStopScale  = fScale;
 	}
 
 	constexpr float Timer::GetScale() const noexcept
@@ -66,6 +75,18 @@ namespace Engine
 		m_fDeltaTime = (tTime.QuadPart - m_tSecond.QuadPart) / static_cast<float>(m_tFreq.QuadPart);
 
 		m_tSecond = tTime;
+
+		// Count the hit-stop down on RAW delta (unaffected by m_fScale /
+		// m_fHitStopScale) so a freeze to scale 0 always recovers.
+		if (m_fHitStopRemain > 0.f)
+		{
+			m_fHitStopRemain -= m_fDeltaTime;
+			if (m_fHitStopRemain <= 0.f)
+			{
+				m_fHitStopRemain = 0.f;
+				m_fHitStopScale  = 1.f;
+			}
+		}
 
 		m_fElapsedTime += m_fDeltaTime * m_fScale;
 

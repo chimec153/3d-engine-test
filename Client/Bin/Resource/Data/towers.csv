@@ -1,0 +1,8 @@
+# Tower data table — base stats for placeable towers (attack + heal).
+# kind: attack | heal. attack = bullet-damage multiplier (player-style),
+# attack_speed = fire-rate multiplier on the weapon cooldown, crit_chance 0..1
+# rolls per shot for crit_mult damage. defense = incoming-damage reduction
+# (0..0.9). range = attack targeting radius (cells). heal_* used by heal towers.
+id,name,kind,hp,attack,defense,attack_speed,crit_chance,crit_mult,range,price,aggro,heal_amount,heal_interval,heal_radius
+0,Attack Tower,attack,100,1.0,0,1.0,0.15,2.0,12,30,3,0,0,0
+1,Heal Tower,heal,80,0,0,0,0,2.0,6,40,3,15,3,6

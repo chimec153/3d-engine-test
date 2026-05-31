@@ -2,6 +2,7 @@
 #include "UI/Button.h"
 #include "UI/ScrollView.h"
 #include "UI/NumberField.h"
+#include "UI/EditBox.h"
 #include "../Scene/StartScene.h"
 #include "../Object/WeaponData.h"
 #include "../Object/WeaponDatabase.h"
@@ -333,7 +334,7 @@ namespace Client
         };
 
         // Title + back button.
-        m_pTitleText = makeText("wc_title_txt", m_pTitleFont, 0.f, H * 0.02f, W, H * 0.06f, L"무기 조합");
+        m_pTitleText = makeText("wc_title_txt", m_pTitleFont, 0.f, H * 0.02f, W, H * 0.06f, L"무기 편집");
 
         const float fBackW = (std::max)(110.f, W * 0.10f);
         const float fBackH = (std::max)(36.f,  H * 0.05f);
@@ -346,6 +347,27 @@ namespace Client
                 Engine::SceneManager::GetInst()->CreateScene<Client::StartScene>(); });
         }
         m_pBackText = makeText("wc_back_txt", m_pSmallFont, W * 0.02f, H * 0.02f, fBackW, fBackH, L"← 메뉴");
+        // (Core stat fields — damage / count / speed — now live in the left
+        // attribute scroll, built below alongside the other number fields.)
+
+        // Editable weapon name — a text-mode EditBox in the top bar (right of the
+        // centred title), with a caption. Type A-Z / digits / space; the typed
+        // string is written back as the weapon's name on save.
+        {
+            const float fNameW = (std::max)(160.f, W * 0.18f);
+            const float fNameH = (std::max)(28.f,  H * 0.04f);
+            const float fNameX = W * 0.66f;
+            const float fNameY = H * 0.035f;
+            makeText("wc_name_cap", m_pSmallFont, fNameX - W * 0.06f, fNameY, W * 0.055f, fNameH, L"이름");
+            m_pNameBox = CreateComponent<Engine::EditBox>("wc_name_box");
+            if (m_pNameBox)
+            {
+                m_pNameBox->SetTextMode(true);
+                m_pNameBox->SetFont(m_pSmallFont);
+                m_pNameBox->SetBoxRect(fNameX, fNameY, fNameW, fNameH);
+                m_pNameBox->SetText(L"");
+            }
+        }
 
         // Six type-fixed slots in a centred row, each with the category
         // caption above and the equipped attribute name inside.
@@ -385,9 +407,9 @@ namespace Client
         {
             m_pCraftButton->SetRect(fCraftX, fCraftY, fCraftW, fCraftH);
             m_pCraftButton->SetTexture(EnsureSolidTexture(kCraftOffColor));
-            m_pCraftButton->SetOnClick([this] { OnCraft(); });
+            m_pCraftButton->SetOnClick([this] { OnSave(); });
         }
-        m_pCraftText = makeText("wc_craft_txt", m_pMidFont, fCraftX, fCraftY, fCraftW, fCraftH, L"무기 제작");
+        m_pCraftText = makeText("wc_craft_txt", m_pMidFont, fCraftX, fCraftY, fCraftW, fCraftH, L"저장");
 
         // Live power-score preview, sitting in the gap above the craft
         // button. RefreshCraft fills it once all six slots are equipped.
@@ -397,10 +419,14 @@ namespace Client
         const float fResultY = fCraftY + fCraftH + H * 0.015f;
         m_pResultText = makeText("wc_result_txt", m_pMidFont, 0.f, fResultY, W, H * 0.04f, L"");
 
-        // Inventory: one row per category, caption on the left, attribute
-        // icons to the right. Double-click an icon to equip it.
+        // ---- Left attribute panel — one vertical-scrolling list ----
+        // Card categories show their cards as a wrapped grid; numeric
+        // categories and the three core-stat rows (damage / count / speed) show
+        // a labelled NumberField. Everything registers with one vertical
+        // ScrollView so the whole column scrolls together (top slots stay put).
         const float fInvHeaderY = fResultY + H * 0.05f;
-        const float fInvLeftX   = W * 0.08f;
+        const float fInvLeftX   = W * 0.06f;
+        const float fBandRight  = W * 0.50f;
         m_pInvHeader = CreateComponent<Engine::Text>("wc_inv_header");
         if (m_pInvHeader)
         {
@@ -408,131 +434,133 @@ namespace Client
             m_pInvHeader->SetColor(0xFFFFFFFFu);
             m_pInvHeader->SetHAlign(Engine::Text::HAlign::Left);
             m_pInvHeader->SetVAlign(Engine::Text::VAlign::Center);
-            m_pInvHeader->SetRect(fInvLeftX, fInvHeaderY, W * 0.5f, H * 0.035f);
-            m_pInvHeader->SetString(L"인벤토리 — 더블클릭하여 장착");
+            m_pInvHeader->SetRect(fInvLeftX, fInvHeaderY, fBandRight - fInvLeftX, H * 0.035f);
+            m_pInvHeader->SetString(L"무기 속성 — 더블클릭 장착 / 값 입력 (휠 스크롤)");
         }
 
-        const float fInvTop  = fInvHeaderY + H * 0.045f;
-        const float fRowH    = (H * 0.95f - fInvTop) / kCatCount;
-        const float fIconSz  = (std::min)(fRowH * 0.78f, H * 0.07f);
-        const float fCatColW = W * 0.12f;
+        const float fInvTop  = fInvHeaderY + H * 0.04f;
+        const float fInvBot  = H * 0.96f;
+        const float fInvW    = fBandRight - fInvLeftX;
+        const float fCatColW = W * 0.085f;
         const float fIconsX  = fInvLeftX + fCatColW;
-        const float fIconGap = W * 0.010f;
+        const float fIconGap = W * 0.008f;
+        const float fIconSz  = (std::max)(38.f, H * 0.05f);
+        const float fLineH   = (std::max)(24.f, H * 0.034f);
+        const float fRowGap  = H * 0.010f;
+        const float fFieldW  = fBandRight - fIconsX;
+        const int   perLine  = (std::max)(1, static_cast<int>((fBandRight - fIconsX) / (fIconSz + fIconGap)));
 
-        // Row captions (one per category).
-        for (int c = 0; c < kCatCount; ++c)
+        m_pInvScroll = CreateComponent<Engine::ScrollView>("wc_inv_scroll");
+        if (m_pInvScroll)
         {
-            const float y = fInvTop + c * fRowH;
-            auto p = CreateComponent<Engine::Text>("wc_invcat_" + std::to_string(c));
-            if (p)
-            {
-                p->SetFont(m_pSmallFont);
-                p->SetColor(0xFFFFFFFFu);
-                p->SetHAlign(Engine::Text::HAlign::Left);
-                p->SetVAlign(Engine::Text::VAlign::Center);
-                p->SetRect(fInvLeftX, y, fCatColW, fRowH);
-                p->SetString(kCatNames[c]);
-            }
+            m_pInvScroll->SetAxis(Engine::ScrollView::Axis::Vertical);
+            m_pInvScroll->SetViewport(fInvLeftX, fInvTop, fInvW, fInvBot - fInvTop);
         }
 
-        // One Engine::ScrollView per category row: its viewport is the row
-        // band (fIconsX .. just before the loadout panel), so a row with more
-        // cards than fit scrolls horizontally under the mouse wheel. Icons are
-        // registered with the row's ScrollView but stay this control's direct
-        // children, so they render exactly as before.
-        const float fBandRight = W * 0.50f;
-        for (int c = 0; c < kCatCount; ++c)
-        {
-            if (IsNumericCat(c)) continue;   // numeric rows hold a NumberField, not cards
-            m_rowScroll[c] = CreateComponent<Engine::ScrollView>("wc_rowsv_" + std::to_string(c));
-            if (m_rowScroll[c])
-            {
-                m_rowScroll[c]->SetAxis(Engine::ScrollView::Axis::Horizontal);
-                m_rowScroll[c]->SetViewport(fIconsX, fInvTop + c * fRowH,
-                                            fBandRight - fIconsX, fRowH);
-            }
-        }
-
-        // Icons, flowed left-to-right within their category's row at full size.
         const int iPartCount = static_cast<int>(m_parts.size());
-        m_iconButtons.resize(iPartCount);
-        m_iconTexts.resize(iPartCount);
+        m_iconButtons.assign(iPartCount, nullptr);
+        m_iconTexts.assign(iPartCount, nullptr);
 
-        float fNextX[kCatCount];
-        for (int c = 0; c < kCatCount; ++c) fNextX[c] = fIconsX;
-
-        for (int i = 0; i < iPartCount; ++i)
+        auto reg = [&](const std::shared_ptr<Engine::UIControl>& p, float x, float y, float w, float h)
         {
-            const PartCard& a = m_parts[i];
-            if (IsNumericCat(a.iCategory)) continue;   // these rows use a NumberField, no card icons
-            const float y = fInvTop + a.iCategory * fRowH + (fRowH - fIconSz) * 0.5f;
-            const float x = fNextX[a.iCategory];
-            fNextX[a.iCategory] += fIconSz + fIconGap;
-
-            m_iconButtons[i] = CreateComponent<Engine::Button>("wc_icon_btn_" + std::to_string(i));
-            if (m_iconButtons[i])
-            {
-                m_iconButtons[i]->SetRect(x, y, fIconSz, fIconSz);
-                m_iconButtons[i]->SetTexture(PartTexture(a));
-                const int idx = i;
-                m_iconButtons[i]->SetOnClick([this, idx] { OnIconClick(idx); });
-            }
-            m_iconTexts[i] = makeText("wc_icon_txt_" + std::to_string(i), m_pSmallFont,
-                x, y, fIconSz, fIconSz, a.wLabel);
-
-            // Register the icon + its label with the row's scroll view so they
-            // scroll and clip together.
-            if (a.iCategory >= 0 && a.iCategory < kCatCount && m_rowScroll[a.iCategory])
-            {
-                if (m_iconButtons[i]) m_rowScroll[a.iCategory]->AddItem(m_iconButtons[i], x, y, fIconSz, fIconSz);
-                if (m_iconTexts[i])   m_rowScroll[a.iCategory]->AddItem(m_iconTexts[i],   x, y, fIconSz, fIconSz);
-            }
-        }
-
-        // Numeric inputs (typed + slider) for the four value categories, placed
-        // in their inventory rows in place of card icons.
-        auto makeNumField = [&](const std::string& tag, int cat, float fMin, float fMax,
-                                int dec, float fInit, float fWidth)
-            -> std::shared_ptr<Engine::NumberField>
+            if (p && m_pInvScroll) m_pInvScroll->AddItem(p, x, y, w, h);
+        };
+        // Caption (left) + NumberField (right) on one content line.
+        auto numRow = [&](std::shared_ptr<Engine::NumberField>& out, const std::string& tag,
+                          const std::wstring& cap, float fMin, float fMax, int dec, float fInit,
+                          float fW, float& cyRef)
         {
-            const float fieldH = fIconSz;
-            const float fieldY = fInvTop + cat * fRowH + (fRowH - fieldH) * 0.5f;
-            auto f = CreateComponent<Engine::NumberField>(tag);
-            if (f)
+            auto pcap = makeText(tag + "_cap", m_pSmallFont, fInvLeftX, cyRef, fCatColW, fLineH, cap);
+            reg(pcap, fInvLeftX, cyRef, fCatColW, fLineH);
+            out = CreateComponent<Engine::NumberField>(tag);
+            if (out)
             {
-                f->SetFont(m_pSmallFont);
-                f->SetRange(fMin, fMax);
-                f->SetDecimals(dec);
-                f->SetFieldRect(fIconsX, fieldY, fWidth, fieldH);
-                f->SetValue(fInit);
-                f->SetOnChange([this](float) { RefreshCraft(); });
+                out->SetFont(m_pSmallFont);
+                out->SetRange(fMin, fMax);
+                out->SetDecimals(dec);
+                out->SetFieldRect(fIconsX, cyRef, fW, fLineH);
+                out->SetValue(fInit);
+                out->SetOnChange([this](float) { RefreshCraft(); });
             }
-            return f;
+            reg(out, fIconsX, cyRef, fW, fLineH);
         };
 
-        const float fBandW    = fBandRight - fIconsX;
-        const float fSustainW = fBandW * 0.26f;
-
-        m_pNumLifetime = makeNumField("wc_num_life",  CAT_LIFETIME, 0.1f,  10.f, 1, 2.0f, fBandW);
-        m_pNumCooldown = makeNumField("wc_num_cd",    CAT_FIRERATE, 0.05f,  3.f, 2, 0.5f, fBandW - fSustainW - fIconGap);
-        m_pNumSize     = makeNumField("wc_num_size",  CAT_SIZE,     0.05f, 30.f, 2, 1.0f, fBandW);
-        m_pNumAccel    = makeNumField("wc_num_accel", CAT_ACCEL,   -10.f,  10.f, 1, 0.0f, fBandW);
-
-        // Sustained toggle sits at the right end of the fire-rate row; when on,
-        // the cooldown + lifetime fields grey out (see OnSustainToggle).
+        const float fSustainW = fFieldW * 0.26f;
+        float cy = fInvTop;
+        for (int c = 0; c < kCatCount; ++c)
         {
-            const float fieldH = fIconSz;
-            const float fieldY = fInvTop + CAT_FIRERATE * fRowH + (fRowH - fieldH) * 0.5f;
-            const float x      = fBandRight - fSustainW;
-            m_pSustainBtn = CreateComponent<Engine::Button>("wc_sustain_btn");
-            if (m_pSustainBtn)
+            if (c == CAT_LIFETIME)
             {
-                m_pSustainBtn->SetRect(x, fieldY, fSustainW, fieldH);
-                m_pSustainBtn->SetTexture(EnsureSolidTexture(kEmptySlotColor));
-                m_pSustainBtn->SetOnClick([this] { OnSustainToggle(); });
+                numRow(m_pNumLifetime, "wc_num_life", kCatNames[c], 0.1f, 10.f, 1, 2.0f, fFieldW, cy);
+                cy += fLineH + fRowGap;
             }
-            m_pSustainText = makeText("wc_sustain_txt", m_pSmallFont, x, fieldY, fSustainW, fieldH, L"지속형");
+            else if (c == CAT_FIRERATE)
+            {
+                const float fCdW = fFieldW - fSustainW - fIconGap;
+                numRow(m_pNumCooldown, "wc_num_cd", kCatNames[c], 0.05f, 3.f, 2, 0.5f, fCdW, cy);
+                const float sx = fIconsX + fCdW + fIconGap;
+                m_pSustainBtn = CreateComponent<Engine::Button>("wc_sustain_btn");
+                if (m_pSustainBtn)
+                {
+                    m_pSustainBtn->SetRect(sx, cy, fSustainW, fLineH);
+                    m_pSustainBtn->SetTexture(EnsureSolidTexture(kEmptySlotColor));
+                    m_pSustainBtn->SetOnClick([this] { OnSustainToggle(); });
+                }
+                m_pSustainText = makeText("wc_sustain_txt", m_pSmallFont, sx, cy, fSustainW, fLineH, L"지속형");
+                reg(m_pSustainBtn,  sx, cy, fSustainW, fLineH);
+                reg(m_pSustainText, sx, cy, fSustainW, fLineH);
+                cy += fLineH + fRowGap;
+            }
+            else if (c == CAT_SIZE)
+            {
+                numRow(m_pNumSize, "wc_num_size", kCatNames[c], 0.05f, 30.f, 2, 1.0f, fFieldW, cy);
+                cy += fLineH + fRowGap;
+            }
+            else if (c == CAT_ACCEL)
+            {
+                numRow(m_pNumAccel, "wc_num_accel", kCatNames[c], -10.f, 10.f, 1, 0.0f, fFieldW, cy);
+                cy += fLineH + fRowGap;
+            }
+            else
+            {
+                // Card category — full-width caption line, then wrapped icons.
+                auto pcap = makeText("wc_invcat_" + std::to_string(c), m_pSmallFont,
+                    fInvLeftX, cy, fInvW, fLineH, kCatNames[c]);
+                reg(pcap, fInvLeftX, cy, fInvW, fLineH);
+                cy += fLineH;
+
+                float ix = fIconsX, iy = cy;
+                int   col = 0;
+                for (int i = 0; i < iPartCount; ++i)
+                {
+                    if (m_parts[i].iCategory != c) continue;
+                    if (col > 0 && (col % perLine) == 0) { ix = fIconsX; iy += fIconSz + fIconGap; }
+                    const PartCard& a = m_parts[i];
+                    m_iconButtons[i] = CreateComponent<Engine::Button>("wc_icon_btn_" + std::to_string(i));
+                    if (m_iconButtons[i])
+                    {
+                        m_iconButtons[i]->SetRect(ix, iy, fIconSz, fIconSz);
+                        m_iconButtons[i]->SetTexture(PartTexture(a));
+                        const int idx = i;
+                        m_iconButtons[i]->SetOnClick([this, idx] { OnIconClick(idx); });
+                    }
+                    m_iconTexts[i] = makeText("wc_icon_txt_" + std::to_string(i), m_pSmallFont,
+                        ix, iy, fIconSz, fIconSz, a.wLabel);
+                    reg(m_iconButtons[i], ix, iy, fIconSz, fIconSz);
+                    reg(m_iconTexts[i],   ix, iy, fIconSz, fIconSz);
+                    ix += fIconSz + fIconGap;
+                    ++col;
+                }
+                cy = (col > 0 ? iy + fIconSz : cy) + fRowGap;
+            }
         }
+
+        // Core stat rows — appended at the end of the same scroll list.
+        numRow(m_pNumDamage, "wc_num_dmg", L"데미지", 1.f, 999.f, 0, 5.f, fFieldW, cy); cy += fLineH + fRowGap;
+        numRow(m_pNumCount,  "wc_num_cnt", L"발사수", 1.f,  50.f, 0, 1.f, fFieldW, cy); cy += fLineH + fRowGap;
+        numRow(m_pNumSpeed,  "wc_num_spd", L"속도",   0.f,  60.f, 1, 8.f, fFieldW, cy); cy += fLineH + fRowGap;
+
+        if (m_pInvScroll) m_pInvScroll->RebuildContent();
 
         // Right-hand loadout panel: a grid of crafted-weapon cells. Click a
         // cell to equip/unequip it; only equipped weapons reach the stage.
@@ -548,40 +576,49 @@ namespace Client
             m_pRegHeader->SetHAlign(Engine::Text::HAlign::Left);
             m_pRegHeader->SetVAlign(Engine::Text::VAlign::Center);
             m_pRegHeader->SetRect(fPanelX0, fInvHeaderY, fPanelW, H * 0.035f);
-            m_pRegHeader->SetString(L"제작 무기");
+            m_pRegHeader->SetString(L"무기 목록 — 클릭하여 편집");
         }
 
         const int   kCols     = 2;
-        const int   kRows     = kRegCells / kCols;   // 6
         const float fCellGapX = W * 0.010f;
         const float fCellGapY = H * 0.012f;
-        const float fCellW    = (fPanelW - (kCols - 1) * fCellGapX) / kCols;
-        const float fRegRowH  = (H * 0.95f - fInvTop) / kRows;
-        const float fCellH    = fRegRowH - fCellGapY;
+        // Fixed (readable) cell height — the list overflows the panel and the
+        // scroll view pages through it, so we no longer shrink cells to fit.
+        const float fRegRowH  = (std::max)(44.f, H * 0.058f);
+        m_fRegX0    = fPanelX0;
+        m_fRegTopY  = fInvTop;
+        m_fRegCellW = (fPanelW - (kCols - 1) * fCellGapX) / kCols;
+        m_fRegRowH  = fRegRowH;
+        m_fRegCellH = fRegRowH - fCellGapY;
+        m_fRegGapX  = fCellGapX;
+
+        // Vertical scroll for the weapon list. Cells are placed in content
+        // space + registered by RefreshRegistry; the view clips/scrolls them.
+        m_pRegScroll = CreateComponent<Engine::ScrollView>("wc_reg_scroll");
+        if (m_pRegScroll)
+        {
+            m_pRegScroll->SetAxis(Engine::ScrollView::Axis::Vertical);
+            m_pRegScroll->SetViewport(fPanelX0, fInvTop, fPanelW, H * 0.95f - fInvTop);
+        }
 
         for (int i = 0; i < kRegCells; ++i)
         {
-            const int   col = i % kCols;
-            const int   row = i / kCols;
-            const float x = fPanelX0 + col * (fCellW + fCellGapX);
-            const float y = fInvTop + row * fRegRowH;
-
+            // Positions are assigned per-refresh (content space); created here.
             m_pRegButton[i] = CreateComponent<Engine::Button>("wc_reg_btn_" + std::to_string(i));
             if (m_pRegButton[i])
             {
-                m_pRegButton[i]->SetRect(x, y, fCellW, fCellH);
                 m_pRegButton[i]->SetTexture(EnsureSolidTexture(kRegUnequipColor));
                 const int idx = i;
                 m_pRegButton[i]->SetOnClick([this, idx] { OnRegistryClick(idx); });
-                m_pRegButton[i]->SetOnRightClick([this, idx] { OnRegistryDestroy(idx); });
             }
             m_pRegText[i] = makeText("wc_reg_txt_" + std::to_string(i), m_pSmallFont,
-                x, y, fCellW, fCellH, L"");
+                0.f, 0.f, m_fRegCellW, m_fRegCellH, L"");
         }
 
         RefreshCraft();
         RefreshRegistry();   // repopulate from any weapons crafted earlier this session
         RefreshImpactSlot(); // set the impact row's initial (all-dimmed) state
+        RefreshLevelUpSlot();// same for the multi-select level-up row
         return true;
     }
 
@@ -624,6 +661,17 @@ namespace Client
             return;
         }
 
+        // Level-up is multi-select too — a weapon can grow several stats/level.
+        if (c == CAT_LEVELUP)
+        {
+            auto it = std::find(m_levelUpSel.begin(), m_levelUpSel.end(), iPaletteIndex);
+            if (it != m_levelUpSel.end()) m_levelUpSel.erase(it);
+            else                          m_levelUpSel.push_back(iPaletteIndex);
+            RefreshLevelUpSlot();
+            RefreshCraft();
+            return;
+        }
+
         m_iSlot[c] = iPaletteIndex;
 
         if (m_pSlotButton[c])   m_pSlotButton[c]->SetTexture(PartTexture(a));
@@ -638,7 +686,8 @@ namespace Client
         bool bReady = true;
         for (int c = 0; c < kCatCount; ++c)
         {
-            if (c == CAT_IMPACT) continue;   // optional — Damage baseline always applies
+            if (c == CAT_IMPACT)  continue;   // optional — Damage baseline always applies
+            if (c == CAT_LEVELUP) continue;   // optional + multi-select (m_levelUpSel)
             if (IsNumericCat(c)) continue;   // number fields always have a value
             if (m_iSlot[c] < 0) { bReady = false; break; }
         }
@@ -690,6 +739,32 @@ namespace Client
             m_pSlotNameText[CAT_IMPACT]->SetString(
                 m_impactSel.empty() ? L"-"
                                     : (std::to_wstring(static_cast<int>(m_impactSel.size())) + L" 모듈"));
+    }
+
+    void WeaponCombiner::RefreshLevelUpSlot()
+    {
+        using namespace WeaponCombiner_detail;
+
+        // Each level-up card keeps its own hue; selected = full colour, the rest
+        // dimmed, so the multi-select set reads at a glance.
+        for (int i = 0; i < static_cast<int>(m_parts.size()); ++i)
+        {
+            if (m_parts[i].iCategory != CAT_LEVELUP || !m_iconButtons[i]) continue;
+            const bool bOn =
+                std::find(m_levelUpSel.begin(), m_levelUpSel.end(), i) != m_levelUpSel.end();
+            m_iconButtons[i]->SetTexture(
+                bOn ? PartTexture(m_parts[i]) : EnsureSolidTexture(Dim(m_parts[i].uColor, 0.4f)));
+        }
+
+        // Slot summarises the set: first chosen card's colour + the stat count.
+        if (m_pSlotButton[CAT_LEVELUP])
+            m_pSlotButton[CAT_LEVELUP]->SetTexture(
+                m_levelUpSel.empty() ? EnsureSolidTexture(kEmptySlotColor)
+                                     : PartTexture(m_parts[m_levelUpSel.front()]));
+        if (m_pSlotNameText[CAT_LEVELUP])
+            m_pSlotNameText[CAT_LEVELUP]->SetString(
+                m_levelUpSel.empty() ? L"-"
+                                     : (std::to_wstring(static_cast<int>(m_levelUpSel.size())) + L" 스탯"));
     }
 
     WeaponDef WeaponCombiner::AssembleWeaponDef() const
@@ -747,10 +822,14 @@ namespace Client
 
         const float fAccel = m_pNumAccel ? m_pNumAccel->GetValue() : 0.f;
 
-        // The LevelUp part drives the per-level stat bump.
-        const PartCard& lvl = m_parts[m_iSlot[CAT_LEVELUP]];
-        def.eLevelUpField  = static_cast<LevelUpField>(lvl.iVariant);
-        def.fLevelUpAmount = lvl.fAmount;
+        // Level-up is multi-select: each chosen card bumps one stat per level.
+        for (int idx : m_levelUpSel)
+        {
+            if (idx < 0 || idx >= static_cast<int>(m_parts.size())) continue;
+            const PartCard& lvl = m_parts[idx];
+            if (lvl.iVariant >= 0 && lvl.iVariant < static_cast<int>(LevelUpField::COUNT_))
+                def.fLevelUpAmt[lvl.iVariant] = lvl.fAmount;
+        }
 
         // Name = first 2 chars of each part's label, in slot order, so the
         // name encodes the build (e.g. "FrStCoVa10Da"). Colour = a hash of
@@ -791,12 +870,13 @@ namespace Client
         // from the number fields above).
         def.eFireMode = bSustained ? FireMode::Sustained : FireMode::Cooldown;
 
-        // Remaining stats use sensible defaults.
-        def.iDamage          = 5;
+        // Core stats now come from the editor's number fields (defaults match
+        // the old hard-coded values when a field is somehow absent).
+        def.iDamage          = m_pNumDamage ? (std::max)(1, static_cast<int>(m_pNumDamage->GetValue() + 0.5f)) : 5;
         def.fCooldown        = fCd;
-        def.fProjectileSpeed = 8.f;
+        def.fProjectileSpeed = m_pNumSpeed ? m_pNumSpeed->GetValue() : 8.f;
         def.fLifetime        = fLife;
-        def.iCount           = 1;
+        def.iCount           = m_pNumCount ? (std::max)(1, static_cast<int>(m_pNumCount->GetValue() + 0.5f)) : 1;
         def.fSize            = fSz;
         // Acceleration: speed delta per second (Bullet::Update applies
         // speed += fAcceleration * dt). 0 = constant speed.
@@ -839,61 +919,71 @@ namespace Client
         return def;
     }
 
-    void WeaponCombiner::OnCraft()
+    void WeaponCombiner::OnSave()
     {
         using namespace WeaponCombiner_detail;
-        if (!m_bCraftReady) return;
+        if (!m_bCraftReady) return;   // every card slot must be filled
 
-        // Registry display is bounded — refuse once the panel is full.
-        if (WeaponDatabase::GetInst().CraftedCount() >= kRegCells)
+        auto& db = WeaponDatabase::GetInst();
+        const WeaponDef* pBase = db.Get(m_iEditId);
+        if (m_iEditId < 0 || !pBase)
         {
             if (m_pResultText)
-                m_pResultText->SetString(L"제작 목록이 가득 찼습니다 (최대 "
-                    + std::to_wstring(kRegCells) + L"개)");
+                m_pResultText->SetString(L"먼저 오른쪽 목록에서 편집할 무기를 선택하세요");
             return;
         }
 
-        // Name + colour are derived from the parts inside AssembleWeaponDef.
-        WeaponDef def = AssembleWeaponDef();
-        const std::wstring wName(def.strName.begin(), def.strName.end());
+        // Graft the editor's fields onto the original so we preserve what the
+        // editor doesn't control (id / name / colour / price / evolution /
+        // shop_available / trail / shape).
+        const WeaponDef edited = AssembleWeaponDef();
+        WeaponDef out = *pBase;
+        out.eOrigin          = edited.eOrigin;
+        out.eMovement        = edited.eMovement;
+        out.fOrbitRadius     = edited.fOrbitRadius;
+        out.fRadialSpeed     = edited.fRadialSpeed;
+        out.eAimMode         = edited.eAimMode;
+        out.eOnHit           = edited.eOnHit;
+        out.iMaxHits         = edited.iMaxHits;
+        out.fDamageInterval  = edited.fDamageInterval;
+        out.eFireMode        = edited.eFireMode;
+        out.fCooldown        = edited.fCooldown;
+        out.fLifetime        = edited.fLifetime;
+        out.fSize            = edited.fSize;
+        out.fAcceleration    = edited.fAcceleration;
+        for (int k = 0; k < static_cast<int>(LevelUpField::COUNT_); ++k)
+            out.fLevelUpAmt[k] = edited.fLevelUpAmt[k];
+        out.uImpactMask      = edited.uImpactMask;
+        out.fKnockback       = edited.fKnockback;
+        out.fGatherPull      = edited.fGatherPull;
+        out.fGatherRadius    = edited.fGatherRadius;
+        out.iBurnDamage      = edited.iBurnDamage;
+        out.fBurnDuration    = edited.fBurnDuration;
+        out.fSlowFactor      = edited.fSlowFactor;
+        out.fSlowDuration    = edited.fSlowDuration;
+        out.iDamage          = edited.iDamage;
+        out.iCount           = edited.iCount;
+        out.fProjectileSpeed = edited.fProjectileSpeed;
+        // Editable name (ASCII) — keep the original if the field was cleared.
+        if (m_pNameBox)
+        {
+            const std::wstring w = m_pNameBox->GetText();
+            if (!w.empty()) out.strName = std::string(w.begin(), w.end());
+        }
+        // Mirror the loader's Sustained-lifetime convention so the value
+        // round-trips (a Sustained non-Straight weapon stores a huge lifetime).
+        if (out.eFireMode == FireMode::Sustained && out.eMovement != MovementType::Straight)
+            out.fLifetime = 9999.f;
 
-        WeaponDatabase::GetInst().Add(def);
-
-        // Auto-equip the new weapon when the loadout has room, so a
-        // craft → play flow works without a separate equip step (the
-        // stage pool is equipped-only). The just-added entry is last and
-        // starts unequipped, so ToggleEquip here only ever equips — and
-        // no-ops once the cap is reached. The list still lets you
-        // unequip/swap when you've crafted more than the cap.
-        auto& db = WeaponDatabase::GetInst();
-        const bool bEquipped = db.ToggleEquip(db.CraftedCount() - 1);
-
-        RefreshRegistry();   // show the new weapon in the loadout panel
-        db.SaveCrafted("/Game/Data/Weapons/crafted.csv");   // persist for next run
+        db.UpdateWeapon(m_iEditId, out);
+        db.SaveToCSV("/Game/Data/Weapons/weapons_v2.csv");
+        RefreshRegistry();
 
         if (m_pResultText)
         {
-            if (bEquipped)
-                m_pResultText->SetString(L"제작 완료: " + wName + L" — 장착됨 ("
-                    + std::to_wstring(db.EquippedCount()) + L"/"
-                    + std::to_wstring(WeaponDatabase::kMaxEquipped) + L")");
-            else
-                m_pResultText->SetString(L"제작 완료: " + wName + L" — 장착 슬롯 가득("
-                    + std::to_wstring(WeaponDatabase::kMaxEquipped)
-                    + L"), 우측 목록에서 교체하세요");
+            std::wstring w(out.strName.begin(), out.strName.end());
+            m_pResultText->SetString(L"저장됨: " + w);
         }
-
-        // Consume the attribute slots — a successful craft empties all six
-        // so the next weapon starts from an empty bench (craft re-locks).
-        for (int c = 0; c < kCatCount; ++c)
-        {
-            m_iSlot[c] = -1;
-            if (m_pSlotButton[c])   m_pSlotButton[c]->SetTexture(EnsureSolidTexture(kEmptySlotColor));
-            if (m_pSlotNameText[c]) m_pSlotNameText[c]->SetString(L"-");
-        }
-        m_impactSel.clear();
-        RefreshImpactSlot();
-        RefreshCraft();
     }
 
     void WeaponCombiner::OnSustainToggle()
@@ -914,86 +1004,180 @@ namespace Client
 
     void WeaponCombiner::OnRegistryClick(int iCell)
     {
+        // The list shows the weapons_v2 catalogue in order; a cell maps 1:1 to
+        // db.All()[iCell]. Clicking loads that weapon into the editor.
         auto& db = WeaponDatabase::GetInst();
-        if (iCell < 0 || iCell >= db.CraftedCount()) return;   // empty cell
-
-        const bool bWasEquipped = db.IsEquipped(iCell);
-        const bool bNowEquipped = db.ToggleEquip(iCell);
-        // Tried to equip but the loadout is full (state unchanged).
-        if (!bWasEquipped && !bNowEquipped && m_pResultText)
-            m_pResultText->SetString(L"최대 "
-                + std::to_wstring(WeaponDatabase::kMaxEquipped) + L"개까지 장착할 수 있습니다");
-
-        RefreshRegistry();
-        db.SaveCrafted("/Game/Data/Weapons/crafted.csv");   // persist equip change
+        const auto& all = db.All();
+        if (iCell < 0 || iCell >= static_cast<int>(all.size())) return;   // empty cell
+        LoadWeaponIntoEditor(all[iCell].iId);
     }
 
-    void WeaponCombiner::OnRegistryDestroy(int iCell)
+    void WeaponCombiner::LoadWeaponIntoEditor(int iWeaponId)
     {
-        auto& db = WeaponDatabase::GetInst();
-        if (iCell < 0 || iCell >= db.CraftedCount()) return;   // empty cell
+        using namespace WeaponCombiner_detail;
+        const WeaponDef* p = WeaponDatabase::GetInst().Get(iWeaponId);
+        if (!p) return;
+        const WeaponDef& d = *p;
+        m_iEditId = iWeaponId;
+        if (m_pNameBox) m_pNameBox->SetText(std::wstring(d.strName.begin(), d.strName.end()));
 
-        const std::string strName = db.CraftedDef(iCell).strName;
-        db.RemoveCrafted(iCell);
+        auto approx = [](float a, float b) { float e = a - b; return (e < 0 ? -e : e) < 0.05f; };
+
+        // Best palette index for a single-card category: must match the
+        // category enum (iVariant); a secondary score breaks ties between cards
+        // that share a variant (e.g. Orbital vs Follow vs SpiralOut).
+        auto pickCard = [&](int cat, int variant, auto score) -> int
+        {
+            int best = -1, bestScore = -1;
+            for (int k = 0; k < static_cast<int>(m_parts.size()); ++k)
+            {
+                if (m_parts[k].iCategory != cat || m_parts[k].iVariant != variant) continue;
+                const int s = score(m_parts[k]);
+                if (s > bestScore) { bestScore = s; best = k; }
+            }
+            return best;
+        };
+        auto setSlot = [&](int cat, int palette)
+        {
+            m_iSlot[cat] = palette;
+            if (palette >= 0)
+            {
+                if (m_pSlotButton[cat])   m_pSlotButton[cat]->SetTexture(PartTexture(m_parts[palette]));
+                if (m_pSlotNameText[cat]) m_pSlotNameText[cat]->SetString(m_parts[palette].wLabel);
+            }
+            else
+            {
+                if (m_pSlotButton[cat])   m_pSlotButton[cat]->SetTexture(EnsureSolidTexture(kEmptySlotColor));
+                if (m_pSlotNameText[cat]) m_pSlotNameText[cat]->SetString(L"-");
+            }
+        };
+
+        setSlot(CAT_ORIGIN, pickCard(CAT_ORIGIN, static_cast<int>(d.eOrigin),
+            [](const PartCard&) { return 0; }));
+
+        const int mv = static_cast<int>(d.eMovement);
+        setSlot(CAT_MOVE, pickCard(CAT_MOVE, mv, [&](const PartCard& c)
+        {
+            int s = 0;
+            if (approx(c.fAmount, d.fOrbitRadius)) ++s;
+            if (approx(c.fGrowth, d.fRadialSpeed)) ++s;
+            if ((mv == static_cast<int>(MovementType::Homing) ||
+                 mv == static_cast<int>(MovementType::Aimed)) &&
+                approx(c.fAimMode, static_cast<float>(static_cast<int>(d.eAimMode)))) ++s;
+            return s;
+        }));
+
+        setSlot(CAT_ONHIT, pickCard(CAT_ONHIT, static_cast<int>(d.eOnHit),
+            [&](const PartCard& c) { return approx(c.fAmount, static_cast<float>(d.iMaxHits)) ? 1 : 0; }));
+
+        // Level-up: multi-select — pick a card for each stat with a non-zero
+        // per-level amount, preferring the card whose amount matches.
+        m_levelUpSel.clear();
+        for (int f = 0; f < static_cast<int>(LevelUpField::COUNT_); ++f)
+        {
+            const float amt = d.fLevelUpAmt[f];
+            if (amt == 0.f) continue;
+            const int pick = pickCard(CAT_LEVELUP, f,
+                [&](const PartCard& c) { return approx(c.fAmount, amt) ? 1 : 0; });
+            if (pick >= 0) m_levelUpSel.push_back(pick);
+        }
+
+        // Impact modules: select the first card for each bit set in the mask.
+        m_impactSel.clear();
+        for (int k = 0; k < static_cast<int>(m_parts.size()); ++k)
+        {
+            if (m_parts[k].iCategory != CAT_IMPACT) continue;
+            const unsigned int bit = 1u << m_parts[k].iVariant;
+            if (!(d.uImpactMask & bit)) continue;
+            bool dup = false;
+            for (int sel : m_impactSel)
+                if ((1u << m_parts[sel].iVariant) == bit) { dup = true; break; }
+            if (!dup) m_impactSel.push_back(k);
+        }
+
+        // Number fields. Sustained non-Straight stores 9999 lifetime — show a
+        // sane editable value instead (save re-applies the convention).
+        if (m_pNumLifetime) m_pNumLifetime->SetValue(d.fLifetime >= 9999.f ? 2.f : d.fLifetime);
+        if (m_pNumCooldown) m_pNumCooldown->SetValue(d.fCooldown);
+        if (m_pNumSize)     m_pNumSize->SetValue(d.fSize);
+        if (m_pNumAccel)    m_pNumAccel->SetValue(d.fAcceleration);
+        if (m_pNumDamage)   m_pNumDamage->SetValue(static_cast<float>(d.iDamage));
+        if (m_pNumCount)    m_pNumCount->SetValue(static_cast<float>(d.iCount));
+        if (m_pNumSpeed)    m_pNumSpeed->SetValue(d.fProjectileSpeed);
+
+        // Sustained toggle + cooldown/lifetime greying (mirror OnSustainToggle).
+        m_bSustained = (d.eFireMode == FireMode::Sustained);
+        if (m_pSustainBtn)  m_pSustainBtn->SetTexture(EnsureSolidTexture(m_bSustained ? kCraftOnColor : kEmptySlotColor));
+        if (m_pNumCooldown) m_pNumCooldown->SetEnabled(!m_bSustained);
+        if (m_pNumLifetime) m_pNumLifetime->SetEnabled(!m_bSustained);
+
+        RefreshImpactSlot();
+        RefreshLevelUpSlot();
+        RefreshCraft();
         RefreshRegistry();
-        db.SaveCrafted("/Game/Data/Weapons/crafted.csv");   // persist removal
-
         if (m_pResultText)
-            m_pResultText->SetString(L"삭제됨: "
-                + std::wstring(strName.begin(), strName.end()));
+        {
+            std::wstring w(d.strName.begin(), d.strName.end());
+            m_pResultText->SetString(L"편집 중: " + w);
+        }
     }
 
     void WeaponCombiner::RefreshRegistry()
     {
         using namespace WeaponCombiner_detail;
         auto& db = WeaponDatabase::GetInst();
-        const int n = db.CraftedCount();
+        const auto& all = db.All();
+        const int n = static_cast<int>(all.size());
+        const int kCols = 2;
+
+        if (m_pRegScroll) m_pRegScroll->ClearItems();
 
         for (int i = 0; i < kRegCells; ++i)
         {
-            const bool bUsed = (i < n);
+            if (i >= n)
+            {
+                if (m_pRegButton[i]) m_pRegButton[i]->Disable();
+                if (m_pRegText[i])   m_pRegText[i]->Disable();
+                continue;
+            }
+
+            // Content-space cell rect (the scroll view re-places + clips it).
+            const int   col = i % kCols;
+            const int   row = i / kCols;
+            const float x = m_fRegX0 + col * (m_fRegCellW + m_fRegGapX);
+            const float y = m_fRegTopY + row * m_fRegRowH;
+
+            const WeaponDef&   cd      = all[i];
+            const unsigned int uCol    = cd.uColorRGB;
+            const bool         bEdit   = (cd.iId == m_iEditId);
 
             if (m_pRegButton[i])
             {
-                if (bUsed)
-                {
-                    m_pRegButton[i]->Enable();
-                    // Always show the weapon's own combo colour so builds are
-                    // distinguishable at a glance; dim it when not equipped
-                    // (equipped also shows the ✓ in the label).
-                    const unsigned int uCol = db.CraftedDef(i).uColorRGB;
-                    m_pRegButton[i]->SetTexture(EnsureSolidTexture(
-                        db.IsEquipped(i) ? uCol : Dim(uCol, 0.45f)));
-                }
-                else
-                {
-                    m_pRegButton[i]->Disable();
-                }
+                m_pRegButton[i]->SetRect(x, y, m_fRegCellW, m_fRegCellH);
+                m_pRegButton[i]->SetTexture(EnsureSolidTexture(bEdit ? uCol : Dim(uCol, 0.45f)));
+                m_pRegButton[i]->Enable();
             }
-
             if (m_pRegText[i])
             {
-                if (bUsed)
-                {
-                    m_pRegText[i]->Enable();
-                    const WeaponDef& cd = db.CraftedDef(i);
-                    std::wstring w(cd.strName.begin(), cd.strName.end());
-                    w += L" (" + std::to_wstring(static_cast<int>(CalcPowerScore(cd))) + L")";
-                    if (db.IsEquipped(i)) w += L" ✓";
-                    m_pRegText[i]->SetString(w);
-                }
-                else
-                {
-                    m_pRegText[i]->Disable();
-                }
+                m_pRegText[i]->SetRect(x, y, m_fRegCellW, m_fRegCellH);
+                std::wstring w(cd.strName.begin(), cd.strName.end());
+                w += L" (" + std::to_wstring(static_cast<int>(CalcPowerScore(cd))) + L")";
+                if (bEdit) w += L" ✎";
+                m_pRegText[i]->SetString(w);
+                m_pRegText[i]->Enable();
+            }
+            if (m_pRegScroll)
+            {
+                if (m_pRegButton[i]) m_pRegScroll->AddItem(m_pRegButton[i], x, y, m_fRegCellW, m_fRegCellH);
+                if (m_pRegText[i])   m_pRegScroll->AddItem(m_pRegText[i],   x, y, m_fRegCellW, m_fRegCellH);
             }
         }
 
+        if (m_pRegScroll) m_pRegScroll->RebuildContent();
+
         if (m_pRegHeader)
-            m_pRegHeader->SetString(L"제작 무기  장착 "
-                + std::to_wstring(db.EquippedCount())
-                + L"/" + std::to_wstring(WeaponDatabase::kMaxEquipped)
-                + L"  (좌클릭 장착 · 우클릭 삭제)");
+            m_pRegHeader->SetString(L"무기 목록 ("
+                + std::to_wstring(n) + L") — 클릭하여 편집");
     }
 
     void WeaponCombiner::Update(float fDeltaTime)

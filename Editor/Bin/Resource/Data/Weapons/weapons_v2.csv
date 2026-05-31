@@ -6,10 +6,15 @@
 # Columns:
 #   id             — unique integer key. 1-99 = shop weapons, 100+ = evolution-only.
 #   name           — display name (currently unused by UI; text rendering not wired)
-#   spawn_origin   — Front | Around | Mouse           (where the projectile is born)
-#   movement       — Straight | Spiral | Fixed | Orbital | Follow
+#   spawn_origin   — Front | Around | Mouse | Random  (where the projectile is born)
+#                    Random = a random point in a 2..6u ring around the player; the
+#                    count-burst fans from ONE such point, so use count=1 for a barrage.
+#   movement       — Straight | Spiral | Fixed | Orbital | Follow | Homing | Aimed
 #                    Follow = independent entity that trails the player and acts on
 #                    its own cooldown (turret/pet). Reuses summoner-style AI.
+#                    Homing = curves toward the target each frame; Aimed = locks the
+#                    heading once at spawn. Both need an enemy-seeking aim_mode
+#                    (Nearest / LowestHP / Random) to have something to track.
 #   fire_mode      — Cooldown | Sustained
 #   on_hit         — Vanish | NoChange | Reflect | Multiply | Chain
 #                    Chain = jump to nearest un-hit enemy within range; max_hits caps jumps.
@@ -49,25 +54,47 @@
 #                    no trail (beams / orbitals / fixed fields); tracer = default
 #                    thin bright streak; plasma = thick/bright/long; spark =
 #                    short/snappy; comet = long fading tail. Blank => tracer.
+#   price          — shop cost. 0 / blank => global kWeaponPrice default.
+#   min_round      — first round it may appear (0 / 1 = from the start).
+#   max_round      — last round it may appear (0 = no cap / available forever).
+#   orbit_radius   — Orbital only: circle radius in world units. Blank/0 => 0.9.
+#   radial_speed   — Orbital only: radius growth per sec (world units). >0 spirals out.
+#   impact_mask    — bit flags: 1=Damage(always) 2=Knockback 4=Gather 8=Burn 16=Slow.
+#                    When PRESENT it REPLACES the knockback column's auto-flag, so add
+#                    2 if the weapon should still knock back. Omit the column entirely
+#                    => Damage only (+ auto Knockback when the knockback column != 0).
+#   gather_pull / gather_radius — Gather (4): pull fraction 0..1 / AoE radius (units).
+#   burn_damage / burn_duration — Burn (8): damage per tick / duration (seconds).
+#   slow_factor / slow_duration — Slow (16): speed multiplier 0..1 / duration (seconds).
 #
-id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,projectile_speed,lifetime,count,color_rgb,level_up_field,level_up_amount,size,acceleration,aim_mode,spread_deg,max_hits,damage_interval,knockback,evolves_into,evolve_min_level,shop_available,trail_style
-1,Pellet,Front,Straight,Cooldown,Vanish,Sphere,6,0.80,380,1.2,1,0xFFE066,Count,1,0.25,0,Nearest,0,1,0,4,101,8,1,tracer
-2,Piercing Bolt,Front,Straight,Cooldown,NoChange,Triangle,9,1.10,460,1.6,1,0x66D9FF,Damage,5,0.30,0,Nearest,0,3,0,6,0,0,1,tracer
-3,Orbit Blade,Around,Orbital,Sustained,NoChange,Box,8,0,200,0,2,0xB0B0C0,Count,1,0.40,0,Radial,0,0,0.30,8,0,0,1,none
-4,Scatter,Front,Straight,Cooldown,Vanish,Sphere,4,1.00,340,0.7,5,0xFF9966,Count,2,0.22,0,Forward,45,1,0,3,0,0,1,spark
-5,Spiral Orb,Around,Spiral,Cooldown,NoChange,Sphere,5,1.40,260,2.0,3,0xCC66FF,Count,1,0.28,0,Radial,120,0,0,4,0,0,1,comet
-6,Land Mine,Mouse,Fixed,Cooldown,NoChange,Box,18,1.60,0,4.0,1,0xFF5555,Size,0.15,0.50,0,Cursor,0,0,0.50,10,0,0,1,none
-7,Ricochet,Front,Straight,Cooldown,Reflect,Sphere,7,1.20,420,2.5,1,0x66FF99,Count,1,0.25,0,Random,0,4,0,5,0,0,1,tracer
-8,Split Shot,Front,Straight,Cooldown,Multiply,Triangle,8,1.50,360,1.4,1,0xFFCC33,Damage,6,0.30,0,Nearest,0,1,0,4,0,0,1,tracer
-9,Laser Beam,Mouse,Straight,Sustained,NoChange,Box,3,1.5,900,1.5,1,0xFF3366,Damage,2,0.35,0,Cursor,0,0,0.10,0,102,8,1,none
-10,Pulse Aura,Around,Fixed,Sustained,NoChange,Sphere,2,0,0,0,1,0x99CCFF,Size,0.20,0.60,0,Radial,0,0,0.40,6,0,0,1,none
-11,Seeker Dart,Front,Straight,Cooldown,Vanish,Triangle,6,0.90,200,2.0,1,0x00FFCC,Speed,50,0.25,180,LowestHP,0,1,0,4,0,0,1,comet
-12,Heavy Cannon,Front,Straight,Cooldown,Vanish,Sphere,40,2.40,300,1.6,1,0xFF8800,Cooldown,0.90,0.70,0,Nearest,0,1,0,25,0,0,1,plasma
-13,Orbital Saw,Around,Orbital,Sustained,NoChange,Triangle,6,0,150,0,3,0xFFEE00,Size,0.12,0.45,1.5,Radial,0,0,0.25,6,0,0,1,none
-14,Boomerang,Front,Straight,Cooldown,NoChange,Box,9,1.30,420,2.4,1,0x88FF00,Count,1,0.35,-160,Forward,0,0,0,5,0,0,1,comet
-15,Chain Lightning,Front,Straight,Cooldown,Chain,Sphere,7,1.30,600,1.5,1,0x33CCFF,Damage,4,0.20,0,Nearest,0,5,0,2,103,8,1,spark
-16,Spirit Wolf,Around,Follow,Cooldown,NoChange,Box,10,1.00,180,0,1,0xC0A0FF,Count,1,0.50,0,Nearest,0,1,0,6,0,0,1,none
-17,Gravity Well,Mouse,Fixed,Cooldown,NoChange,Sphere,2,3.00,0,3.0,1,0x9933CC,Size,0.20,0.70,0,Cursor,0,0,0.50,-30,0,0,1,none
-101,Storm Pellet,Front,Straight,Cooldown,Vanish,Sphere,10,0.40,440,1.4,8,0xFFF0A0,Count,2,0.25,0,Nearest,60,1,0,4,0,0,0,spark
-102,Death Ray,Mouse,Straight,Sustained,NoChange,Box,6,1.0,900,2.0,1,0xFF0066,Damage,3,0.60,0,Cursor,0,0,0.05,0,0,0,0,none
-103,Tempest,Front,Straight,Cooldown,Chain,Sphere,12,1.00,700,1.8,2,0x66FFFF,Damage,6,0.25,0,Nearest,0,9,0,3,0,0,0,spark
+id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,projectile_speed,lifetime,count,color_rgb,level_up_field,level_up_amount,size,acceleration,aim_mode,spread_deg,max_hits,damage_interval,knockback,evolves_into,evolve_min_level,shop_available,trail_style,price,min_round,max_round,orbit_radius,radial_speed,impact_mask,gather_pull,gather_radius,burn_damage,burn_duration,slow_factor,slow_duration
+1,Pellet,Front,Straight,Cooldown,Vanish,Sphere,6,0.80,380,1.2,1,0xFFE066,Count,1,0.25,0,Nearest,0,1,0,4,101,8,1,tracer,30,1,5
+2,Piercing Bolt,Front,Straight,Cooldown,NoChange,Triangle,9,1.10,460,1.6,1,0x66D9FF,Damage,5,0.30,0,Nearest,0,3,0,6,0,0,1,tracer,105,11,15
+3,Orbit Blade,Around,Orbital,Sustained,NoChange,Box,8,0,200,0,2,0xB0B0C0,Count,1,0.40,0,Radial,0,0,0.30,8,0,0,1,none,150,18,22
+4,Scatter,Front,Straight,Cooldown,Vanish,Sphere,4,1.00,340,0.7,5,0xFF9966,Count,2,0.22,0,Forward,45,1,0,3,0,0,1,spark,25,1,5
+5,Spiral Orb,Around,Spiral,Cooldown,NoChange,Sphere,5,1.40,260,2.0,3,0xCC66FF,Count,1,0.28,0,Radial,120,0,0,4,0,0,1,comet,80,9,13
+6,Land Mine,Mouse,Fixed,Cooldown,NoChange,Box,18,1.60,0,4.0,1,0xFF5555,Size,0.15,0.50,0,Cursor,0,0,0.50,10,0,0,1,none,35,3,7
+7,Ricochet,Front,Straight,Cooldown,Reflect,Sphere,7,1.20,420,2.5,1,0x66FF99,Count,1,0.25,0,Random,0,4,0,5,0,0,1,tracer,45,3,7
+8,Split Shot,Front,Straight,Cooldown,Multiply,Triangle,8,1.50,360,1.4,1,0xFFCC33,Damage,6,0.30,0,Nearest,0,1,0,4,0,0,1,tracer,70,7,11
+9,Laser Beam,Mouse,Straight,Sustained,NoChange,Box,3,1.5,900,1.5,1,0xFF3366,Damage,2,0.35,0,Cursor,0,0,0.10,0,102,8,1,none,150,19,23
+10,Pulse Aura,Around,Fixed,Sustained,NoChange,Sphere,2,0,0,0,1,0x99CCFF,Size,0.20,0.60,0,Radial,0,0,0.40,6,0,0,1,none,30,2,6
+11,Seeker Dart,Front,Straight,Cooldown,Vanish,Triangle,6,0.90,200,2.0,1,0x00FFCC,Speed,1,0.25,180,LowestHP,0,1,0,4,0,0,1,comet,25,2,6
+12,Heavy Cannon,Front,Straight,Cooldown,Vanish,Sphere,40,2.40,300,1.6,1,0xFF8800,Cooldown,0.90,0.70,0,Nearest,0,1,0,25,0,0,1,plasma,80,8,12
+13,Orbital Saw,Around,Orbital,Sustained,NoChange,Triangle,6,0,150,0,3,0xFFEE00,Size,0.12,0.45,1.5,Radial,0,0,0.25,6,0,0,1,none,150,17,21
+14,Boomerang,Front,Straight,Cooldown,NoChange,Box,9,1.30,420,5.5,1,0x88FF00,Count,1,0.35,-160,Forward,0,0,0,5,0,0,1,comet,145,16,20
+15,Chain Lightning,Front,Straight,Cooldown,Chain,Sphere,7,1.30,600,1.5,1,0x33CCFF,Damage,4,0.20,0,Nearest,0,5,0,2,103,8,1,spark,30,3,7
+16,Spirit Wolf,Around,Follow,Cooldown,NoChange,Box,10,1.00,180,0,1,0xC0A0FF,Count,1,0.50,0,Nearest,0,1,0,6,0,0,1,none,60,6,10
+17,Gravity Well,Mouse,Fixed,Cooldown,NoChange,Sphere,2,3.00,0,3.0,1,0x9933CC,Size,0.20,0.70,0,Cursor,0,0,0.50,-30,0,0,1,none,20,10,14
+18,Railgun,Front,Straight,Cooldown,NoChange,Box,30,1.70,760,1.4,1,0xCFE8FF,Damage,8,0.30,0,Nearest,0,0,0,10,0,0,1,plasma,150,20,24
+19,Black Hole,Mouse,Fixed,Cooldown,NoChange,Sphere,5,4.00,0,3.5,1,0x7722AA,Size,0.20,1.10,0,Cursor,0,0,0.35,-45,0,0,1,none,20,12,16
+20,Hunter Drone,Around,Follow,Cooldown,NoChange,Box,14,0.70,260,0,1,0xFFAA44,Count,1,0.45,0,Nearest,0,1,0,6,0,0,1,tracer,135,15,19
+21,Nova Burst,Around,Straight,Cooldown,Vanish,Sphere,14,2.00,420,1.0,12,0xFFE0E0,Count,2,0.28,0,Radial,0,1,0,8,0,0,1,spark,95,11,15
+22,Annihilator,Mouse,Straight,Sustained,NoChange,Box,9,1.50,950,1.8,1,0xFF2200,Damage,3,0.40,0,Cursor,0,0,0.06,0,0,0,1,none,150,21,25
+23,Homing Rocket,Front,Homing,Cooldown,Vanish,Triangle,18,1.10,360,2.5,1,0xFF66AA,Damage,6,0.30,0,Nearest,0,1,0,6,0,0,1,comet,95,10,14
+24,Meteor Strike,Random,Fixed,Cooldown,NoChange,Sphere,16,0.80,0,0.7,1,0xFF7711,Damage,5,0.60,0,Forward,0,0,0.30,8,0,0,1,none,70,8,12
+25,Flamethrower,Front,Straight,Cooldown,Vanish,Triangle,6,0.50,300,0.5,3,0xFF5500,Damage,3,0.30,0,Forward,25,1,0,0,0,0,1,spark,50,5,9,0.9,0,9,1,4,4,3,0.5,2.5
+26,Frost Bolt,Front,Straight,Cooldown,Vanish,Triangle,10,1.00,460,1.5,1,0x66DDFF,Damage,4,0.28,0,Nearest,0,1,0,0,0,0,1,tracer,50,6,10,0.9,0,17,1,4,3,3,0.45,2.5
+27,Spiral Saw,Around,Orbital,Cooldown,NoChange,Triangle,8,2.00,220,4.0,2,0xFFAA00,Count,1,0.40,0,Radial,0,0,0.30,5,0,0,1,none,60,7,11,0.8,1.2
+101,Storm Pellet,Front,Straight,Cooldown,Vanish,Sphere,10,0.40,440,1.4,8,0xFFF0A0,Count,2,0.25,0,Nearest,60,1,0,4,0,0,0,spark,150,99,0
+102,Death Ray,Mouse,Straight,Sustained,NoChange,Box,6,1.0,900,2.0,1,0xFF0066,Damage,3,0.60,0,Cursor,0,0,0.05,0,0,0,0,none,150,99,0
+103,Tempest,Front,Straight,Cooldown,Chain,Sphere,12,1.00,700,1.8,2,0x66FFFF,Damage,6,0.25,0,Nearest,0,9,0,3,0,0,0,spark,115,99,0

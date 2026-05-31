@@ -23,6 +23,12 @@ namespace Engine
 		float fFrameTime;
 		float m_fScale;
 		float m_fDeltaTime;
+		// Hit-stop overlay — a short gameplay time-freeze that multiplies on
+		// top of m_fScale (so it composes with the editor's time scrub).
+		// m_fHitStopRemain counts down on RAW (unscaled) delta in Update() so
+		// a freeze to scale 0 still recovers.
+		float m_fHitStopScale;
+		float m_fHitStopRemain;
 		// Frame-time gate for game-time pause. Set via Stop()/Resume();
 		// while set, GetDeltTime() returns 0 so all callers (Input,
 		// Scene, etc.) see "no time passed" without each having to know
@@ -37,6 +43,10 @@ namespace Engine
 		constexpr float GetFPS()	const noexcept;
 		void SetScale(float fScale) noexcept;
 		constexpr float GetScale()	const noexcept;
+		// Request a hit-stop: freeze game time to fScale for fDuration seconds.
+		// Stronger/longer requests win (max-merge) so chained hits never cut a
+		// freeze short. Counted down on raw delta in Update().
+		void RequestHitStop(float fDuration, float fScale = 0.f) noexcept;
 		// Pause / resume game time. Previously lived on Window (bStop)
 		// where every Update path had to multiply by !bStop manually;
 		// folding the gate into Timer means GetDeltTime is the single

@@ -735,15 +735,6 @@ namespace Engine
 
 		//m_pMidBuffer->WriteData(&vecMatrix[0], 0, sizeof(Matrix) * pSequenceInfo->vecJoint.size());
 
-#ifdef _DEBUG
-		std::vector<Matrix> matFinal(iJointCount);
-
-		m_pFinalBuffer->ReadBuffer(&matFinal.front(), 0, sizeof(Matrix) * iJointCount);
-		std::vector<Matrix> matMid(iJointCount);
-
-		m_pMidBuffer->ReadBuffer(&matMid[0], 0, sizeof(Matrix) * iJointCount);
-#endif
-
 		m_pCurrentSequence->pSequence->ResetResource();
 
 		m_pComputeShader->PostBind();
@@ -752,6 +743,12 @@ namespace Engine
 	}
 	void Animation::MatrixPostProcess()
 	{
+		// IK가 등록된 경우에만 포즈 버퍼를 CPU로 readback해 IK를 푼다.
+		// ReadBuffer는 CopyResource+Map(READ)이라 GPU 동기 stall이 발생하므로,
+		// IK가 없으면 이 CPU 블록 전체를 건너뛴다. (결과를 다시 GPU로 올리는
+		// WriteData가 비활성 상태라 IK가 없을 땐 순수 stall 비용만 들었음)
+		if (!m_vecIKInfo.empty())
+		{
 		std::vector<Matrix> vecKeyFrame(m_pSkeleton->GetBoneCount());
 
 		m_pPoseBuffer->ReadBuffer(&vecKeyFrame.front(), 0, sizeof(Matrix) * m_pSkeleton->GetBoneCount());
@@ -856,6 +853,7 @@ namespace Engine
 		}
 
 		//m_pMidBuffer->WriteData(&vecKeyFrame.front(), 0, sizeof(Matrix) * m_pSkeleton->GetBoneCount());
+		}
 
 		m_pFinalBuffer->SetUAV(0);
 
@@ -874,11 +872,6 @@ namespace Engine
 		m_pMidBuffer->ResetSRV(30);
 
 		m_pFinalBuffer->ResetUAV(0);
-
-#ifdef _DEBUG
-		std::vector<Matrix> vecFinal(iJointCount);
-		m_pFinalBuffer->ReadBuffer(&vecFinal[0], 0, sizeof(Matrix) * iJointCount);
-#endif
 	}
 	const std::unordered_map<std::string, Animation::PSEQUENCEINFO>& Animation::GetSequences() const
 	{

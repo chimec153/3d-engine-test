@@ -95,9 +95,20 @@ namespace Client
             pPlayer = pLayer->FindGameObject("player");
             if (pPlayer) pPlayerTr = pPlayer->GetComponent<Engine::Transform>();
         }
+        m_fGoalReselectAcc += fDeltaTime;
         std::shared_ptr<Engine::GameObject> pGoal;
         if (m_pFlowField && pLayer)
         {
+          // Throttle the full goal re-selection / field rebuild to ~10 Hz
+          // (kGoalReselectInterval). The 129×129 Dijkstra re-ran every frame
+          // as the player walked. On throttled frames pGoal stays null so the
+          // SetTarget loop below is skipped — enemies keep their committed
+          // target and sample the existing (<=0.1 s stale) field. New enemies
+          // already get SetTarget(pPlayer) at materialise time.
+          if (m_fGoalReselectAcc >= kGoalReselectInterval)
+          {
+            m_fGoalReselectAcc = 0.f;
+
             // Towers are unbreakable to pathing — collect their cells so the
             // field routes around them (and a target boxed in by towers reads
             // as unreachable to the enemies outside).
@@ -127,6 +138,7 @@ namespace Client
 
             pGoal = SelectReachableGoal(pLayer.get(), vecBlocked,
                                         probeCx, probeCz, bProbe, pPlayer);
+          }
         }
         else
         {
@@ -465,6 +477,7 @@ namespace Client
         pEnemy->SetFlowField(m_pFlowField.get());
         pEnemy->SetSpawnCell(cx, cz);
         pEnemy->SetTarget(pPlayer);
+        m_wpBoss = pEnemy;   // HUD reads its HP for the boss bar
     }
 
     void EnemySpawner::MaterialisePending(const PendingSpawn& pending,

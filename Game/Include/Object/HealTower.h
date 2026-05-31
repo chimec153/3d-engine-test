@@ -37,6 +37,12 @@ namespace Client
         virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
 
+        // Immediate removal for a shop SELL (no death shatter): just leaves the
+        // scene. A heal tower owns no separate scene instances (it only pulses),
+        // so there's nothing to tear down. The owned-count decrement + refund
+        // are handled by the shop, so this does NOT touch TowerManager.
+        void Despawn() { InActivate(); }
+
         // Shared cylinder mesh (built once, cached) — also used by the
         // placement ghost so the preview matches.
         static std::shared_ptr<Engine::Mesh> BuildCylinderMesh();
@@ -54,7 +60,15 @@ namespace Client
         // boundary; Fill = inner disc scaled by charge progress (0..1).
         std::shared_ptr<Engine::Decal>                 m_pRingDecal;
 
-        float m_fHealAcc = 0.f;   // counts up to kHealInterval, then pulses
+        // Heal stats from towers.csv (TowerDatabase), seeded in Init. Default
+        // to 0 and are always overwritten there (from the loaded def, or the
+        // GameDefs kHeal* constants when no row is loaded), so Update/heal use
+        // the data-driven values.
+        int   m_iHealAmount   = 0;
+        float m_fHealInterval = 0.f;
+        float m_fHealRadius   = 0.f;
+
+        float m_fHealAcc = 0.f;   // counts up to m_fHealInterval, then pulses
 
         // Heal every ally (AggroTarget holder) within kHealRadius.
         void HealNearbyAllies();

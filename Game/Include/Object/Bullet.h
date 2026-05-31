@@ -46,6 +46,11 @@ namespace Client
         // boosted value is what Enemy::OnCollision reads. Floors at 1.
         void ScaleDamage(float fMul);
 
+        // Add a flat amount to this bullet's damage (Player's AttackFlat stat
+        // upgrade, applied before ScaleDamage so the multiplier/crit scale it).
+        // Floors at 1.
+        void AddDamage(int iAdd) { m_iDamage += iAdd; if (m_iDamage < 1) m_iDamage = 1; }
+
         // Multiply split children remember the enemy that spawned them and
         // must never interact with it again — otherwise the two children,
         // born inside that enemy's collider, instantly re-hit it. Both

@@ -4,6 +4,7 @@
 #include "State.h"
 #include "WeaponData.h"
 #include <vector>
+#include <string>
 
 namespace Engine
 {
@@ -14,7 +15,6 @@ namespace Engine
     class Particle;
     class ColliderLine;
     class Camera;
-    class SoundBindable;
     class Transform;
     class MeshRendererComponent;
     class Animation;
@@ -56,17 +56,10 @@ namespace Client
             END
         };
 
-        // Level-up stat upgrade choices (shown as cards by LevelUpChoices).
-        // Each pick bumps one player stat. Keep COUNT last.
-        enum class StatUpgrade
-        {
-            MoveSpeed,    // faster walk
-            MaxHP,        // +max HP (and heal)
-            Attack,       // +player bullet damage
-            CritChance,   // +chance for a bullet to deal 2x
-            Defense,      // +incoming-damage reduction
-            COUNT
-        };
+        // Level-up stat upgrade cards are now data-driven: the option list +
+        // display + weight + magnitude live in levelups.csv (LevelUpDatabase),
+        // and each card's "key" string selects the effect applied here in
+        // ApplyStatUpgrade. (Replaces the old hard-coded StatUpgrade enum.)
     public:
         Player(int iMaxHP, int iAttackMin, int iAttackMax);
         virtual ~Player() override;
@@ -164,6 +157,12 @@ namespace Client
         float m_fStrideAccum = 0.f;
         bool  m_bLeftFoot    = false;
 
+        // Damage-feedback state. m_fImpactCooldown throttles the dramatic
+        // single-hit reaction (flash + shake + hit-stop) so chained projectile
+        // hits don't strobe; m_fHeartAcc paces the low-HP heartbeat SFX.
+        float m_fImpactCooldown = 0.f;
+        float m_fHeartAcc       = 0.f;
+
         // Experience / level progression. Orbs dropped by dead enemies
         // feed AddExp on pickup; AddExp pushes overflow back into the
         // next level so a single pickup can never silently drop XP.
@@ -181,8 +180,11 @@ namespace Client
         // damage reduction, and on m_fSpeed: move speed). Applied to spawned
         // bullets in FireCooldownBurst.
         float m_fDamageMult = 1.f;   // attack-up multiplier on bullet damage
+        int   m_iFlatDamage = 0;     // flat bullet-damage bonus (AttackFlat upgrade)
         float m_fCritChance = 0.f;   // 0..1 chance a bullet crits
         float m_fCritMult   = 2.f;   // crit damage multiplier
+        float m_fGoldMult   = 1.f;   // gold-gain multiplier on orb pickup
+        float m_fXpMult     = 1.f;   // XP-gain multiplier on orb pickup
 
     private:
         // Get the aim yaw the next projectile should fly along. Honours
@@ -216,6 +218,13 @@ namespace Client
         // Per-frame: anchor each beam at the muzzle and aim it down the
         // weapon's current heading (called from Update).
         void  DriveBeams(float fDeltaTime);
+        // Player damage feedback. TriggerImpactFeedback fires the dramatic
+        // single-hit reaction (red flash + camera shake + hit-stop), throttled
+        // by m_fImpactCooldown. UpdateDamageFeedback runs each frame: ticks the
+        // cooldown, pushes the low-HP overlay strength to the renderer, and
+        // paces the low-HP heartbeat SFX.
+        void  TriggerImpactFeedback();
+        void  UpdateDamageFeedback(float fDeltaTime);
 
     public:
         void SetVoxelWorld(Engine::VoxelWorld* pWorld) { m_pVoxelWorld = pWorld; }
@@ -231,6 +240,10 @@ namespace Client
         //   GetWeaponSlotCount  — used to decide whether new-weapon cards
         //                        should appear in the pool (capped at 6).
         void AddOrLevelUpWeapon(int iWeaponId);
+        // Drop an owned weapon (shop sell). Tears down its live instances
+        // (sustained orbs / pets / beams) and erases the slot. No-op if the
+        // weapon isn't owned.
+        void RemoveWeapon(int iWeaponId);
         std::vector<int> GetOwnedWeaponIds() const;
         int  GetOwnedWeaponLevel(int iWeaponId) const;
         int  GetWeaponSlotCount() const { return static_cast<int>(m_vecWeaponSlots.size()); }
@@ -256,8 +269,9 @@ namespace Client
         int  PendingLevelUpCount()  const { return m_iPendingLevelUps; }
         void ConsumeLevelUp(int iChoice);
         // Apply a chosen stat upgrade and consume one pending level-up.
-        // LevelUpChoices calls this when the player picks a card.
-        void ApplyStatUpgrade(StatUpgrade eStat);
+        // LevelUpChoices calls this when the player picks a card; strKey is the
+        // levelups.csv "key" column and fAmount its "amount" (magnitude).
+        void ApplyStatUpgrade(const std::string& strKey, float fAmount);
 
         // Apply a hit from an external attacker. Mirrors the frogclaw
         // collision branch in CollisionPlayerBodyStay so non-collision damage

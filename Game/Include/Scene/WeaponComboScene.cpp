@@ -18,9 +18,10 @@ namespace Client
 
     bool WeaponComboScene::Init()
     {
-        // Restore crafted weapons saved from previous runs (load-once) so
-        // the loadout panel shows them straight away.
-        //WeaponDatabase::GetInst().LoadCrafted("/Game/Data/Weapons/crafted.csv");
+        // Load the weapon catalogue so the editor's list is populated even when
+        // entering straight from the start menu (without going through the game
+        // scene). Re-loading here also picks up edits saved on a prior visit.
+        WeaponDatabase::GetInst().LoadFromCSV("/Game/Data/Weapons/weapons_v2.csv");
 
         if (!FindLayer(DEFAULT_LAYER)) AddLayer(DEFAULT_LAYER);
 

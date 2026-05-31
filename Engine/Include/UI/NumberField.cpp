@@ -66,6 +66,12 @@ namespace Engine
         return v;
     }
 
+    void NumberField::OnRectChanged(float fX, float fY, float fW, float fH)
+    {
+        // SetRect (ScrollView re-placement, window resize) → re-lay children.
+        SetFieldRect(fX, fY, fW, fH);
+    }
+
     void NumberField::SetFieldRect(float fX, float fY, float fW, float fH)
     {
         // Slider takes the left ~58%, the edit box the right ~38%, with a gap.

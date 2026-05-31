@@ -522,6 +522,27 @@ namespace Engine
 		Vector2 vDOFFarValues;
 	}HDRCBUFFER, *PHDRCBUFFER;
 
+	// Radial screen-shockwave parameters consumed by HDR.fx's FinalPassPS
+	// (the full-screen tonemap resolve). RenderManager animates active
+	// shockwaves CPU-side and uploads up to 4 per frame to b13; the PS
+	// warps its scene-colour sample UV along each expanding ring. iCount==0
+	// is the common case and the shader early-outs (identity resolve).
+	typedef struct ENGINE_DLL alignas(16) _tagShockwaveCBuffer
+	{
+		Vector4 vShockwaves[4] = {};   // xy = centre UV, z = radius (UV), w = amplitude
+		int     iCount      = 0;
+		float   fThickness  = 0.12f;   // ring half-width in UV
+		float   fAspect     = 1.f;     // width/height — keeps the ring circular
+		float   _pad        = 0.f;
+		// Player damage-feedback overlays (HDR.fx FinalPassPS). Reuse the b13
+		// cbuffer so no extra pass / register is needed. All in [0,1] except
+		// fFxTime (a free-running clock driving the low-HP vignette pulse).
+		float   fDamageFlash = 0.f;    // sharp full-screen red flash (single hits)
+		float   fChipRed     = 0.f;    // subtle persistent red edge (contact/DoT)
+		float   fLowHp       = 0.f;    // low-HP vignette + desaturation strength
+		float   fFxTime      = 0.f;    // seconds, for the pulse
+	}SHOCKWAVECBUFFER, *PSHOCKWAVECBUFFER;
+
 	typedef struct ENGINE_DLL alignas(16) _tagUICBuffer
 	{
 		Vector2 vStartUV;
