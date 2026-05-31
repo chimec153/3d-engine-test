@@ -399,6 +399,18 @@
     <ClCompile Include="UI\Image.cpp">
       <Filter>14. UI</Filter>
     </ClCompile>
+    <ClCompile Include="UI\EditBox.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\NumberField.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Slider.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\ScrollView.cpp">
+      <Filter>14. UI</Filter>
+    </ClCompile>
     <ClCompile Include="UI\UIControl.cpp">
       <Filter>14. UI</Filter>
     </ClCompile>
@@ -748,6 +760,18 @@
     </ClInclude>
     <ClInclude Include="Bindable\ColliderOBB.h">
       <Filter>04. Bindable\08. Collider</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\EditBox.h">
+      <Filter>14. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\NumberField.h">
+      <Filter>14. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\Slider.h">
+      <Filter>14. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\ScrollView.h">
+      <Filter>14. UI</Filter>
     </ClInclude>
     <ClInclude Include="UI\UIControl.h">
       <Filter>14. UI</Filter>

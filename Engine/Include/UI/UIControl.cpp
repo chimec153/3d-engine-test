@@ -201,6 +201,22 @@ namespace Engine
 		return pTr;
 	}
 
+	void UIControl::SetClipRect(float fX, float fY, float fW, float fH)
+	{
+		std::vector<std::shared_ptr<UIRenderer>> vecRenderers;
+		FindChilds<UIRenderer>(vecRenderers);
+		for (auto& pRd : vecRenderers)
+			if (pRd) pRd->SetClipRect(fX, fY, fW, fH);
+	}
+
+	void UIControl::ClearClipRect()
+	{
+		std::vector<std::shared_ptr<UIRenderer>> vecRenderers;
+		FindChilds<UIRenderer>(vecRenderers);
+		for (auto& pRd : vecRenderers)
+			if (pRd) pRd->ClearClipRect();
+	}
+
 	bool UIControl::HitTestMousePx() const
 	{
 		if (!m_pTransform) return false;
@@ -228,6 +244,8 @@ namespace Engine
 		{
 			if (pInput->IsMouseButtonDown(CInput::MOUSE_TYPE::LEFT))
 				OnMouseDown();
+			if (pInput->IsMouseButtonDown(CInput::MOUSE_TYPE::RIGHT))
+				OnRightMouseDown();
 		}
 	}
 

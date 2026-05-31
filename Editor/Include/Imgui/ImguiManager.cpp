@@ -49,6 +49,7 @@
 #include "Bindable/PointLight.h"
 #include "Bindable/Sphere.h"
 #include "Bindable/MeshPresets.h"
+#include "../Procedural/FragmentGenerator.h"
 #include "Render/MRT.h"
 #include "Bindable/Particle.h"
 #include "Bindable/Cloth.h"
@@ -392,6 +393,9 @@ namespace Editor
 		WorldOutliner_ImGuiWindow(Engine::SceneManager::GetInst()->GetScene());
 		EditorSettings_ImGuiWindow();
 		MaterialBrowser_ImGuiWindow();
+		FragmentBaker_ImGuiWindow();
+		ParticleEditor_ImGuiWindow();
+		ShaderReload_ImGuiWindow();
 
 		if (auto pAnim = m_pSelectedAnimation.lock())
 		{
@@ -406,6 +410,488 @@ namespace Editor
 		Engine::RenderManager::GetInst()->AddCustomRender(
 			Engine::RENDER_LAYER::UI,
 			[this]() { RenderSelectionOutline(); });
+	}
+
+	void ImguiManager::FragmentBaker_ImGuiWindow()
+	{
+		if (!ImGui::Begin("Fragment Baker"))
+		{
+			ImGui::End();
+			return;
+		}
+
+		ImGui::TextWrapped("Carve a convex volume into low-poly shards, then "
+			"bake the combined mesh (one container per shard) to a .mesh asset.");
+		ImGui::Separator();
+
+		ImGui::Combo("Base Shape", &m_iFragShape, "Box\0Sphere\0Capsule\0Cylinder\0\0");
+		ImGui::SliderInt("Fragments", &m_iFragCount, 2, 64);
+		ImGui::DragFloat("Size", &m_fFragSize, 0.05f, 0.1f, 20.f, "%.2f");
+		if (m_iFragShape == 0)
+			ImGui::DragFloat("Box Height", &m_fFragBoxHeight, 0.05f, 0.1f, 20.f, "%.2f");
+		if (m_iFragShape == 1)
+			ImGui::SliderInt("Sphere Subdiv", &m_iFragSubdiv, 0, 3);
+		if (m_iFragShape == 2)
+		{
+			ImGui::DragFloat("Cyl Height",   &m_fFragCylHeight,  0.05f, 0.f, 10.f, "%.2f");
+			ImGui::SliderInt("Capsule Rings",   &m_iFragCapRings,    2, 12);
+			ImGui::SliderInt("Capsule Sectors", &m_iFragCapSectors,  4, 32);
+		}
+		if (m_iFragShape == 3)
+		{
+			ImGui::DragFloat("Height",  &m_fFragCylinderHeight, 0.05f, 0.1f, 20.f, "%.2f");
+			ImGui::SliderInt("Sectors", &m_iFragCapSectors,     4, 32);
+		}
+
+		ImGui::InputInt("Seed", &m_iFragSeed);
+		ImGui::SameLine();
+		if (ImGui::Button("Reroll"))
+			m_iFragSeed = (int)(ImGui::GetTime() * 1000.0);
+
+		if (ImGui::Button("Generate / Preview"))
+		{
+			FragmentGenerator::Params p;
+			p.eShape          = (m_iFragShape == 1) ? FragmentGenerator::BaseShape::Sphere
+			                  : (m_iFragShape == 2) ? FragmentGenerator::BaseShape::Capsule
+			                  : (m_iFragShape == 3) ? FragmentGenerator::BaseShape::Cylinder
+			                                        : FragmentGenerator::BaseShape::Box;
+			p.iFragments      = m_iFragCount;
+			p.uSeed           = (unsigned int)m_iFragSeed;
+			p.fSize           = m_fFragSize;
+			p.fBoxHeight      = m_fFragBoxHeight;
+			p.iSphereSubdiv   = m_iFragSubdiv;
+			p.fCylHeight      = m_fFragCylHeight;
+			p.iCapsuleRings   = m_iFragCapRings;
+			p.iCapsuleSectors = m_iFragCapSectors;
+			p.fCylinderHeight = m_fFragCylinderHeight;
+
+			FragmentGenerator::Result res = FragmentGenerator::Generate(p);
+			m_pFragMesh      = res.pMesh;
+			m_iFragOutShards = res.iFragments;
+			m_iFragOutVerts  = res.iVertices;
+			m_iFragOutTris   = res.iTriangles;
+
+			// Drop (or reuse) a throwaway preview object so the shards show in
+			// the viewport. Mirrors the "+ Add Cube" spawner: UnitBox material
+			// setup, Standard VS + solid PS + Standard IL/Topology. The single
+			// renderer-level material covers every shard container because the
+			// MeshRenderer's resolver returns it for all (container, sub).
+			if (m_pFragMesh)
+			{
+				if (auto pScene = Engine::SceneManager::GetInst()->GetScene())
+				{
+					if (auto pLayer = pScene->FindLayer(DEFAULT_LAYER))
+					{
+						auto pObj = m_pFragPreview.lock();
+						if (!pObj)
+						{
+							pObj = pScene->CreateGameObject("__FragmentPreview", pLayer);
+							m_pFragPreview = pObj;
+							if (pObj)
+							{
+								Engine::Vector3 vPos = { 0.f, 0.f, 0.f };
+								if (auto pCam = Engine::Graphics::GetInst()->GetCamera())
+									if (auto pCamTr = pCam->GetTransform())
+										vPos = pCamTr->GetPosition()
+											 + pCamTr->GetAxis(Engine::AXIS_TYPE::Z) * 5.f;
+
+								if (auto pTr = pObj->AddComponent<Engine::Transform>("transform"))
+									pTr->SetPosition(vPos);
+
+								if (auto pMR = pObj->AddComponent<Engine::MeshRendererComponent>("mesh_renderer"))
+								{
+									pMR->SetVertexShader(Engine::StaticFindBindable<Engine::VertexShader>(STANDARD_VS));
+									pMR->SetPixelShader (Engine::StaticFindBindable<Engine::PixelShader>(STANDARD_SOLID_PS));
+									if (auto pIL  = Engine::StaticFindBindable<Engine::InputLayout>("Standard"))
+										pMR->AddBindable(pIL);
+									if (auto pTop = Engine::StaticFindBindable<Engine::Topology>("TriangleList"))
+										pMR->AddBindable(pTop);
+									if (auto pSrcMat = Engine::StaticFindBindable<Engine::Material>("Material"))
+									{
+										auto pMat = std::static_pointer_cast<Engine::Material>(pSrcMat->Clone());
+										pMat->SetDiffuseColor (0.8f, 0.8f, 0.8f, 1.f);
+										pMat->SetSpecularColor(1.f, 1.f, 1.f, 1.f);
+										pMat->SetEmissiveColor({ 0.05f, 0.05f, 0.05f, 1.f });
+										pMR->SetMaterial(pMat);
+									}
+								}
+							}
+						}
+						if (pObj)
+							if (auto pMR = pObj->GetComponent<Engine::MeshRendererComponent>())
+								pMR->SetMesh(m_pFragMesh);
+					}
+				}
+			}
+		}
+
+		ImGui::Text("Shards: %d   Verts: %d   Tris: %d",
+			m_iFragOutShards, m_iFragOutVerts, m_iFragOutTris);
+
+		ImGui::Separator();
+		ImGui::BeginDisabled(!m_pFragMesh);
+		if (ImGui::Button("Save .mesh..."))
+		{
+			TCHAR strFile[MAX_PATH]    = {};
+			TCHAR strInitDir[MAX_PATH] = {};
+			BuildClientSubPath(strInitDir, MAX_PATH, TEXT("Mesh"), MESH_PATH);
+			OPENFILENAME tName = {};
+			tName.lStructSize     = sizeof(OPENFILENAME);
+			tName.hwndOwner       = Engine::Window::GetInst()->GetWinHandle();
+			tName.lpstrFilter     = TEXT("Mesh\0*.mesh;*.msh\0All\0*.*\0");
+			tName.nMaxFile        = MAX_PATH;
+			tName.lpstrInitialDir = strInitDir;
+			tName.lpstrFile       = strFile;
+			tName.lpstrDefExt     = TEXT("mesh");
+
+			if (GetSaveFileName(&tName))
+				m_pFragMesh->SaveFromFullPath(strFile);
+		}
+		ImGui::EndDisabled();
+
+		ImGui::End();
+	}
+
+	void ImguiManager::ApplyParticleParams(std::shared_ptr<Engine::Particle> pPt)
+	{
+		if (!pPt) return;
+		pPt->SetStartColor  ({ m_ptStartColor[0],  m_ptStartColor[1],  m_ptStartColor[2],  m_ptStartColor[3] });
+		pPt->SetEndColor    ({ m_ptEndColor[0],    m_ptEndColor[1],    m_ptEndColor[2],    m_ptEndColor[3] });
+		pPt->SetVelocity    ({ m_ptVelocity[0],    m_ptVelocity[1],    m_ptVelocity[2] });
+		pPt->SetMaxVelocity ({ m_ptMaxVelocity[0], m_ptMaxVelocity[1], m_ptMaxVelocity[2] });
+		pPt->SetAccelaration({ m_ptAccel[0],       m_ptAccel[1],       m_ptAccel[2] });
+		pPt->SetMinCreatePosition({ m_ptMinPos[0], m_ptMinPos[1], m_ptMinPos[2] });
+		pPt->SetMaxCreatePosition({ m_ptMaxPos[0], m_ptMaxPos[1], m_ptMaxPos[2] });
+		pPt->SetStartSize   ({ m_ptStartSize[0], m_ptStartSize[1] });
+		pPt->SetEndSize     ({ m_ptEndSize[0],   m_ptEndSize[1] });
+		pPt->SetMaxLifeTime (m_ptLifeTime);
+		// Emit interval divides elapsed time each frame — never let it hit 0.
+		pPt->SetEmitTime    (m_ptEmitTime > 1e-5f ? m_ptEmitTime : 1e-5f);
+		pPt->SetMaxFrame    (m_ptMaxFrame);
+		pPt->SetFrameWidth  (m_ptFrameW);
+		pPt->SetFrameHeight (m_ptFrameH);
+		m_ptStopEmit ? pPt->StopEmit() : pPt->ResumeEmit();
+	}
+
+	void ImguiManager::SpawnParticlePreview()
+	{
+		auto pScene = Engine::SceneManager::GetInst()->GetScene();
+		if (!pScene) return;
+		auto pLayer = pScene->FindLayer(DEFAULT_LAYER);
+		if (!pLayer) return;
+
+		// Drop the previous preview: the per-particle StructuredBuffer is fixed
+		// at construction, so changing Max Count needs a fresh component/object.
+		if (auto pOld = m_pParticlePreview.lock()) pOld->InActivate();
+		m_pParticlePreview.reset();
+
+		auto pObj = pScene->CreateGameObject("__ParticlePreview", pLayer);
+		if (!pObj) return;
+		m_pParticlePreview = pObj;
+
+		// Only the int-count Particle ctor builds the CS / structured buffers;
+		// the count is captured here and can't change without a respawn.
+		const int iCount = m_ptMaxCount < 64 ? 64 : m_ptMaxCount;
+		auto pPt = pObj->AddComponent<Engine::Particle>("particle", iCount);
+		if (!pPt) return;
+
+		pPt->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
+
+		// Texture: seed the default game atlas path on the first ever spawn,
+		// then (re)bind whatever path is remembered. SetParticleTexture finds
+		// the just-created preview (m_pParticlePreview is already set above) and
+		// binds the texture to it.
+		if (!m_strPtTexturePath[0])
+			strcpy_s(m_strPtTexturePath, MAX_PATH, "/Game/Texture/Particle/particle_00.png");
+		SetParticleTexture(m_strPtTexturePath);
+
+		// Anchor 5 units in front of the camera (mirrors the Fragment Baker).
+		Engine::Vector3 vPos(0.f, 0.f, 0.f);
+		if (auto pCam = Engine::Graphics::GetInst()->GetCamera())
+			if (auto pCamTr = pCam->GetTransform())
+				vPos = pCamTr->GetPosition()
+					 + pCamTr->GetAxis(Engine::AXIS_TYPE::Z) * 5.f;
+		if (auto pTr = pPt->GetTransform()) pTr->SetPosition(vPos);
+
+		ApplyParticleParams(pPt);
+	}
+
+	void ImguiManager::ParticleEditor_ImGuiWindow()
+	{
+		if (!ImGui::Begin("Particle Editor"))
+		{
+			ImGui::End();
+			return;
+		}
+
+		ImGui::TextWrapped("Spawn a live preview emitter in front of the camera "
+			"and tune it in real time. Values are NOT saved.");
+		ImGui::Separator();
+
+		ImGui::SliderInt("Max Count", &m_ptMaxCount, 64, 16384);
+		if (ImGui::Button("Spawn / Reset Preview"))
+			SpawnParticlePreview();
+		ImGui::SameLine();
+		if (ImGui::Button("Remove Preview"))
+		{
+			if (auto pOld = m_pParticlePreview.lock()) pOld->InActivate();
+			m_pParticlePreview.reset();
+		}
+
+		if (ImGui::Button("Save Preset..."))
+			SaveParticlePreset();
+		ImGui::SameLine();
+		if (ImGui::Button("Load Preset..."))
+			LoadParticlePreset();
+
+		auto pObj = m_pParticlePreview.lock();
+		std::shared_ptr<Engine::Particle> pPt =
+			pObj ? pObj->GetComponent<Engine::Particle>() : nullptr;
+		ImGui::Text(pPt ? "Preview: ACTIVE" : "Preview: (none) - press Spawn");
+
+		ImGui::Separator();
+
+		// Texture picker — load any image and bind it to slot 0 (the slot the
+		// particle PS samples). Stored on m_pPtTexture so respawns keep it.
+		ImGui::Text("Texture: %s", m_pPtTexture ? m_pPtTexture->GetTag().c_str() : "(default on spawn)");
+		if (ImGui::Button("Set Texture..."))
+		{
+			TCHAR strFile[MAX_PATH] = {};
+			OPENFILENAME tName = {};
+			tName.lStructSize     = sizeof(OPENFILENAME);
+			tName.hwndOwner       = Engine::Window::GetInst()->GetWinHandle();
+			tName.lpstrFilter     = TEXT("Texture\0*.png;*.dds;*.tga;*.jpg;*.bmp\0All\0*.*\0");
+			tName.nMaxFile        = MAX_PATH;
+			tName.lpstrInitialDir = m_strTextureDefaultPath;
+			tName.lpstrFile       = strFile;
+
+			if (GetOpenFileName(&tName))
+			{
+				char szPath[MAX_PATH] = {};
+				WideCharToMultiByte(CP_ACP, 0, strFile, -1, szPath, MAX_PATH, nullptr, nullptr);
+				SetParticleTexture(szPath);
+			}
+		}
+
+		ImGui::Separator();
+
+		// Each widget edits the editor's authoritative value, then (when changed
+		// and a live preview exists) pushes it via the matching setter. The CPU
+		// cbuffer field is re-uploaded next Update → frame-immediate.
+		if (ImGui::ColorEdit4("Start Color", m_ptStartColor) && pPt)
+			pPt->SetStartColor({ m_ptStartColor[0], m_ptStartColor[1], m_ptStartColor[2], m_ptStartColor[3] });
+		if (ImGui::ColorEdit4("End Color", m_ptEndColor) && pPt)
+			pPt->SetEndColor({ m_ptEndColor[0], m_ptEndColor[1], m_ptEndColor[2], m_ptEndColor[3] });
+
+		if (ImGui::DragFloat2("Start Size", m_ptStartSize, 0.005f, 0.f, 5.f, "%.3f") && pPt)
+			pPt->SetStartSize({ m_ptStartSize[0], m_ptStartSize[1] });
+		if (ImGui::DragFloat2("End Size", m_ptEndSize, 0.005f, 0.f, 5.f, "%.3f") && pPt)
+			pPt->SetEndSize({ m_ptEndSize[0], m_ptEndSize[1] });
+
+		if (ImGui::DragFloat("Life Time", &m_ptLifeTime, 0.05f, 0.05f, 30.f, "%.2f") && pPt)
+			pPt->SetMaxLifeTime(m_ptLifeTime);
+		if (ImGui::DragFloat("Emit Interval", &m_ptEmitTime, 0.001f, 0.0001f, 2.f, "%.4f") && pPt)
+			pPt->SetEmitTime(m_ptEmitTime > 1e-5f ? m_ptEmitTime : 1e-5f);
+
+		ImGui::Separator();
+		ImGui::Text("Motion");
+		if (ImGui::DragFloat3("Velocity (min)", m_ptVelocity, 0.01f) && pPt)
+			pPt->SetVelocity({ m_ptVelocity[0], m_ptVelocity[1], m_ptVelocity[2] });
+		if (ImGui::DragFloat3("Velocity (max)", m_ptMaxVelocity, 0.01f) && pPt)
+			pPt->SetMaxVelocity({ m_ptMaxVelocity[0], m_ptMaxVelocity[1], m_ptMaxVelocity[2] });
+		if (ImGui::DragFloat3("Acceleration", m_ptAccel, 0.01f) && pPt)
+			pPt->SetAccelaration({ m_ptAccel[0], m_ptAccel[1], m_ptAccel[2] });
+
+		ImGui::Separator();
+		ImGui::Text("Spawn Box (emitter-local)");
+		if (ImGui::DragFloat3("Min Pos", m_ptMinPos, 0.01f) && pPt)
+			pPt->SetMinCreatePosition({ m_ptMinPos[0], m_ptMinPos[1], m_ptMinPos[2] });
+		if (ImGui::DragFloat3("Max Pos", m_ptMaxPos, 0.01f) && pPt)
+			pPt->SetMaxCreatePosition({ m_ptMaxPos[0], m_ptMaxPos[1], m_ptMaxPos[2] });
+
+		ImGui::Separator();
+		ImGui::Text("Flipbook (square N x N atlas only)");
+		if (ImGui::SliderInt("Max Frame", &m_ptMaxFrame, 1, 64) && pPt)
+			pPt->SetMaxFrame(m_ptMaxFrame);
+		if (ImGui::SliderInt("Frame Width", &m_ptFrameW, 1, 16) && pPt)
+			pPt->SetFrameWidth(m_ptFrameW);
+		if (ImGui::SliderInt("Frame Height", &m_ptFrameH, 1, 16) && pPt)
+			pPt->SetFrameHeight(m_ptFrameH);
+
+		ImGui::Separator();
+		if (ImGui::Checkbox("Stop Emit", &m_ptStopEmit) && pPt)
+			(m_ptStopEmit ? pPt->StopEmit() : pPt->ResumeEmit());
+
+		ImGui::End();
+	}
+
+	void ImguiManager::SetParticleTexture(const char* szPathUtf8)
+	{
+		if (!szPathUtf8 || !szPathUtf8[0]) return;
+
+		// Tag = file name (registry key). Disambiguation across folders is good
+		// enough for this tool; same-named files share a cache entry.
+		std::string strTag(szPathUtf8);
+		const size_t slash = strTag.find_last_of("\\/");
+		if (slash != std::string::npos) strTag = strTag.substr(slash + 1);
+
+		std::shared_ptr<Engine::Texture> pTex;
+		if (szPathUtf8[0] == '/')
+		{
+			// Mounted /Game/ resource path → path-key load (char* overload).
+			pTex = Engine::StaticCreateBindable<Engine::Texture>(strTag, szPathUtf8, TEXTURE_PATH);
+		}
+		else
+		{
+			// Absolute file path → full-path load, bound to slot 0.
+			TCHAR wPath[MAX_PATH] = {};
+			MultiByteToWideChar(CP_ACP, 0, szPathUtf8, -1, wPath, MAX_PATH);
+			pTex = Engine::StaticCreateBindable<Engine::Texture>(strTag, wPath, 0);
+		}
+		if (!pTex) pTex = Engine::StaticFindBindable<Engine::Texture>(strTag);
+		if (!pTex) return;
+
+		m_pPtTexture = pTex;
+		strcpy_s(m_strPtTexturePath, MAX_PATH, szPathUtf8);
+
+		if (auto pObj = m_pParticlePreview.lock())
+			if (auto pPt = pObj->GetComponent<Engine::Particle>())
+				pPt->SetTexture(pTex);
+	}
+
+	void ImguiManager::SaveParticlePreset()
+	{
+		// Serialise a live emitter via the engine's own Particle::Save (cbuffer +
+		// emit/elapsed times). Spawn one — it already mirrors the current editor
+		// values — if the user hasn't pressed Spawn yet.
+		auto pObj = m_pParticlePreview.lock();
+		if (!pObj) { SpawnParticlePreview(); pObj = m_pParticlePreview.lock(); }
+		auto pPt = pObj ? pObj->GetComponent<Engine::Particle>() : nullptr;
+		if (!pPt) return;
+
+		TCHAR strFile[MAX_PATH] = {};
+		OPENFILENAME t = {};
+		t.lStructSize  = sizeof(OPENFILENAME);
+		t.hwndOwner    = Engine::Window::GetInst()->GetWinHandle();
+		t.lpstrFilter  = TEXT("Particle Preset\0*.particle\0All\0*.*\0");
+		t.nMaxFile     = MAX_PATH;
+		t.lpstrFile    = strFile;
+		t.lpstrDefExt  = TEXT("particle");
+		if (!GetSaveFileName(&t)) return;
+
+		char szPath[MAX_PATH] = {};
+		WideCharToMultiByte(CP_ACP, 0, strFile, -1, szPath, MAX_PATH, nullptr, nullptr);
+		FILE* f = nullptr;
+		fopen_s(&f, szPath, "wb");
+		if (!f) return;
+
+		// Small wrapper header so a load can validate the file, then the engine's
+		// Particle::Save block, then the texture path (Particle::Save doesn't
+		// serialise the runtime texture binding).
+		const unsigned int uMagic = 0x32435450;   // 'PTC2'
+		const unsigned int uVer   = 2;
+		fwrite(&uMagic, 4, 1, f);
+		fwrite(&uVer,   4, 1, f);
+		pPt->Save(f);
+		const int iTexLen = static_cast<int>(strnlen_s(m_strPtTexturePath, MAX_PATH));
+		fwrite(&iTexLen, 4, 1, f);
+		if (iTexLen > 0) fwrite(m_strPtTexturePath, 1, iTexLen, f);
+
+		fclose(f);
+	}
+
+	void ImguiManager::LoadParticlePreset()
+	{
+		TCHAR strFile[MAX_PATH] = {};
+		OPENFILENAME t = {};
+		t.lStructSize  = sizeof(OPENFILENAME);
+		t.hwndOwner    = Engine::Window::GetInst()->GetWinHandle();
+		t.lpstrFilter  = TEXT("Particle Preset\0*.particle\0All\0*.*\0");
+		t.nMaxFile     = MAX_PATH;
+		t.lpstrFile    = strFile;
+		if (!GetOpenFileName(&t)) return;
+
+		char szPath[MAX_PATH] = {};
+		WideCharToMultiByte(CP_ACP, 0, strFile, -1, szPath, MAX_PATH, nullptr, nullptr);
+		FILE* f = nullptr;
+		fopen_s(&f, szPath, "rb");
+		if (!f) return;
+
+		unsigned int uMagic = 0, uVer = 0;
+		fread(&uMagic, 4, 1, f);
+		fread(&uVer,   4, 1, f);
+		if (uMagic != 0x32435450) { fclose(f); return; }
+
+		// Load straight into a live emitter via the engine's Particle::Load,
+		// which rebuilds the GPU buffers at the saved Max Count — so a different
+		// count takes effect immediately, no respawn needed. Spawn one first if
+		// the user hasn't.
+		auto pObj = m_pParticlePreview.lock();
+		if (!pObj) { SpawnParticlePreview(); pObj = m_pParticlePreview.lock(); }
+		auto pPt = pObj ? pObj->GetComponent<Engine::Particle>() : nullptr;
+		if (!pPt) { fclose(f); return; }
+
+		pPt->Load(f);
+
+		int iTexLen = 0;
+		fread(&iTexLen, 4, 1, f);
+		char szTex[MAX_PATH] = {};
+		if (iTexLen > 0 && iTexLen < MAX_PATH) fread(szTex, 1, iTexLen, f);
+		fclose(f);
+
+		// Re-bind the saved texture (Particle::Load doesn't restore it).
+		if (szTex[0]) SetParticleTexture(szTex);
+
+		// Mirror the loaded cbuffer back into the editor widgets so the sliders
+		// reflect what was loaded (and the next tweak edits the right value).
+		const auto& cb = pPt->GetCBuffer();
+		m_ptStartColor[0] = cb.vStartColor.x; m_ptStartColor[1] = cb.vStartColor.y;
+		m_ptStartColor[2] = cb.vStartColor.z; m_ptStartColor[3] = cb.vStartColor.w;
+		m_ptEndColor[0] = cb.vEndColor.x; m_ptEndColor[1] = cb.vEndColor.y;
+		m_ptEndColor[2] = cb.vEndColor.z; m_ptEndColor[3] = cb.vEndColor.w;
+		m_ptVelocity[0]    = cb.vVelocity.x;    m_ptVelocity[1]    = cb.vVelocity.y;    m_ptVelocity[2]    = cb.vVelocity.z;
+		m_ptMaxVelocity[0] = cb.vMaxVelocity.x; m_ptMaxVelocity[1] = cb.vMaxVelocity.y; m_ptMaxVelocity[2] = cb.vMaxVelocity.z;
+		m_ptAccel[0]       = cb.vAccelation.x;  m_ptAccel[1]       = cb.vAccelation.y;  m_ptAccel[2]       = cb.vAccelation.z;
+		m_ptMinPos[0]      = cb.vMinimumPosition.x; m_ptMinPos[1] = cb.vMinimumPosition.y; m_ptMinPos[2] = cb.vMinimumPosition.z;
+		m_ptMaxPos[0]      = cb.vMaximumPosition.x; m_ptMaxPos[1] = cb.vMaximumPosition.y; m_ptMaxPos[2] = cb.vMaximumPosition.z;
+		m_ptStartSize[0]   = cb.vStartSize.x; m_ptStartSize[1] = cb.vStartSize.y;
+		m_ptEndSize[0]     = cb.vEndSize.x;   m_ptEndSize[1]   = cb.vEndSize.y;
+		m_ptLifeTime       = cb.fMaxLifeTime;
+		m_ptMaxCount       = cb.iMaxParticleCount;
+		m_ptMaxFrame       = cb.iMaxFrame;
+		m_ptFrameW         = cb.iFrameWidth;
+		m_ptFrameH         = cb.iFrameHeight;
+		m_ptEmitTime       = pPt->GetEmitTime();
+	}
+
+	void ImguiManager::ShaderReload_ImGuiWindow()
+	{
+		if (!ImGui::Begin("Shader Reload"))
+		{
+			ImGui::End();
+			return;
+		}
+
+		ImGui::TextWrapped("Recompile all shaders from their .fx / .hlsl source on "
+			"disk without restarting. A compile error keeps the old shader and is "
+			"listed below. (Vertex input-signature changes aren't re-reflected.)");
+		ImGui::Separator();
+
+		if (ImGui::Button("Recompile All Shaders"))
+		{
+			// Enumeration + recompile + bind-cache reset all happen engine-side
+			// (Engine::RecompileAllShaders) — BindableManager::GetMap is an
+			// inline member that isn't exported across the DLL boundary, so the
+			// loop can't live here.
+			m_strShaderReloadLog.clear();
+			Engine::RecompileAllShaders(m_strShaderReloadLog);
+		}
+
+		ImGui::Separator();
+		if (!m_strShaderReloadLog.empty())
+			ImGui::TextUnformatted(m_strShaderReloadLog.c_str());
+
+		ImGui::End();
 	}
 
 	void ImguiManager::Render(float fDeltaTime)

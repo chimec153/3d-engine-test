@@ -38,6 +38,7 @@ namespace Engine
         void SetMaxFadeTime(float fMax);
         void SetFadeStartTime(float fStart);
         void StartFade();
+        void SetFadeTime(float fTime);
 
         // Slots (mirrors MeshRendererComponent pattern).
         void SetMesh(const std::shared_ptr<class Mesh>& p);

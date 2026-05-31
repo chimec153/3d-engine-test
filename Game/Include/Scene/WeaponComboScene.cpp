@@ -2,6 +2,7 @@
 #include "Core/ObjectFactory.h"
 REGISTER_SCENE(Client::WeaponComboScene, WeaponComboScene)
 #include "../UI/WeaponCombiner.h"
+#include "../Object/WeaponDatabase.h"
 #include "Bindable/Camera.h"
 #include "Core/Graphics.h"
 
@@ -17,6 +18,10 @@ namespace Client
 
     bool WeaponComboScene::Init()
     {
+        // Restore crafted weapons saved from previous runs (load-once) so
+        // the loadout panel shows them straight away.
+        //WeaponDatabase::GetInst().LoadCrafted("/Game/Data/Weapons/crafted.csv");
+
         if (!FindLayer(DEFAULT_LAYER)) AddLayer(DEFAULT_LAYER);
 
         std::shared_ptr<Engine::Camera> pCamera;

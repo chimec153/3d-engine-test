@@ -16,7 +16,11 @@ namespace Client
     {
         Playing,
         LevelUpModal,
-        // Inventory, GameOver, Paused (future)
+        GameOver,
+        Paused,      // ESC pause menu (이어하기 / 종료하기)
+        Intermission, // between-round prep: pick the tower weapon, then start
+        StartSelect,  // start-of-game free pick of one starting weapon
+        // Inventory (future)
     };
 
     class GameStateManager

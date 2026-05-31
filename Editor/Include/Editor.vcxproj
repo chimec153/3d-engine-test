@@ -189,6 +189,7 @@
     <ClCompile Include="Imgui\ImGuizmo.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Object\Player.cpp" />
+    <ClCompile Include="Procedural\FragmentGenerator.cpp" />
     <ClCompile Include="Project\ProjectModule.cpp" />
     <ClCompile Include="Scene\InGameScene.cpp" />
     <ClCompile Include="Window.cpp" />
@@ -213,6 +214,7 @@
     <ClInclude Include="Navigation\Recast\RecastAlloc.h" />
     <ClInclude Include="Navigation\Recast\RecastAssert.h" />
     <ClInclude Include="Object\Player.h" />
+    <ClInclude Include="Procedural\FragmentGenerator.h" />
     <ClInclude Include="Project\ProjectModule.h" />
     <ClInclude Include="Scene\InGameScene.h" />
     <ClInclude Include="Window.h" />

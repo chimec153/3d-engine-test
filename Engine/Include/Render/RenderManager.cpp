@@ -47,9 +47,15 @@ namespace
 		Engine::GameObject* pOwner = pMR->GetGameObjectOwner();
 		std::shared_ptr<Engine::Transform> pTr =
 			pOwner ? pOwner->GetComponent<Engine::Transform>() : nullptr;
-		if (pTr) pTr->Bind();
+		if (pTr)
+		{
+			pTr->Bind();
+		}
 		pMR->Bind();
-		if (pMR->GetMesh()) pMR->GetMesh()->Draw(pMR->MakeMaterialResolver());
+		if (pMR->GetMesh())
+		{
+			pMR->GetMesh()->Draw(pMR->MakeMaterialResolver());
+		}
 		pMR->PostBind();
 		if (pTr) pTr->PostBind();
 	}
@@ -754,6 +760,8 @@ namespace Engine
 
 		m_pDecalMRT->Clear();
 
+		m_pCustomDepthWriteState->Bind();
+
 		RenderOpaque();
 
 		// Phase V8 — Unreal-style CustomDepth. Flagged MRs draw to a
@@ -765,6 +773,8 @@ namespace Engine
 		RenderDecal();
 
 		RenderShadow();
+
+		m_pCustomDepthWriteState->PostBind();
 
 		m_pNoDepthWrite->Bind();
 
@@ -1072,9 +1082,16 @@ namespace Engine
 
 		m_pHDRTexture->ResetTargets();
 
-		m_pHDRTexture->SetTargets(pMRT->GetDSV());
+		// Bind the depth as a READ-ONLY DSV so it can be depth-tested against
+		// AND sampled as an SRV (t10) at the same time — soft-particle effects
+		// (laser beams) fade against scene depth. Existing alpha effects only
+		// depth-test (they don't write depth), so read-only is equivalent for
+		// them. Falls back to the read-write DSV if the read-only view is null.
+		CPtr<ID3D11DepthStencilView> pAlphaDSV = pMRT->GetReadOnlyDSV();
+		if (!pAlphaDSV) pAlphaDSV = pMRT->GetDSV();
+		m_pHDRTexture->SetTargets(pAlphaDSV);
 
-		//pMRT->SetDepthSRV(10);
+		pMRT->SetDepthSRV(10);
 		m_pAlphaBlend->Bind();
 
 		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
@@ -1108,7 +1125,7 @@ namespace Engine
 		}
 
 		m_pAlphaBlend->PostBind();
-		//pMRT->ResetSRV(10);
+		pMRT->ResetSRV(10);
 	}
 
 	void RenderManager::RenderLight()
@@ -1231,7 +1248,7 @@ namespace Engine
 		// wires the light-clip-space transform — no extra plumbing.
 		Graphics::GetInst()->ResetBindCache();
 
-		auto& mapBuckets = m_mapMeshInstance[static_cast<int>(RENDER_LAYER::OPACUE)];
+		auto& mapBuckets = m_mapMeshInstance[static_cast<int>(RENDER_LAYER::OPACUE)]; 
 
 		for (auto& kv : mapBuckets)
 		{
@@ -1386,6 +1403,20 @@ namespace Engine
 		m_pDecalMRT->ResetTargets();
 
 		pMRT->ResetSRV(10);
+
+		// Decals draw a real mesh via Mesh::Draw, leaving a vertex buffer +
+		// STANDARD input layout bound. Clear them so a later non-indexed pass
+		// doesn't validate its draw against the leftover (smaller) decal VB
+		// (DEVICE_DRAW_VERTEX_BUFFER_TOO_SMALL) and so stale state can't break
+		// subsequent draws. No-op when nothing was drawn.
+		if (!m_DecalList.empty())
+		{
+			ID3D11Buffer* pNullVB = nullptr;
+			UINT iZero = 0;
+			Graphics::GetInst()->GetDeviceContext()->IASetVertexBuffers(0, 1, &pNullVB, &iZero, &iZero);
+			Graphics::GetInst()->GetDeviceContext()->IASetInputLayout(nullptr);
+			Graphics::GetInst()->ResetBindCache();
+		}
 	}
 
 	void RenderManager::RenderSkyBox()

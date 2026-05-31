@@ -69,8 +69,13 @@ namespace Engine
 
     const VoxelWorld::ChunkRecord* VoxelWorld::FindChunk(const ChunkCoord& c) const
     {
+        if (m_bLastFindValid && c == m_lastFindCoord) return m_pLastFindRec;
         auto it = m_chunks.find(c);
-        return it == m_chunks.end() ? nullptr : &it->second;
+        const ChunkRecord* rec = (it == m_chunks.end()) ? nullptr : &it->second;
+        m_lastFindCoord  = c;
+        m_pLastFindRec   = rec;
+        m_bLastFindValid = true;
+        return rec;
     }
 
     VoxelWorld::ChunkRecord* VoxelWorld::EnsureChunk(const ChunkCoord& c)
@@ -133,6 +138,7 @@ namespace Engine
         }
 
         auto [it, ok] = m_chunks.emplace(c, std::move(rec));
+        m_bLastFindValid = false;   // a cached miss for `c` would now be stale
         return &it->second;
     }
 

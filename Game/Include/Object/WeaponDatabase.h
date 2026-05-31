@@ -51,8 +51,34 @@ namespace Client
         // Flips the equip flag for a registry entry. Refuses to equip past
         // kMaxEquipped (leaving it unequipped). Returns the new state.
         bool ToggleEquip(int iIndex);
+        // Permanently removes a crafted weapon from the registry (combo-scene
+        // destroy). Shifts later indices down; the live m_vecWeapons copy is
+        // dropped on the next LoadFromCSV re-apply.
+        void RemoveCrafted(int iIndex);
         // Live ids of the equipped crafted weapons — the in-stage pool.
         std::vector<int> EquippedLiveIds() const;
+        // Live ids of EVERY crafted weapon (equipped or not). LoadFromCSV
+        // re-applies all crafted entries into the live catalogue and assigns
+        // each an iLiveId, so all of these resolve through Get(). Used by the
+        // between-round shop, which sells from the whole crafted collection.
+        std::vector<int> AllCraftedLiveIds() const;
+
+        // Ids the shop may sell: every loaded weapon (weapons_v2.csv catalogue
+        // plus re-applied crafted) flagged shop_available. Evolution-only forms
+        // set shop_available=0 so they only arrive by evolving.
+        std::vector<int> ShopWeaponIds() const;
+
+        // Cross-run persistence of the crafted registry.
+        //   LoadCrafted — reads the saved registry into m_vecCrafted ONCE
+        //     per process (guarded); later calls no-op so in-session crafts
+        //     aren't clobbered. Call from scene init. Loaded entries get
+        //     iLiveId = -1; LoadFromCSV's re-apply assigns live ids.
+        //   SaveCrafted — writes the current registry. Call after every
+        //     craft / equip change so the file is always current (this is
+        //     more robust than saving only at exit, and avoids the
+        //     separate-singleton-per-module issue if saved from the .exe).
+        size_t LoadCrafted(const std::string& strPath);
+        void   SaveCrafted(const std::string& strPath) const;
 
     private:
         WeaponDatabase() = default;
@@ -73,7 +99,10 @@ namespace Client
         std::vector<WeaponDef>            m_vecWeapons;
         std::unordered_map<int, size_t>   m_mapIdToIndex;
         // Crafted weapons, kept across LoadFromCSV clears so they persist
-        // for the rest of the process run (not written to disk).
+        // for the rest of the process run. Also saved to / loaded from disk
+        // via SaveCrafted / LoadCrafted so they survive app restarts.
         std::vector<CraftedEntry>         m_vecCrafted;
+        // LoadCrafted runs at most once per process (see its comment).
+        bool                              m_bCraftedLoaded = false;
     };
 }

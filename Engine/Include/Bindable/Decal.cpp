@@ -47,6 +47,11 @@ namespace Engine
 	void Decal::SetFadeStartTime(float fStart) { m_tCBuffer.fFadeStartTime = fStart; }
 	void Decal::StartFade() { m_bFadeStart = true; }
 
+	void Decal::SetFadeTime(float fTime)
+	{
+		m_tCBuffer.fFadeTime = fTime;
+	}
+
 	void Decal::SetMesh(const std::shared_ptr<Mesh>& p) { m_pMesh = p; }
 	void Decal::SetVertexShader(const std::shared_ptr<VertexShader>& p) { m_pVS = p; }
 	void Decal::SetPixelShader(const std::shared_ptr<PixelShader>& p) { m_pPS = p; }

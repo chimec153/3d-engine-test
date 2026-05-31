@@ -19,18 +19,26 @@ REGISTER_GAMEOBJECT_EX(Player, new Client::Player(100, 1, 5))
 #include "Bindable/DepthStencilState.h"
 #include "Animation/JointSocket.h"
 #include "Trail.h"
+#include "Movement/EnemyTargeting.h"
+#include "Pet.h"
+#include "Beam.h"
 #include "GameObject/GameObject.h"
 #include "Bindable/ColliderOBB.h"
 #include "Bindable/Particle.h"
 #include "Bindable/Texture.h"
 #include "Attackable.h"
+#include "AggroTarget.h"
 #include "Bindable/Decal.h"
+#include "Vfx/FootstepManager.h"
 #include "Bindable/ColliderLine.h"
 #include "Bindable/UIRenderer.h"
 #include "../UI/Inventory.h"
 #include "Bindable/SoundBindable.h"
 #include "Bullet.h"
+#include "Orb.h"
 #include "WeaponDatabase.h"
+#include "Wallet.h"
+#include "../GameDefs.h"
 #include "PlayerState.h"
 #include "Voxel/VoxelWorld.h"
 #include "Scene/Scene.h"
@@ -311,6 +319,16 @@ namespace Client
 
 	int Player::GetHP()    const { return m_pAttackable ? m_pAttackable->GetHP()    : 0; }
 	int Player::GetMaxHP() const { return m_pAttackable ? m_pAttackable->GetMaxHP() : 1; }
+	void Player::FullHeal()
+	{
+		// Heal() clamps to max and never revives a dead (HP<=0) target, so
+		// passing the full max tops a living player off to 100%.
+		if (m_pAttackable) m_pAttackable->Heal(m_pAttackable->GetMaxHP());
+	}
+	float Player::GetDamageReduction() const
+	{
+		return m_pAttackable ? m_pAttackable->GetDamageReduction() : 0.f;
+	}
 
 	void Player::AddExp(int iAmount)
 	{
@@ -341,18 +359,79 @@ namespace Client
 		if (m_iPendingLevelUps > 0) --m_iPendingLevelUps;
 	}
 
+	void Player::ApplyStatUpgrade(StatUpgrade eStat)
+	{
+		switch (eStat)
+		{
+		case StatUpgrade::MoveSpeed:
+			m_fSpeed *= 1.12f;                 // +12% walk speed
+			break;
+		case StatUpgrade::MaxHP:
+			if (m_pAttackable) m_pAttackable->AddMaxHP(25);   // +25 max HP (heals)
+			break;
+		case StatUpgrade::Attack:
+			m_fDamageMult += 0.15f;            // +15% bullet damage
+			break;
+		case StatUpgrade::CritChance:
+			m_fCritChance += 0.10f;            // +10% crit chance
+			if (m_fCritChance > 1.f) m_fCritChance = 1.f;
+			break;
+		case StatUpgrade::Defense:
+			if (m_pAttackable) m_pAttackable->AddDamageReduction(0.08f);  // +8% reduction
+			break;
+		default:
+			break;
+		}
+		if (m_iPendingLevelUps > 0) --m_iPendingLevelUps;
+	}
+
 	void Player::CollisionPlayerBodyStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime)
 	{
 		if (pDest->GetTag() == "orb_body")
 		{
-			// XP pickup — Enemy::OnCollision drops an Orb (tag "orb_body") at
-			// its position on death. Route through AddExp so level-up
-			// detection runs; Handling the pickup from the Player side
-			// guarantees it fires even if the Orb's own collider callback
-			// doesn't get dispatched.
-			AddExp(1);
+			// Pickup — Enemy::OnCollision drops an Orb (tag "orb_body") at its
+			// position on death. Orbs grant both money (spent in the between-
+			// round shop) AND XP (drives the level-up stat-upgrade modal).
+			// Handling the pickup from the Player side guarantees it fires even
+			// if the Orb's own collider callback doesn't dispatch.
+			//
+			// Reward values live on the Orb (set by Enemy::TakeDamage from
+			// EnemyDef goldReward/xpReward), so per-archetype rewards land
+			// here instead of a flat kOrbMoney.
+			int iMoney = kOrbMoney, iXp = 1;
 			if (auto* pOwner = pDest->GetGameObjectOwner())
+			{
+				if (auto* pOrb = dynamic_cast<Orb*>(pOwner))
+				{
+					iMoney = pOrb->GetMoneyValue();
+					iXp    = pOrb->GetExpValue();
+				}
 				pOwner->InActivate();
+			}
+			Wallet::GetInst().Add(iMoney);
+			AddExp(iXp);
+			return;
+		}
+
+		if (pDest->GetTag() == "enemy_bullet")
+		{
+			// Spitter / boss barrage projectile (EnemyBullet). Carries an
+			// Attackable component with the per-shot damage already baked
+			// in by the spawner's damageMultiplier path. Route through
+			// OnHitBy so the same Hit/Die state transitions fire as a
+			// melee contact hit, then deactivate the projectile.
+			if (auto* pOwner = pDest->GetGameObjectOwner())
+			{
+				auto pAttacker = pOwner->GetComponent<Attackable>();
+				if (pAttacker)
+				{
+					if (pAttacker->Attack(m_pAttackable.get()))
+						ChangeLowerState(std::make_unique<PlayerLowerDieState>());
+					else
+						ChangeLowerState(std::make_unique<PlayerLowerHitState>());
+				}
+				pOwner->InActivate();
+			}
 			return;
 		}
 
@@ -426,12 +505,16 @@ namespace Client
 		// Attackable handles a null owner gracefully (PaperBurn/Particle/
 		// Sound creation just becomes no-op); the rendering-side dissolve
 		// effect for Player is wired separately if needed.
-		// Player opts in to the blood particle (last arg true). Enemies /
-		// monsters leave it at the default false so they skip the
-		// per-frame CS dispatch + system-buffer upload for an emitter
-		// they'd never visibly use.
+		// Player opts in to the blood particle + impact-flash burst (last
+		// two true args; paperburn stays default true). Enemies / monsters
+		// leave them at the default false so they skip the per-frame CS
+		// dispatch + system-buffer upload for emitters they'd never use.
 		m_pAttackable = AddComponent<Attackable>("attackable",
-			m_iInitHP, m_iInitAttackMin, m_iInitAttackMax, true);
+			m_iInitHP, m_iInitAttackMin, m_iInitAttackMax, true, true, true);
+
+		// Aggro target so enemies can pick the player when no higher-aggro
+		// tower exists (towers out-aggro the player — see GameDefs).
+		AddComponent<AggroTarget>("aggro", kPlayerAggro);
 
 		if (m_pTransform)
 		{
@@ -555,13 +638,10 @@ namespace Client
 		ChangeLowerState(std::make_unique<PlayerLowerIdleState>());
 		ChangeUpperState(std::make_unique<PlayerUpperIdleState>());
 
-		// Grant a starting weapon so the player can damage enemies before
-		// the first level-up card (no damage → no kills → no orbs → no
-		// level-ups). Prefer the first weapon equipped in the combo
-		// scene's loadout; fall back to Arrow (id=1) when nothing is
-		// equipped so a straight-to-stage run isn't left weaponless.
-		const std::vector<int> vecLoadout = WeaponDatabase::GetInst().EquippedLiveIds();
-		AddOrLevelUpWeapon(vecLoadout.empty() ? 1 : vecLoadout.front());
+		// Starting weapon is no longer auto-granted here — GameScene drives
+		// it: the player picks one in the StartSelect panel at game start
+		// (which calls AddOrLevelUpWeapon), or GameScene seeds Arrow (id=1) as
+		// a fallback when there are no crafted weapons to choose from.
 
 		return true;
 	}
@@ -649,6 +729,25 @@ namespace Client
 				// -Z (RY=0), so face-direction yaw is atan2 of the negated dir.
 				pTransform->SetRY(atan2f(-vDir.x, -vDir.z));
 				ChangeLowerState(std::make_unique<PlayerLowerRunState>());
+
+				// Footstep marks: accumulate distance walked and drop an
+				// alternating L/R print, offset to the side of the facing.
+				constexpr float kFootstepStride = 0.6f;   // distance between prints
+				constexpr float kFootSideOffset = 0.18f;  // lateral foot spacing
+				m_fStrideAccum += fDeltaTime * m_fSpeed;
+				if (m_fStrideAccum >= kFootstepStride)
+				{
+					m_fStrideAccum -= kFootstepStride;
+					const float fYaw  = pTransform->GetRY();
+					const float fSide = m_bLeftFoot ? 1.f : -1.f;
+					m_bLeftFoot = !m_bLeftFoot;
+					// Perpendicular to forward(-sinθ,0,-cosθ) in XZ is (-cosθ,0,sinθ).
+					Engine::Vector3 vFoot = vTarget;
+					vFoot.x += -cosf(fYaw) * fSide * kFootSideOffset;
+					vFoot.z +=  sinf(fYaw) * fSide * kFootSideOffset;
+					vFoot.y  = static_cast<float>(kWallY) + 0.02f;   // just above the floor
+					FootstepManager::GetInst()->Spawn(vFoot, fYaw);
+				}
 			}
 			else
 			{
@@ -689,6 +788,8 @@ namespace Client
 		{
 			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
 			if (!pDef || pDef->eFireMode != FireMode::Cooldown) continue;
+			// Follow weapons fire through their pets, not the player.
+			if (pDef->eMovement == MovementType::Follow) continue;
 			const float fCd = ComputeCooldown(*pDef, slot.iLevel);
 			slot.fCooldownAcc += fDeltaTime;
 			// Loop so a paused / hitching frame doesn't drop shots.
@@ -699,71 +800,95 @@ namespace Client
 				FireCooldownBurst(slot);
 			}
 		}
+
+		// Laser beams (Straight + Sustained) stay anchored to the player and
+		// re-aim down the live cursor heading every frame.
+		DriveBeams(fDeltaTime);
+	}
+
+	bool Player::TryComputeMouseAimYaw(float& outYaw) const
+	{
+		// Cast a ray from the camera through the mouse cursor onto the
+		// player's horizontal plane and derive the yaw whose forward points
+		// from the player to that aim point. Returns false (outYaw untouched)
+		// if a resource is missing or the ray is degenerate, so callers keep
+		// their fallback heading and never spawn NaN-oriented bullets.
+		if (!m_pCamera || !m_pTransform) return false;
+		auto* pInput = Engine::CInput::GetInst();
+		const Engine::Vector2 vMouseScreen{
+			static_cast<float>(pInput->GetMouseX()),
+			static_cast<float>(pInput->GetMouseY()) };
+		const Engine::Vector3 vClip   = m_pCamera->ScreenPosToClipPos(vMouseScreen);
+		// ScreenPosToClipPos maps screen Y as (screenY/H*2 - 1), opposite to
+		// the D3D NDC convention CameraPosToWorldPos unprojects from; flip Y
+		// here rather than touch the shared helper its other callers rely on.
+		const Engine::Vector3 vWorld  = m_pCamera->CameraPosToWorldPos({ vClip.x, -vClip.y });
+		const Engine::Vector3 vCamPos = m_pCamera->GetTransform()->GetPosition();
+		const Engine::Vector3 vRayDir = vWorld - vCamPos;
+		const Engine::Vector3 vPlayerPos = m_pTransform->GetPosition();
+		if (std::abs(vRayDir.y) <= 1e-4f) return false;
+		const float t = (vPlayerPos.y - vCamPos.y) / vRayDir.y;
+		if (t <= 0.f) return false;
+		const float dx = (vCamPos.x + vRayDir.x * t) - vPlayerPos.x;
+		const float dz = (vCamPos.z + vRayDir.z * t) - vPlayerPos.z;
+		if (dx * dx + dz * dz <= 1e-6f) return false;
+		// Inverse of forward = (-sin yaw, 0, -cos yaw): yaw = atan2(-dx, -dz).
+		outYaw = atan2f(-dx, -dz);
+		return true;
 	}
 
 	float Player::ComputeAimYaw() const
 	{
 		if (!m_pTransform) return 0.f;
-		// Default aim: player's world-forward at the current yaw.
-		// Derivation: model is authored Z-up; engine applies SetRX(-PI/2)
-		// once to stand it up, so model-local +Y (Z-up "forward") maps
-		// to world -Z at RY=0. Subsequent SetRY(θ) rotates that vector
-		// around world Y. Closed form: forward = (-sinθ, 0, -cosθ).
+		// Default aim: player's world-forward at the current yaw (forward =
+		// (-sin yaw, 0, -cos yaw)). LCTRL toggles mouse-cursor aim.
 		float fAimYaw = m_pTransform->GetRY();
+		if (m_bMouseAim) TryComputeMouseAimYaw(fAimYaw);
+		return fAimYaw;
+	}
 
-		// Mouse-aim override (LCTRL toggle). Cast a ray from the camera
-		// through the mouse cursor onto the player's horizontal plane,
-		// then derive the yaw whose forward direction points from the
-		// player to that aim point. Falls back to the default yaw if any
-		// engine resource is missing (no camera, near-vertical ray, etc.)
-		// so we never spawn bullets with NaN orientations.
-		if (m_bMouseAim && m_pCamera)
+	float Player::ComputeWeaponAimYaw(const WeaponDef& def,
+	                                  const Engine::Vector3& vPlayerPos) const
+	{
+		// Base spawn heading for a fired projectile, driven by the weapon's
+		// AimMode. The LCTRL mouse-aim toggle is a global override: while held
+		// every weapon aims at the cursor regardless of its mode. Radial is
+		// distributed per-projectile by the caller, so it falls through to the
+		// player's facing here as a harmless base.
+		const float fFacing = m_pTransform ? m_pTransform->GetRY() : 0.f;
+
+		if (m_bMouseAim)
 		{
-			auto* pInput = Engine::CInput::GetInst();
-			const Engine::Vector2 vMouseScreen{
-				static_cast<float>(pInput->GetMouseX()),
-				static_cast<float>(pInput->GetMouseY()) };
-			const Engine::Vector3 vClip  = m_pCamera->ScreenPosToClipPos(vMouseScreen);
-			// ScreenPosToClipPos maps screen Y as (screenY/H * 2 − 1), so
-			// the top of the screen comes out as clip Y = −1 — opposite to
-			// the D3D NDC convention CameraPosToWorldPos unprojects from
-			// (NDC +Y is up). Flip Y here instead of fixing the shared
-			// helper, since the UI/picking callers built around the
-			// current convention and might break if it changes.
-			const Engine::Vector3 vWorld = m_pCamera->CameraPosToWorldPos({ vClip.x, -vClip.y });
-			const Engine::Vector3 vCamPos = m_pCamera->GetTransform()->GetPosition();
-
-			const Engine::Vector3 vRayDir = vWorld - vCamPos;
-			const Engine::Vector3 vPlayerPos = m_pTransform->GetPosition();
-
-			// Solve cam.y + t*dir.y = player.y. With the locked top-
-			// down camera the ray points clearly downward (dir.y < 0),
-			// so |dir.y| is comfortably above the epsilon — but guard
-			// anyway in case the camera ever flattens.
-			if (std::abs(vRayDir.y) > 1e-4f)
-			{
-				const float t = (vPlayerPos.y - vCamPos.y) / vRayDir.y;
-				if (t > 0.f)
-				{
-					const Engine::Vector3 vAim{
-						vCamPos.x + vRayDir.x * t,
-						vPlayerPos.y,
-						vCamPos.z + vRayDir.z * t };
-					const float dx = vAim.x - vPlayerPos.x;
-					const float dz = vAim.z - vPlayerPos.z;
-					if (dx * dx + dz * dz > 1e-6f)
-					{
-						// Inverse of the forward closed form above:
-						// forward = (-sinθ, 0, -cosθ) gives
-						// θ = atan2(-dx, -dz). Same convention used by
-						// Player::Input when steering by WASD.
-						fAimYaw = atan2f(-dx, -dz);
-					}
-				}
-			}
+			float y = fFacing;
+			TryComputeMouseAimYaw(y);
+			return y;
 		}
 
-		return fAimYaw;
+		switch (def.eAimMode)
+		{
+		case AimMode::Cursor:
+		{
+			float y = fFacing;
+			TryComputeMouseAimYaw(y);
+			return y;
+		}
+		case AimMode::Nearest:
+		case AimMode::LowestHP:
+		case AimMode::Random:
+			if (auto pTarget = FindTargetEnemy(vPlayerPos, def.eAimMode))
+				if (auto pTr = pTarget->GetComponent<Engine::Transform>())
+				{
+					const Engine::Vector3 e = pTr->GetPosition();
+					const float dx = e.x - vPlayerPos.x;
+					const float dz = e.z - vPlayerPos.z;
+					if (dx * dx + dz * dz > 1e-6f) return atan2f(-dx, -dz);
+				}
+			return fFacing;   // no enemy in range -> fire forward
+		case AimMode::Forward:
+		case AimMode::Radial:
+		default:
+			return fFacing;
+		}
 	}
 
 	void Player::FireCooldownBurst(const WeaponSlot& slot)
@@ -772,10 +897,14 @@ namespace Client
 		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
 		if (!pDef) return;
 
-		const float fAimYaw = ComputeAimYaw();
+		const Engine::Vector3 vPlayerPos = m_pTransform->GetPosition();
+		// Heading is driven by the weapon's AimMode (the LCTRL mouse toggle
+		// overrides to Cursor). Radial ignores this base and rings the
+		// projectiles evenly around 360 in the fire loop below.
+		const bool  bRadial = (pDef->eAimMode == AimMode::Radial) && !m_bMouseAim;
+		const float fAimYaw = ComputeWeaponAimYaw(*pDef, vPlayerPos);
 		const Engine::Vector3 vForward(-sinf(fAimYaw), 0.f, -cosf(fAimYaw));
 		const Engine::Vector3 vRight(cosf(fAimYaw), 0.f, -sinf(fAimYaw));
-		const Engine::Vector3 vPlayerPos = m_pTransform->GetPosition();
 
 		// Resolve the spawn anchor by the WeaponDef's origin. Front
 		// matches the legacy bullet muzzle (kept the same offsets so
@@ -833,17 +962,43 @@ namespace Client
 		auto pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
 		if (!pLayer) return;
 
-		// Multi-shot burst — Count>1 fans projectiles around the aim
-		// direction. ±10° per extra projectile feels tight enough to
-		// stay readable.
+		// Multi-shot burst. Radial rings Count projectiles evenly around 360;
+		// otherwise they fan around the aim heading at ~10 deg per extra shot,
+		// tight enough to stay readable. (spread_deg will replace the fixed
+		// fan step in a later phase.)
 		const int iCount = ComputeCount(*pDef, slot.iLevel);
-		const float fFanStep = 0.174f;   // ~10°
-		const float fFanBase = -fFanStep * (iCount - 1) * 0.5f;
+		// Fan geometry. spread_deg < 0 (unset) keeps the legacy ~10deg-per-shot
+		// fan; >= 0 spreads Count shots evenly across that total arc (0 =
+		// stacked single line). Radial ignores both (handled in the loop).
+		float fFanStep, fFanBase;
+		if (pDef->fSpreadDeg < 0.f)
+		{
+			fFanStep = 0.174f;   // ~10 deg/shot (legacy)
+			fFanBase = -fFanStep * (iCount - 1) * 0.5f;
+		}
+		else
+		{
+			const float fSpreadRad = pDef->fSpreadDeg * (PI / 180.f);
+			fFanStep = (iCount > 1) ? fSpreadRad / (iCount - 1) : 0.f;
+			fFanBase = -fSpreadRad * 0.5f;
+		}
 		for (int i = 0; i < iCount; ++i)
 		{
 			auto pBullet = GetScene()->CreateGameObject<Bullet>("bullet", pLayer);
 			if (!pBullet) continue;
 			pBullet->Configure(*pDef, slot.iLevel, m_pTransform);
+			// Hand the bullet the voxel world so a Reflect-type projectile
+			// can bounce off walls (no-op for every other on-hit).
+			pBullet->SetVoxelWorld(m_pVoxelWorld);
+			// Player stat scaling: attack-up multiplier, plus a per-bullet crit
+			// roll (crit doubles this bullet's damage).
+			{
+				float fScale = m_fDamageMult;
+				if (m_fCritChance > 0.f &&
+					(static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) < m_fCritChance)
+					fScale *= m_fCritMult;
+				pBullet->ScaleDamage(fScale);
+			}
 			// vSpawn already bakes kMuzzleYOffset for the first frame;
 			// the orbital path also needs it to survive subsequent
 			// Bullet::Update calls that re-anchor to the owner pivot.
@@ -852,7 +1007,9 @@ namespace Client
 			{
 				pBulletTr->SetPosition(vSpawn);
 				pBulletTr->SetRX(-PI / 2.f);
-				pBulletTr->SetRY(fAimYaw + fFanBase + fFanStep * i);
+				pBulletTr->SetRY(bRadial
+					? (6.2831853f * i) / iCount               // even 360 ring
+					: (fAimYaw + fFanBase + fFanStep * i));   // fan around heading
 			}
 		}
 	}
@@ -879,9 +1036,15 @@ namespace Client
 		// intersect enemy collider spheres (~kWallY+0.3).
 		const Engine::Vector3 vSpawn =
 			m_pTransform->GetPosition() + Engine::Vector3{ 0.f, kMuzzleYOffset, 0.f };
-		// Evenly distribute starting angles around the player so multiple
-		// orbs don't stack on top of each other. RY is interpreted as the
-		// initial orbit angle in Bullet::Configure (Orbital path).
+		// Orbital instances spread their start angle evenly around the player
+		// (RY = initial orbit angle in Bullet::Configure), and so does an
+		// explicit Radial aim. Other Sustained movers (Straight / Fixed beams)
+		// take the weapon's AimMode heading instead.
+		const bool  bOrbital = (pDef->eMovement == MovementType::Orbital);
+		const bool  bRadial  = (pDef->eAimMode == AimMode::Radial) && !m_bMouseAim;
+		const bool  bRing    = bOrbital || bRadial;
+		const float fAimYaw  = bRing ? 0.f
+			: ComputeWeaponAimYaw(*pDef, m_pTransform->GetPosition());
 		for (int i = 0; i < iCount; ++i)
 		{
 			auto pBullet = GetScene()->CreateGameObject<Bullet>("bullet", pLayer);
@@ -890,13 +1053,91 @@ namespace Client
 			{
 				pBulletTr->SetPosition(vSpawn);
 				pBulletTr->SetRX(-PI / 2.f);
-				pBulletTr->SetRY((6.2831853f * i) / iCount);
+				pBulletTr->SetRY(bRing ? (6.2831853f * i) / iCount : fAimYaw);
 			}
 			pBullet->Configure(*pDef, slot.iLevel, m_pTransform);
 			// Keep the orbital path at muzzle height — Bullet::Update
 			// adds this each frame to vCenter.y (the owner pivot).
 			pBullet->SetOrbitYOffset(kMuzzleYOffset);
 			slot.vecSustainedInstances.emplace_back(pBullet);
+		}
+	}
+
+	void Player::RespawnPets(WeaponSlot& slot)
+	{
+		// Drop any live pets first — the previous level's count no longer
+		// matches after a level-up (mirrors RespawnSustainedInstances).
+		for (auto& wp : slot.vecPets)
+			if (auto sp = wp.lock())
+				sp->InActivate();
+		slot.vecPets.clear();
+
+		if (!m_pTransform) return;
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		if (!pDef || pDef->eMovement != MovementType::Follow) return;
+
+		auto pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
+		if (!pLayer) return;
+
+		const int iCount = ComputeCount(*pDef, slot.iLevel);
+		const Engine::Vector3 vSpawn = m_pTransform->GetPosition();
+		for (int i = 0; i < iCount; ++i)
+		{
+			auto pPet = GetScene()->CreateGameObject<Pet>("pet", pLayer);
+			if (!pPet) continue;
+			// Spawn at the player so the pet visibly drifts out to its ring slot.
+			if (auto pPetTr = pPet->GetTransform())
+				pPetTr->SetPosition(vSpawn);
+			const float fRing = (6.2831853f * i) / iCount;
+			pPet->Configure(slot.iWeaponId, slot.iLevel, m_pTransform, fRing, m_pVoxelWorld);
+			slot.vecPets.emplace_back(pPet);
+		}
+	}
+
+	void Player::RespawnBeams(WeaponSlot& slot)
+	{
+		// Drop old beams (level-up re-spawn) and create ComputeCount fresh ones.
+		// They're positioned/aimed by DriveBeams each frame, so spawn position
+		// doesn't matter here.
+		for (auto& wp : slot.vecBeams)
+			if (auto sp = wp.lock())
+				sp->InActivate();
+		slot.vecBeams.clear();
+
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		if (!pDef || pDef->eFireMode != FireMode::Sustained) return;
+
+		auto pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
+		if (!pLayer) return;
+
+		const int iCount = ComputeCount(*pDef, slot.iLevel);
+		for (int i = 0; i < iCount; ++i)
+		{
+			auto pBeam = GetScene()->CreateGameObject<Beam>("beam", pLayer);
+			if (!pBeam) continue;
+			pBeam->Configure(slot.iWeaponId, slot.iLevel);
+			// Lock the heading per on-pulse: DriveBeams still passes the live
+			// cursor yaw every frame, but the beam latches it when it fires and
+			// holds it for the whole pulse, re-aiming only during the off phase.
+			pBeam->SetAimLock(true);
+			slot.vecBeams.emplace_back(pBeam);
+		}
+	}
+
+	void Player::DriveBeams(float fDeltaTime)
+	{
+		if (!m_pTransform) return;
+		const Engine::Vector3 vMuzzle =
+			m_pTransform->GetPosition() + Engine::Vector3{ 0.f, kMuzzleYOffset, 0.f };
+		for (auto& slot : m_vecWeaponSlots)
+		{
+			if (slot.vecBeams.empty()) continue;
+			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+			if (!pDef) continue;
+			const float fAimYaw = ComputeWeaponAimYaw(*pDef, m_pTransform->GetPosition());
+			for (auto& wp : slot.vecBeams)
+				if (auto sp = wp.lock())
+					sp->Drive(vMuzzle, fAimYaw, fDeltaTime);
 		}
 	}
 
@@ -918,8 +1159,32 @@ namespace Client
 			if (slot.iWeaponId == iWeaponId)
 			{
 				++slot.iLevel;
-				if (pDef->eFireMode == FireMode::Sustained)
-					RespawnSustainedInstances(slot);
+				// One-time evolution: at the threshold level the slot transforms
+				// into the evolved weapon (fresh at level 1). Drop the base
+				// weapon's live instances first so an evolution that changes
+				// category (Sustained/Follow -> Cooldown) leaves no orphans.
+				if (pDef->iEvolvesInto > 0 && slot.iLevel >= pDef->iEvolveMinLevel)
+				{
+					if (const WeaponDef* pEvo = WeaponDatabase::GetInst().Get(pDef->iEvolvesInto))
+					{
+						for (auto& wp : slot.vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+						slot.vecSustainedInstances.clear();
+						for (auto& wp : slot.vecPets) if (auto sp = wp.lock()) sp->InActivate();
+						slot.vecPets.clear();
+						slot.iWeaponId = pDef->iEvolvesInto;
+						slot.iLevel    = 1;
+						pDef = pEvo;   // the dispatch below uses the evolved def
+					}
+				}
+				if (pDef->eMovement == MovementType::Follow)
+					RespawnPets(slot);
+				else if (pDef->eFireMode == FireMode::Sustained)
+				{
+					if (pDef->eMovement == MovementType::Straight)
+						RespawnBeams(slot);              // laser beam (anchored line)
+					else
+						RespawnSustainedInstances(slot); // orbs / fixed zone
+				}
 				return;
 			}
 		}
@@ -932,8 +1197,15 @@ namespace Client
 		slot.iWeaponId = iWeaponId;
 		slot.iLevel    = 1;
 		m_vecWeaponSlots.push_back(std::move(slot));
-		if (pDef->eFireMode == FireMode::Sustained)
-			RespawnSustainedInstances(m_vecWeaponSlots.back());
+		if (pDef->eMovement == MovementType::Follow)
+			RespawnPets(m_vecWeaponSlots.back());
+		else if (pDef->eFireMode == FireMode::Sustained)
+		{
+			if (pDef->eMovement == MovementType::Straight)
+				RespawnBeams(m_vecWeaponSlots.back());
+			else
+				RespawnSustainedInstances(m_vecWeaponSlots.back());
+		}
 	}
 
 	std::vector<int> Player::GetOwnedWeaponIds() const

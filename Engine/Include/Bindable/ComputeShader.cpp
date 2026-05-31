@@ -26,11 +26,18 @@ void Engine::ComputeShader::LoadShader()
 {
 	if (!LoadShaderFile("cs_5_0"))
 	{
-		assert(false);
 		return;
 	}
 
-	if (FAILED(Graphics::GetInst()->GetDevice()->CreateComputeShader(GetBlob()->GetBufferPointer(), GetBlob()->GetBufferSize(), nullptr, &m_pComputeShader)))
+	CreateFromBlob();
+}
+
+void Engine::ComputeShader::CreateFromBlob()
+{
+	ID3DBlob* pBlob = GetBlob();
+	if (!pBlob) return;
+
+	if (FAILED(Graphics::GetInst()->GetDevice()->CreateComputeShader(pBlob->GetBufferPointer(), pBlob->GetBufferSize(), nullptr, &m_pComputeShader)))
 	{
 		assert(false);
 		return;

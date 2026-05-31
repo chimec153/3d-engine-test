@@ -37,6 +37,9 @@
     <Filter Include="05. Scene">
       <UniqueIdentifier>{665eaa82-7237-4543-9680-e447c3bc19f9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="06. Procedural">
+      <UniqueIdentifier>{b2f7c1a4-3e9d-4a6b-9c2e-7f1d8a5b6c30}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -74,6 +77,9 @@
     </ClCompile>
     <ClCompile Include="Scene\InGameScene.cpp">
       <Filter>05. Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Procedural\FragmentGenerator.cpp">
+      <Filter>06. Procedural</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -136,6 +142,9 @@
     </ClInclude>
     <ClInclude Include="Scene\InGameScene.h">
       <Filter>05. Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Procedural\FragmentGenerator.h">
+      <Filter>06. Procedural</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

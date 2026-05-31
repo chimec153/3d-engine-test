@@ -76,7 +76,13 @@ namespace Engine
 			return;
 		}
 
+		CreateFromBlob();
+	}
+
+	void VertexShader::CreateFromBlob()
+	{
 		ID3DBlob* pBlob = GetBlob();
+		if (!pBlob) return;
 
 		if (FAILED(Graphics::GetInst()->GetDevice()->CreateVertexShader(pBlob->GetBufferPointer(), pBlob->GetBufferSize(), nullptr, &pVertexShader)))
 		{

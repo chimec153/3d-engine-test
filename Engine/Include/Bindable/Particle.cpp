@@ -194,6 +194,15 @@ namespace Engine
 
 		if (m_pTexture) m_pTexture->Bind();
 
+		// Re-upload this emitter's cbuffer for the draw. The "Particle" cbuffer
+		// is a shared bindable, and Update() only wrote it for that emitter's
+		// CS dispatch — by render time the last emitter to Update owns it. The
+		// GS reads FrameWidth/FrameHeight from here (flipbook cell), so without
+		// this every emitter draws with the last writer's frame grid (all 1/1/1
+		// for the non-flipbook emitters → a flipbook shows its whole atlas).
+		m_pParticleCBuffer->UpdateBuffer(m_tCBuffer);
+		m_pParticleCBuffer->Bind();
+
 		m_pBuffer->SetSRV(40);
 
 		m_pVS->Bind();
@@ -257,8 +266,16 @@ namespace Engine
 		fread(&m_fElapsedTime, 4, 1, pFile);
 		fread(&m_fEmitMaxTime, 4, 1, pFile);
 
-		m_pBuffer = std::make_shared<StructuredBuffer>(m_tCBuffer.iMaxParticleCount, static_cast<int>(sizeof(PARTICLE)));
-		m_pSystemBuffer = std::make_shared<StructuredBuffer>(1, 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS);
+		// Rebuild the GPU buffers exactly as the int-count ctor does. Two things
+		// the original Load got wrong (dormant because nothing loaded particles
+		// from disk until the editor's Particle Editor): the per-particle buffer
+		// must be zero-initialised (D3D11 leaves DEFAULT buffers undefined and
+		// CS_PARTICLE reads `alive` before writing → first-frame garbage
+		// billboards), and the system buffer needs one slot per 64-thread group
+		// (not a single slot) or Update's per-group WriteData overflows it.
+		m_pBuffer = std::make_shared<StructuredBuffer>(m_tCBuffer.iMaxParticleCount, static_cast<int>(sizeof(PARTICLE)),
+			std::vector<PARTICLE>(m_tCBuffer.iMaxParticleCount).data());
+		m_pSystemBuffer = std::make_shared<StructuredBuffer>(static_cast<int>(ceil(m_tCBuffer.iMaxParticleCount / 64.f)), 4, nullptr, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS);
 	}
 
 	void Particle::SetStartColor(const Vector4& vColor)         { m_tCBuffer.vStartColor = vColor; }

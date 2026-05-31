@@ -282,7 +282,11 @@
     <ClCompile Include="UI\Button.cpp" />
     <ClCompile Include="UI\Frame.cpp" />
     <ClCompile Include="UI\Gauge.cpp" />
+    <ClCompile Include="UI\EditBox.cpp" />
     <ClCompile Include="UI\Image.cpp" />
+    <ClCompile Include="UI\NumberField.cpp" />
+    <ClCompile Include="UI\Slider.cpp" />
+    <ClCompile Include="UI\ScrollView.cpp" />
     <ClCompile Include="UI\UIControl.cpp" />
     <ClCompile Include="Vector3.cpp" />
   </ItemGroup>
@@ -406,7 +410,11 @@
     <ClInclude Include="UI\Button.h" />
     <ClInclude Include="UI\Frame.h" />
     <ClInclude Include="UI\Gauge.h" />
+    <ClInclude Include="UI\EditBox.h" />
     <ClInclude Include="UI\Image.h" />
+    <ClInclude Include="UI\NumberField.h" />
+    <ClInclude Include="UI\Slider.h" />
+    <ClInclude Include="UI\ScrollView.h" />
     <ClInclude Include="UI\UIControl.h" />
     <ClInclude Include="Vector2.h" />
     <ClInclude Include="Vector3.h" />

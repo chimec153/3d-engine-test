@@ -45,6 +45,15 @@ namespace Engine
 			return;
 		}
 
+		// Read-only-depth view of the same buffer so a pass can depth-TEST
+		// against it while also sampling it as an SRV (no read/write hazard).
+		// Non-fatal: if the format rejects it, m_pReadOnlyDSV stays null and
+		// callers fall back to the read-write DSV.
+		D3D11_DEPTH_STENCIL_VIEW_DESC tReadOnlyDSVDesc = tDSVDesc;
+		tReadOnlyDSVDesc.Flags = D3D11_DSV_READ_ONLY_DEPTH;
+		Graphics::GetInst()->GetDevice()->CreateDepthStencilView(
+			*pDepthTexture, &tReadOnlyDSVDesc, &m_pReadOnlyDSV);
+
 		D3D11_SHADER_RESOURCE_VIEW_DESC tSRVDesc = {};
 
 		tSRVDesc.Format = eDepthSRVFormat;
@@ -151,6 +160,11 @@ namespace Engine
 	CPtr<ID3D11DepthStencilView> MRT::GetDSV() const
 	{
 		return m_pDSV;
+	}
+
+	CPtr<ID3D11DepthStencilView> MRT::GetReadOnlyDSV() const
+	{
+		return m_pReadOnlyDSV;
 	}
 
 	void MRT::Clear(D3D11_CLEAR_FLAG eClearFlag)

@@ -90,6 +90,13 @@ namespace Engine
         void SetSize(const Vector2& vSize);
         void DrawQuad();
 
+        // Clip every child UIRenderer's draw to this screen-pixel rect (or
+        // clear the clip). Used by ScrollView to trim contained widgets to its
+        // viewport via GPU scissor, so a partially-scrolled item is clipped at
+        // the edge instead of popping out.
+        void SetClipRect(float fX, float fY, float fW, float fH);
+        void ClearClipRect();
+
     protected:
         // Wires a child UIRenderer Component to the standard UI shaders
         // ("UIVS"/"UIPS"), TriangleStrip topology and the "UIQuad" mesh.
@@ -126,6 +133,10 @@ namespace Engine
         // choice screen).
         virtual void OnHover() {}
         virtual void OnMouseDown() {}
+        // Right-button counterpart of OnMouseDown — single down-edge while
+        // the cursor is inside the rect. Default no-op; widgets that want a
+        // secondary action (e.g. a list cell's "delete") override it.
+        virtual void OnRightMouseDown() {}
 
         // True when the OS mouse position (window pixels) is within the
         // current rect of the base Transform. Provided to subclasses

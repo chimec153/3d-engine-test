@@ -19,6 +19,39 @@
     <ClCompile Include="Object\Enemy.cpp">
       <Filter>01. Object</Filter>
     </ClCompile>
+    <ClCompile Include="Object\EnemyBullet.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Tower.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\HealTower.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Vfx\HealAuraManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Vfx\BeamRenderManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Vfx\TrailRenderManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Vfx\DeathBurstManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Vfx\SpawnTelegraphManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\TowerPlacementController.cpp">
+      <Filter>01. Object</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\TowerIntermissionUI.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\StartWeaponSelectUI.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
     <ClCompile Include="Object\Monster.cpp">
       <Filter>01. Object</Filter>
     </ClCompile>
@@ -60,6 +93,9 @@
     <ClCompile Include="Object\EnemyDatabase.cpp">
       <Filter>06. Data</Filter>
     </ClCompile>
+    <ClCompile Include="Object\RoundDatabase.cpp">
+      <Filter>06. Data</Filter>
+    </ClCompile>
     <ClCompile Include="Object\SpawnConfig.cpp">
       <Filter>06. Data</Filter>
     </ClCompile>
@@ -68,6 +104,12 @@
     </ClCompile>
     <ClCompile Include="Object\Movement\BulletMovementFactory.cpp" />
     <ClCompile Include="Object\GameStateManager.cpp" />
+    <ClCompile Include="Object\Movement\AimedMovement.cpp">
+      <Filter>07. Movement</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Movement\HomingMovement.cpp">
+      <Filter>07. Movement</Filter>
+    </ClCompile>
     <ClCompile Include="Object\Movement\OrbitalMovement.cpp">
       <Filter>07. Movement</Filter>
     </ClCompile>
@@ -76,6 +118,33 @@
     </ClCompile>
     <ClCompile Include="Object\Movement\StraightMovement.cpp">
       <Filter>07. Movement</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Impact\KnockbackEffect.cpp">
+      <Filter>08. Impact</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Impact\BurnEffect.cpp">
+      <Filter>08. Impact</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Impact\SlowEffect.cpp">
+      <Filter>08. Impact</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Vfx\FragmentShard.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Vfx\FragmentShatterManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Vfx\VfxManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Vfx\FootstepManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Impact\GatherEffect.cpp">
+      <Filter>08. Impact</Filter>
+    </ClCompile>
+    <ClCompile Include="Object\Impact\ImpactEffectFactory.cpp">
+      <Filter>08. Impact</Filter>
     </ClCompile>
     <ClCompile Include="Object\UIObjects.cpp">
       <Filter>03. UI</Filter>
@@ -86,10 +155,18 @@
     <ClCompile Include="Object\EnemyMeshRenderer.cpp">
       <Filter>05. Component</Filter>
     </ClCompile>
-    <ClCompile Include="UI\StartMenu.cpp" />
     <ClCompile Include="UI\WeaponCombiner.cpp" />
     <ClCompile Include="Scene\WeaponComboScene.cpp">
       <Filter>02. Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\PauseMenuUI.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\GameOverUI.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\StartMenu.cpp">
+      <Filter>03. UI</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -110,6 +187,48 @@
     </ClInclude>
     <ClInclude Include="Object\Enemy.h">
       <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\EnemyBullet.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Tower.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\HealTower.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Vfx\HealAuraManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Vfx\BeamRenderManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Vfx\TrailRenderManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Vfx\DeathBurstManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Vfx\SpawnTelegraphManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\AggroTarget.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\TowerManager.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\TowerPlacementController.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Wallet.h">
+      <Filter>01. Object</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\TowerIntermissionUI.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\StartWeaponSelectUI.h">
+      <Filter>03. UI</Filter>
     </ClInclude>
     <ClInclude Include="Object\Monster.h">
       <Filter>01. Object</Filter>
@@ -148,6 +267,7 @@
       <Filter>04. State</Filter>
     </ClInclude>
     <ClInclude Include="Util\CSVLoader.h" />
+    <ClInclude Include="Util\JsonLoader.h" />
     <ClInclude Include="Scene\EnemySpawner.h" />
     <ClInclude Include="Scene\GameWorldBuilder.h" />
     <ClInclude Include="UI\DamageText.h">
@@ -157,6 +277,9 @@
       <Filter>06. Data</Filter>
     </ClInclude>
     <ClInclude Include="Object\EnemyDatabase.h">
+      <Filter>06. Data</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\RoundDatabase.h">
       <Filter>06. Data</Filter>
     </ClInclude>
     <ClInclude Include="Object\SpawnConfig.h">
@@ -170,6 +293,12 @@
     </ClInclude>
     <ClInclude Include="Object\Movement\BulletMovementFactory.h" />
     <ClInclude Include="Object\GameStateManager.h" />
+    <ClInclude Include="Object\Movement\AimedMovement.h">
+      <Filter>07. Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Movement\HomingMovement.h">
+      <Filter>07. Movement</Filter>
+    </ClInclude>
     <ClInclude Include="Object\Movement\IBulletMovement.h">
       <Filter>07. Movement</Filter>
     </ClInclude>
@@ -194,10 +323,48 @@
     <ClInclude Include="Object\Movement\FixedMovement.h">
       <Filter>07. Movement</Filter>
     </ClInclude>
-    <ClInclude Include="UI\StartMenu.h" />
+    <ClInclude Include="Object\Impact\IImpactEffect.h">
+      <Filter>08. Impact</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Impact\KnockbackEffect.h">
+      <Filter>08. Impact</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Impact\GatherEffect.h">
+      <Filter>08. Impact</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Impact\ImpactEffectFactory.h">
+      <Filter>08. Impact</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Impact\BurnEffect.h">
+      <Filter>08. Impact</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Impact\SlowEffect.h">
+      <Filter>08. Impact</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Vfx\FragmentShard.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Vfx\FragmentShatterManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Vfx\VfxManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
+    <ClInclude Include="Object\Vfx\FootstepManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
     <ClInclude Include="UI\WeaponCombiner.h" />
     <ClInclude Include="Scene\WeaponComboScene.h">
       <Filter>02. Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\PauseMenuUI.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\GameOverUI.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\StartMenu.h">
+      <Filter>03. UI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -224,6 +391,12 @@
     </Filter>
     <Filter Include="07. Movement">
       <UniqueIdentifier>{ca02ad20-ade7-4f5f-a07f-f2ed8d621b61}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="08. Impact">
+      <UniqueIdentifier>{b3f1c9d4-2a77-4e6b-9c10-7d5e8a1f2b34}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="09. VFX">
+      <UniqueIdentifier>{c4e2da15-3b88-4f7c-ad21-8e6f9b2a3c45}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

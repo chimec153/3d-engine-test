@@ -438,6 +438,7 @@ Texture2D g_DecalTexture0 : register(t25);
 Texture2D g_DecalTexture1 : register(t26);
 Texture2D g_DecalTexture2 : register(t27);
 Texture2D g_DecalTexture3 : register(t28);
+Texture2D g_DecalTexture4 : register(t29);
 
 StructuredBuffer<matrix> g_vecBones : register(t30);
 StructuredBuffer<Transform> g_vecTransforms : register(t31);

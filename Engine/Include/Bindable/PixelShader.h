@@ -15,6 +15,8 @@ namespace Engine
 
     public:
         virtual void LoadShader() override;
+        virtual const char* GetTarget() const override { return "ps_5_0"; }
+        virtual void CreateFromBlob() override;
 
     public:
         virtual void Update(float fDeltaTime) override;

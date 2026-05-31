@@ -81,10 +81,11 @@ namespace Engine
         if (auto pTintPS = StaticFindBindable<PixelShader>("UIPSTint"))
             m_pRenderer->SetPixelShader(pTintPS);
 
-        m_pTintCBuffer =
-            StaticFindBindable<ConstantBuffer<UITINTBUFFER>>("UITint");
-        // UIControl::Init already populates the inherited m_pCBuffer
-        // (b5 UI cbuffer) — PushUICBuffer mutates m_tCBuffer + binds.
+        // Colour is a first-class UIRenderer property (UMG-style tint): the
+        // renderer binds it — plus a full-quad UV reset — right before its
+        // own draw, so per-instance text colour is correct. Forward this
+        // Text's colour to the renderer.
+        m_pRenderer->SetTint(m_uColorRGBA);
         return true;
     }
 
@@ -97,6 +98,17 @@ namespace Engine
         if (m_fBoxW != fW || m_fBoxH != fH) m_bDirty = true;
         m_fBoxX = fX; m_fBoxY = fY;
         m_fBoxW = fW; m_fBoxH = fH;
+
+        // Position-only change (e.g. scrolling): re-place the already-baked
+        // quad to the new box origin using the last bake's crop offset, no
+        // re-bake needed. A size change leaves m_bDirty set, so PreDraw
+        // re-bakes and rewrites the position from scratch instead.
+        if (!m_bDirty)
+            if (auto pTr = GetTransform())
+            {
+                pTr->SetPosition(m_fBoxX + m_fCropDX, m_fBoxY + m_fCropDY, 0.f);
+                pTr->PostUpdate(0.f);
+            }
     }
 
     void Text::PreDraw(float fDeltaTime)
@@ -107,25 +119,12 @@ namespace Engine
             BakeToTexture(m_fBoxW, m_fBoxH);
         }
 
-        // Queue a tint-push + UV-cbuffer reset callback BEFORE the child
-        // UIRenderer registers its draw — AddCustomRender invokes
-        // callbacks in registration order, so both cbuffers hold our
-        // values at draw time. UV reset matters because a sibling like
-        // EnemyCountHUD pushes per-glyph sub-regions into the same
-        // b5 cbuffer that would otherwise crop our atlas.
-        std::weak_ptr<Text> wpSelf = std::dynamic_pointer_cast<Text>(shared_from_this());
-        RenderManager::GetInst()->AddCustomRender(RENDER_LAYER::UI,
-            [wpSelf]()
-            {
-                if (auto pSelf = wpSelf.lock())
-                {
-                    pSelf->PushUICBuffer();
-                    pSelf->PushTintColor();
-                }
-            });
-
-        // Ticks child Components — UIRenderer's PreDraw self-registers
-        // its Bind callback into the same UI render queue, after ours.
+        // The UV + tint cbuffers are bound by the UIRenderer pre-bind
+        // (installed in Init) at the start of its m_UIList Bind — i.e.
+        // immediately before this Text's own quad draws — so per-instance
+        // colour is correct without a separate custom-render pass.
+        // Ticks child Components — UIRenderer's PreDraw self-registers its
+        // draw into the UI pass.
         UIControl::PreDraw(fDeltaTime);
     }
 
@@ -141,9 +140,9 @@ namespace Engine
     }
     void Text::SetColor(unsigned int uRGBA)
     {
-        // No re-bake — tint is applied per-frame via PushTintColor.
+        // No re-bake — colour is a UIRenderer tint, bound per-draw.
         m_uColorRGBA = uRGBA;
-        PushTintColor();
+        if (m_pRenderer) m_pRenderer->SetTint(uRGBA);
     }
     void Text::SetTextureSize(int /*iWidth*/, int /*iHeight*/)
     {
@@ -166,33 +165,6 @@ namespace Engine
         return std::make_shared<Text>(*this);
     }
 
-    void Text::PushUICBuffer()
-    {
-        // Use the inherited UIControl b5 cbuffer (m_pCBuffer) so we
-        // don't carry a duplicate handle. VS_UI multiplies the unit-
-        // quad UV by (vEndUV-vStartUV)+vStartUV, so a full-quad atlas
-        // sample needs (0,0)→(1,1).
-        if (!m_pCBuffer) return;
-        m_tCBuffer.vStartUV = Vector2(0.f, 0.f);
-        m_tCBuffer.vEndUV   = Vector2(1.f, 1.f);
-        m_pCBuffer->UpdateBuffer(m_tCBuffer);
-        m_pCBuffer->Bind();
-    }
-
-    void Text::PushTintColor()
-    {
-        if (!m_pTintCBuffer) return;
-        UITINTBUFFER buf{};
-        // m_uColorRGBA is 0xRRGGBBAA. PS_UITint multiplies tint.rgb by
-        // the master alpha; the blend state handles PMA on output.
-        const float fA = ((m_uColorRGBA      ) & 0xFF) / 255.f;
-        const float fR = ((m_uColorRGBA >> 24) & 0xFF) / 255.f;
-        const float fG = ((m_uColorRGBA >> 16) & 0xFF) / 255.f;
-        const float fB = ((m_uColorRGBA >>  8) & 0xFF) / 255.f;
-        buf.vTint = Vector4(fR, fG, fB, fA);
-        m_pTintCBuffer->UpdateBuffer(buf);
-        m_pTintCBuffer->Bind();
-    }
 
     bool Text::BakeToTexture(float fPxW, float fPxH)
     {
@@ -304,6 +276,10 @@ namespace Engine
         // Rewrite the UIControl base m_pTransform to the tight-crop quad
         // placement. UIRenderer's target is this same Transform, so the
         // next draw uses these values directly.
+        // Remember the crop offset so OnRectChanged can re-place the quad on a
+        // position-only change (scrolling) without re-baking.
+        m_fCropDX = fLeftDip;
+        m_fCropDY = fTopDip;
         if (auto pTr = GetTransform())
         {
             pTr->SetPosition(m_fBoxX + fLeftDip, m_fBoxY + fTopDip, 0.f);
@@ -323,12 +299,6 @@ namespace Engine
         m_fLastPxW = fPxW;
         m_fLastPxH = fPxH;
         m_bDirty   = false;
-
-        // Defensive: push tint + UV cbuffer right after the first
-        // successful bake so initial values show up even if the
-        // per-frame callback dispatch hasn't fired yet (first Render).
-        PushUICBuffer();
-        PushTintColor();
         return true;
     }
 }

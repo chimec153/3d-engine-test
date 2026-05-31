@@ -285,7 +285,8 @@ namespace Client
             float fPxX, fPxY, fPxW;
             if (!pCamera->WorldToScreen(vPos, fPxX, fPxY, fPxW)) continue;
 
-            const float fBaseGlyphH = p.bCritical ? 48.f : 32.f;
+            const float fBaseSize = 24.f;
+            const float fBaseGlyphH = p.bCritical ? fBaseSize * 1.5f: fBaseSize;
             const float fDistScale = (std::min)(2.f, (std::max)(0.4f, 18.f / fPxW));
             const float fPop = (t < 0.15f)
                 ? 1.f + 0.4f * (1.f - (t / 0.15f) * (t / 0.15f))
@@ -299,8 +300,7 @@ namespace Client
                 : (std::max)(0.f, 1.f - (t - fFadeStart) / (1.f - fFadeStart));
 
             char buf[16];
-            int  iLen = std::snprintf(buf, sizeof(buf), "%d%s",
-                p.iValue, p.bCritical ? "!" : "");
+            int  iLen = std::snprintf(buf, sizeof(buf), "%d", p.iValue);
             if (iLen <= 0) continue;
 
             float fTotalW = 0.f;

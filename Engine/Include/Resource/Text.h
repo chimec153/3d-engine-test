@@ -79,19 +79,6 @@ namespace Engine
         // UIControl Transform to place the tight-cropped quad.
         bool BakeToTexture(float fPxW, float fPxH);
 
-        // Re-applies the current tint colour into the UITint cbuffer.
-        // Called via the per-frame UI custom render callback (so the
-        // cbuffer holds our value at the exact moment the draw fires).
-        void PushTintColor();
-
-        // Pushes a full-quad (0,0)-(1,1) sub-region into the shared b5
-        // UI cbuffer. VS_UI multiplies the unit-quad UV by
-        // (vEndUV-vStartUV)+vStartUV; without our push the previous
-        // draw's sub-region (e.g. EnemyCountHUD's last digit cell)
-        // would crop our atlas. Runs from the same per-frame UI
-        // callback as PushTintColor.
-        void PushUICBuffer();
-
         std::shared_ptr<Font>        m_pFont;
         std::wstring                 m_strText;
         unsigned int                 m_uColorRGBA = 0xFFFFFFFFu;
@@ -109,6 +96,13 @@ namespace Engine
         float                        m_fBoxW = 0.f;
         float                        m_fBoxH = 0.f;
 
+        // Crop offset (DIP) of the baked glyph quad relative to the box origin
+        // — captured by the last BakeToTexture. Lets OnRectChanged re-place the
+        // quad when only the box position moves (e.g. scrolling) without a
+        // re-bake, since the crop is unchanged while size/string/align are.
+        float                        m_fCropDX = 0.f;
+        float                        m_fCropDY = 0.f;
+
         // Cached DWrite layout — rebuilt only when an input changes.
         Microsoft::WRL::ComPtr<IDWriteTextLayout> m_pTextLayout;
         float                        m_fLastPxW = 0.f;
@@ -119,11 +113,5 @@ namespace Engine
         // Transform as the tight-crop quad placement.
         std::shared_ptr<UIRenderer>  m_pRenderer;
         std::shared_ptr<Texture>     m_pBakedTex;
-
-        // Shared UITint cbuffer (registered by BindableManager). We
-        // upload the current colour into it before the PS samples.
-        // The b5 UI cbuffer comes from UIControl::m_pCBuffer (base) —
-        // PushUICBuffer mutates UIControl::m_tCBuffer and binds it.
-        std::shared_ptr<ConstantBuffer<_tagUITintBuffer>> m_pTintCBuffer;
     };
 }

@@ -22,9 +22,19 @@ namespace Client
         Orb();
         virtual ~Orb() override = default;
 
-        void SetExpValue(int iExp) { m_iExp = iExp; }
+        void SetExpValue  (int iExp)   { m_iExp   = iExp;   }
+        void SetMoneyValue(int iMoney) { m_iMoney = iMoney; }
+        int  GetExpValue  () const     { return m_iExp;   }
+        int  GetMoneyValue() const     { return m_iMoney; }
+
+        // Switch on "magnet" mode: from now the orb homes straight to the
+        // player every frame regardless of distance (used at round end to
+        // auto-collect everything left on the ground). The existing pickup
+        // collision grants the money once it reaches the player.
+        void PullToPlayer() { m_bMagnet = true; }
 
         virtual bool Init() override;
+        virtual void Update(float fDeltaTime) override;
 
     private:
         std::shared_ptr<Engine::Transform>             m_pTransform;
@@ -41,11 +51,22 @@ namespace Client
         //                        distance scan in Update.
         std::shared_ptr<Engine::ColliderSphere>        m_pCollider;
         std::shared_ptr<Engine::ColliderSphere>        m_pAttractCollider;
-        int m_iExp = 1;
+        int m_iExp   = 1;
+        // Money awarded on pickup. Defaulted to the legacy flat constant
+        // (GameDefs.h kOrbMoney) so an Orb spawned without SetMoneyValue
+        // (e.g. tests) still hands out the previous amount; Enemy
+        // overwrites this with the JSON goldReward at death.
+        int m_iMoney = 10;
 
         // Player magnet tuning. Speed ramps by proximity inside AttractStay.
         float m_fAttractRadius = 4.0f;
         float m_fAttractSpeed  = 8.0f;
+
+        // Round-end auto-collect: when true, Update homes the orb to the
+        // player at m_fMagnetSpeed with no range limit (collision then picks
+        // it up). Set by PullToPlayer().
+        bool  m_bMagnet      = false;
+        float m_fMagnetSpeed = 22.0f;
 
         void OnCollision(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);
         // STAY callback on the attract collider — fires every frame the

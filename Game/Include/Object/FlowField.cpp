@@ -56,19 +56,45 @@ namespace Client
         return lz * kSide + lx;
     }
 
-    bool FlowField::Rebuild(const Engine::VoxelWorld& world, int gx, int gz)
+    uint64_t FlowField::HashBlocked(const std::vector<std::pair<int, int>>& v)
     {
-        if (m_bHasGoal && gx == m_iGoalX && gz == m_iGoalZ) return false;
-        return ForceRebuild(world, gx, gz);
+        // XOR of per-cell mixes — order-independent so the caller doesn't have
+        // to sort before each call. Splitmix-style mix on a packed 64-bit cell
+        // key keeps the distribution clean enough for short lists (~tens of
+        // towers), and the size is XOR'd in so an empty list isn't 0.
+        uint64_t h = static_cast<uint64_t>(v.size()) * 0x9E3779B97F4A7C15ULL;
+        for (const auto& p : v)
+        {
+            uint64_t k = (static_cast<uint64_t>(static_cast<uint32_t>(p.first)) << 32)
+                       |  static_cast<uint64_t>(static_cast<uint32_t>(p.second));
+            k ^= k >> 30; k *= 0xBF58476D1CE4E5B9ULL;
+            k ^= k >> 27; k *= 0x94D049BB133111EBULL;
+            k ^= k >> 31;
+            h ^= k;
+        }
+        return h;
     }
 
-    bool FlowField::ForceRebuild(const Engine::VoxelWorld& world, int gx, int gz)
+    bool FlowField::Rebuild(const Engine::VoxelWorld& world, int gx, int gz,
+                            const std::vector<std::pair<int, int>>& vecBlocked)
+    {
+        const uint64_t uFp = HashBlocked(vecBlocked);
+        if (m_bHasGoal && gx == m_iGoalX && gz == m_iGoalZ &&
+            uFp == m_uBlockedFingerprint)
+            return false;
+        return ForceRebuild(world, gx, gz, vecBlocked);
+    }
+
+    bool FlowField::ForceRebuild(const Engine::VoxelWorld& world, int gx, int gz,
+                                 const std::vector<std::pair<int, int>>& vecBlocked)
     {
         m_iGoalX   = gx;
         m_iGoalZ   = gz;
         m_iOriginX = gx - kRadius;
         m_iOriginZ = gz - kRadius;
         m_bHasGoal = true;
+        m_uBlockedFingerprint = HashBlocked(vecBlocked);
+        m_vBlocked = vecBlocked;
 
         std::fill(m_vG.begin(),   m_vG.end(),   std::numeric_limits<float>::infinity());
         std::fill(m_vDir.begin(), m_vDir.end(), int8_t(-1));
@@ -98,15 +124,37 @@ namespace Client
                     world.GetBlock(wx, kWallY, wz);
             }
         }
+        // Parallel "tower-occupied" overlay. Same layout as `blocks` (with the
+        // 1-cell padding) so the shoulder/destination lookups can read both
+        // arrays without an extra bounds check. Pad cells default to false —
+        // they're already Stone in `blocks`, so they're unbreakable regardless.
+        std::vector<uint8_t> blocked(kCacheSide * kCacheSide, uint8_t(0));
+        for (const auto& p : vecBlocked)
+        {
+            const int lx = p.first  - m_iOriginX + kPad;
+            const int lz = p.second - m_iOriginZ + kPad;
+            if (lx < kPad || lx >= kCacheSide - kPad) continue;
+            if (lz < kPad || lz >= kCacheSide - kPad) continue;
+            blocked[lz * kCacheSide + lx] = 1;
+        }
         const auto BlockAt = [&](int cx, int cz) -> Engine::BlockType
         {
             const int lx = cx - m_iOriginX + kPad;
             const int lz = cz - m_iOriginZ + kPad;
             return blocks[lz * kCacheSide + lx];
         };
+        const auto IsTowerBlocked = [&](int cx, int cz) -> bool
+        {
+            const int lx = cx - m_iOriginX + kPad;
+            const int lz = cz - m_iOriginZ + kPad;
+            return blocked[lz * kCacheSide + lx] != 0;
+        };
 
-        // Goal must be air — if it isn't, no enemy can reach it; leave
-        // the field empty and let callers fall back to straight-line.
+        // Goal cell: only bail when the *voxel* is solid. A tower-occupied
+        // goal (enemies chasing a tower aggro target) is fine — Dijkstra
+        // plants cost 0 here and expands outward without ever needing to
+        // "enter" the goal cell, so neighbours can record a direction toward
+        // it and adjacent enemies still get a melee approach.
         if (Engine::IsSolid(BlockAt(gx, gz))) return true;
 
         const int iGoal = Index(gx, gz);
@@ -145,6 +193,13 @@ namespace Client
                 const int iN = Index(nx, nz);
                 if (iN < 0) continue;
 
+                // Tower-occupied cells are unbreakable to pathing — skip
+                // outright (no break-cost branch). Visually the voxel is
+                // still Air, but logically it's a permanent wall until the
+                // tower is destroyed (which triggers a rebuild via the
+                // spawner's blocked-set fingerprint).
+                if (IsTowerBlocked(nx, nz)) continue;
+
                 const Engine::BlockType b = BlockAt(nx, nz);
                 const bool bSolid = Engine::IsSolid(b);
                 float fBreak = 0.f;
@@ -155,16 +210,18 @@ namespace Client
                 }
 
                 // Corner-cut guard for diagonals — both shoulder cells
-                // must be air. Even a breakable shoulder blocks the
-                // diagonal because an enemy gliding across would
-                // visually clip the wall corner; let the route go
-                // through the orthogonals and break the wall there.
+                // must be air AND not tower-occupied. A breakable wall or
+                // a tower on the shoulder blocks the diagonal so the route
+                // is forced through an orthogonal step (which then either
+                // breaks the wall or routes around the tower).
                 if (n.iOrthoA >= 0)
                 {
                     const Neighbour& a = kNbr[n.iOrthoA];
                     const Neighbour& c = kNbr[n.iOrthoB];
-                    if (Engine::IsSolid(BlockAt(cx + a.dx, cz + a.dz))) continue;
-                    if (Engine::IsSolid(BlockAt(cx + c.dx, cz + c.dz))) continue;
+                    const int saX = cx + a.dx, saZ = cz + a.dz;
+                    const int scX = cx + c.dx, scZ = cz + c.dz;
+                    if (Engine::IsSolid(BlockAt(saX, saZ)) || IsTowerBlocked(saX, saZ)) continue;
+                    if (Engine::IsSolid(BlockAt(scX, scZ)) || IsTowerBlocked(scX, scZ)) continue;
                 }
 
                 const float fNewG = cur.fG + n.fCost + fBreak;
@@ -196,6 +253,23 @@ namespace Client
             }
         }
         return true;
+    }
+
+    bool FlowField::IsBlocked(int cx, int cz) const
+    {
+        for (const auto& p : m_vBlocked)
+            if (p.first == cx && p.second == cz) return true;
+        return false;
+    }
+
+    bool FlowField::Reaches(int cx, int cz) const
+    {
+        if (!m_bHasGoal) return false;
+        const int iIdx = Index(cx, cz);
+        if (iIdx < 0) return false;
+        // Unreached cells keep the +inf sentinel from the rebuild fill; the
+        // goal itself is 0 and every expanded cell is finite.
+        return m_vG[iIdx] < std::numeric_limits<float>::infinity();
     }
 
     bool FlowField::Sample(int cx, int cz,

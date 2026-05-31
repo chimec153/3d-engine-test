@@ -14,6 +14,8 @@ namespace Engine
 
     public:
         virtual void LoadShader() override;
+        virtual const char* GetTarget() const override { return "gs_5_0"; }
+        virtual void CreateFromBlob() override;
         virtual void Bind() override;
         virtual void PostBind() override;
         virtual std::shared_ptr<Bindable> Clone() override;

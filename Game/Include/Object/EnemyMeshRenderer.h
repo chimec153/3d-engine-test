@@ -3,11 +3,12 @@
 
 namespace Client
 {
-    // Game-side MeshRenderer for enemies. Overrides GetInstData to append two
+    // Game-side MeshRenderer for enemies. Overrides GetInstData to append three
     // per-instance attributes after the engine's 236-byte transform+material
-    // block: hit-flash colour (read from the effective material) and dissolve
-    // time. Paired with EnemyInst.hlsl (EnemyVSInst / EnemyPSInst) + a 256-byte
-    // instance input layout registered by RegisterShaders().
+    // block: hit-flash colour (read from the effective material), dissolve time,
+    // and burn-rim intensity. Paired with EnemyInst.hlsl (EnemyVSInst /
+    // EnemyPSInst) + a 260-byte instance input layout registered by
+    // RegisterShaders().
     //
     // This is what lets same-kind enemies collapse into one DrawInstanced call
     // while each still flashes and dissolves independently — previously the
@@ -20,8 +21,8 @@ namespace Client
         virtual ~EnemyMeshRenderer() override = default;
 
         // Game instance-buffer stride: 192 (transform) + 44 (material)
-        // + 16 (hit flash float4) + 4 (dissolve time float).
-        static constexpr int kInstSize = 256;
+        // + 16 (hit flash float4) + 4 (dissolve time float) + 4 (burn rim float).
+        static constexpr int kInstSize = 260;
 
         // Tags the four game enemy shaders + the instance input layout register
         // under. RenderManager derives the Inst VS/PS names from the solo ones
@@ -41,10 +42,17 @@ namespace Client
         void  SetDissolveTime(float f) { m_fDissolveTime = f; }
         float GetDissolveTime() const  { return m_fDissolveTime; }
 
+        // Per-instance burn-rim intensity (weapon Burn ImpactEffect). Enemy
+        // sets this >0 while burning; GetInstData ships it to EnemyPSInst, which
+        // turns it into a Fresnel (rim) emissive glow on the silhouette. 0 = off.
+        void  SetBurnRim(float f) { m_fBurnRim = f; }
+        float GetBurnRim() const  { return m_fBurnRim; }
+
         virtual void GetInstData(char* pData, int iSize) const override;
         virtual std::shared_ptr<Engine::Component> Clone() override;
 
     private:
         float m_fDissolveTime = 0.f;
+        float m_fBurnRim      = 0.f;
     };
 }

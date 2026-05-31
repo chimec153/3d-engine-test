@@ -143,6 +143,33 @@ namespace Editor
 		// Save All (bulk-write every tagged material to Resource/Material).
 		void MaterialBrowser_ImGuiWindow();
 
+		// Fragment Baker — bake-time tool that procedurally carves a convex
+		// base volume into N low-poly shards (FragmentGenerator) and writes the
+		// combined multi-container Mesh to a .mesh asset. "Generate" also
+		// previews the shards on a throwaway __FragmentPreview object in the
+		// current scene; "Save" opens a file dialog and serialises the Mesh.
+		void FragmentBaker_ImGuiWindow();
+
+		// Particle Editor — spawns a throwaway live preview emitter in the
+		// current scene and tunes it in real time (no persistence). The editor
+		// holds the authoritative parameter values; each widget change is pushed
+		// to the live Particle via its setter, and the scene's normal per-frame
+		// Update ticks the GPU simulation, so edits are visible immediately.
+		void ParticleEditor_ImGuiWindow();
+		void SpawnParticlePreview();   // (re)create the preview at the current Max Count
+		void ApplyParticleParams(std::shared_ptr<Engine::Particle> pParticle);  // push every member value
+		// (Re)load a texture from a path and bind it to the live preview. A
+		// leading '/' is treated as a /Game/ mount path (path-key load),
+		// otherwise an absolute file path. Remembers the path for save/respawn.
+		void SetParticleTexture(const char* szPathUtf8);
+		void SaveParticlePreset();     // write all tunables + texture path to a .particle file
+		void LoadParticlePreset();     // read them back and apply to the live preview
+
+		// Shader hot-reload — recompile every registered shader from its source
+		// .fx/.hlsl without restarting. Compile errors keep the old shader and
+		// are collected into m_strShaderReloadLog.
+		void ShaderReload_ImGuiWindow();
+
 		// 3D translate/rotate/scale gizmo for the currently-selected GameObject.
 		// Backed by ImGuizmo — overlays directly on the main viewport, hooked
 		// to the active camera's view/projection. W/E/R cycle operation,
@@ -238,6 +265,57 @@ namespace Editor
 		float m_fSavedBloomScale = 0.f;
 		float m_fSavedFOVValueY  = 0.f;
 		float m_fSavedFogDensity = 0.f;
+
+		// Fragment Baker UI state + last bake result. The preview GameObject is
+		// held weakly so a scene swap (Play/Stop, project reload) auto-clears
+		// it and the next Generate rebuilds it.
+		int   m_iFragShape       = 0;     // 0 = Box, 1 = Sphere, 2 = Capsule
+		int   m_iFragCount       = 12;
+		int   m_iFragSeed        = 1337;
+		float m_fFragSize        = 1.f;
+		float m_fFragBoxHeight   = 1.f;  // Box only: Y half-extent (= Size → cube)
+		int   m_iFragSubdiv      = 1;
+		float m_fFragCylHeight   = 0.4f;  // Capsule only: straight-section length
+		int   m_iFragCapRings    = 4;     // Capsule only: rings per hemisphere
+		int   m_iFragCapSectors  = 12;    // Capsule/Cylinder: longitude segments
+		float m_fFragCylinderHeight = 2.f; // Cylinder only: full height (Y)
+		int   m_iFragOutShards   = 0;
+		int   m_iFragOutVerts    = 0;
+		int   m_iFragOutTris     = 0;
+		std::shared_ptr<Engine::Mesh>     m_pFragMesh;
+		std::weak_ptr<Engine::GameObject> m_pFragPreview;
+
+		// Particle Editor UI state. Float arrays feed ImGui widgets directly and
+		// are the authoritative values (no getters on Particle needed). Defaults
+		// roughly mirror the in-game hit-spark emitter (Attackable). The preview
+		// GameObject is held weakly so a scene swap auto-clears it.
+		float m_ptStartColor[4]  = { 1.f, 1.f, 0.f, 1.f };
+		float m_ptEndColor[4]    = { 1.f, 1.f, 0.f, 0.f };
+		float m_ptVelocity[3]    = { -0.1f, 0.f, -0.1f };
+		float m_ptMaxVelocity[3] = {  0.1f, 0.f,  0.1f };
+		float m_ptAccel[3]       = { 0.f, 1.f, 0.f };
+		float m_ptMinPos[3]      = { -1.f, 0.f, -1.f };
+		float m_ptMaxPos[3]      = {  1.f, 0.f,  1.f };
+		float m_ptStartSize[2]   = { 0.05f, 0.05f };
+		float m_ptEndSize[2]     = { 0.10f, 0.10f };
+		float m_ptLifeTime       = 3.f;
+		float m_ptEmitTime       = 0.01f;
+		int   m_ptMaxCount       = 4096;
+		int   m_ptMaxFrame       = 1;
+		int   m_ptFrameW         = 1;
+		int   m_ptFrameH         = 1;
+		bool  m_ptStopEmit       = false;
+		std::weak_ptr<Engine::GameObject> m_pParticlePreview;
+		// Chosen emitter texture (slot 0, like the in-game atlas). Persists
+		// across respawns; null until the first spawn seeds the default.
+		std::shared_ptr<Engine::Texture>  m_pPtTexture;
+		// Path m_pPtTexture was loaded from (UTF-8/ACP). Saved with the preset
+		// so a load can re-bind the same image. "/..." = /Game/ mount path.
+		char m_strPtTexturePath[MAX_PATH] = {};
+
+		// Result text of the last shader hot-reload (per-shader compile errors,
+		// or an all-OK message).
+		std::string m_strShaderReloadLog;
 
 	public:
 		void CollisionStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);

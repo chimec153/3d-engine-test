@@ -19,6 +19,8 @@ namespace Engine
         virtual void PostBind() override;
         virtual std::shared_ptr<Bindable> Clone() override;
         virtual void LoadShader() override;
+        virtual const char* GetTarget() const override { return "cs_5_0"; }
+        virtual void CreateFromBlob() override;
     public:
         void Dispatch(int x = 1, int y = 1, int z = 1);
     };

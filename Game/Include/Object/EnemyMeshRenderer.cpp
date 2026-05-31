@@ -26,6 +26,9 @@ namespace Client
 
         if (iSize < 236 + 16 + 4) return;
         std::memcpy(pData + 252, &m_fDissolveTime, 4);
+
+        if (iSize < 236 + 16 + 4 + 4) return;
+        std::memcpy(pData + 256, &m_fBurnRim, 4);
     }
 
     std::shared_ptr<Engine::Component> EnemyMeshRenderer::Clone()
@@ -83,6 +86,7 @@ namespace Client
             {"Material",  3, DXGI_FORMAT_R32_FLOAT,          1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
             {"HitFlash",  0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
             {"PaperTime", 0, DXGI_FORMAT_R32_FLOAT,          1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+            {"BurnRim",   0, DXGI_FORMAT_R32_FLOAT,          1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
         };
 
         std::shared_ptr<InputLayout> pIL = StaticCreateBindable<InputLayout>(

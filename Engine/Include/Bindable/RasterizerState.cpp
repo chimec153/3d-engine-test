@@ -2,7 +2,7 @@
 
 namespace Engine
 {
-	RasterizerState::RasterizerState(bool bDepthEnable, D3D11_CULL_MODE eCullMode, D3D11_FILL_MODE eFillmode, float fDepthBias, float fSlopeScaledDepthBias) :
+	RasterizerState::RasterizerState(bool bDepthEnable, D3D11_CULL_MODE eCullMode, D3D11_FILL_MODE eFillmode, float fDepthBias, float fSlopeScaledDepthBias, bool bScissorEnable) :
 		Bindable()
 	{
 		SetBindableType(BINDABLE_TYPE::RASTERIZER_STATE);
@@ -14,6 +14,7 @@ namespace Engine
 		desc.DepthClipEnable = bDepthEnable;
 		desc.DepthBiasClamp = fDepthBias;
 		desc.SlopeScaledDepthBias = fSlopeScaledDepthBias;
+		desc.ScissorEnable = bScissorEnable;
 
 		if (FAILED(Graphics::GetInst()->GetDevice()->CreateRasterizerState(&desc, &m_pState)))
 		{

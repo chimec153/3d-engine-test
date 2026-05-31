@@ -4,17 +4,25 @@
 Engine::GeometryShader::GeometryShader(const TCHAR* pFilePath, const char* pEntry)	:
 	Shader(pFilePath, pEntry)
 {
-	if (!LoadShaderFile("gs_5_0")) 
-	{
-		assert(false);
-	}
-
 	LoadShader();
 }
 
 void Engine::GeometryShader::LoadShader()
 {
-	if (FAILED(Graphics::GetInst()->GetDevice()->CreateGeometryShader(GetBlob()->GetBufferPointer(), GetBlob()->GetBufferSize(), nullptr, &m_pGS))) {
+	if (!LoadShaderFile("gs_5_0"))
+	{
+		return;
+	}
+
+	CreateFromBlob();
+}
+
+void Engine::GeometryShader::CreateFromBlob()
+{
+	ID3DBlob* pBlob = GetBlob();
+	if (!pBlob) return;
+
+	if (FAILED(Graphics::GetInst()->GetDevice()->CreateGeometryShader(pBlob->GetBufferPointer(), pBlob->GetBufferSize(), nullptr, &m_pGS))) {
 		assert(false);
 	}
 }

@@ -39,7 +39,10 @@ namespace Client
         // and a PaperBurn sibling would force RenderManager's instancing fast
         // path to bail (it conservatively skips buckets with decorator
         // siblings), dropping every enemy back to a solo draw.
-        Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle = false, bool bWithPaperBurn = true);
+        // bWithImpactBurst — opt-in for the animated impact-flash flipbook
+        // (burst.png). Separate from bWithBloodParticle so mechanical hosts
+        // (towers) can get the hit flash without spawning blood/dust.
+        Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle = false, bool bWithPaperBurn = true, bool bWithImpactBurst = false);
         Attackable(const Attackable& other);
         virtual ~Attackable() override = default;
 
@@ -48,11 +51,23 @@ namespace Client
         int m_iHP;
         int m_iAttackMin;
         int m_iAttackMax;
+        // Fractional reduction applied to incoming damage in Attack (0 = none).
+        float m_fDamageReduction = 0.f;
         bool m_bWithBloodParticle = false;
         bool m_bWithPaperBurn = true;
+        bool m_bWithImpactBurst = false;
         std::shared_ptr<Engine::PaperBurn>     m_pPaperBurn;
         std::shared_ptr<Engine::Particle>      m_pParticle;
         std::shared_ptr<Engine::Particle>      m_pBloodParticle;
+        // Companion to the blood emitter — a grey impact puff. Created and
+        // emitted under the same bWithBloodParticle opt-in so only the
+        // player pays for it (same per-frame CS dispatch cost rationale).
+        std::shared_ptr<Engine::Particle>      m_pDustParticle;
+        // Animated impact flash — a square N×N flipbook (white/grayscale +
+        // alpha) that plays once per hit. The flipbook frame advances with
+        // particle age in the GS, so the animation IS the visual expansion;
+        // size/velocity are kept ~constant. Same opt-in / cost rationale.
+        std::shared_ptr<Engine::Particle>      m_pImpactParticle;
         std::shared_ptr<Engine::SoundBindable> m_pHitSound;
 
     public:
@@ -76,6 +91,14 @@ namespace Client
             if (m_iHP > m_iMaxHP) m_iHP = m_iMaxHP;
             if (m_iHP < 0)        m_iHP = 0;
         }
+        // Restore current HP (heal tower). Clamped to max; never revives a
+        // dead (HP<=0) target.
+        void Heal(int iAmount)
+        {
+            if (iAmount <= 0 || m_iHP <= 0) return;
+            m_iHP += iAmount;
+            if (m_iHP > m_iMaxHP) m_iHP = m_iMaxHP;
+        }
         void AddAttack(int iDelta)
         {
             m_iAttackMin += iDelta;
@@ -83,6 +106,15 @@ namespace Client
             if (m_iAttackMin < 0) m_iAttackMin = 0;
             if (m_iAttackMax < m_iAttackMin) m_iAttackMax = m_iAttackMin;
         }
+        // Fractional incoming-damage reduction (0..0.9). Attack() applies the
+        // TARGET's reduction, so the player's "defense up" stat softens hits.
+        void AddDamageReduction(float fDelta)
+        {
+            m_fDamageReduction += fDelta;
+            if (m_fDamageReduction < 0.f)  m_fDamageReduction = 0.f;
+            if (m_fDamageReduction > 0.9f) m_fDamageReduction = 0.9f;
+        }
+        float GetDamageReduction() const { return m_fDamageReduction; }
         // Absolute setter — used by Enemy::ApplyDef to push a CSV-loaded
         // damage range over the default the ctor baked in. Clamps to a
         // sane order so a malformed (min > max) row doesn't break Attack.

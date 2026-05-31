@@ -27,15 +27,19 @@ namespace Engine
         // own; placement lives on the UIControl-owned Transform.
         void SetTexture(const std::shared_ptr<Texture>& pTex);
         void SetOnClick(std::function<void()> fnOnClick) { m_fnOnClick = std::move(fnOnClick); }
+        // Optional secondary (right-click) action — e.g. a list cell's delete.
+        void SetOnRightClick(std::function<void()> fn) { m_fnOnRightClick = std::move(fn); }
 
         virtual bool Init() override;
         virtual std::shared_ptr<Component> Clone() override;
 
     protected:
         virtual void OnMouseDown() override;
+        virtual void OnRightMouseDown() override;
 
     private:
         std::function<void()> m_fnOnClick;
+        std::function<void()> m_fnOnRightClick;
 
         std::shared_ptr<UIRenderer> m_pRenderer;
     };

@@ -52,17 +52,16 @@ namespace Client
         std::shared_ptr<Engine::Text> m_pNameTexts[3];
         std::shared_ptr<Engine::Text> m_pLvlTexts[3];
 
-        // Weapon id rendered on each card. -1 means the slot has no
-        // weapon to offer this round (rare — only if the catalogue has
-        // fewer entries than the player owns + slot cap).
-        int m_iCardWeaponIds[3] = { -1, -1, -1 };
+        // Stat upgrade shown on each card (a Player::StatUpgrade value, stored
+        // as int to keep this header free of the full Player include). -1 =
+        // empty slot.
+        int m_iCardStats[3] = { -1, -1, -1 };
 
         void Show();
         void Hide();
         void OnPick(int iCardIndex);
-        // Re-roll the 3 card weapon ids from the current state of the
-        // player's slots and the WeaponDatabase. Updates each card's
-        // background tint and Text strings.
+        // Re-roll the 3 cards with distinct random stat upgrades; updates each
+        // card's tint + label + effect text.
         void RollCards();
     };
 }

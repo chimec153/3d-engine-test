@@ -586,6 +586,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     float4 decal1 = g_DecalTexture1.Sample(g_sPoint, input.uv);
     float4 decal2 = g_DecalTexture2.Sample(g_sPoint, input.uv);
     float4 decal3 = g_DecalTexture3.Sample(g_sPoint, input.uv);
+    float4 decal4 = g_DecalTexture4.Sample(g_sPoint, input.uv);
     
     float4 value0 = g_GBufferTexture0.Sample(g_sPoint, input.uv);
     
@@ -662,6 +663,11 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     uint shadingId = (uint)round(value3.w * 255.0);
 
     float3 emissive = g_GBufferTexture4.Sample(g_sPoint, input.uv).xyz;
+    // MRT4 (emissive) is R11G11B10_FLOAT — no alpha channel, so decal4.w samples
+    // as 1.0 and a lerp here wipes emissive to decal4.xyz. Emissive is additive
+    // light anyway, so add the decal's emissive on top; decal MRT4 clears to 0,
+    // so this is a no-op until an emissive decal writes value4 (see PS_DECAL_RING).
+    emissive += decal4.xyz; // composite decal emissive (e.g. glowing ring)
 
     float3 worldPixelPos = mul(float4(viewPos, 1.f), g_matInvView).xyz;
     float3 worldCamPos   = mul(float4(0.f, 0.f, 0.f, 1.f), g_matInvView).xyz;

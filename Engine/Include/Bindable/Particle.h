@@ -65,6 +65,12 @@ namespace Engine
         void SetTexture(const std::shared_ptr<class Texture>& p) { m_pTexture = p; }
         std::shared_ptr<class Texture> GetTexture() const { return m_pTexture; }
 
+        // Read-back for tools (e.g. the editor's Particle Editor, which mirrors
+        // these into its widgets after Load). Every tunable lives in the cbuffer
+        // except the emit interval. Inline — no DLL ABI impact.
+        const PARTICLECBUFFER& GetCBuffer() const { return m_tCBuffer; }
+        float GetEmitTime() const { return m_fEmitMaxTime; }
+
         void SetRenderLayer(RENDER_LAYER eLayer) { m_eRenderLayer = eLayer; }
         RENDER_LAYER GetRenderLayer() const { return m_eRenderLayer; }
 

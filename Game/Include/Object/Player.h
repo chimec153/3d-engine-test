@@ -30,6 +30,8 @@ namespace Client
     class Attackable;
     class Trail;
     class Bullet;
+    class Pet;
+    class Beam;
     class IPlayerLowerState;
     class IPlayerUpperState;
 
@@ -52,6 +54,18 @@ namespace Client
             UP,
             DOWN,
             END
+        };
+
+        // Level-up stat upgrade choices (shown as cards by LevelUpChoices).
+        // Each pick bumps one player stat. Keep COUNT last.
+        enum class StatUpgrade
+        {
+            MoveSpeed,    // faster walk
+            MaxHP,        // +max HP (and heal)
+            Attack,       // +player bullet damage
+            CritChance,   // +chance for a bullet to deal 2x
+            Defense,      // +incoming-damage reduction
+            COUNT
         };
     public:
         Player(int iMaxHP, int iAttackMin, int iAttackMax);
@@ -129,6 +143,12 @@ namespace Client
             int   iLevel       = 1;
             float fCooldownAcc = 0.f;
             std::vector<std::weak_ptr<Bullet>> vecSustainedInstances;
+            // Follow-weapon pets (independent companions). Spawned/refreshed by
+            // RespawnPets on add / level-up, like vecSustainedInstances.
+            std::vector<std::weak_ptr<Pet>> vecPets;
+            // Laser beams (Straight + Sustained weapons). Spawned by
+            // RespawnBeams; the Player drives them each frame (anchor + aim).
+            std::vector<std::weak_ptr<Beam>> vecBeams;
         };
         static constexpr int kMaxWeaponSlots = 6;
         std::vector<WeaponSlot> m_vecWeaponSlots;
@@ -138,6 +158,11 @@ namespace Client
         // weapon-spawn path traces the mouse cursor onto the player's
         // y-plane and aims along that vector.
         bool m_bMouseAim = false;
+
+        // Footstep marks — distance walked since the last print, and which
+        // foot is next (alternates L/R). Drives FootstepManager::Spawn.
+        float m_fStrideAccum = 0.f;
+        bool  m_bLeftFoot    = false;
 
         // Experience / level progression. Orbs dropped by dead enemies
         // feed AddExp on pickup; AddExp pushes overflow back into the
@@ -152,11 +177,27 @@ namespace Client
         // bug where AddExp(20) at level 1 would queue only one card.
         int  m_iPendingLevelUps = 0;
 
+        // Stat-upgrade accumulators (the rest live on m_pAttackable: max HP +
+        // damage reduction, and on m_fSpeed: move speed). Applied to spawned
+        // bullets in FireCooldownBurst.
+        float m_fDamageMult = 1.f;   // attack-up multiplier on bullet damage
+        float m_fCritChance = 0.f;   // 0..1 chance a bullet crits
+        float m_fCritMult   = 2.f;   // crit damage multiplier
+
     private:
         // Get the aim yaw the next projectile should fly along. Honours
         // m_bMouseAim (raycast onto the player's y-plane) and falls back
         // to the player's facing yaw.
         float ComputeAimYaw() const;
+        // Base spawn heading for a weapon per its AimMode (the LCTRL mouse-aim
+        // toggle is a global Cursor override). Radial is distributed per
+        // projectile by the caller, so it returns the player facing here.
+        float ComputeWeaponAimYaw(const WeaponDef& def,
+                                  const Engine::Vector3& vPlayerPos) const;
+        // Mouse-cursor aim yaw (camera ray onto the player plane). Returns
+        // false / leaves outYaw untouched when unavailable. Shared by
+        // ComputeAimYaw and ComputeWeaponAimYaw.
+        bool TryComputeMouseAimYaw(float& outYaw) const;
         // Spawn one Cooldown shot from a slot. Reads slot.iLevel for damage
         // / speed scaling; the slot's cooldown accumulator is the caller's
         // job.
@@ -165,6 +206,16 @@ namespace Client
         // the weapon is gained or its level changes — old instances are
         // released first so the count change takes effect.
         void  RespawnSustainedInstances(WeaponSlot& slot);
+        // Spawn / refresh a Follow weapon's pets (movement == Follow). Mirrors
+        // RespawnSustainedInstances: drops the old companions and spawns
+        // ComputeCount fresh ones ringed around the player.
+        void  RespawnPets(WeaponSlot& slot);
+        // Spawn / refresh a Straight+Sustained weapon's laser beam(s). The
+        // Player drives them each frame (DriveBeams) with the live cursor aim.
+        void  RespawnBeams(WeaponSlot& slot);
+        // Per-frame: anchor each beam at the muzzle and aim it down the
+        // weapon's current heading (called from Update).
+        void  DriveBeams(float fDeltaTime);
 
     public:
         void SetVoxelWorld(Engine::VoxelWorld* pWorld) { m_pVoxelWorld = pWorld; }
@@ -204,6 +255,9 @@ namespace Client
         bool HasPendingLevelUp()    const { return m_iPendingLevelUps > 0; }
         int  PendingLevelUpCount()  const { return m_iPendingLevelUps; }
         void ConsumeLevelUp(int iChoice);
+        // Apply a chosen stat upgrade and consume one pending level-up.
+        // LevelUpChoices calls this when the player picks a card.
+        void ApplyStatUpgrade(StatUpgrade eStat);
 
         // Apply a hit from an external attacker. Mirrors the frogclaw
         // collision branch in CollisionPlayerBodyStay so non-collision damage
@@ -215,6 +269,19 @@ namespace Client
         // component that actually tracks the values.
         int GetHP()    const;
         int GetMaxHP() const;
+        // Restore current HP to full (called when a round is cleared).
+        void FullHeal();
+
+        // Stat readback for the intermission shop's stat panel. These mirror
+        // the five StatUpgrade choices (move speed / max HP / attack / crit /
+        // defense) plus the player's bullet-attack scaling.
+        float GetMoveSpeed()  const { return m_fSpeed; }
+        float GetDamageMult() const { return m_fDamageMult; }
+        float GetCritChance() const { return m_fCritChance; }
+        float GetDamageReduction() const;
+        // True once a lethal hit has dropped HP to 0 (Attackable::Attack
+        // returns true and the Die state latches). Polled by GameOverUI.
+        bool IsDead()  const { return GetHP() <= 0; }
 
     public:
         // Replace the active lower/upper state. Mirrors the original SetState

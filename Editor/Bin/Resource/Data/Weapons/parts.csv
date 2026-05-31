@@ -2,24 +2,43 @@
 # scene init. One row = one part card (부품 카드). If this file is missing
 # or empty, WeaponCombiner falls back to a built-in default set.
 # Columns:
-#   category — origin | movement | firemode | onhit | shape | levelup
+#   category — origin | movement | lifetime | firerate | onhit | size | levelup
 #   variant  — integer enum value within that category:
 #                origin:   Front=0 Around=1 Mouse=2 Random=3
-#                movement: Straight=0 Spiral=1 Fixed=2 Orbital=3
-#                firemode: Cooldown=0 Sustained=1
-#                onhit:    Vanish=0 NoChange=1 Reflect=2 Multiply=3
-#                shape:    Sphere=0 Box=1 Triangle=2
+#                movement: Straight=0 Spiral=1 Fixed=2 Orbital=3 Homing=4
+#                lifetime: index only (0,1,2…); seconds are the duration column
+#                onhit:    Vanish=0 NoChange=1 Reflect=2 Multiply=3 Field=4
+#                size:     index only (0,1,2…); the scale is the amount column
 #                levelup:  Damage=0 Cooldown=1 Count=2 Speed=3 Size=4
 #   label    — name shown on the card (ASCII)
 #   color    — 0xRRGGBB icon / slot colour (levelup also tints the weapon)
-#   amount   — levelup only: per-level bump (Damage/Count add, Cooldown
-#              multiplies, Speed/Size add). Ignored (0) for other categories.
-#   duration — firemode only: weapon lifetime in seconds. Cooldown bullets
-#              despawn after this; Sustained orbs live this long (use a big
-#              value like 9999 for effectively-permanent). Two parts of the
-#              same fire mode may set different durations. Ignored (0)
-#              elsewhere; if left 0 a fire-mode default is used.
-category,variant,label,color,amount,duration
+#   amount   — levelup: per-level bump (Damage/Count add, Cooldown
+#              multiplies, Speed/Size add). size: uniform scale of the
+#              projectile. movement (Orbital): orbit radius in world units
+#              (0 = sits on the player and follows). onhit: max hits before
+#              the projectile despawns (0 = unlimited; caps NoChange/Reflect
+#              bounces; sets Multiply split generations; Field ignores it).
+#              firerate: cooldown seconds between
+#              shots (lower = faster; 0 = Sustained / persistent, no repeat
+#              fire). Ignored for other categories.
+#   duration — lifetime only: projectile lifetime in seconds (how long each
+#              shot lives). Cooldown weapons use it; a Sustained weapon
+#              (firerate 0) ignores it and stays effectively permanent.
+#              Ignored (0) elsewhere; if left 0 a 2s default is used.
+#   growth   — movement (Orbital) only: radial growth in world units/sec.
+#              >0 makes the orbit spiral outward (SpiralOut); the projectile
+#              despawns when the radius nears the arena edge. Ignored (0)
+#              elsewhere. Optional column — older rows without it read 0.
+#   damage_interval — onhit (Field) card: DoT tick interval in seconds. The
+#              Field zone applies its damage to overlapping enemies once every
+#              this many seconds (lower = faster ticks = higher sustained DPS).
+#              0 here falls back to the legacy 0.5s Field tick. (In weapons.csv
+#              this column drives ANY Sustained weapon's tick; 0 = single hit.)
+#              Optional column — older rows without it read 0.
+#   aim_mode  — movement (Homing / Aimed) only: which enemy the auto-targeting
+#              projectile locks onto. 0 Nearest (default) / 1 LowestHP / 2
+#              Random. Ignored elsewhere. Optional column — older rows read 0.
+category,variant,label,color,amount,duration,growth,damage_interval,aim_mode
 origin,0,Front,0x4FC3F7,0,0
 origin,1,Around,0x4FC3F7,0,0
 origin,2,Mouse,0x4FC3F7,0,0
@@ -27,18 +46,40 @@ origin,3,Random,0x4FC3F7,0,0
 movement,0,Straight,0x81C784,0,0
 movement,1,Spiral,0x81C784,0,0
 movement,2,Fixed,0x81C784,0,0
-movement,3,Orbital,0x81C784,0,0
-firemode,0,Cooldown,0xFFB74D,0,2.0
-firemode,1,Sustained,0xFFB74D,0,9999.0
+movement,3,Orbital,0x81C784,0.9,0
+movement,3,Follow,0x81C784,0,0
+movement,3,SpiralOut,0x81C784,0.9,0,3.0
+movement,4,Homing,0x81C784,0,0
+movement,4,HomingWeak,0x81C784,0,0,0,0,1
+movement,4,HomingRand,0x81C784,0,0,0,0,2
+lifetime,0,Short,0xFFB74D,0,0.5
+lifetime,1,Medium,0xFFB74D,0,2.0
+lifetime,2,Long,0xFFB74D,0,5.0
+firerate,0,Rapid,0xFFCA28,0.2,0
+firerate,1,Normal,0xFFCA28,0.5,0
+firerate,2,Slow,0xFFCA28,1.0,0
+firerate,3,Continuous,0xFFCA28,0,0
 onhit,0,Vanish,0xE57373,0,0
 onhit,1,NoChange,0xE57373,0,0
-onhit,2,Reflect,0xE57373,0,0
-onhit,3,Multiply,0xE57373,0,0
-shape,0,Sphere,0xBA68C8,0,0
-shape,1,Box,0xBA68C8,0,0
-shape,2,Triangle,0xBA68C8,0,0
+onhit,2,Reflect1,0xE57373,1,0
+onhit,2,Reflect3,0xE57373,3,0
+onhit,2,Reflect5,0xE57373,5,0
+onhit,2,Reflect7,0xE57373,7,0
+onhit,3,Multiply1,0xE57373,1,0
+onhit,3,Multiply3,0xE57373,3,0
+onhit,3,Multiply5,0xE57373,5,0
+onhit,3,Multiply7,0xE57373,7,0
+onhit,4,Field,0xE57373,0,0,0,0.5
+size,0,10,0xBA68C8,0.25,0
+size,1,20,0xBA68C8,1,0
+size,2,30,0xBA68C8,5,0
 levelup,0,Damage,0xE53935,2.0,0
 levelup,1,Cooldown,0x26C6DA,0.9,0
 levelup,2,Count,0x9CCC65,1.0,0
 levelup,3,Speed,0xFFEE58,3.0,0
 levelup,4,Size,0xAB47BC,0.1,0
+impact,0,Damage,0xFF8A65,0,0
+impact,1,Knockback,0xFF8A65,6,0
+impact,2,Gather,0xFF8A65,6,0,4
+impact,3,Burn,0xFF8A65,3,3
+impact,4,Slow,0xFF8A65,0.5,2.5

@@ -62,7 +62,13 @@ namespace Engine
 			return;
 		}
 
+		CreateFromBlob();
+	}
+
+	void PixelShader::CreateFromBlob()
+	{
 		ID3DBlob* pPixelBlob = GetBlob();
+		if (!pPixelBlob) return;
 
 		if (FAILED(Graphics::GetInst()->GetDevice()->CreatePixelShader(pPixelBlob->GetBufferPointer(), pPixelBlob->GetBufferSize(), nullptr, &pPixelShader)))
 		{

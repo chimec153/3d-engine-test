@@ -76,6 +76,17 @@ namespace Engine
         std::shared_ptr<Layer>  m_pLayer;
         std::map<ChunkCoord, ChunkRecord> m_chunks;
 
+        // 1-entry lookup cache for the const FindChunk. The flow-field rebuild
+        // sweeps a large region row-major, so consecutive GetBlock calls almost
+        // always hit the same chunk — caching the last result turns ~16k
+        // std::map::find calls per rebuild into cheap coord compares. Chunks are
+        // never erased and std::map node pointers are stable, so a cached hit
+        // stays valid; EnsureChunk invalidates it so a freshly-created chunk
+        // isn't masked by a cached miss.
+        mutable ChunkCoord         m_lastFindCoord{};
+        mutable const ChunkRecord* m_pLastFindRec  = nullptr;
+        mutable bool               m_bLastFindValid = false;
+
         static ChunkCoord WorldToChunk(int wx, int wy, int wz);
         static void       WorldToLocal(int wx, int wy, int wz,
                                        int& lx, int& ly, int& lz);

@@ -63,7 +63,14 @@ void CS_PARTICLE(uint3 iDispatchThreadID : SV_DispatchThreadID, uint3 iGroupID :
                 g_vecParticleInfo[iDispatchThreadID.x].size = g_vParticleStartSize;
                 
                 float3 vSpeed = g_vParticleVelocity * (1.f - vRandom) + g_vParticleMaxVelocity * vRandom;
-                g_vecParticleInfo[iDispatchThreadID.x].speed = normalize(vSpeed);
+                if(length(vSpeed) == 0)
+                {
+                    g_vecParticleInfo[iDispatchThreadID.x].speed = float3(0.f, 0.f, 0.f);
+                }
+                else
+                {
+                    g_vecParticleInfo[iDispatchThreadID.x].speed = normalize(vSpeed);
+                }
                 g_vecParticleInfo[iDispatchThreadID.x].color = g_vParticleStartColor;
 
             }

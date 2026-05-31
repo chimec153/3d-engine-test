@@ -116,6 +116,7 @@ namespace Engine
 		PICKUP      = 1u << 4,
 		CAMERA_LINE = 1u << 5,
 		TERRAIN     = 1u << 6,
+		TOWER       = 1u << 7,
 		ALL         = 0xFFFFFFFFu
 	};
 

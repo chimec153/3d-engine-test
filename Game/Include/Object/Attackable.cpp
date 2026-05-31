@@ -33,13 +33,14 @@ namespace Client
 		SetComponentType(Engine::COMPONENT_TYPE::NONE);
 	}
 
-	Attackable::Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle, bool bWithPaperBurn)	:
+	Attackable::Attackable(int iMaxHP, int iAttackMin, int iAttackMax, bool bWithBloodParticle, bool bWithPaperBurn, bool bWithImpactBurst)	:
 		m_iMaxHP(iMaxHP)
 		, m_iHP(iMaxHP)
 		, m_iAttackMin(iAttackMin)
 		, m_iAttackMax(iAttackMax)
 		, m_bWithBloodParticle(bWithBloodParticle)
 		, m_bWithPaperBurn(bWithPaperBurn)
+		, m_bWithImpactBurst(bWithImpactBurst)
 	{
 		SetComponentType(Engine::COMPONENT_TYPE::NONE);
 	}
@@ -52,9 +53,12 @@ namespace Client
 		, m_iAttackMax(other.m_iAttackMax)
 		, m_bWithBloodParticle(other.m_bWithBloodParticle)
 		, m_bWithPaperBurn(other.m_bWithPaperBurn)
+		, m_bWithImpactBurst(other.m_bWithImpactBurst)
 		, m_pPaperBurn(other.m_pPaperBurn)
 		, m_pParticle(other.m_pParticle)
 		, m_pBloodParticle(other.m_pBloodParticle)
+		, m_pDustParticle(other.m_pDustParticle)
+		, m_pImpactParticle(other.m_pImpactParticle)
 		, m_pHitSound(other.m_pHitSound)
 	{
 	}
@@ -65,10 +69,26 @@ namespace Client
 
 		int iAttack = GetAttack();
 
-		if (m_pBloodParticle) m_pBloodParticle->AddEmitCount(iAttack * 64);
+		// Blood spurts from the entity taking the hit, so emit on the
+		// TARGET's blood particle (the player), not the attacker's — the
+		// attacker (enemy) has none. Same private-member access works
+		// because Attack is a member of Attackable.
+		if (pTargetAttackable->m_pBloodParticle) pTargetAttackable->m_pBloodParticle->AddEmitCount(iAttack * 64);
+		// Grey impact puff alongside the blood — fixed burst so it reads as
+		// a consistent "hit dust" regardless of the damage rolled.
+		if (pTargetAttackable->m_pDustParticle)  pTargetAttackable->m_pDustParticle->AddEmitCount(40);
+		// Animated impact flash — a small cluster whose flipbook plays once.
+		if (pTargetAttackable->m_pImpactParticle) pTargetAttackable->m_pImpactParticle->AddEmitCount(6);
 		if (m_pHitSound)      m_pHitSound->Play();
 
-		return (pTargetAttackable->m_iHP -= iAttack) <= 0;
+		// Apply the TARGET's damage reduction (the player's "defense up" stat).
+		int iDmg = iAttack;
+		const float fRed = pTargetAttackable->m_fDamageReduction;
+		if (fRed > 0.f)
+			iDmg = static_cast<int>(iAttack * (1.f - fRed) + 0.5f);
+		if (iDmg < 0) iDmg = 0;
+
+		return (pTargetAttackable->m_iHP -= iDmg) <= 0;
 	}
 
 	int Attackable::GetAttack() const
@@ -182,6 +202,73 @@ namespace Client
 				m_pBloodParticle->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
 				m_pBloodParticle->AddEmitCount(1);
 			}
+
+			// Grey dust puff that accompanies the blood: bigger, slower,
+			// fading particles that drift up-and-out so the hit kicks up
+			// a small cloud. Reuses the same soft round particle texture,
+			// just tinted grey. Same arm pattern as blood (AddEmitCount(1)
+			// moves the emit count from -1/continuous to 0/burst-on-demand).
+			m_pDustParticle = CreateSiblingComponent<Engine::Particle>(
+				pOwnerGameObject, "dustparticle", 256);
+
+			if (m_pDustParticle)
+			{
+				m_pDustParticle->SetAccelaration({ 0.f, 0.4f, 0.f });
+				m_pDustParticle->SetEmitTime(0.0001f);
+				m_pDustParticle->SetStartColor({ 0.55f, 0.52f, 0.47f, 0.6f });
+				m_pDustParticle->SetEndColor({ 0.6f, 0.57f, 0.52f, 0.f });
+				m_pDustParticle->SetMaxLifeTime(0.6f);
+				m_pDustParticle->SetStartSize({ 0.06f, 0.06f });
+				m_pDustParticle->SetEndSize({ 0.22f, 0.22f });
+				m_pDustParticle->SetVelocity({ -0.5f, 0.f, -0.5f });
+				m_pDustParticle->SetMaxVelocity({ 0.5f, 0.4f, 0.5f });
+				m_pDustParticle->SetTexture(pParticleTex);
+				m_pDustParticle->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
+				m_pDustParticle->AddEmitCount(1);
+			}
+		}
+
+		// Animated impact flash. Square 4x4 flipbook (16 frames): the GS
+		// advances the frame by particle age, so the texture itself carries
+		// the burst/expansion — size and velocity stay ~fixed. MUST be a
+		// square N×N atlas (FrameWidth==FrameHeight==N), see the GS row calc
+		// (/FrameHeight). Tinted white. Opt-in via bWithImpactBurst so the
+		// player AND towers (which have no blood) show a hit flash.
+		if (m_bWithImpactBurst)
+		{
+			std::shared_ptr<Engine::Texture> pImpactTex =
+				Engine::StaticCreateBindable<Engine::Texture>("hitimpacttexture", "/Game/Texture/Particle/burst.png", TEXTURE_PATH);
+
+			m_pImpactParticle = CreateSiblingComponent<Engine::Particle>(
+				pOwnerGameObject, "impactparticle", 64);
+
+			if (m_pImpactParticle)
+			{
+				m_pImpactParticle->SetFrameWidth(4);
+				m_pImpactParticle->SetFrameHeight(4);
+				m_pImpactParticle->SetMaxFrame(16);
+				m_pImpactParticle->SetAccelaration({ 0.f, 0.f, 0.f });
+				m_pImpactParticle->SetEmitTime(0.001f);
+				m_pImpactParticle->SetStartColor({ 1.f, 1.f, 1.f, 1.f });
+				m_pImpactParticle->SetEndColor({ 1.f, 1.f, 1.f, 1.f });
+				// The bright frames are only the FIRST half of the sheet, so
+				// the quad must already be large when the burst spawns —
+				// growing from small made the bright moment tiny. Start big
+				// (≈2-3x a tower's ~0.9-unit width so a hit is unmissable) and
+				// only grow a little. 0.8s life keeps the flash readable.
+				m_pImpactParticle->SetMaxLifeTime(0.8f);
+				float fSize = 0.5f;
+				m_pImpactParticle->SetStartSize({ fSize, fSize });
+				m_pImpactParticle->SetEndSize({ fSize, fSize });
+				float fPosition = 0.5f;
+				m_pImpactParticle->SetMinCreatePosition({ -fPosition, 0.5f, -fPosition });
+				m_pImpactParticle->SetMaxCreatePosition({ fPosition, 1.f, fPosition });
+				m_pImpactParticle->SetVelocity({ 0.f, 0.f, 0.f });
+				m_pImpactParticle->SetMaxVelocity({ 0.f, 0.f, 0.f });
+				m_pImpactParticle->SetTexture(pImpactTex);
+				m_pImpactParticle->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
+				m_pImpactParticle->AddEmitCount(1);
+			}
 		}
 
 		char strHit[TEXT_LEN] = {};
@@ -222,6 +309,22 @@ namespace Client
 		if (m_pBloodParticle)
 		{
 			if (auto pTr = m_pBloodParticle->GetTransform())
+			{
+				pTr->SetPosition(vPos);
+				pTr->SetRotation(vRot);
+			}
+		}
+		if (m_pDustParticle)
+		{
+			if (auto pTr = m_pDustParticle->GetTransform())
+			{
+				pTr->SetPosition(vPos);
+				pTr->SetRotation(vRot);
+			}
+		}
+		if (m_pImpactParticle)
+		{
+			if (auto pTr = m_pImpactParticle->GetTransform())
 			{
 				pTr->SetPosition(vPos);
 				pTr->SetRotation(vRot);

@@ -9,6 +9,13 @@
 // shared_ptrs through without dereferencing), so the include wasn't pulled
 // in before.
 #include "VertexShader.h"
+// Full shader types + Graphics for the engine-side shader hot-reload entry
+// point (RecompileAllShaders) at the bottom of this file.
+#include "PixelShader.h"
+#include "GeometryShader.h"
+#include "ComputeShader.h"
+#include "../Core/Graphics.h"
+#include <string>
 #ifdef _DEBUG
 #include "Camera.h"
 #endif
@@ -92,8 +99,14 @@ namespace Engine
 	template<>
 	inline BindableManager<class RasterizerState>::BindableManager()
 	{
-		const std::shared_ptr<RasterizerState>& pRasterizer = CreateBindable("Basic", true, D3D11_CULL_BACK, D3D11_FILL_SOLID, 0.1f, 1.5f);
-		//const std::shared_ptr<RasterizerState>& pRasterizer = CreateBindable("Basic", true, D3D11_CULL_BACK, D3D11_FILL_SOLID);
+		// Opaque-pass raster — NO depth bias. The previous 0.1f/1.5f values
+		// (DepthBiasClamp / SlopeScaledDepthBias) were left over from a 2023
+		// "postprocessing" commit and were shadow-map-magnitude biases applied
+		// to ALL deferred geometry. With SlopeScaledBias=1.5 clamped at 0.1
+		// NDC, tilted faces (e.g. a tall tower's front from an isometric
+		// camera) got pushed back enough that enemies a short distance behind
+		// passed the LESS depth test and drew in front of the tower.
+		const std::shared_ptr<RasterizerState>& pRasterizer = CreateBindable("Basic", true, D3D11_CULL_BACK, D3D11_FILL_SOLID);
 
 		if (pRasterizer)
 		{
@@ -139,6 +152,10 @@ namespace Engine
 			{true, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_OP_ADD, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_DEST_ALPHA, D3D11_BLEND_OP_MAX, D3D11_COLOR_WRITE_ENABLE_ALL},
 		};
 
+		// RT4 (emissive): write-enable with the same blend as the colour targets
+		// so decals can composite into the emissive G-buffer (e.g. glowing ring).
+		vecRenderTargetBlend.push_back(vecRenderTargetBlend[0]);
+
 		CreateBindable("DecalBlend", false, true, vecRenderTargetBlend);
 
 
@@ -176,6 +193,9 @@ namespace Engine
 		CreateBindable("EnvironmentVS", TEXT("VertexShader.hlsl"), "VS_ENV");
 		CreateBindable("UIVS", TEXT("UI.fx"), "VS_UI");
 		CreateBindable("UIVSInst", TEXT("UI.fx"), "VS_UIInst");
+		// Laser beam billboard — consumes world-space corners (pos+uv+colour)
+		// built CPU-side by BeamRenderManager; pairs with the "BeamVtx" IL.
+		CreateBindable("BeamVS", TEXT("Beam.fx"), "VS_Beam");
 
 #ifdef _DEBUG
 		// Position-only VS for the collider wireframe debug pass. Pre-
@@ -259,6 +279,7 @@ namespace Engine
 		CreateBindable("ParticlePS", TEXT("Particle.fx"), "PS_PARTICLE");
 		CreateBindable(DECAL_PS, TEXT("Decal.fx"), "PS_DECAL");
 		CreateBindable(DECAL_PS_PBR, TEXT("Decal.fx"), "PS_DECAL_PBR");
+		CreateBindable(DECAL_PS_RING, TEXT("Decal.fx"), "PS_DECAL_RING");
 		CreateBindable("DecalPSInst", TEXT("Decal.fx"), "PS_DECAL_INST");
 		CreateBindable("DecalPSPBRInst", TEXT("Decal.fx"), "PS_DECAL_PBR_INST");
 
@@ -268,6 +289,18 @@ namespace Engine
 		CreateBindable("UIPS", TEXT("UI.fx"), "PS_UI");
 		CreateBindable("UIPSTint", TEXT("UI.fx"), "PS_UITint");
 		CreateBindable("UIPSInst", TEXT("UI.fx"), "PS_UIInst");
+		// Laser beam: cross-section falloff + UV-scroll energy + soft-particle
+		// depth fade. Output is additive HDR (intensity > 1 feeds bloom).
+		CreateBindable("BeamPS", TEXT("Beam.fx"), "PS_Beam");
+		// Tracer-tip glow: radial additive sprite for the head of a bullet
+		// trail. Reuses BeamVS / BeamVtx; only the PS differs.
+		CreateBindable("BeamGlowPS", TEXT("Beam.fx"), "PS_BeamGlow");
+		// Stylized enemy-death billboards. Shape mask in the PS; colour pulled
+		// from a 1xN lifetime ramp LUT (bound at t0). Reuse BeamVS / BeamVtx.
+		CreateBindable("DeathPuffPS",    TEXT("Beam.fx"), "PS_DeathPuff");
+		CreateBindable("DeathStarPS",    TEXT("Beam.fx"), "PS_DeathStar");
+		CreateBindable("DeathDiamondPS", TEXT("Beam.fx"), "PS_DeathDiamond");
+		CreateBindable("DeathRingPS",    TEXT("Beam.fx"), "PS_DeathRing");
 	}
 
 	template <>
@@ -428,11 +461,23 @@ namespace Engine
 	template <>
 	inline BindableManager<class InputLayout>::BindableManager()
 	{
+		// Per-vertex part MUST match VertexStandard byte layout (Types.h:87).
+		// VertexStandard is 76B: tangent(16) + blendIndecies(16) + pos(12) +
+		// normal(12) + blendWeight(12) + uv(8). The old TPNT_Inst used
+		// explicit offsets 0/16/28/40 for a hypothetical compact "TPNT"(48B)
+		// vertex — so Position read blendIndecies(=0) and every instanced
+		// STANDARD_VS mesh (Tower / Bullet / HealTower at 2+ count) collapsed
+		// to a degenerate point and disappeared. APPEND_ALIGNED + the same
+		// 6 fields as "Standard"/"Standard_Inst" fixes it; VSInst doesn't
+		// read BLENDINDICES/BLENDWEIGHT but having them in the IL is harmless
+		// (D3D11 just doesn't wire unused semantics).
 		D3D11_INPUT_ELEMENT_DESC desc[] = {
-			{"Tangent", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-			{"Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 16, D3D11_INPUT_PER_VERTEX_DATA, 0},
-			{"Normal", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 28, D3D11_INPUT_PER_VERTEX_DATA, 0},
-			{"Texcoord", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 40, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			{"Tangent", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			{"BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			{"Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			{"Normal", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			{"BLENDWEIGHT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			{"Texcoord", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
 			{"World", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
 			{"World", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 16, D3D11_INPUT_PER_INSTANCE_DATA, 1},
 			{"World", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 32, D3D11_INPUT_PER_INSTANCE_DATA, 1},
@@ -570,6 +615,18 @@ namespace Engine
 
 		CreateBindable("P", StaticFindBindable<VertexShader>("PointLightVS"), &descP, static_cast<int>(sizeof(descP) / sizeof(D3D11_INPUT_ELEMENT_DESC)));
 
+		// Laser beam billboard vertex: world-space pos (12) + uv (8) +
+		// HDR colour (16) = 36-byte stride, matching BeamRenderManager's
+		// BeamVertex. Pairs with BeamVS / BeamPS in Beam.fx.
+		D3D11_INPUT_ELEMENT_DESC descBeam[] =
+		{
+			{"Position", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			{"Texcoord", 0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			{"Color",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		};
+
+		CreateBindable("BeamVtx", StaticFindBindable<VertexShader>("BeamVS"), descBeam, static_cast<int>(sizeof(descBeam) / sizeof(D3D11_INPUT_ELEMENT_DESC)));
+
 #ifdef _DEBUG
 		// Position-only input layout dedicated to the collider wireframe
 		// debug pass. Pairs with DebugLineVS (consumes Position semantic).
@@ -703,4 +760,42 @@ namespace Engine
 	template ENGINE_DLL void BindableManager<Mesh>::Clear();
 	template ENGINE_DLL void BindableManager<Texture>::Clear();
 	template ENGINE_DLL void BindableManager<Material>::Clear();
+
+	int RecompileAllShaders(std::string& outLog)
+	{
+		int ok = 0, fail = 0;
+		std::string errs;
+
+		// GetMap is an inline member of the dllexport class template; called
+		// here (engine-side) it's a plain inline, so no cross-DLL export of the
+		// per-type instantiation is needed (which is why the editor can't loop
+		// this itself). Recompile lives on the Shader base — a failed compile
+		// keeps the old native shader, so a typo never blanks the viewport.
+		auto recompileType = [&](auto* pMgr)
+		{
+			if (!pMgr) return;
+			for (const auto& kv : pMgr->GetMap())
+			{
+				const auto& sp = kv.second;
+				if (!sp) continue;
+				std::string err;
+				if (sp->Recompile(err)) ++ok;
+				else if (err != "not hot-reloadable") { ++fail; errs += kv.first + ": " + err + "\n"; }
+			}
+		};
+
+		recompileType(BindableManager<VertexShader>::GetInst());
+		recompileType(BindableManager<PixelShader>::GetInst());
+		recompileType(BindableManager<GeometryShader>::GetInst());
+		recompileType(BindableManager<ComputeShader>::GetInst());
+
+		// New native objects → drop the bound-shader cache so the next frame's
+		// binds re-issue XSSet with the fresh pointers instead of skipping on a
+		// stale "already bound" hit.
+		Graphics::GetInst()->ResetBindCache();
+
+		outLog = "Recompiled " + std::to_string(ok) + " shader(s), " +
+		         std::to_string(fail) + " error(s).\n" + errs;
+		return fail;
+	}
 }

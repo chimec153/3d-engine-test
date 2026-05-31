@@ -30,6 +30,11 @@ namespace Engine
         if (m_fnOnClick) m_fnOnClick();
     }
 
+    void Button::OnRightMouseDown()
+    {
+        if (m_fnOnRightClick) m_fnOnRightClick();
+    }
+
     std::shared_ptr<Component> Button::Clone()
     {
         return std::make_shared<Button>(*this);

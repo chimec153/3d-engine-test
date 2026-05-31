@@ -1,4 +1,5 @@
 #pragma once
+#include "../WeaponData.h"   // AimMode
 
 namespace Engine
 {
@@ -33,5 +34,26 @@ namespace Client
         // virtual to avoid a type-narrowed cast — non-orbital strategies
         // ignore it.
         virtual void SetYOffset(float /*f*/) {}
+
+        // Orbit radius in world units (Bullet forwards WeaponDef::fOrbitRadius
+        // after Configure). 0 makes the projectile sit on the owner and
+        // follow it. Only OrbitalMovement uses this; other strategies ignore.
+        virtual void SetRadius(float /*f*/) {}
+
+        // Orbital-only: radial growth in world units/sec (Bullet forwards
+        // WeaponDef::fRadialSpeed). >0 spirals the orbit outward; other
+        // strategies ignore it.
+        virtual void SetRadialSpeed(float /*f*/) {}
+
+        // Target-selection mode (Bullet forwards WeaponDef::eAimMode). Only the
+        // auto-targeting movers (Aimed / Homing) use it to pick which enemy to
+        // lock; every other strategy ignores it.
+        virtual void SetAimMode(AimMode /*e*/) {}
+
+        // True once the strategy decides the projectile should despawn — a
+        // spiralling orbit returns true after its radius passes
+        // kMaxOrbitRadius. Bullet::Update polls this each frame after Update.
+        // Default never despawns (motion stops only at the lifetime cap).
+        virtual bool WantsDespawn() const { return false; }
     };
 }

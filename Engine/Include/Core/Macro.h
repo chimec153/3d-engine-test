@@ -141,6 +141,8 @@
 #define DECAL_VS	"DecalVS"
 #define DECAL_PS	"DecalPS"
 #define DECAL_PS_PBR	"DecalPSPBR"
+#define DECAL_PS_RING	"DecalPSRing"
+#define DECAL_PS_DISC	"DecalPSDisc"
 
 template <typename T>
 void Safe_Delete_VecList_Array(T& p)

@@ -1,8 +1,6 @@
 #include "LevelUpChoices.h"
 #include "UI/Button.h"
 #include "../Object/Player.h"
-#include "../Object/WeaponData.h"
-#include "../Object/WeaponDatabase.h"
 #include "../Object/GameStateManager.h"
 #include "Bindable/Texture.h"
 #include "Bindable/BindableManager.h"
@@ -85,14 +83,24 @@ namespace Client
             return pNew;
         }
 
-        std::shared_ptr<Engine::Texture> EnsureWeaponBgTexture(int iWeaponId, unsigned int uRGB)
-        {
-            std::string strTag = "weapon_bg_" + std::to_string(iWeaponId);
-            return EnsureSolidTexture(strTag, uRGB);
-        }
         std::shared_ptr<Engine::Texture> EnsureBlankCardTexture()
         {
-            return EnsureSolidTexture("weapon_bg_blank", 0x222222);
+            return EnsureSolidTexture("levelup_blank", 0x222222);
+        }
+
+        // Display data for each stat-upgrade card.
+        struct StatInfo { const wchar_t* label; const wchar_t* effect; unsigned int rgb; };
+        StatInfo GetStatInfo(int eStat)
+        {
+            switch (static_cast<Player::StatUpgrade>(eStat))
+            {
+            case Player::StatUpgrade::MoveSpeed:  return { L"Move Speed", L"+12% Speed",  0x2A6FB0 };
+            case Player::StatUpgrade::MaxHP:      return { L"Max HP",     L"+25 HP",      0x2E8B40 };
+            case Player::StatUpgrade::Attack:     return { L"Attack",     L"+15% Damage", 0xB03030 };
+            case Player::StatUpgrade::CritChance: return { L"Crit",       L"+10% Crit",   0xB07020 };
+            case Player::StatUpgrade::Defense:    return { L"Defense",    L"+8% Defense", 0x5A5AB0 };
+            default:                              return { L"?",          L"",            0x606060 };
+            }
         }
     }
 
@@ -195,54 +203,23 @@ namespace Client
 
     void LevelUpChoices::RollCards()
     {
-        auto pPlayer = m_pTarget.lock();
-        if (!pPlayer) return;
-
-        // Pool = the crafted weapons equipped in the combo scene (≤10).
-        // The CSV catalogue no longer feeds the cards directly; only the
-        // player's chosen loadout appears in the stage.
-        const std::vector<int> vecPoolIds = WeaponDatabase::GetInst().EquippedLiveIds();
-        if (vecPoolIds.empty())
+        // Pick 3 distinct random stat upgrades (partial Fisher-Yates over the
+        // StatUpgrade enum). std::rand matches the rest of the game.
+        const int kStatCount = static_cast<int>(Player::StatUpgrade::COUNT);
+        std::vector<int> pool;
+        pool.reserve(kStatCount);
+        for (int s = 0; s < kStatCount; ++s) pool.push_back(s);
+        for (int i = 0; i < kStatCount && i < 3; ++i)
         {
-            for (int i = 0; i < 3; ++i)
-            {
-                m_iCardWeaponIds[i] = -1;
-                if (m_pBgButtons[i])
-                    m_pBgButtons[i]->SetTexture(LevelUpChoices_detail::EnsureBlankCardTexture());
-                if (m_pNameTexts[i]) m_pNameTexts[i]->SetString(L"");
-                if (m_pLvlTexts[i])  m_pLvlTexts[i]->SetString(L"");
-            }
-            return;
-        }
-
-        const auto vecOwned = pPlayer->GetOwnedWeaponIds();
-        const bool bSlotsFull = pPlayer->GetWeaponSlotCount() >= Player::GetMaxWeaponSlots();
-
-        std::vector<int> vecUnowned;
-        std::vector<int> vecOwnedIds = vecOwned;
-        for (int id : vecPoolIds)
-        {
-            const bool bAlreadyOwn =
-                std::find(vecOwned.begin(), vecOwned.end(), id) != vecOwned.end();
-            if (!bAlreadyOwn && !bSlotsFull) vecUnowned.push_back(id);
-        }
-
-        std::vector<int> vecPool;
-        vecPool.reserve(vecUnowned.size() + vecOwnedIds.size());
-        for (int id : vecUnowned)  vecPool.push_back(id);
-        for (int id : vecOwnedIds) vecPool.push_back(id);
-
-        for (size_t i = 0; i < vecPool.size() && i < 3; ++i)
-        {
-            size_t j = i + static_cast<size_t>(std::rand()) % (vecPool.size() - i);
-            std::swap(vecPool[i], vecPool[j]);
+            const int j = i + std::rand() % (kStatCount - i);
+            std::swap(pool[i], pool[j]);
         }
 
         for (int i = 0; i < 3; ++i)
         {
-            const int id = (i < static_cast<int>(vecPool.size())) ? vecPool[i] : -1;
-            m_iCardWeaponIds[i] = id;
-            if (id < 0)
+            const int eStat = (i < static_cast<int>(pool.size())) ? pool[i] : -1;
+            m_iCardStats[i] = eStat;
+            if (eStat < 0)
             {
                 if (m_pBgButtons[i])
                     m_pBgButtons[i]->SetTexture(LevelUpChoices_detail::EnsureBlankCardTexture());
@@ -251,24 +228,12 @@ namespace Client
                 continue;
             }
 
-            const WeaponDef* pDef = WeaponDatabase::GetInst().Get(id);
-            if (!pDef) continue;
-            const int iCurrent = pPlayer->GetOwnedWeaponLevel(id);
-            const int iDisplayLevel = iCurrent > 0 ? iCurrent + 1 : 1;
-
+            const auto info = LevelUpChoices_detail::GetStatInfo(eStat);
             if (m_pBgButtons[i])
-                m_pBgButtons[i]->SetTexture(
-                    LevelUpChoices_detail::EnsureWeaponBgTexture(id, pDef->uColorRGB));
-
-            // Text components rebuild their own textures inside Update
-            // when SetString invalidates the cache, then push the new
-            // texture into their internal UIRenderer. No bridging from
-            // LevelUpChoices needed.
-            if (m_pNameTexts[i])
-                m_pNameTexts[i]->SetString(std::wstring(
-                    pDef->strName.begin(), pDef->strName.end()));
-            if (m_pLvlTexts[i])
-                m_pLvlTexts[i]->SetString(L"Lv. " + std::to_wstring(iDisplayLevel));
+                m_pBgButtons[i]->SetTexture(LevelUpChoices_detail::EnsureSolidTexture(
+                    "levelup_stat_" + std::to_string(eStat), info.rgb));
+            if (m_pNameTexts[i]) m_pNameTexts[i]->SetString(info.label);
+            if (m_pLvlTexts[i])  m_pLvlTexts[i]->SetString(info.effect);
         }
     }
 
@@ -280,13 +245,13 @@ namespace Client
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
 
-        const int iWeaponId = m_iCardWeaponIds[iCardIndex];
-        pPlayer->ConsumeLevelUp(iWeaponId);
+        const int eStat = m_iCardStats[iCardIndex];
+        if (eStat < 0) return;
+        pPlayer->ApplyStatUpgrade(static_cast<Player::StatUpgrade>(eStat));
 
-        // Sequential drain: a multi-level pickup queues several pending
-        // cards. If more remain, re-roll and stay in the modal; only
-        // exit when the queue is empty. The single-pick path collapses
-        // to "consume → exit" because PendingLevelUpCount drops to 0.
+        // Sequential drain: a multi-level pickup queues several picks. If more
+        // remain, re-roll and stay in the modal; only exit when the queue is
+        // empty (ApplyStatUpgrade decrements the pending counter).
         if (pPlayer->HasPendingLevelUp())
         {
             RollCards();

@@ -1,5 +1,7 @@
 #pragma once
 #include "Vector3.h"
+#include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace Engine
@@ -34,11 +36,18 @@ namespace Client
 
         FlowField();
 
-        // Rebuild the field centred on (gx, gz) with the given world. No-op
-        // when the centre matches the last build (use ForceRebuild for that).
-        // Returns true if a rebuild ran.
-        bool Rebuild(const Engine::VoxelWorld& world, int gx, int gz);
-        bool ForceRebuild(const Engine::VoxelWorld& world, int gx, int gz);
+        // Rebuild the field centred on (gx, gz) with the given world.
+        // vecBlocked lists extra (cell_x, cell_z) cells the spawner has marked
+        // impassable (player-placed towers) — voxel may still report Air there
+        // but pathing treats them as unbreakable walls. The goal cell itself is
+        // exempt (so an enemy can chase a tower target). No-op when both the
+        // centre and the blocked-set fingerprint match the last build (use
+        // ForceRebuild for an unconditional rebuild). Returns true if a rebuild
+        // actually ran.
+        bool Rebuild(const Engine::VoxelWorld& world, int gx, int gz,
+                     const std::vector<std::pair<int, int>>& vecBlocked = {});
+        bool ForceRebuild(const Engine::VoxelWorld& world, int gx, int gz,
+                          const std::vector<std::pair<int, int>>& vecBlocked = {});
 
         // Last-built goal cell.
         int GoalX() const { return m_iGoalX; }
@@ -53,6 +62,21 @@ namespace Client
                     int& outNextX, int& outNextZ,
                     Engine::Vector3& outDir) const;
 
+        // True if (cx, cz) was in the blocked-cell set at the last rebuild.
+        // Enemies consult this after Sample so they don't step into a tower
+        // cell when the tower itself is the aggro goal — Dijkstra still
+        // records a direction toward the goal (so they face it for melee),
+        // but the cell must be treated like a wall on the way in.
+        bool IsBlocked(int cx, int cz) const;
+
+        // True if the last-built field actually reached (cx, cz) — i.e. there
+        // is a finite-cost path from this cell to the goal. The spawner uses
+        // this to detect a goal that is walled off (e.g. a tower aggro target
+        // boxed in by other towers, or a goal cell whose voxel was solid so
+        // the field never expanded): when the goal can't be reached from the
+        // player's area, every enemy would freeze, so it retargets instead.
+        bool Reaches(int cx, int cz) const;
+
     private:
         // Row-major [kSide * kSide]. Index = (cz - originZ) * kSide + (cx - originX).
         std::vector<float>   m_vG;        // cost-to-goal; +inf for unreached
@@ -64,7 +88,21 @@ namespace Client
         int  m_iOriginZ = 0;
         bool m_bHasGoal = false;
 
+        // Fingerprint of the last-built blocked-cell set. Order-independent
+        // hash so the spawner can hand us an unsorted list without forcing a
+        // pointless rebuild on shuffled order.
+        uint64_t m_uBlockedFingerprint = 0;
+
+        // Last-rebuilt blocked-cell list, kept so IsBlocked() can answer
+        // per-cell queries from enemies. Small (tens of towers at most), so
+        // a linear scan is fine and beats a 16k-entry side bitmap.
+        std::vector<std::pair<int, int>> m_vBlocked;
+
         // grid-space index from world cell, -1 if outside.
         int  Index(int cx, int cz) const;
+
+        // Order-independent hash of (cell_x, cell_z) pairs — combined via XOR
+        // of per-cell mixes so list order doesn't affect the result.
+        static uint64_t HashBlocked(const std::vector<std::pair<int, int>>& v);
     };
 }

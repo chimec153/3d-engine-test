@@ -13,7 +13,12 @@ REGISTER_GAMEOBJECT(Client::Orb, Orb)
 #include "Bindable/ColliderSphere.h"
 #include "Bindable/BindableManager.h"
 #include "Component/MeshRendererComponent.h"
+#include "Scene/Scene.h"
+#include "Scene/Layer.h"
+#include "Core/Macro.h"
 #include "Types.h"
+#include <algorithm>
+#include <cmath>
 
 namespace Client
 {
@@ -101,6 +106,40 @@ namespace Client
         }
 
         return true;
+    }
+
+    void Orb::Update(float fDeltaTime)
+    {
+        __super::Update(fDeltaTime);
+
+        // Round-end magnet: home straight to the player, no range gate. The
+        // orb_body pickup collision grants the money once it arrives.
+        if (!m_bMagnet || !m_pTransform) return;
+
+        auto pScene = GetScene();
+        if (!pScene) return;
+        auto pLayer = pScene->FindLayer(DEFAULT_LAYER);
+        if (!pLayer) return;
+        auto pPlayer = pLayer->FindGameObject("player");
+        if (!pPlayer) return;
+        auto pPlayerTr = pPlayer->GetComponent<Engine::Transform>();
+        if (!pPlayerTr) return;
+
+        const Engine::Vector3& vOrb    = m_pTransform->GetPosition();
+        const Engine::Vector3& vPlayer = pPlayerTr->GetPosition();
+
+        Engine::Vector3 vDelta = vPlayer - vOrb;
+        vDelta.y = 0.f;
+        const float fDistSq = vDelta.LengthSq();
+        if (fDistSq < 1e-6f) return;   // on top — pickup fires
+
+        const float fDist = sqrtf(fDistSq);
+        const float fStep = std::min(m_fMagnetSpeed * fDeltaTime, fDist);
+        vDelta.Normalize();
+        m_pTransform->SetPosition(
+            vOrb.x + vDelta.x * fStep,
+            vOrb.y,
+            vOrb.z + vDelta.z * fStep);
     }
 
     void Orb::AttractStay(Engine::Collider* /*pSrc*/, Engine::Collider* pDest, float fDeltaTime)
