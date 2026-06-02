@@ -10,6 +10,7 @@ REGISTER_GAMEOBJECT(Client::Tower, Tower)
 #include "WeaponData.h"
 #include "WeaponDatabase.h"
 #include "TowerData.h"
+#include "Impact/ImpactEffectFactory.h"
 #include "GameStateManager.h"
 #include "../GameDefs.h"
 #include "Bindable/Transform.h"
@@ -32,11 +33,96 @@ REGISTER_GAMEOBJECT(Client::Tower, Tower)
 #include <cmath>
 #include <cfloat>
 #include <cstdlib>
+#include <cstdio>
 
 namespace Client
 {
     Tower::Tower() = default;
     Tower::~Tower() = default;
+
+    void Tower::SetLevel(int iLevel)
+    {
+        if (iLevel < 1)                iLevel = 1;
+        if (iLevel > kMaxWeaponLevel)  iLevel = kMaxWeaponLevel;
+        if (iLevel == m_iLevel) return;
+        m_iLevel = iLevel;
+        // Sustained / Beam towers cache their instances; invalidating the
+        // spawned-for id makes Update tear them down and respawn at the new
+        // level's ComputeCount (cooldown towers pick up the level next shot).
+        m_iSustainedForId = -1;
+    }
+
+    void Tower::SetTowerDefId(int iId)
+    {
+        m_iTowerDefId = iId;
+        // -1 (or an unknown id) means the default attack type — exactly what
+        // Init already seeded, so resolve to the same FirstOfKind(Attack).
+        const TowerDef* pDef = (iId >= 0) ? TowerDatabase::GetInst().Get(iId) : nullptr;
+        if (!pDef) pDef = TowerDatabase::GetInst().FirstOfKind(TowerKind::Attack);
+        if (!pDef) return;   // no table loaded — keep the Init defaults
+        // Store the RESOLVED id so a -1 (default) tower and an explicitly-bought
+        // first-attack tower count as the SAME type for merging.
+        m_iTowerDefId = pDef->iId;
+
+        // Use-time combat members (read on every shot) — safe to overwrite.
+        m_fAttack        = pDef->fAttack;
+        m_fAttackSpeed   = pDef->fAttackSpeed;
+        m_fCritChance    = pDef->fCritChance;
+        m_fCritMult      = pDef->fCritMult;
+        m_fRange         = pDef->fRange;
+        m_uTowerImpact   = pDef->uTowerImpact;
+        m_fTowerEffectP0 = pDef->fTowerEffectP0;
+        m_fTowerEffectP1 = pDef->fTowerEffectP1;
+
+        // HP / defence are baked into the Attackable. Shift only the base
+        // portion by the delta from what Init seeded so the level-up bonus
+        // (TowerBonusHP/Def) layered on top is preserved.
+        if (m_pAttackable)
+        {
+            const int   iHpDelta  = pDef->iHP - m_iSeedBaseHP;
+            if (iHpDelta != 0)    m_pAttackable->AddMaxHP(iHpDelta);
+            const float fDefDelta = pDef->fDefense - m_fSeedBaseDef;
+            if (fDefDelta != 0.f) m_pAttackable->AddDamageReduction(fDefDelta);
+        }
+        m_iSeedBaseHP  = pDef->iHP;
+        m_fSeedBaseDef = pDef->fDefense;
+
+        // --- Per-type body: shape (N-gon prism) + identity colour ------------
+        // Shape: the mesh key "prismN" picks an N-gon prism (side-count reads the
+        // type at a glance); anything else falls back to a square prism.
+        int iSides = 4;
+        if (pDef->strMesh.rfind("prism", 0) == 0)   // starts with "prism"
+        {
+            const int n = std::atoi(pDef->strMesh.c_str() + 5);
+            if (n >= 3) iSides = n;
+        }
+        if (m_pMeshRenderer)
+        {
+            // Same footprint/height envelope as the original box (radius ~0.32
+            // ≈ the 0.3 half-extent; 0 → 1.6 tall). Cached per side-count, so
+            // same-shape towers share one Mesh.
+            m_pMeshRenderer->SetMesh(Engine::MeshPresets::RegularPrism(iSides, 0.32f, 0.f, 1.6f));
+        }
+
+        // Colour: one identity hue per kind (NOTE: a unique material tag was set
+        // in Init, so this shows per-tower instead of collapsing to tower #0).
+        switch (pDef->eKind)
+        {
+        case TowerKind::Frost:   m_vBaseColor = { 0.30f, 0.70f, 1.00f }; break;  // cyan
+        case TowerKind::Mortar:  m_vBaseColor = { 1.00f, 0.50f, 0.15f }; break;  // orange
+        case TowerKind::Gravity: m_vBaseColor = { 0.80f, 0.30f, 0.90f }; break;  // magenta
+        case TowerKind::Buff:    m_vBaseColor = { 1.00f, 0.84f, 0.20f }; break;  // gold
+        case TowerKind::Heal:    m_vBaseColor = { 0.30f, 0.90f, 0.50f }; break;  // green
+        case TowerKind::Attack:
+        default:                 m_vBaseColor = { 0.55f, 0.62f, 0.75f }; break;  // steel
+        }
+        if (m_pMaterial)
+        {
+            m_pMaterial->SetDiffuseColor(m_vBaseColor.x, m_vBaseColor.y, m_vBaseColor.z, 1.f);
+            m_pMaterial->SetEmissiveColor({ m_vBaseColor.x * 0.25f, m_vBaseColor.y * 0.25f, m_vBaseColor.z * 0.25f, 1.f });
+        }
+        // NOTE: aggro stays at the Init default this step.
+    }
 
     void Tower::Despawn()
     {
@@ -81,7 +167,16 @@ namespace Client
                 m_pMaterial = std::static_pointer_cast<Engine::Material>(pSrcMat->Clone());
                 m_pMaterial->SetDiffuseColor(0.2f, 0.45f, 0.95f, 1.f);
                 m_pMaterial->SetEmissiveColor({ 0.05f, 0.10f, 0.25f, 1.f });
-                m_pMaterial->SetTag("TowerMat");
+                // UNIQUE per-tower tag: instancing buckets by mesh+material tag and
+                // draws the whole bucket with the FIRST member's mesh/material. A
+                // shared "TowerMat" tag therefore made every tower render as tower
+                // #0 (same colour/shape, broken per-tower damage tint). A unique
+                // tag makes each tower a solo draw so its type colour, prism mesh
+                // and hit tint all show correctly (towers are few — cost is moot).
+                static int s_iMatSeq = 0;
+                char szMatTag[32];
+                std::snprintf(szMatTag, sizeof(szMatTag), "TowerMat_%d", s_iMatSeq++);
+                m_pMaterial->SetTag(szMatTag);
                 m_pMeshRenderer->SetMaterial(m_pMaterial);
                 m_pMeshRenderer->SetOverrideMaterial(0, 0, m_pMaterial);
             }
@@ -98,6 +193,10 @@ namespace Client
         const int   iBaseHP    = pTowerDef ? pTowerDef->iHP    : kTowerHP;
         const float fBaseDef   = pTowerDef ? pTowerDef->fDefense : 0.f;
         const int   iAggro     = pTowerDef ? pTowerDef->iAggro : kTowerAggro;
+        // Record what we seed from the default type so SetTowerDefId can later
+        // shift HP/defence by only the chosen type's delta.
+        m_iSeedBaseHP  = iBaseHP;
+        m_fSeedBaseDef = fBaseDef;
         if (pTowerDef)
         {
             m_fAttack      = pTowerDef->fAttack;
@@ -105,6 +204,10 @@ namespace Client
             m_fCritChance  = pTowerDef->fCritChance;
             m_fCritMult    = pTowerDef->fCritMult;
             m_fRange       = pTowerDef->fRange;
+            // Intrinsic on-hit effect this tower layers onto its weapon's bullets.
+            m_uTowerImpact   = pTowerDef->uTowerImpact;
+            m_fTowerEffectP0 = pTowerDef->fTowerEffectP0;
+            m_fTowerEffectP1 = pTowerDef->fTowerEffectP1;
         }
 
         // Health (enemies melee this down) — no melee of its own, no blood /
@@ -211,11 +314,11 @@ namespace Client
         // instances now, then start the death squish (shatter fires at its end).
         if (m_pAttackable && m_pAttackable->GetHP() <= 0)
         {
-            // Give up the owned slot: a destroyed tower must be re-bought in the
-            // shop before another can be placed (the placement controller gates
-            // on live-count < TowersOwned, so without this the freed cell would
-            // be re-placeable for free).
-            TowerManager::GetInst().RemoveTower();
+            // Bench this tower until the next round: ownership is kept (not
+            // re-bought), but it returns to the reserve carrying its weapon +
+            // level, flagged on destroy-cooldown so it can't be re-placed this
+            // round (OnNewRound clears the flag at the next round start).
+            TowerManager::GetInst().DestroyTower(m_iWeaponId, m_iLevel, m_iTowerDefId);
             // Drop the persistent instances this tower owns (orbiting
             // sustained bullets + laser beams) — they're scene-owned and held
             // only by weak_ptr here, so without this they outlive the tower.
@@ -281,15 +384,16 @@ namespace Client
             }
         }
 
-        // Damage feedback — tint from blue (full) toward dark red as HP drops.
+        // Damage feedback — tint from the type's identity colour (full HP)
+        // toward red as HP drops.
         if (m_pMaterial && m_pAttackable && m_pAttackable->GetMaxHP() > 0)
         {
             const float f = static_cast<float>(m_pAttackable->GetHP()) /
                             static_cast<float>(m_pAttackable->GetMaxHP());
             m_pMaterial->SetDiffuseColor(
-                0.2f + (1.f - f) * 0.7f,   // r: 0.2 → 0.9
-                0.45f * f,                 // g: 0.45 → 0
-                0.95f * f,                 // b: 0.95 → 0
+                m_vBaseColor.x + (1.f - f) * (1.f - m_vBaseColor.x),   // → red 1.0
+                m_vBaseColor.y * f,                                    // → 0
+                m_vBaseColor.z * f,                                    // → 0
                 1.f);
         }
 
@@ -459,6 +563,8 @@ namespace Client
             // tower pivot sits at y = kWallY, so lift the orbit +0.3 to circle
             // at enemy-collider height (kWallY + 0.3), matching the spawn Y.
             pBullet->SetOrbitYOffset(0.3f);
+            // Layer the tower's intrinsic effect on top of the weapon's effects.
+            ApplyTowerImpact(pBullet.get());
             if (auto pBulletTr = pBullet->GetTransform())
             {
                 pBulletTr->SetPosition(vSpawn);
@@ -466,6 +572,13 @@ namespace Client
                 pBulletTr->SetRY(fAimYaw + fFanBase + fFanStep * i);
             }
         }
+    }
+
+    void Tower::ApplyTowerImpact(Bullet* pBullet)
+    {
+        if (!pBullet || m_uTowerImpact == Impact_None) return;
+        for (auto& pEffect : MakeTowerImpactEffects(m_uTowerImpact, m_fTowerEffectP0, m_fTowerEffectP1))
+            pBullet->AddImpactEffect(std::move(pEffect));
     }
 
     void Tower::RespawnSustained(const WeaponDef& def)
@@ -505,6 +618,8 @@ namespace Client
             pBullet->ScaleDamage(m_fAttack * TowerManager::GetInst().TowerAtkMult());
             pBullet->SetVoxelWorld(m_pVoxelWorld);
             pBullet->SetOrbitYOffset(0.3f);
+            // Layer the tower's intrinsic effect on top of the weapon's effects.
+            ApplyTowerImpact(pBullet.get());
             m_vecSustained.emplace_back(pBullet);
         }
     }

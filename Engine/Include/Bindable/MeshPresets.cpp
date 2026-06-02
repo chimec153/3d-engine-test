@@ -5,6 +5,7 @@
 #include "Capsule.h"
 #include "BindableManager.h"
 #include <cstdio>
+#include <cmath>
 #include <vector>
 
 namespace Engine
@@ -112,6 +113,89 @@ namespace Engine
                 }
                 inds.push_back(base + 0); inds.push_back(base + 1); inds.push_back(base + 2);
                 inds.push_back(base + 0); inds.push_back(base + 2); inds.push_back(base + 3);
+            }
+
+            return StaticCreateBindable<Mesh>(szTag, verts, inds);
+        }
+
+        std::shared_ptr<Mesh> RegularPrism(int iSides, float fRadius,
+                                           float fYLo, float fYHi)
+        {
+            if (iSides < 3)  iSides = 3;
+            if (iSides > 32) iSides = 32;
+            char szTag[96];
+            std::snprintf(szTag, sizeof(szTag),
+                "MeshPreset.Prism.%d.%g.%g.%g", iSides, fRadius, fYLo, fYHi);
+            if (auto pCached = StaticFindBindable<Mesh>(szTag)) return pCached;
+
+            const float kTwoPi = 6.2831853071795864f;
+            std::vector<VertexStandard> verts;
+            std::vector<unsigned int>   inds;
+
+            // Side faces — one flat-shaded quad per edge, normal pointing out
+            // along the mid-angle radial. Vertex order [topA, topB, botB, botA]
+            // with tris (0,1,2),(0,2,3) gives an outward face (CW-front).
+            for (int i = 0; i < iSides; ++i)
+            {
+                const float a0 = kTwoPi * i / iSides;
+                const float a1 = kTwoPi * (i + 1) / iSides;
+                const float am = (a0 + a1) * 0.5f;
+                const Vector3 n = { cosf(am), 0.f, sinf(am) };
+                const float c0 = cosf(a0), s0 = sinf(a0);
+                const float c1 = cosf(a1), s1 = sinf(a1);
+                const unsigned int base = static_cast<unsigned int>(verts.size());
+                VertexStandard q[4] = {};
+                q[0].pos = { fRadius * c0, fYHi, fRadius * s0 };
+                q[1].pos = { fRadius * c1, fYHi, fRadius * s1 };
+                q[2].pos = { fRadius * c1, fYLo, fRadius * s1 };
+                q[3].pos = { fRadius * c0, fYLo, fRadius * s0 };
+                q[0].uv = { 0.f, 0.f }; q[1].uv = { 1.f, 0.f };
+                q[2].uv = { 1.f, 1.f }; q[3].uv = { 0.f, 1.f };
+                for (int k = 0; k < 4; ++k) { q[k].normal = n; verts.push_back(q[k]); }
+                inds.push_back(base + 0); inds.push_back(base + 1); inds.push_back(base + 2);
+                inds.push_back(base + 0); inds.push_back(base + 2); inds.push_back(base + 3);
+            }
+
+            // Top cap (+Y): centre fan, tris (centre, next, cur) face up.
+            {
+                const unsigned int c = static_cast<unsigned int>(verts.size());
+                VertexStandard vc = {}; vc.pos = { 0.f, fYHi, 0.f }; vc.normal = { 0.f, 1.f, 0.f }; vc.uv = { 0.5f, 0.5f };
+                verts.push_back(vc);
+                const unsigned int ring = static_cast<unsigned int>(verts.size());
+                for (int i = 0; i < iSides; ++i)
+                {
+                    const float a = kTwoPi * i / iSides;
+                    VertexStandard v = {}; v.pos = { fRadius * cosf(a), fYHi, fRadius * sinf(a) };
+                    v.normal = { 0.f, 1.f, 0.f }; v.uv = { 0.5f + 0.5f * cosf(a), 0.5f + 0.5f * sinf(a) };
+                    verts.push_back(v);
+                }
+                for (int i = 0; i < iSides; ++i)
+                {
+                    const unsigned int cur = ring + i;
+                    const unsigned int nxt = ring + ((i + 1) % iSides);
+                    inds.push_back(c); inds.push_back(nxt); inds.push_back(cur);
+                }
+            }
+
+            // Bottom cap (-Y): centre fan, tris (centre, cur, next) face down.
+            {
+                const unsigned int c = static_cast<unsigned int>(verts.size());
+                VertexStandard vc = {}; vc.pos = { 0.f, fYLo, 0.f }; vc.normal = { 0.f, -1.f, 0.f }; vc.uv = { 0.5f, 0.5f };
+                verts.push_back(vc);
+                const unsigned int ring = static_cast<unsigned int>(verts.size());
+                for (int i = 0; i < iSides; ++i)
+                {
+                    const float a = kTwoPi * i / iSides;
+                    VertexStandard v = {}; v.pos = { fRadius * cosf(a), fYLo, fRadius * sinf(a) };
+                    v.normal = { 0.f, -1.f, 0.f }; v.uv = { 0.5f + 0.5f * cosf(a), 0.5f + 0.5f * sinf(a) };
+                    verts.push_back(v);
+                }
+                for (int i = 0; i < iSides; ++i)
+                {
+                    const unsigned int cur = ring + i;
+                    const unsigned int nxt = ring + ((i + 1) % iSides);
+                    inds.push_back(c); inds.push_back(cur); inds.push_back(nxt);
+                }
             }
 
             return StaticCreateBindable<Mesh>(szTag, verts, inds);

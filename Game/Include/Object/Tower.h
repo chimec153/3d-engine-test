@@ -52,6 +52,23 @@ namespace Client
         int  GetWeaponId() const   { return m_iWeaponId; }
         void SetWeaponId(int iId)   { m_iWeaponId = iId; }
 
+        // This tower's weapon level (1..kMaxWeaponLevel). Drives the same
+        // ComputeCooldown/ComputeCount/ComputeDamage scaling the player's
+        // weapon slots use. Raised by merging two same-weapon towers in the
+        // shop (TowerIntermissionUI). SetLevel clamps to the cap and forces a
+        // Sustained/Beam respawn so the new instance count takes effect.
+        int  GetLevel() const   { return m_iLevel; }
+        void SetLevel(int iLevel);
+
+        // Which towers.csv type this tower is (def id). The shop buys a type and
+        // the placement controller calls this right after creation; the tower
+        // re-applies that type's stats + intrinsic effect over the defaults Init
+        // seeded. -1 = the default attack type (FirstOfKind(Attack)), preserving
+        // the pre-type-select behaviour. GetTowerDefId feeds the death path so a
+        // re-placed destroyed tower keeps its type.
+        int  GetTowerDefId() const { return m_iTowerDefId; }
+        void SetTowerDefId(int iId);
+
         // Immediate removal for a shop SELL (no death squish): tears down the
         // tower's owned scene instances (orbiting sustained bullets + beams),
         // then InActivates. The owned-count decrement + gold refund are handled
@@ -96,6 +113,14 @@ namespace Client
         int   m_iWeaponId    = -1;
         float m_fCooldownAcc = 0.f;
         int   m_iLevel       = 1;
+        // towers.csv type id (-1 = default attack type). Set by the placement
+        // controller via SetTowerDefId; preserved through death so a re-placed
+        // tower keeps its type. m_iSeedBaseHP / m_fSeedBaseDef record what Init
+        // applied, so SetTowerDefId can shift HP/defence by the type delta
+        // without disturbing the level-up bonus layered on top.
+        int   m_iTowerDefId  = -1;
+        int   m_iSeedBaseHP  = 0;
+        float m_fSeedBaseDef = 0.f;
         // Targeting radius (world units). Enemies farther than this are
         // ignored so a tower only engages what's near it.
         float m_fRange       = 12.f;
@@ -109,6 +134,19 @@ namespace Client
         float m_fAttackSpeed = 1.f;
         float m_fCritChance  = 0.f;
         float m_fCritMult    = 2.f;
+
+        // Intrinsic tower effect from towers.csv, layered onto every bullet this
+        // tower fires (on top of the equipped weapon's own effects). 0u =
+        // Impact_None = no extra effect; P0/P1 are that effect's params. Seeded
+        // in Init from the TowerDef; applied in FireAt / RespawnSustained.
+        unsigned int m_uTowerImpact   = 0u;   // Impact_None
+        float        m_fTowerEffectP0 = 0.f;
+        float        m_fTowerEffectP1 = 0.f;
+
+        // Per-type base body colour (set by SetTowerDefId from the tower kind).
+        // The damage-feedback tint in Update lerps from this toward red as HP
+        // drops, so each type keeps its identity colour at full health.
+        Engine::Vector3 m_vBaseColor{ 0.2f, 0.45f, 0.95f };
 
         // Sustained weapons spawn persistent instances (orbiting blades / aura)
         // around the tower instead of firing on a cooldown. Tracked so a weapon
@@ -133,6 +171,10 @@ namespace Client
         bool FindNearestEnemy(Engine::Vector3& vOut) const;
         // Spawn one cooldown burst aimed at vTarget (mirrors the player path).
         void FireAt(const Engine::Vector3& vTarget, const WeaponDef& def);
+        // Layer this tower's intrinsic impact effect (m_uTowerImpact) onto a
+        // freshly-configured bullet, so a hit runs weapon + tower effects. No-op
+        // when the tower has no intrinsic effect (Impact_None).
+        void ApplyTowerImpact(Bullet* pBullet);
         // Drop any live Sustained instances and spawn a fresh ring around the
         // tower (mirrors Player::RespawnSustainedInstances; owner = this tower
         // so OrbitalMovement circles the tower).

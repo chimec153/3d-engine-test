@@ -226,6 +226,62 @@ namespace Client
             s += L"Auto-fires its equipped weapon";
             return s;
         }
+
+        // --- Typed attack-tower helpers (shop buys a specific towers.csv type) -
+        // Resolve a buy row's tower type by id (-1 / unknown = default attack
+        // type, preserving the pre-type-select rows).
+        const TowerDef* TowerDefById(int iId)
+        {
+            const TowerDef* d = (iId >= 0) ? TowerDatabase::GetInst().Get(iId) : nullptr;
+            return d ? d : AttackTowerDef();
+        }
+        // Which towers.csv kinds are buyable as bullet-firing attack towers
+        // (Heal is its own object; Buff is an aura with no weapon fire).
+        bool IsBuyableAttackType(const TowerDef& d)
+        {
+            switch (d.eKind)
+            {
+            case TowerKind::Attack:
+            case TowerKind::Frost:
+            case TowerKind::Mortar:
+            case TowerKind::Gravity: return true;
+            default:                 return false;
+            }
+        }
+        // One-line description of a type's intrinsic on-hit effect (tooltip).
+        std::wstring TowerEffectLabel(unsigned int uImpact)
+        {
+            if (uImpact & Impact_Slow)      return L"+ Slows enemies hit";
+            if (uImpact & Impact_Knockback) return L"+ Knocks enemies back";
+            if (uImpact & Impact_Gather)    return L"+ Pulls enemies in";
+            if (uImpact & Impact_Burn)      return L"+ Burns enemies hit";
+            return L"";
+        }
+        // Per-type buy tooltip (name + stats + intrinsic effect).
+        std::wstring BuildAttackTowerTooltip(int iId)
+        {
+            const TowerDef* d = TowerDefById(iId);
+            const int iPrice = d ? d->iPrice : kTowerPrice;
+            const int iHP    = d ? d->iHP    : kTowerHP;
+            std::wstring s = (d ? ToW(d->strName) : L"Tower");
+            s += L"  $" + std::to_wstring(iPrice) + L"\n";
+            s += L"HP " + std::to_wstring(iHP);
+            if (d && d->fDefense > 0.f)
+                s += L"  Def " + std::to_wstring(static_cast<int>(d->fDefense * 100.f + 0.5f)) + L"%";
+            s += L"\n";
+            if (d)
+            {
+                s += L"Atk x" + F1(d->fAttack) + L"  Spd x" + F1(d->fAttackSpeed) + L"\n";
+                if (d->fCritChance > 0.f)
+                    s += L"Crit " + std::to_wstring(static_cast<int>(d->fCritChance * 100.f + 0.5f)) +
+                         L"% x" + F1(d->fCritMult) + L"\n";
+                s += L"Range " + F1(d->fRange) + L"\n";
+                const std::wstring wEff = TowerEffectLabel(d->uTowerImpact);
+                if (!wEff.empty()) s += wEff + L"\n";
+            }
+            s += L"Auto-fires its equipped weapon";
+            return s;
+        }
     }
 
     TowerIntermissionUI::TowerIntermissionUI()
@@ -350,9 +406,28 @@ namespace Client
             y += S.fItemH + S.fGap;
         }
 
+        // --- Reroll button (re-rolls all unpinned buy slots for a fee) ---
+        // Deliberately smaller than a full-width buy row so it doesn't read as a
+        // weapon: a short, centred pill (~40% width, ~70% row height).
+        {
+            const float fRerollW = S.fW * 0.4f;
+            const float fRerollH = S.fItemH * 0.7f;
+            const float fRerollX = S.fLeftX + (S.fW - fRerollW) * 0.5f;
+            m_pRerollButton = CreateComponent<Engine::Button>("tower_shop_reroll_b");
+            if (m_pRerollButton)
+            {
+                m_pRerollButton->SetRect(fRerollX, y, fRerollW, fRerollH);
+                m_pRerollButton->SetTexture(EnsureSolidTexture("tower_shop_reroll_bg", 0x315A7A));
+                m_pRerollButton->SetOnClick([this]() { OnReroll(); });
+            }
+            m_pRerollText = makeText("tower_shop_reroll_t", y, fRerollH, m_pItemFont, Engine::Text::HAlign::Center);
+            if (m_pRerollText) m_pRerollText->SetRect(fRerollX, y, fRerollW, fRerollH);
+            y += fRerollH + S.fGap;
+        }
+
         // --- Your Weapons (drag sources) — a horizontal strip of icons ---
         m_pOwnedHeader = makeText("tower_shop_owned_h", y, S.fHeaderH, m_pItemFont, Engine::Text::HAlign::Left);
-        if (m_pOwnedHeader) m_pOwnedHeader->SetString(L"Your Weapons - click for menu (sell / combine / equip)");
+        if (m_pOwnedHeader) m_pOwnedHeader->SetString(L"Your Weapons - click for menu (sell / merge / equip)");
         y += S.fHeaderH + S.fGap;
         {
             const float fIconGap = S.fGap;
@@ -388,7 +463,12 @@ namespace Client
                 m_pTowerButtons[i]->SetRect(S.fLeftX, y, S.fW, S.fItemH);
                 m_pTowerButtons[i]->SetTexture(EnsureSolidTexture("tower_shop_blank", 0x303030));
                 const int idx = i;
-                m_pTowerButtons[i]->SetOnClick([this, idx]() { OnCycleTowerWeapon(idx); });
+                // Equip armed (weapon menu) → assign that weapon to this tower;
+                // otherwise pop the tower action menu (Merge / Weapon / Sell).
+                m_pTowerButtons[i]->SetOnClick([this, idx]() {
+                    if (m_iEquipArmedWeaponId >= 0) OnCycleTowerWeapon(idx);
+                    else                            OpenTowerMenu(idx);
+                });
                 m_pTowerButtons[i]->SetOnRightClick([this, idx]() { OnSellTower(idx); });
             }
             m_pTowerTexts[i] = makeText("tower_shop_tower_t" + std::to_string(i), y, S.fItemH, m_pItemFont, Engine::Text::HAlign::Center);
@@ -454,7 +534,7 @@ namespace Client
             m_pTooltipText->SetVAlign(Engine::Text::VAlign::Top);
         }
 
-        // Weapon action menu — a dark panel + three buttons (Sell / Combine /
+        // Weapon action menu — a dark panel + three buttons (Sell / Merge /
         // Equip). Created last so it draws above every row. Rects are set per
         // open in OpenWeaponMenu; the OnClick handlers act on m_iMenuWeaponId
         // (current at click time), so they're bound once here.
@@ -475,9 +555,12 @@ namespace Client
                 m_pMenuTexts[i]->SetVAlign(Engine::Text::VAlign::Center);
             }
         }
-        if (m_pMenuButtons[0]) m_pMenuButtons[0]->SetOnClick([this]() { OnMenuSell();    });
-        if (m_pMenuButtons[1]) m_pMenuButtons[1]->SetOnClick([this]() { OnMenuCombine(); });
-        if (m_pMenuButtons[2]) m_pMenuButtons[2]->SetOnClick([this]() { OnMenuEquip();   });
+        // The panel is shared between the weapon menu and the tower menu; route
+        // each button to the matching handler by which menu is open. Tower-menu
+        // rows are Merge / Weapon / Sell (vs the weapon menu's Sell / Merge / Equip).
+        if (m_pMenuButtons[0]) m_pMenuButtons[0]->SetOnClick([this]() { if (m_iMenuTowerRow >= 0) OnTowerMenuMerge(); else OnMenuSell();  });
+        if (m_pMenuButtons[1]) m_pMenuButtons[1]->SetOnClick([this]() { if (m_iMenuTowerRow >= 0) OnTowerMenuCycle(); else OnMenuMerge(); });
+        if (m_pMenuButtons[2]) m_pMenuButtons[2]->SetOnClick([this]() { if (m_iMenuTowerRow >= 0) OnTowerMenuSell();  else OnMenuEquip(); });
 
         Hide();
         return true;
@@ -494,6 +577,8 @@ namespace Client
         if (m_pReserveHeader)  m_pReserveHeader->Enable();
         if (m_pStartButton)    m_pStartButton->Enable();
         if (m_pStartText)      m_pStartText->Enable();
+        if (m_pRerollButton)   m_pRerollButton->Enable();
+        if (m_pRerollText)     m_pRerollText->Enable();
         // Buy / owned / tower rows are enabled selectively by RebuildList.
         // The drag ghost stays hidden until a drag begins.
     }
@@ -509,6 +594,8 @@ namespace Client
         if (m_pReserveHeader)  m_pReserveHeader->Disable();
         if (m_pStartButton)    m_pStartButton->Disable();
         if (m_pStartText)      m_pStartText->Disable();
+        if (m_pRerollButton)   m_pRerollButton->Disable();
+        if (m_pRerollText)     m_pRerollText->Disable();
         if (m_pDragGhost)      m_pDragGhost->Disable();
         if (m_pTooltipBg)      m_pTooltipBg->Disable();
         if (m_pTooltipText)    m_pTooltipText->Disable();
@@ -541,8 +628,8 @@ namespace Client
         // std::rand to match the rest of the game). The pool is the v2 weapon
         // catalogue ONLY — crafted weapons (from crafted.csv) are excluded so
         // they never roll into the round shop. Owned weapons can still appear
-        // (shown as a merge/level-up buy); the equip section is where you pick
-        // among them.
+        // (buying adds another copy, shown with a "xN" owned count); the equip
+        // section is where you pick among them.
         // The catalog mixes weapons and towers: every shop-available weapon plus
         // an attack-tower and a heal-tower entry, shuffled, first kBuyRows shown.
         // So towers roll in randomly alongside weapons (same as how a weapon may
@@ -555,9 +642,21 @@ namespace Client
         {
             if (std::find(vecCrafted.begin(), vecCrafted.end(), id) != vecCrafted.end())
                 continue;   // skip session-crafted weapons
+            if (IsWeaponHeldByTower(id)) continue;   // locked to a tower — not buyable
             all.push_back({ BuyKind::Weapon, id });
         }
-        all.push_back({ BuyKind::Tower,     -1 });
+        // One entry per round-available attack tower TYPE (Gatling / Frost /
+        // Mortar / Gravity), so types roll into the shop alongside weapons.
+        {
+            const int gateRound = iRound < 1 ? 1 : iRound;
+            for (const TowerDef& d : TowerDatabase::GetInst().All())
+            {
+                if (!TowerIntermissionUI_detail::IsBuyableAttackType(d)) continue;
+                if (d.iFirstRound > gateRound) continue;
+                if (d.iLastRound != 0 && gateRound > d.iLastRound) continue;
+                all.push_back({ BuyKind::Tower, d.iId });
+            }
+        }
         all.push_back({ BuyKind::HealTower, -1 });
 
         // Pinned slots keep their current item (and are excluded from the fresh
@@ -605,9 +704,21 @@ namespace Client
         {
             if (std::find(vecCrafted.begin(), vecCrafted.end(), id) != vecCrafted.end())
                 continue;
+            if (IsWeaponHeldByTower(id)) continue;   // locked to a tower — not buyable
             all.push_back({ BuyKind::Weapon, id });
         }
-        all.push_back({ BuyKind::Tower,     -1 });
+        // One entry per round-available attack tower TYPE (Gatling / Frost /
+        // Mortar / Gravity), so types roll into the shop alongside weapons.
+        {
+            const int gateRound = iRound < 1 ? 1 : iRound;
+            for (const TowerDef& d : TowerDatabase::GetInst().All())
+            {
+                if (!TowerIntermissionUI_detail::IsBuyableAttackType(d)) continue;
+                if (d.iFirstRound > gateRound) continue;
+                if (d.iLastRound != 0 && gateRound > d.iLastRound) continue;
+                all.push_back({ BuyKind::Tower, d.iId });
+            }
+        }
         all.push_back({ BuyKind::HealTower, -1 });
 
         // Prefer a pick that isn't already displayed in another slot, so the
@@ -639,6 +750,53 @@ namespace Client
         const WeaponDef* pDef = WeaponDatabase::GetInst().Get(iWeaponId);
         if (pDef && pDef->iPrice > 0) return pDef->iPrice;
         return kWeaponPrice;   // 0/unset => global default
+    }
+
+    bool TowerIntermissionUI::IsWeaponHeldByTower(int iWeaponId) const
+    {
+        if (iWeaponId < 0) return false;
+        // Placed attack towers in the scene.
+        auto* pOwnerT = GetGameObjectOwner();
+        Engine::Scene* pSceneT = pOwnerT ? pOwnerT->GetScene() : nullptr;
+        std::shared_ptr<Engine::Layer> pLayerT =
+            pSceneT ? pSceneT->FindLayer(DEFAULT_LAYER) : nullptr;
+        if (pLayerT)
+            for (const auto& p : pLayerT->GetGameObjectList())
+            {
+                if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
+                if (std::static_pointer_cast<Tower>(p)->GetWeaponId() == iWeaponId) return true;
+            }
+        // Bought-but-unplaced (reserve) towers.
+        auto& tm = TowerManager::GetInst();
+        const int n = tm.ReserveCount();
+        for (int i = 0; i < n; ++i)
+            if (tm.ReserveWeaponRaw(i) == iWeaponId) return true;
+        return false;
+    }
+
+    bool TowerIntermissionUI::IsWeaponHeldByOtherTower(
+        int iWeaponId, const Engine::GameObject* pExcludeTower, int iExcludeReserve) const
+    {
+        if (iWeaponId < 0) return false;
+        auto* pOwnerO = GetGameObjectOwner();
+        Engine::Scene* pSceneO = pOwnerO ? pOwnerO->GetScene() : nullptr;
+        std::shared_ptr<Engine::Layer> pLayerO =
+            pSceneO ? pSceneO->FindLayer(DEFAULT_LAYER) : nullptr;
+        if (pLayerO)
+            for (const auto& p : pLayerO->GetGameObjectList())
+            {
+                if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
+                if (p.get() == pExcludeTower) continue;   // the tower being assigned
+                if (std::static_pointer_cast<Tower>(p)->GetWeaponId() == iWeaponId) return true;
+            }
+        auto& tm = TowerManager::GetInst();
+        const int n = tm.ReserveCount();
+        for (int i = 0; i < n; ++i)
+        {
+            if (i == iExcludeReserve) continue;
+            if (tm.ReserveWeaponRaw(i) == iWeaponId) return true;
+        }
+        return false;
     }
 
     int TowerIntermissionUI::PlacedTowerCount() const
@@ -763,7 +921,13 @@ namespace Client
             if (m_eBuyKind[i] == BuyKind::Tower || m_eBuyKind[i] == BuyKind::HealTower)
             {
                 const bool bHeal  = (m_eBuyKind[i] == BuyKind::HealTower);
-                const int  iPrice = TowerIntermissionUI_detail::TowerBuyPrice(bHeal);
+                const TowerDef* pTowerDef = bHeal ? nullptr : TowerIntermissionUI_detail::TowerDefById(id);
+                const int  iPrice = bHeal
+                    ? TowerIntermissionUI_detail::TowerBuyPrice(true)
+                    : (pTowerDef ? pTowerDef->iPrice : kTowerPrice);
+                const std::wstring wTowerName = bHeal
+                    ? std::wstring(L"Heal Tower")
+                    : (pTowerDef ? ToW(pTowerDef->strName) : std::wstring(L"Tower"));
                 // All towers (attack + heal) share one kMaxTowers cap; once the
                 // combined owned count reaches it, every tower row greys out and
                 // shows (MAX) instead of the price (the buy handler enforces the
@@ -779,8 +943,8 @@ namespace Client
                     m_pBuyButtons[i]->Enable();
                 }
                 const std::wstring wTowerLabel = bTowerCapped
-                    ? std::wstring(bHeal ? L"Heal Tower  (MAX)" : L"Tower  (MAX)")
-                    : (bHeal ? L"Heal Tower  $" : L"Tower  $") + std::to_wstring(iPrice);
+                    ? (wTowerName + L"  (MAX)")
+                    : (wTowerName + L"  $" + std::to_wstring(iPrice));
                 if (m_pBuyTexts[i])
                 {
                     m_pBuyTexts[i]->SetColor(
@@ -793,8 +957,7 @@ namespace Client
             }
             const WeaponDef* pDef = WeaponDatabase::GetInst().Get(id);
             const std::wstring wName = pDef ? ToW(pDef->strName) : L"Weapon";
-            const int  iOwnedLevel = pPlayer ? pPlayer->GetOwnedWeaponLevel(id) : 0;
-            const bool bOwned = iOwnedLevel > 0;
+            const int  iOwnedCopies = pPlayer ? pPlayer->CountOwnedWeapon(id) : 0;
 
             if (m_pBuyButtons[i])
             {
@@ -808,22 +971,20 @@ namespace Client
                 const int iPrice = WeaponPriceOf(id);   // per-weapon price
                 std::wstring wLabel;
                 unsigned int uTextColor;
-                if (bOwned)
+                if (bLoadoutFull)
                 {
-                    // Already owned → buying the duplicate MERGES it (levels up
-                    // the existing slot). Allowed even when the loadout is full.
-                    wLabel = wName + L"  Lv." + std::to_wstring(iOwnedLevel) +
-                             L" merge $" + std::to_wstring(iPrice);
-                    uTextColor = (iMoney >= iPrice) ? 0x60C0FFFFu : 0x808080FFu;
-                }
-                else if (bLoadoutFull)
-                {
+                    // Every buy now takes a loadout slot (duplicate copies are
+                    // mergeable in the weapon menu), so a full loadout blocks it.
                     wLabel = wName + L"  (FULL)";
                     uTextColor = 0x808080FFu;
                 }
                 else
                 {
-                    wLabel = wName + L"  $" + std::to_wstring(iPrice);
+                    // A "x2"-style suffix flags how many copies are already owned
+                    // so the player can plan a merge.
+                    const std::wstring wOwned = iOwnedCopies > 0
+                        ? L"  x" + std::to_wstring(iOwnedCopies) : std::wstring();
+                    wLabel = wName + wOwned + L"  $" + std::to_wstring(iPrice);
                     uTextColor = (iMoney >= iPrice) ? 0x60FF60FFu : 0x808080FFu;
                 }
                 m_pBuyTexts[i]->SetColor(uTextColor);
@@ -831,6 +992,14 @@ namespace Client
                 m_pBuyTexts[i]->Enable();
                 syncOutline(i, wLabel, true);
             }
+        }
+
+        // --- Reroll cost label (white when affordable, grey otherwise) ---
+        if (m_pRerollText)
+        {
+            const int iCost = RerollCost();
+            m_pRerollText->SetColor(iMoney >= iCost ? 0xFFFFFFFFu : 0x808080FFu);
+            m_pRerollText->SetString(L"Reroll  $" + std::to_wstring(iCost));
         }
 
         // --- Your Weapons (drag-source icons) ---
@@ -915,7 +1084,8 @@ namespace Client
             if (m_pTowerTexts[i])
             {
                 m_pTowerTexts[i]->SetColor(0xFFFFFFFFu);
-                m_pTowerTexts[i]->SetString(L"Tower " + std::to_wstring(i + 1) + L": " + wName);
+                m_pTowerTexts[i]->SetString(L"Tower " + std::to_wstring(i + 1) +
+                    L" (Lv." + std::to_wstring(pT->GetLevel()) + L"): " + wName);
                 m_pTowerTexts[i]->Enable();
             }
         }
@@ -962,8 +1132,11 @@ namespace Client
         if (m_eBuyKind[iIndex] == BuyKind::Tower)
         {
             if (iTowersTotal >= kMaxTowers) return;   // tower cap reached
-            if (!Wallet::GetInst().TrySpend(TowerIntermissionUI_detail::TowerBuyPrice(false))) return;
-            TowerManager::GetInst().AddTower();
+            const int       iTowerId  = m_iBuyIds[iIndex];
+            const TowerDef* pTowerDef = TowerIntermissionUI_detail::TowerDefById(iTowerId);
+            const int       iPrice    = pTowerDef ? pTowerDef->iPrice : kTowerPrice;
+            if (!Wallet::GetInst().TrySpend(iPrice)) return;
+            TowerManager::GetInst().AddTower(iTowerId);
             m_bBuyLocked[iIndex] = false;   // buying consumes a pinned item → reroll
             RerollBuySlot(iIndex);
             RebuildList();
@@ -985,18 +1158,16 @@ namespace Client
 
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
-        // Already owned → this purchase MERGES the duplicate (levels up the
-        // existing slot). A new weapon needs a free loadout slot; a merge does
-        // not, so the loadout-full guard only applies to new weapons.
-        const bool bOwned = pPlayer->GetOwnedWeaponLevel(id) > 0;
-        if (!bOwned && pPlayer->GetWeaponSlotCount() >= Player::GetMaxWeaponSlots()) return;   // loadout full
+        // Every purchase adds a fresh copy as its own loadout slot (duplicate
+        // copies are combined later via the weapon menu's Merge), so a full
+        // loadout blocks any buy — owned or not.
+        if (pPlayer->GetWeaponSlotCount() >= Player::GetMaxWeaponSlots()) return;   // loadout full
         if (!Wallet::GetInst().TrySpend(WeaponPriceOf(id))) return;   // can't afford
 
-        // Owns it now (or levels it up). Add it to the player's loadout and make
-        // it the default weapon for newly placed towers (assign it to specific
-        // towers in the Tower Loadout section below). AddOrLevelUpWeapon handles
-        // the merge (level-up + evolution) when the weapon is already owned.
-        pPlayer->AddOrLevelUpWeapon(id);
+        // Add the copy to the player's loadout and make it the default weapon
+        // for newly placed towers (assign it to specific towers in the Tower
+        // Loadout section below).
+        pPlayer->AddWeaponCopy(id);
         TowerManager::GetInst().SetCurrentWeaponId(id);
         m_bBuyLocked[iIndex] = false;   // buying consumes a pinned item → reroll
         RerollBuySlot(iIndex);
@@ -1033,7 +1204,7 @@ namespace Client
 
     bool TowerIntermissionUI::PointerInOpenMenu() const
     {
-        if (m_iMenuWeaponId < 0) return false;
+        if (m_iMenuWeaponId < 0 && m_iMenuTowerRow < 0) return false;
         auto* pInput = Engine::CInput::GetInst();
         return InRect(static_cast<float>(pInput->GetMouseX()),
                       static_cast<float>(pInput->GetMouseY()), m_MenuPanelRect);
@@ -1052,16 +1223,18 @@ namespace Client
         m_iEquipArmedWeaponId = -1;
         if (m_pDragGhost) m_pDragGhost->Disable();
         m_iMenuWeaponId = id;
+        m_iMenuTowerRow = -1;   // weapon menu, not tower menu
 
         // Sell refund mirrors OnSellWeapon (half of kWeaponPrice per level, min
-        // 1); combine costs one more kWeaponPrice and greys out when unaffordable.
+        // 1); merge needs at least two owned copies and greys out otherwise.
         auto pPlayer = m_pTarget.lock();
         int iLevel = pPlayer ? pPlayer->GetOwnedWeaponLevel(id) : 1;
         if (iLevel < 1) iLevel = 1;
         const int iPrice = WeaponPriceOf(id);   // per-weapon price
         int iRefund = iPrice * iLevel / 2;
         if (iRefund < 1) iRefund = 1;
-        const bool bCanCombine = Wallet::GetInst().Money() >= iPrice;
+        const int  iCopies    = pPlayer ? pPlayer->CountOwnedWeapon(id) : 0;
+        const bool bCanMerge  = iCopies >= 2;
 
         // Lay the panel out just under the clicked icon, flipping above / clamping
         // to the window if it would spill off-screen.
@@ -1094,8 +1267,10 @@ namespace Client
         }
         if (m_pMenuTexts[1])
         {
-            m_pMenuTexts[1]->SetString(L"Combine  $" + std::to_wstring(iPrice));
-            m_pMenuTexts[1]->SetColor(bCanCombine ? 0x60FF60FFu : 0x808080FFu);
+            // Merge two owned copies into one higher-level copy (free). Greyed
+            // until the player owns at least two; the count hints at progress.
+            m_pMenuTexts[1]->SetString(L"Merge  (x" + std::to_wstring(iCopies) + L")");
+            m_pMenuTexts[1]->SetColor(bCanMerge ? 0x60FF60FFu : 0x808080FFu);
         }
         if (m_pMenuTexts[2])
         {
@@ -1107,6 +1282,7 @@ namespace Client
     void TowerIntermissionUI::CloseWeaponMenu()
     {
         m_iMenuWeaponId = -1;
+        m_iMenuTowerRow = -1;
         if (m_pMenuBg) m_pMenuBg->Disable();
         for (int i = 0; i < kMenuRows; ++i)
         {
@@ -1122,7 +1298,7 @@ namespace Client
         if (id >= 0) OnSellWeapon(id);   // refunds gold + RebuildList
     }
 
-    void TowerIntermissionUI::OnMenuCombine()
+    void TowerIntermissionUI::OnMenuMerge()
     {
         if (GameStateManager::GetInst().GetState() != GameState::Intermission) return;
         const int id = m_iMenuWeaponId;
@@ -1130,12 +1306,10 @@ namespace Client
         if (id < 0) return;
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
-        if (pPlayer->GetOwnedWeaponLevel(id) <= 0) return;   // must already own it
-        // Buy a duplicate to level it up (handles evolution at the threshold,
-        // same as the catalog merge). No-op refund if unaffordable.
-        if (!Wallet::GetInst().TrySpend(WeaponPriceOf(id))) return;
-        pPlayer->AddOrLevelUpWeapon(id);
-        RebuildList();
+        // Combine two owned copies of this weapon into one higher-level copy,
+        // freeing a slot (handles evolution at the threshold). Free — the cost
+        // was the second copy. No-op when fewer than two copies are owned.
+        if (pPlayer->MergeWeapon(id)) RebuildList();
     }
 
     void TowerIntermissionUI::OnMenuEquip()
@@ -1156,6 +1330,147 @@ namespace Client
                 "tower_shop_w_" + std::to_string(id), uColor));
             m_pDragGhost->Enable();
         }
+    }
+
+    // Placed attack towers of a given TYPE (towers.csv def id). Merging groups
+    // by type, NOT weapon: any two same-type towers combine regardless of the
+    // weapons they have equipped.
+    std::vector<std::shared_ptr<Tower>> TowerIntermissionUI::CollectAttackTowers(int iTowerDefId) const
+    {
+        std::vector<std::shared_ptr<Tower>> vec;
+        auto* pOwner = GetGameObjectOwner();
+        Engine::Scene* pScene = pOwner ? pOwner->GetScene() : nullptr;
+        std::shared_ptr<Engine::Layer> pLayer =
+            pScene ? pScene->FindLayer(DEFAULT_LAYER) : nullptr;
+        if (!pLayer) return vec;
+        for (const auto& p : pLayer->GetGameObjectList())
+        {
+            if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
+            auto pT = std::static_pointer_cast<Tower>(p);
+            if (pT->GetTowerDefId() == iTowerDefId) vec.push_back(pT);
+        }
+        return vec;
+    }
+
+    void TowerIntermissionUI::OpenTowerMenu(int iRow)
+    {
+        using namespace TowerIntermissionUI_detail;
+        if (GameStateManager::GetInst().GetState() != GameState::Intermission) return;
+        if (PointerInOpenMenu()) return;   // click landed on the already-open menu
+        if (iRow < 0 || iRow >= m_iTowerCount) return;
+
+        // Opening a menu cancels any pending equip-arm and the weapon menu.
+        m_iEquipArmedWeaponId = -1;
+        if (m_pDragGhost) m_pDragGhost->Disable();
+        m_iMenuWeaponId = -1;
+        m_iMenuTowerRow = iRow;
+
+        // Merge needs >= 2 placed towers of the same TYPE (regardless of weapon)
+        // and a kept copy below the cap; heal towers have no level and never merge.
+        const bool bHeal = m_bTowerRowIsHeal[iRow];
+        int iCopies = 0; bool bCanMerge = false; std::wstring wName = L"-";
+        if (!bHeal)
+        {
+            auto pT = std::static_pointer_cast<Tower>(m_pTowerRowRefs[iRow].lock());
+            if (pT)
+            {
+                const int wid = pT->GetWeaponId();
+                const WeaponDef* pDef = WeaponDatabase::GetInst().Get(wid);
+                wName = pDef ? TowerIntermissionUI_detail::ToW(pDef->strName) : L"None";
+                auto vec = CollectAttackTowers(pT->GetTowerDefId());
+                iCopies = static_cast<int>(vec.size());
+                int iKeepLv = 1;
+                for (auto& t : vec) if (t->GetLevel() > iKeepLv) iKeepLv = t->GetLevel();
+                bCanMerge = iCopies >= 2 && iKeepLv < kMaxWeaponLevel;
+            }
+        }
+        int iRefund = TowerIntermissionUI_detail::TowerBuyPrice(bHeal) / 2;
+        if (iRefund < 1) iRefund = 1;
+
+        // Panel layout under the tower row (mirrors OpenWeaponMenu).
+        const Sizes S = ComputeSizes();
+        const float Wpx = static_cast<float>(Engine::Window::GetInst()->GetWidth());
+        const float Hpx = static_cast<float>(Engine::Window::GetInst()->GetHeight());
+        const float fRowH = S.fItemH;
+        const float fW    = (std::max)(150.f, S.fW * 0.34f);
+        const float fH    = fRowH * kMenuRows;
+        const Rect& anchor = m_TowerRect[iRow];
+        float px = anchor.x;
+        float py = anchor.y + anchor.h + S.fGap;
+        if (px + fW > Wpx) px = Wpx - fW;
+        if (px < 0.f) px = 0.f;
+        if (py + fH > Hpx) py = anchor.y - fH - S.fGap;   // flip above
+        if (py < 0.f) py = 0.f;
+        m_MenuPanelRect = { px, py, fW, fH };
+
+        if (m_pMenuBg) { m_pMenuBg->SetRect(px, py, fW, fH); m_pMenuBg->Enable(); }
+        for (int i = 0; i < kMenuRows; ++i)
+        {
+            const float ry = py + fRowH * i;
+            if (m_pMenuButtons[i]) { m_pMenuButtons[i]->SetRect(px, ry, fW, fRowH); m_pMenuButtons[i]->Enable(); }
+            if (m_pMenuTexts[i])   { m_pMenuTexts[i]->SetRect(px, ry, fW, fRowH);   m_pMenuTexts[i]->Enable(); }
+        }
+        // Rows: 0 Merge, 1 Weapon (cycle), 2 Sell.
+        if (m_pMenuTexts[0])
+        {
+            m_pMenuTexts[0]->SetString(L"Merge  (x" + std::to_wstring(iCopies) + L")");
+            m_pMenuTexts[0]->SetColor(bCanMerge ? 0x60FF60FFu : 0x808080FFu);
+        }
+        if (m_pMenuTexts[1])
+        {
+            m_pMenuTexts[1]->SetString(bHeal ? L"Weapon  (-)" : (L"Weapon: " + wName));
+            m_pMenuTexts[1]->SetColor(bHeal ? 0x808080FFu : 0xFFFFFFFFu);
+        }
+        if (m_pMenuTexts[2])
+        {
+            m_pMenuTexts[2]->SetString(L"Sell  +" + std::to_wstring(iRefund) + L" G");
+            m_pMenuTexts[2]->SetColor(0xFFD000FFu);
+        }
+    }
+
+    void TowerIntermissionUI::OnTowerMenuMerge()
+    {
+        if (GameStateManager::GetInst().GetState() != GameState::Intermission) return;
+        const int row = m_iMenuTowerRow;
+        CloseWeaponMenu();
+        if (row < 0 || row >= m_iTowerCount) return;
+        if (m_bTowerRowIsHeal[row]) return;   // heal towers have no weapon level
+        auto pClicked = std::static_pointer_cast<Tower>(m_pTowerRowRefs[row].lock());
+        if (!pClicked) return;
+
+        // Among the placed towers of the SAME TYPE (any weapon), keep the highest
+        // level, consume the lowest, level the kept one up by one. Free — the cost
+        // was the consumed tower (its owned slot is freed so it can be re-bought).
+        // No-op if fewer than two or kept maxed.
+        auto vec = CollectAttackTowers(pClicked->GetTowerDefId());
+        if (vec.size() < 2) return;
+        std::shared_ptr<Tower> pKeep = vec.front(), pErase;
+        for (auto& t : vec) if (t->GetLevel() > pKeep->GetLevel()) pKeep = t;
+        if (pKeep->GetLevel() >= kMaxWeaponLevel) return;   // maxed → don't waste a tower
+        for (auto& t : vec)
+            if (t != pKeep && (!pErase || t->GetLevel() < pErase->GetLevel())) pErase = t;
+        if (!pErase) return;
+
+        pErase->Despawn();
+        TowerManager::GetInst().RemoveTower();   // free the owned slot (re-buyable)
+        pKeep->SetLevel(pKeep->GetLevel() + 1);
+        RebuildList();
+    }
+
+    void TowerIntermissionUI::OnTowerMenuCycle()
+    {
+        const int row = m_iMenuTowerRow;
+        CloseWeaponMenu();
+        if (row < 0) return;
+        OnCycleTowerWeapon(row);   // menu closed + not armed → cycles the weapon
+    }
+
+    void TowerIntermissionUI::OnTowerMenuSell()
+    {
+        const int row = m_iMenuTowerRow;
+        CloseWeaponMenu();
+        if (row < 0) return;
+        OnSellTower(row);
     }
 
     void TowerIntermissionUI::OnCycleTowerWeapon(int iIndex)
@@ -1180,7 +1495,9 @@ namespace Client
         // Armed by the weapon menu's Equip → assign that weapon, not a cycle.
         if (m_iEquipArmedWeaponId >= 0)
         {
-            pTower->SetWeaponId(m_iEquipArmedWeaponId);
+            // Reject if another tower already holds it (one tower per weapon).
+            if (!IsWeaponHeldByOtherTower(m_iEquipArmedWeaponId, pTower.get(), -1))
+                pTower->SetWeaponId(m_iEquipArmedWeaponId);
             m_iEquipArmedWeaponId = -1;
             if (m_pDragGhost) m_pDragGhost->Disable();
             RebuildList();
@@ -1190,15 +1507,25 @@ namespace Client
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
 
-        // Cycle this tower's weapon to the player's next owned weapon.
+        // Cycle this tower's weapon to the player's next owned weapon that no
+        // OTHER tower already holds (each weapon sits on at most one tower).
         const std::vector<int> vecOwned = pPlayer->GetOwnedWeaponIds();
-        if (vecOwned.empty()) return;
+        const int sz = static_cast<int>(vecOwned.size());
+        if (sz == 0) return;
         const int cur = pTower->GetWeaponId();
         int idx = -1;
-        for (int i = 0; i < static_cast<int>(vecOwned.size()); ++i)
+        for (int i = 0; i < sz; ++i)
             if (vecOwned[i] == cur) { idx = i; break; }
-        const int next = (idx + 1) % static_cast<int>(vecOwned.size());
-        pTower->SetWeaponId(vecOwned[next]);
+        for (int step = 1; step <= sz; ++step)
+        {
+            const int cand = vecOwned[(idx + step) % sz];
+            if (cand == cur) break;   // wrapped to current → nothing else free
+            if (!IsWeaponHeldByOtherTower(cand, pTower.get(), -1))
+            {
+                pTower->SetWeaponId(cand);
+                break;
+            }
+        }
         RebuildList();
     }
 
@@ -1242,7 +1569,9 @@ namespace Client
         // Armed by the weapon menu's Equip → assign that weapon, not a cycle.
         if (m_iEquipArmedWeaponId >= 0)
         {
-            TowerManager::GetInst().SetReserveWeapon(iIndex, m_iEquipArmedWeaponId);
+            // Reject if another tower already holds it (one tower per weapon).
+            if (!IsWeaponHeldByOtherTower(m_iEquipArmedWeaponId, nullptr, iIndex))
+                TowerManager::GetInst().SetReserveWeapon(iIndex, m_iEquipArmedWeaponId);
             m_iEquipArmedWeaponId = -1;
             if (m_pDragGhost) m_pDragGhost->Disable();
             RebuildList();
@@ -1252,16 +1581,26 @@ namespace Client
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
 
-        // Cycle this unplaced tower's weapon to the player's next owned weapon.
+        // Cycle this unplaced tower's weapon to the player's next owned weapon
+        // that no OTHER tower already holds (each weapon sits on one tower).
         const std::vector<int> vecOwned = pPlayer->GetOwnedWeaponIds();
-        if (vecOwned.empty()) return;
+        const int sz = static_cast<int>(vecOwned.size());
+        if (sz == 0) return;
         int cur = TowerManager::GetInst().ReserveWeaponRaw(iIndex);
         if (cur < 0) cur = TowerManager::GetInst().CurrentWeaponId();
         int idx = -1;
-        for (int i = 0; i < static_cast<int>(vecOwned.size()); ++i)
+        for (int i = 0; i < sz; ++i)
             if (vecOwned[i] == cur) { idx = i; break; }
-        const int next = (idx + 1) % static_cast<int>(vecOwned.size());
-        TowerManager::GetInst().SetReserveWeapon(iIndex, vecOwned[next]);
+        for (int step = 1; step <= sz; ++step)
+        {
+            const int cand = vecOwned[(idx + step) % sz];
+            if (cand == cur) break;   // wrapped to current → nothing else free
+            if (!IsWeaponHeldByOtherTower(cand, nullptr, iIndex))
+            {
+                TowerManager::GetInst().SetReserveWeapon(iIndex, cand);
+                break;
+            }
+        }
         RebuildList();
     }
 
@@ -1272,6 +1611,29 @@ namespace Client
         Hide();
         m_bShownLocal = false;
         if (m_fnStart) m_fnStart();
+    }
+
+    int TowerIntermissionUI::RerollCost() const
+    {
+        int iRound = m_fnRound ? m_fnRound() : 1;
+        if (iRound < 1) iRound = 1;
+        return kRerollBaseCost + (iRound - 1) * kRerollCostPerRound;
+    }
+
+    void TowerIntermissionUI::OnReroll()
+    {
+        if (GameStateManager::GetInst().GetState() != GameState::Intermission) return;
+        if (PointerInOpenMenu()) return;   // click belongs to the open weapon menu
+
+        // Nothing to do if every slot is pinned — don't charge for a no-op.
+        int iRerollable = 0;
+        for (int i = 0; i < kBuyRows; ++i)
+            if (!m_bBuyLocked[i]) ++iRerollable;
+        if (iRerollable == 0) return;
+
+        if (!Wallet::GetInst().TrySpend(RerollCost())) return;   // can't afford
+        RollCatalog();   // re-rolls all unpinned slots, keeps pinned ones
+        RebuildList();
     }
 
     void TowerIntermissionUI::Update(float fDeltaTime)
@@ -1349,12 +1711,17 @@ namespace Client
         // owned icon, which would just reopen it) closes the menu. Menu-button
         // clicks already closed it via their handlers during input dispatch, so
         // by here m_iMenuWeaponId is -1 for those.
-        if (m_iMenuWeaponId >= 0 && pInput->IsMouseButtonDown(MOUSE::LEFT))
+        if ((m_iMenuWeaponId >= 0 || m_iMenuTowerRow >= 0) && pInput->IsMouseButtonDown(MOUSE::LEFT))
         {
             bool bInside = InRect(mx, my, m_MenuPanelRect);
-            if (!bInside)
+            // A click on the anchor row (owned icon for the weapon menu, tower
+            // row for the tower menu) just reopens it — don't treat as dismiss.
+            if (!bInside && m_iMenuWeaponId >= 0)
                 for (int i = 0; i < kOwnedRows; ++i)
                     if (m_iOwnedIds[i] >= 0 && InRect(mx, my, m_OwnedRect[i])) { bInside = true; break; }
+            if (!bInside && m_iMenuTowerRow >= 0)
+                for (int i = 0; i < m_iTowerCount; ++i)
+                    if (InRect(mx, my, m_TowerRect[i])) { bInside = true; break; }
             if (!bInside) CloseWeaponMenu();
         }
     }
@@ -1370,7 +1737,7 @@ namespace Client
         };
         // While the action menu is open or a weapon is armed for equip, the
         // cursor is busy — suppress the hover tooltip.
-        if (m_iMenuWeaponId >= 0 || m_iEquipArmedWeaponId >= 0) { hideTip(); return; }
+        if (m_iMenuWeaponId >= 0 || m_iMenuTowerRow >= 0 || m_iEquipArmedWeaponId >= 0) { hideTip(); return; }
 
         auto* pInput = Engine::CInput::GetInst();
         const float mx = static_cast<float>(pInput->GetMouseX());
@@ -1396,8 +1763,10 @@ namespace Client
             if (!m_bBuyUsed[i] || !InRect(mx, my, m_BuyRect[i])) continue;
             if (m_eBuyKind[i] == BuyKind::Weapon)
                 wInfo = weaponTip(m_iBuyIds[i]);
+            else if (m_eBuyKind[i] == BuyKind::HealTower)
+                wInfo = BuildTowerTooltip(true);
             else
-                wInfo = BuildTowerTooltip(m_eBuyKind[i] == BuyKind::HealTower);
+                wInfo = BuildAttackTowerTooltip(m_iBuyIds[i]);
             break;
         }
         if (wInfo.empty())

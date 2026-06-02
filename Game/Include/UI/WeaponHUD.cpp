@@ -165,7 +165,11 @@ namespace Client
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
 
-        const auto vecIds = pPlayer->GetOwnedWeaponIds();
+        // Hide weapons currently mounted on towers — they belong to the tower,
+        // not the player, so they shouldn't take a player weapon-HUD slot.
+        std::vector<int> vecIds;
+        for (int id : pPlayer->GetOwnedWeaponIds())
+            if (!pPlayer->IsWeaponTowerHeld(id)) vecIds.push_back(id);
         for (int i = 0; i < kSlotCount; ++i)
         {
             const int iId    = (i < static_cast<int>(vecIds.size())) ? vecIds[i] : -1;

@@ -144,15 +144,24 @@ namespace Client
                     if (auto pHeal = pScene->CreateGameObject<HealTower>("HealTower", pLayer))
                         pHeal->SetCell(m_iCellX, m_iCellZ);
                 }
-                else
+                // A tower can only be DEPLOYED with a weapon equipped. A freshly
+                // bought tower starts weaponless and must be equipped in the shop
+                // first; PlaceableTowerCount counts only weaponed (non-down) slots.
+                else if (TowerManager::GetInst().PlaceableTowerCount() > 0)
                 {
                     if (auto pTower = pScene->CreateGameObject<Tower>("Tower", pLayer))
                     {
                         pTower->SetVoxelWorld(m_pVoxelWorld);
                         pTower->SetCell(m_iCellX, m_iCellZ);
-                        // Consume the next reserve slot's configured weapon
-                        // (shop-assigned, FIFO) instead of the global default.
-                        pTower->SetWeaponId(TowerManager::GetInst().ConsumeReserveWeapon());
+                        // Consume the next placeable reserve slot: it carries the
+                        // tower's weapon AND level (a re-placed destroyed tower
+                        // keeps both; a freshly bought one is level 1).
+                        const auto slot = TowerManager::GetInst().ConsumePlaceableSlot();
+                        pTower->SetWeaponId(slot.iWeaponId);
+                        pTower->SetLevel(slot.iLevel);
+                        // Apply the bought tower TYPE (stats + intrinsic effect)
+                        // over the defaults Init seeded. -1 = default attack type.
+                        pTower->SetTowerDefId(slot.iTowerId);
                     }
                 }
             }
@@ -218,9 +227,12 @@ namespace Client
 
     bool TowerPlacementController::HasBudgetFor(PlaceType eType) const
     {
+        // Placeable = owned but not currently placed and not on destroy-cooldown.
+        // A tower destroyed this round is benched (counts as owned) until the
+        // next round, so it doesn't grant build budget here.
         if (eType == PlaceType::Heal)
-            return CountByTag("HealTower") < TowerManager::GetInst().HealTowersOwned();
-        return CountByTag("Tower") < TowerManager::GetInst().TowersOwned();
+            return CountByTag("HealTower") < TowerManager::GetInst().PlaceableHealCount();
+        return TowerManager::GetInst().PlaceableTowerCount() > 0;
     }
 
     bool TowerPlacementController::IsCellOccupied(int cx, int cz) const

@@ -258,10 +258,11 @@ namespace Client
 
     void StartWeaponSelectUI::BuildList()
     {
-        // The shop-available weapon catalogue (v2 + crafted), first kMaxItems
-        // in deterministic order -- same pool the between-round shop sells from.
-        // Round 1 at game start, so only the earliest weapons are offered.
-        const std::vector<int> vecIds = WeaponDatabase::GetInst().ShopWeaponIds(1);
+        // The start picker pool, first kMaxItems in deterministic order: the
+        // round-1 shop-available weapons plus every weapon the player has
+        // acquired (unlocked) in a past run -- so a later-round weapon you've
+        // earned can be chosen as a starting weapon.
+        const std::vector<int> vecIds = WeaponDatabase::GetInst().StartWeaponIds();
         m_iCount = (std::min)(kMaxItems, static_cast<int>(vecIds.size()));
 
         for (int i = 0; i < kMaxItems; ++i)

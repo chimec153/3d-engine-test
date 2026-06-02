@@ -363,13 +363,13 @@ namespace Engine
 		}
 
 		float fTime = pTimer->GetElapsedTime();
-
+#ifdef _DEBUG
 		TCHAR strFPS[MAX_PATH] = {};
 
 		swprintf_s(strFPS, TEXT("FPS: %d, Elapsed Time: %.4f"), static_cast<int>(pTimer->GetFPS()), fDeltaTime);
 
 		SetWindowText(m_hWnd, strFPS);
-
+#endif
 		// fDeltaTime already comes from Timer::GetDeltTime which folds
 		// the Stop() gate in directly (returns 0 while paused) — no
 		// per-callsite `* !bStop` masking needed anymore.

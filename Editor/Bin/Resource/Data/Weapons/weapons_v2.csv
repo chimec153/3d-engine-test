@@ -69,7 +69,7 @@
 #
 id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,projectile_speed,lifetime,count,color_rgb,level_up_field,level_up_amount,size,acceleration,aim_mode,spread_deg,max_hits,damage_interval,knockback,evolves_into,evolve_min_level,shop_available,trail_style,price,min_round,max_round,orbit_radius,radial_speed,impact_mask,gather_pull,gather_radius,burn_damage,burn_duration,slow_factor,slow_duration
 1,Pellet,Front,Straight,Cooldown,Vanish,Sphere,6,0.80,380,1.2,1,0xFFE066,Count,1,0.25,0,Nearest,0,1,0,4,101,8,1,tracer,30,1,5
-2,Piercing Bolt,Front,Straight,Cooldown,NoChange,Triangle,9,1.10,460,1.6,1,0x66D9FF,Damage,5,0.30,0,Nearest,0,3,0,6,0,0,1,tracer,105,11,15
+2,Piercing Bolt,Front,Aimed,Cooldown,NoChange,Triangle,9,1.10,460,1.6,1,0x66D9FF,Damage,5,0.30,0,Nearest,0,3,0,6,0,0,1,tracer,105,11,15
 3,Orbit Blade,Around,Orbital,Sustained,NoChange,Box,8,0,200,0,2,0xB0B0C0,Count,1,0.40,0,Radial,0,0,0.30,8,0,0,1,none,150,18,22
 4,Scatter,Front,Straight,Cooldown,Vanish,Sphere,4,1.00,340,0.7,5,0xFF9966,Count,2,0.22,0,Forward,45,1,0,3,0,0,1,spark,25,1,5
 5,Spiral Orb,Around,Spiral,Cooldown,NoChange,Sphere,5,1.40,260,2.0,3,0xCC66FF,Count,1,0.28,0,Radial,120,0,0,4,0,0,1,comet,80,9,13

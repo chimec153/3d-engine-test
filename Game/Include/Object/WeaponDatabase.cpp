@@ -294,6 +294,8 @@ namespace Client
             if (row.size() > 35) def.fBurnDuration   = ToFloat(row[35]);
             if (row.size() > 36) def.fSlowFactor     = ToFloat(row[36]);
             if (row.size() > 37) def.fSlowDuration   = ToFloat(row[37]);
+            //   38 spawn_radius (Random-origin ring radius; default 6)
+            if (row.size() > 38) def.fSpawnRadius    = ToFloat(row[38]);
 
             // Sustained weapons persist (their lifetime column is 0 by
             // convention) -- mirror the combiner and hand them a huge lifetime
@@ -360,6 +362,15 @@ namespace Client
         return def.iId;
     }
 
+    int WeaponDatabase::AddCatalogueWeapon(const WeaponDef& defIn)
+    {
+        WeaponDef def = defIn;
+        def.iId = NextId();
+        m_mapIdToIndex[def.iId] = m_vecWeapons.size();
+        m_vecWeapons.push_back(def);
+        return def.iId;
+    }
+
     bool WeaponDatabase::UpdateWeapon(int iId, const WeaponDef& def)
     {
         auto it = m_mapIdToIndex.find(iId);
@@ -387,7 +398,7 @@ namespace Client
                 "size,acceleration,aim_mode,spread_deg,max_hits,damage_interval,knockback,"
                 "evolves_into,evolve_min_level,shop_available,trail_style,price,min_round,max_round,"
                 "orbit_radius,radial_speed,impact_mask,gather_pull,gather_radius,"
-                "burn_damage,burn_duration,slow_factor,slow_duration\n";
+                "burn_damage,burn_duration,slow_factor,slow_duration,spawn_radius\n";
 
         char hex[16];
         for (const auto& d : m_vecWeapons)
@@ -444,7 +455,8 @@ namespace Client
                  << d.iBurnDamage          << ','
                  << d.fBurnDuration        << ','
                  << d.fSlowFactor          << ','
-                 << d.fSlowDuration        << '\n';
+                 << d.fSlowDuration        << ','
+                 << d.fSpawnRadius         << '\n';
         }
         return m_vecWeapons.size();
     }
@@ -658,5 +670,74 @@ namespace Client
                  << d.fDamageInterval  << ','
                  << static_cast<int>(d.eAimMode) << '\n';
         }
+    }
+
+    size_t WeaponDatabase::LoadUnlocked(const std::string& strPath)
+    {
+        // Once per process — repeated scene-init calls must not wipe ids
+        // unlocked earlier this session (before they were written to disk).
+        if (m_bUnlockedLoaded) return m_vecUnlocked.size();
+        m_bUnlockedLoaded = true;
+        m_strUnlockPath   = strPath;   // remembered so Unlock can auto-save
+
+        using namespace WeaponDatabase_detail;
+        // One id per row (header + '#' comments skipped by CSVLoader).
+        for (const auto& row : CSVLoader::Load(strPath))
+        {
+            if (row.empty()) continue;
+            const int id = ToInt(row[0]);
+            if (id >= 0 && !IsUnlocked(id)) m_vecUnlocked.push_back(id);
+        }
+        return m_vecUnlocked.size();
+    }
+
+    void WeaponDatabase::Unlock(int iId)
+    {
+        if (iId < 0 || IsUnlocked(iId)) return;
+        // Crafted weapons get transient ids (re-assigned on every LoadFromCSV)
+        // and are already always shop-available, so persisting one would point
+        // at the wrong weapon next run — skip them; only stable catalogue ids
+        // are saved as unlocks.
+        for (int iLive : AllCraftedLiveIds())
+            if (iLive == iId) return;
+        m_vecUnlocked.push_back(iId);
+        SaveUnlocked(m_strUnlockPath);
+    }
+
+    bool WeaponDatabase::IsUnlocked(int iId) const
+    {
+        return std::find(m_vecUnlocked.begin(), m_vecUnlocked.end(), iId)
+             != m_vecUnlocked.end();
+    }
+
+    std::vector<int> WeaponDatabase::StartWeaponIds() const
+    {
+        // The start-of-game picker pool: the always-available round-1 shop
+        // weapons, plus every unlocked catalogue weapon whose appearance window
+        // only opens later. Stale ids (catalogue edited since the unlock was
+        // saved) are dropped via Get().
+        std::vector<int> out = ShopWeaponIds(1);
+        for (int id : m_vecUnlocked)
+        {
+            if (!Get(id)) continue;
+            if (std::find(out.begin(), out.end(), id) != out.end()) continue;
+            out.push_back(id);
+        }
+        return out;
+    }
+
+    void WeaponDatabase::SaveUnlocked(const std::string& strPath) const
+    {
+        char szResolved[MAX_PATH] = {};
+        Engine::CPathManager::GetInst()->ResolveMB(strPath.c_str(), ROOT_PATH, szResolved);
+
+        std::ofstream file(szResolved, std::ios::trunc);
+        if (!file.is_open()) return;
+
+        file << "# unlocked weapons — catalogue ids the player has acquired; "
+                "offered in the start-of-game weapon picker.\n";
+        file << "id\n";
+        for (int id : m_vecUnlocked)
+            file << id << '\n';
     }
 }

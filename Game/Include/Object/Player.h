@@ -142,9 +142,24 @@ namespace Client
             // Laser beams (Straight + Sustained weapons). Spawned by
             // RespawnBeams; the Player drives them each frame (anchor + aim).
             std::vector<std::weak_ptr<Beam>> vecBeams;
+            // True while this weapon is mounted on a tower: a weapon is used by
+            // EITHER the player OR a tower, never both (towers.csv type-lock).
+            // The player skips firing a held slot and tears down its persistent
+            // instances; releasing it (selling the tower) respawns them. Updated
+            // each frame by ReconcileTowerHeldInstances.
+            bool bTowerHeld = false;
         };
         static constexpr int kMaxWeaponSlots = 6;
         std::vector<WeaponSlot> m_vecWeaponSlots;
+
+        // Weapon ids currently mounted on towers (placed + reserve), rebuilt
+        // each frame from the scene + TowerManager. The player never fires a
+        // weapon in this set, enforcing the player/tower mutual exclusivity.
+        std::vector<int> m_vecTowerHeldWeapons;
+        void RefreshTowerHeldWeapons();
+        // Drive the per-slot held state: tear down a slot's persistent instances
+        // when it becomes tower-held, respawn them when it's released.
+        void ReconcileTowerHeldInstances();
 
         // Aim mode toggle. Default = false (bullets follow the player's
         // facing direction). Pressing LCTRL flips it; while true the
@@ -218,6 +233,13 @@ namespace Client
         // Per-frame: anchor each beam at the muzzle and aim it down the
         // weapon's current heading (called from Update).
         void  DriveBeams(float fDeltaTime);
+        // Spawn a slot's live instances (orbs / pets / beams) per its weapon
+        // def. Shared by the add-new, add-copy, and level-up paths.
+        void  SpawnSlotInstances(WeaponSlot& slot);
+        // Bump a slot's level in place, applying the one-time evolution at the
+        // threshold and re-spawning its live instances. Shared by
+        // AddOrLevelUpWeapon (existing slot) and MergeWeapon.
+        void  LevelUpSlot(WeaponSlot& slot);
         // Player damage feedback. TriggerImpactFeedback fires the dramatic
         // single-hit reaction (red flash + camera shake + hit-stop), throttled
         // by m_fImpactCooldown. UpdateDamageFeedback runs each frame: ticks the
@@ -240,12 +262,26 @@ namespace Client
         //   GetWeaponSlotCount  — used to decide whether new-weapon cards
         //                        should appear in the pool (capped at 6).
         void AddOrLevelUpWeapon(int iWeaponId);
+        // Add a fresh copy of a weapon as a NEW slot, even if the player
+        // already owns it (capped at kMaxWeaponSlots). The shop buy path uses
+        // this so duplicate copies can later be combined via MergeWeapon.
+        void AddWeaponCopy(int iWeaponId);
+        // Combine two owned copies of the same weapon into one: erases the
+        // lowest-level copy and levels up the highest-level one (freeing a
+        // slot). No-op (returns false) unless at least two copies are owned.
+        bool MergeWeapon(int iWeaponId);
+        // How many slots currently hold this weapon (0..kMaxWeaponSlots).
+        int  CountOwnedWeapon(int iWeaponId) const;
         // Drop an owned weapon (shop sell). Tears down its live instances
         // (sustained orbs / pets / beams) and erases the slot. No-op if the
         // weapon isn't owned.
         void RemoveWeapon(int iWeaponId);
         std::vector<int> GetOwnedWeaponIds() const;
         int  GetOwnedWeaponLevel(int iWeaponId) const;
+        // True when a weapon id is currently mounted on a tower (placed or
+        // reserve). The weapon HUD hides such weapons — they're used by the
+        // tower, not the player. Backed by the per-frame held set.
+        bool IsWeaponTowerHeld(int iWeaponId) const;
         int  GetWeaponSlotCount() const { return static_cast<int>(m_vecWeaponSlots.size()); }
         static constexpr int GetMaxWeaponSlots() { return kMaxWeaponSlots; }
 

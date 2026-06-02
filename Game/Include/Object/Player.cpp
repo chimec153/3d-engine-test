@@ -42,6 +42,8 @@ REGISTER_GAMEOBJECT_EX(Player, new Client::Player(100, 1, 5))
 #include "Orb.h"
 #include "WeaponDatabase.h"
 #include "TowerManager.h"
+#include "Tower.h"            // GetWeaponId() on placed towers (held-weapon scan)
+#include "Scene/Layer.h"      // GetGameObjectList() for the held-weapon scan
 #include "Wallet.h"
 #include "../GameDefs.h"
 #include "PlayerState.h"
@@ -888,11 +890,18 @@ namespace Client
 		// voxels; UpdateState still runs so Idle/Run animations sync.
 		UpdateState(fDeltaTime);
 
+		// A weapon mounted on a tower is used by the tower, not the player.
+		// Refresh the held set, then suppress/restore each slot's persistent
+		// instances accordingly, before any firing this frame.
+		RefreshTowerHeldWeapons();
+		ReconcileTowerHeldInstances();
+
 		// Weapon slots — Cooldown slots accumulate dt and fire when the
 		// (level-scaled) cooldown is reached; Sustained slots have no
 		// per-frame work here, their orbital instances tick themselves.
 		for (auto& slot : m_vecWeaponSlots)
 		{
+			if (slot.bTowerHeld) continue;   // this weapon is on a tower
 			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
 			if (!pDef || pDef->eFireMode != FireMode::Cooldown) continue;
 			// Follow weapons fire through their pets, not the player.
@@ -998,6 +1007,66 @@ namespace Client
 		}
 	}
 
+	void Player::RefreshTowerHeldWeapons()
+	{
+		m_vecTowerHeldWeapons.clear();
+		// Placed towers in the scene (each fires one weapon id).
+		if (auto pScene = GetScene())
+		{
+			if (auto pLayer = pScene->FindLayer(DEFAULT_LAYER))
+			{
+				for (const auto& p : pLayer->GetGameObjectList())
+				{
+					if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
+					const int wid = std::static_pointer_cast<Tower>(p)->GetWeaponId();
+					if (wid >= 0) m_vecTowerHeldWeapons.push_back(wid);
+				}
+			}
+		}
+		// Bought-but-unplaced towers (reserve) reserve their weapon too.
+		auto& tm = TowerManager::GetInst();
+		const int n = tm.ReserveCount();
+		for (int i = 0; i < n; ++i)
+		{
+			const int wid = tm.ReserveWeaponRaw(i);
+			if (wid >= 0) m_vecTowerHeldWeapons.push_back(wid);
+		}
+	}
+
+	bool Player::IsWeaponTowerHeld(int iWeaponId) const
+	{
+		if (iWeaponId < 0) return false;
+		for (int id : m_vecTowerHeldWeapons)
+			if (id == iWeaponId) return true;
+		return false;
+	}
+
+	void Player::ReconcileTowerHeldInstances()
+	{
+		for (auto& slot : m_vecWeaponSlots)
+		{
+			const bool bHeld = IsWeaponTowerHeld(slot.iWeaponId);
+			if (bHeld && !slot.bTowerHeld)
+			{
+				// Just handed to a tower — drop the player's persistent instances
+				// so the player stops using this weapon entirely.
+				for (auto& wp : slot.vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+				slot.vecSustainedInstances.clear();
+				for (auto& wp : slot.vecBeams) if (auto sp = wp.lock()) sp->InActivate();
+				slot.vecBeams.clear();
+				for (auto& wp : slot.vecPets) if (auto sp = wp.lock()) sp->InActivate();
+				slot.vecPets.clear();
+			}
+			else if (!bHeld && slot.bTowerHeld)
+			{
+				// Released (tower sold) — respawn this weapon's persistent
+				// instances; Cooldown weapons just resume firing next frame.
+				SpawnSlotInstances(slot);
+			}
+			slot.bTowerHeld = bHeld;
+		}
+	}
+
 	void Player::FireCooldownBurst(const WeaponSlot& slot)
 	{
 		if (!m_pTransform) return;
@@ -1061,11 +1130,16 @@ namespace Client
 			break;
 		case SpawnOrigin::Random:
 		{
-			// A random point on the player's y-plane in a ring around them
-			// (2..6 units), so area weapons rain down at unpredictable
-			// spots near the player instead of from the muzzle.
+			// A random point on the player's y-plane in a ring around them, so
+			// area weapons rain down at unpredictable spots near the player
+			// instead of from the muzzle. The ring radius is per-weapon
+			// (fSpawnRadius, world units); distance is random in
+			// [fSpawnRadius/3, fSpawnRadius] — the default 6 reproduces the old
+			// hard-coded 2..6 ring.
+			const float fOuter  = (pDef->fSpawnRadius > 0.f) ? pDef->fSpawnRadius : 6.f;
+			const float fInner  = fOuter * (1.f / 3.f);
 			const float fAngle  = (static_cast<float>(std::rand()) / RAND_MAX) * (2.f * PI);
-			const float fRadius = 2.f + (static_cast<float>(std::rand()) / RAND_MAX) * 4.f;
+			const float fRadius = fInner + (static_cast<float>(std::rand()) / RAND_MAX) * (fOuter - fInner);
 			vSpawn = vSpawn + Engine::Vector3{ cosf(fAngle) * fRadius, 0.f, sinf(fAngle) * fRadius };
 			break;
 		}
@@ -1248,6 +1322,7 @@ namespace Client
 			m_pTransform->GetPosition() + Engine::Vector3{ 0.f, kMuzzleYOffset, 0.f };
 		for (auto& slot : m_vecWeaponSlots)
 		{
+			if (slot.bTowerHeld) continue;   // mounted on a tower — beams torn down
 			if (slot.vecBeams.empty()) continue;
 			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
 			if (!pDef) continue;
@@ -1256,6 +1331,51 @@ namespace Client
 				if (auto sp = wp.lock())
 					sp->Drive(vMuzzle, fAimYaw, fDeltaTime);
 		}
+	}
+
+	void Player::SpawnSlotInstances(WeaponSlot& slot)
+	{
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		if (!pDef) return;
+		// Sustained orbs / pets / beams need a re-spawn so a count/speed bump
+		// on the level-up column takes effect; Cooldown weapons just read the
+		// new level on the next fire.
+		if (pDef->eMovement == MovementType::Follow)
+			RespawnPets(slot);
+		else if (pDef->eFireMode == FireMode::Sustained)
+		{
+			if (pDef->eMovement == MovementType::Straight)
+				RespawnBeams(slot);              // laser beam (anchored line)
+			else
+				RespawnSustainedInstances(slot); // orbs / fixed zone
+		}
+	}
+
+	void Player::LevelUpSlot(WeaponSlot& slot)
+	{
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		if (!pDef) return;
+		// Capped at kMaxWeaponLevel. Already maxed → nothing to do (the slot
+		// is already spawned), so bail before touching level / evolution.
+		if (slot.iLevel >= kMaxWeaponLevel) return;
+		++slot.iLevel;
+		// One-time evolution: at the threshold level the slot transforms
+		// into the evolved weapon (fresh at level 1). Drop the base
+		// weapon's live instances first so an evolution that changes
+		// category (Sustained/Follow -> Cooldown) leaves no orphans.
+		if (pDef->iEvolvesInto > 0 && slot.iLevel >= pDef->iEvolveMinLevel)
+		{
+			if (WeaponDatabase::GetInst().Get(pDef->iEvolvesInto))
+			{
+				for (auto& wp : slot.vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+				slot.vecSustainedInstances.clear();
+				for (auto& wp : slot.vecPets) if (auto sp = wp.lock()) sp->InActivate();
+				slot.vecPets.clear();
+				slot.iWeaponId = pDef->iEvolvesInto;
+				slot.iLevel    = 1;
+			}
+		}
+		SpawnSlotInstances(slot);
 	}
 
 	void Player::AddOrLevelUpWeapon(int iWeaponId)
@@ -1268,40 +1388,15 @@ namespace Client
 			return;
 		}
 
-		// Existing slot → bump level. Sustained orbs need a re-spawn so a
-		// count/speed bump on the level-up column actually takes effect;
-		// Cooldown weapons just read the new level on the next fire.
+		// Acquiring a weapon unlocks it for future runs' start-of-game picker.
+		WeaponDatabase::GetInst().Unlock(iWeaponId);
+
+		// Existing slot → bump level in place.
 		for (auto& slot : m_vecWeaponSlots)
 		{
 			if (slot.iWeaponId == iWeaponId)
 			{
-				++slot.iLevel;
-				// One-time evolution: at the threshold level the slot transforms
-				// into the evolved weapon (fresh at level 1). Drop the base
-				// weapon's live instances first so an evolution that changes
-				// category (Sustained/Follow -> Cooldown) leaves no orphans.
-				if (pDef->iEvolvesInto > 0 && slot.iLevel >= pDef->iEvolveMinLevel)
-				{
-					if (const WeaponDef* pEvo = WeaponDatabase::GetInst().Get(pDef->iEvolvesInto))
-					{
-						for (auto& wp : slot.vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
-						slot.vecSustainedInstances.clear();
-						for (auto& wp : slot.vecPets) if (auto sp = wp.lock()) sp->InActivate();
-						slot.vecPets.clear();
-						slot.iWeaponId = pDef->iEvolvesInto;
-						slot.iLevel    = 1;
-						pDef = pEvo;   // the dispatch below uses the evolved def
-					}
-				}
-				if (pDef->eMovement == MovementType::Follow)
-					RespawnPets(slot);
-				else if (pDef->eFireMode == FireMode::Sustained)
-				{
-					if (pDef->eMovement == MovementType::Straight)
-						RespawnBeams(slot);              // laser beam (anchored line)
-					else
-						RespawnSustainedInstances(slot); // orbs / fixed zone
-				}
+				LevelUpSlot(slot);
 				return;
 			}
 		}
@@ -1314,15 +1409,72 @@ namespace Client
 		slot.iWeaponId = iWeaponId;
 		slot.iLevel    = 1;
 		m_vecWeaponSlots.push_back(std::move(slot));
-		if (pDef->eMovement == MovementType::Follow)
-			RespawnPets(m_vecWeaponSlots.back());
-		else if (pDef->eFireMode == FireMode::Sustained)
+		SpawnSlotInstances(m_vecWeaponSlots.back());
+	}
+
+	void Player::AddWeaponCopy(int iWeaponId)
+	{
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(iWeaponId);
+		if (!pDef)
 		{
-			if (pDef->eMovement == MovementType::Straight)
-				RespawnBeams(m_vecWeaponSlots.back());
-			else
-				RespawnSustainedInstances(m_vecWeaponSlots.back());
+			MessageBox(nullptr, TEXT("Error"), TEXT("그런 무기가 없다."), MB_OK);
+			assert(false);
+			return;
 		}
+		// Acquiring a weapon unlocks it for future runs' start-of-game picker.
+		WeaponDatabase::GetInst().Unlock(iWeaponId);
+		// Always a new slot (duplicate copies are mergeable later). Capped at
+		// kMaxWeaponSlots — the shop guards this before charging gold.
+		if (static_cast<int>(m_vecWeaponSlots.size()) >= kMaxWeaponSlots) return;
+		WeaponSlot slot;
+		slot.iWeaponId = iWeaponId;
+		slot.iLevel    = 1;
+		m_vecWeaponSlots.push_back(std::move(slot));
+		SpawnSlotInstances(m_vecWeaponSlots.back());
+	}
+
+	bool Player::MergeWeapon(int iWeaponId)
+	{
+		// Combine two copies: keep the highest-level copy, erase the
+		// lowest-level one, then level the kept copy up by one.
+		int iKeep = -1, iErase = -1, iCopies = 0;
+		for (int i = 0; i < static_cast<int>(m_vecWeaponSlots.size()); ++i)
+		{
+			if (m_vecWeaponSlots[i].iWeaponId != iWeaponId) continue;
+			++iCopies;
+			if (iKeep < 0 || m_vecWeaponSlots[i].iLevel > m_vecWeaponSlots[iKeep].iLevel)
+				iKeep = i;
+		}
+		if (iCopies < 2) return false;
+		// Kept copy already maxed → merging gains nothing, so don't consume the
+		// other copy. Player keeps both copies to merge/use elsewhere.
+		if (m_vecWeaponSlots[iKeep].iLevel >= kMaxWeaponLevel) return false;
+		for (int i = 0; i < static_cast<int>(m_vecWeaponSlots.size()); ++i)
+		{
+			if (m_vecWeaponSlots[i].iWeaponId != iWeaponId || i == iKeep) continue;
+			if (iErase < 0 || m_vecWeaponSlots[i].iLevel < m_vecWeaponSlots[iErase].iLevel)
+				iErase = i;
+		}
+		if (iErase < 0) return false;
+
+		// Tear down the consumed copy's live instances before erasing it
+		// (same teardown RemoveWeapon uses) so no orbs / pets / beams orphan.
+		WeaponSlot& e = m_vecWeaponSlots[iErase];
+		for (auto& wp : e.vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+		for (auto& wp : e.vecPets)               if (auto sp = wp.lock()) sp->InActivate();
+		for (auto& wp : e.vecBeams)              if (auto sp = wp.lock()) sp->InActivate();
+		m_vecWeaponSlots.erase(m_vecWeaponSlots.begin() + iErase);
+		if (iErase < iKeep) --iKeep;   // erase shifted the kept slot down one
+		LevelUpSlot(m_vecWeaponSlots[iKeep]);
+		return true;
+	}
+
+	int Player::CountOwnedWeapon(int iWeaponId) const
+	{
+		int n = 0;
+		for (const auto& s : m_vecWeaponSlots)
+			if (s.iWeaponId == iWeaponId) ++n;
+		return n;
 	}
 
 	void Player::RemoveWeapon(int iWeaponId)

@@ -51,6 +51,12 @@ namespace Client
         // Floors at 1.
         void AddDamage(int iAdd) { m_iDamage += iAdd; if (m_iDamage < 1) m_iDamage = 1; }
 
+        // Append one more on-impact effect on top of the weapon's own (built in
+        // Configure). A Tower calls this AFTER Configure to layer its intrinsic
+        // tower effect (e.g. Slow) onto the equipped weapon's effects, so a hit
+        // runs both. nullptr is ignored. See Tower::FireAt.
+        void AddImpactEffect(std::unique_ptr<IImpactEffect> pEffect);
+
         // Multiply split children remember the enemy that spawned them and
         // must never interact with it again — otherwise the two children,
         // born inside that enemy's collider, instantly re-hit it. Both

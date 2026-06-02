@@ -1,8 +1,40 @@
-# Tower data table — base stats for placeable towers (attack + heal).
-# kind: attack | heal. attack = bullet-damage multiplier (player-style),
-# attack_speed = fire-rate multiplier on the weapon cooldown, crit_chance 0..1
-# rolls per shot for crit_mult damage. defense = incoming-damage reduction
-# (0..0.9). range = attack targeting radius (cells). heal_* used by heal towers.
-id,name,kind,hp,attack,defense,attack_speed,crit_chance,crit_mult,range,price,aggro,heal_amount,heal_interval,heal_radius
-0,Attack Tower,attack,100,1.0,0,1.0,0.15,2.0,12,30,3,0,0,0
-1,Heal Tower,heal,80,0,0,0,0,2.0,6,40,3,15,3,6
+# Tower data table — base stats for placeable towers.
+#
+# kind: attack | heal | frost | mortar | gravity | buff.
+#   attack/heal are WIRED (attack = bullet-damage multiplier, player-style;
+#   heal = HP pulse aura). frost/mortar/gravity/buff are DATA-ONLY for now —
+#   their rows load faithfully but no gameplay code consumes them yet (type-
+#   select UI + slow/AOE/pull/buff behaviours are a later step). Tower::Init
+#   reads only the first attack row; HealTower only the first heal row.
+#
+# attack_speed = fire-rate multiplier on the weapon cooldown. crit_chance 0..1
+#   rolls per shot for crit_mult damage. defense = incoming-damage reduction
+#   (0..0.9). range = attack/aura targeting radius (cells). heal_* = heal towers.
+#
+# first_round / last_round = shop availability window. last_round = 0 means
+#   "no cap" (available from first_round through the final round). No consumer
+#   yet — the shop does not gate on round.
+# mesh = silhouette key the builder maps to geometry. Two languages allowed:
+#   a composite of CURRENT primitives (box/sphere/capsule), e.g. post_orb =
+#   square pillar + floating sphere (buildable today, the demo path); OR a
+#   regular N-gon prism prism3..prism8 (side-count = role, needs a new
+#   generator). Tower::Init still hard-codes AxisBox, so this is unread now.
+# max_level + lvl_*_add = NEW per-tower-type level-up. Each level past 1 ADDS
+#   the flat deltas (stackable): HP, bullet-damage mult, fire-rate mult. Role-
+#   specific per-level effects (slow %, AOE radius, buff %) are future columns.
+#   No leveling flow exists yet — these load but nothing applies them.
+# tower_effect = the tower's INTRINSIC on-impact effect, layered on top of the
+#   equipped weapon's own effects (so a hit runs both). One of:
+#   none | knockback | gather | burn | slow. effect_p0 / effect_p1 are that
+#   effect's params: slow=(factor 0..1, duration s); gather=(pull 0..1, radius);
+#   burn=(damage/tick, duration s); knockback=(force, -). WIRED for towers that
+#   fire bullets (FireAt / sustained orbits); laser-beam weapons don't carry it.
+#   Only the first attack row is placeable today, so only its effect is visible
+#   until tower-type selection ships.
+id,name,kind,hp,attack,defense,attack_speed,crit_chance,crit_mult,range,price,aggro,heal_amount,heal_interval,heal_radius,first_round,last_round,mesh,max_level,lvl_hp_add,lvl_atk_add,lvl_atkspd_add,tower_effect,effect_p0,effect_p1
+0,Gatling Turret,attack,100,0.8,0,1.6,0.15,2.0,11,30,3,0,0,0,1,0,prism3,5,20,0.1,0.15,none,0,0
+1,Heal Tower,heal,80,0,0,0,0,2.0,6,40,3,15,3,6,3,0,prism8,3,15,0,0,none,0,0
+2,Frost Spire,frost,130,0.2,0.1,1.0,0,1.0,6,45,4,0,0,0,2,0,prism5,4,25,0,0,slow,0.5,2.0
+3,Mortar,mortar,90,2.2,0,0.5,0.1,2.0,14,60,3,0,0,0,4,0,prism4,5,15,0.25,0.05,knockback,6,0
+4,Gravity Well,gravity,110,0.1,0.05,1.0,0,1.0,7,55,4,0,0,0,5,0,prism6,4,20,0,0,gather,1.0,4.0
+5,Buff Totem,buff,100,0,0,0,0,1.0,6,50,3,0,0,0,6,0,prism7,3,20,0,0,none,0,0

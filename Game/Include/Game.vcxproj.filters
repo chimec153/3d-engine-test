@@ -158,6 +158,9 @@
     <ClCompile Include="UI\WeaponHUD.cpp">
       <Filter>03. UI</Filter>
     </ClCompile>
+    <ClCompile Include="UI\TowerHUD.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
     <ClCompile Include="Object\EnemyMeshRenderer.cpp">
       <Filter>05. Component</Filter>
     </ClCompile>
@@ -327,6 +330,9 @@
       <Filter>03. UI</Filter>
     </ClInclude>
     <ClInclude Include="UI\WeaponHUD.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\TowerHUD.h">
       <Filter>03. UI</Filter>
     </ClInclude>
     <ClInclude Include="Object\EnemyMeshRenderer.h">

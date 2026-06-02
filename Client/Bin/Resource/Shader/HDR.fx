@@ -202,6 +202,11 @@ cbuffer Shockwave : register(b13)
     float  g_fShockwaveThickness;
     float  g_fShockwaveAspect;
     float  _shockPad;
+    // Player damage-feedback overlays (fed by RenderManager via SHOCKWAVECBUFFER).
+    float  g_fDamageFlash;      // sharp full-screen red flash (single hits)
+    float  g_fChipRed;          // subtle persistent red edge (contact/DoT)
+    float  g_fLowHp;            // low-HP vignette + desaturation strength
+    float  g_fFxTime;           // seconds, drives the low-HP pulse
 }
 
 // Offset a UV along any active expanding rings. Each ring pushes pixels
@@ -271,9 +276,33 @@ float4 FinalPassPS(VS_HDR_OUTPUT input) :   SV_TARGET
     }
     
     color += BloomScale * BloomTexture.Sample(g_sLinear, input.uv.xy).xyz;
-    
+
     color = ToneMapping(color);
-    
+
+    // --- Player damage-feedback overlays (b13 fields fed by RenderManager) ---
+    // Distance from screen centre, squared and scaled so it reads 0 at the
+    // centre and ~1 in the corners — shared by the low-HP and chip vignettes.
+    float2 vd  = input.uv.xy - 0.5;
+    float  vig = saturate(dot(vd, vd) * 2.2);
+
+    // Low-HP: desaturate the frame and bleed a pulsing red vignette in,
+    // intensifying as HP approaches zero (g_fLowHp ramps 0..1).
+    if (g_fLowHp > 0.0)
+    {
+        float lum = dot(color, float3(0.299, 0.587, 0.114));
+        color = lerp(color, lum.xxx, g_fLowHp * 0.45);
+
+        float pulse = 0.7 + 0.3 * sin(g_fFxTime * 6.2831853 * (0.6 + 0.9 * g_fLowHp));
+        color = lerp(color, float3(0.6, 0.0, 0.0), saturate(vig * g_fLowHp * pulse));
+    }
+
+    // Chip: subtle persistent red edge from contact / DoT (no pulse).
+    if (g_fChipRed > 0.0)
+        color = lerp(color, float3(0.5, 0.0, 0.0), saturate(vig * g_fChipRed * 0.6));
+
+    // Flash: sharp full-screen red on hard single hits (decays CPU-side).
+    color = lerp(color, float3(0.85, 0.0, 0.0), saturate(g_fDamageFlash));
+
     return float4(color, 1.0);
 }
 

@@ -192,6 +192,10 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Util\Telemetry.cpp">
+      <!-- unity 빌드에서 제외: winhttp.h 매크로 충돌 + 전역 epsilon 매크로 회피 -->
+      <IncludeInUnityFile>false</IncludeInUnityFile>
+    </ClCompile>
     <ClCompile Include="Object\Attackable.cpp" />
     <ClCompile Include="Object\Bullet.cpp" />
     <ClCompile Include="Object\Movement\AimedMovement.cpp" />
@@ -253,6 +257,7 @@
     <ClCompile Include="UI\StartMenu.cpp" />
     <ClCompile Include="UI\WeaponCombiner.cpp" />
     <ClCompile Include="UI\WeaponHUD.cpp" />
+    <ClCompile Include="UI\TowerHUD.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Object\Attackable.h" />
@@ -310,6 +315,7 @@
     <ClInclude Include="Object\TowerData.h" />
     <ClInclude Include="Util\CSVLoader.h" />
     <ClInclude Include="Util\JsonLoader.h" />
+    <ClInclude Include="Util\Telemetry.h" />
     <ClInclude Include="Scene\EnemySpawner.h" />
     <ClInclude Include="Scene\GameScene.h" />
     <ClInclude Include="Scene\GameWorldBuilder.h" />
@@ -327,6 +333,7 @@
     <ClInclude Include="UI\StartMenu.h" />
     <ClInclude Include="UI\WeaponCombiner.h" />
     <ClInclude Include="UI\WeaponHUD.h" />
+    <ClInclude Include="UI\TowerHUD.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Copy.bat" />

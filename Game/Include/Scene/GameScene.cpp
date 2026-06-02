@@ -12,6 +12,7 @@ REGISTER_SCENE(Client::GameScene, GameScene)
 #include "../Object/LevelUpDatabase.h"
 #include "../Object/Enemy.h"
 #include "EnemySpawner.h"
+#include "../Util/Telemetry.h"
 #include "GameWorldBuilder.h"
 #include "Bindable/BindableManager.h"
 #include "Bindable/Mesh.h"
@@ -38,6 +39,7 @@ REGISTER_SCENE(Client::GameScene, GameScene)
 #include "../Object/GameStateManager.h"
 #include "../UI/DamageText.h"
 #include "../UI/WeaponHUD.h"
+#include "../UI/TowerHUD.h"
 #include "Input/Input.h"
 #include "Bindable/Camera.h"
 #include "Core/Graphics.h"
@@ -91,7 +93,32 @@ namespace Client
 	}
 
 	// Out-of-line so unique_ptr<VoxelWorld> can destroy a complete type.
-	GameScene::~GameScene() = default;
+	GameScene::~GameScene()
+	{
+		// Catch-all telemetry for mid-run exits (window close / return to menu).
+		// If a run_end was already sent (death), IsRunActive() is false -> no-op.
+		SendRunEndTelemetry("quit");
+	}
+
+	// Telemetry: assemble run_end (round / level / weapons) and send with the
+	// given reason. No-op if no run is active, which also prevents duplicate
+	// sends since RunEnd clears the run_id.
+	void GameScene::SendRunEndTelemetry(const char* szReason)
+	{
+		auto& tm = Telemetry::GetInst();
+		if (!tm.IsRunActive()) return;
+
+		std::vector<std::string> vecWeapons;
+		int iLevel = 1;
+		if (auto pPlayer = m_pPlayer.lock())
+		{
+			iLevel = pPlayer->GetLevel();
+			for (int id : pPlayer->GetOwnedWeaponIds())
+				vecWeapons.push_back(std::to_string(id));
+		}
+		const int iRound = m_pEnemySpawner ? m_pEnemySpawner->GetRound() : m_iRound;
+		tm.RunEnd(iRound, iLevel, m_fActivePlayTime, vecWeapons, szReason);
+	}
 
 	bool GameScene::LoadSequences()
 	{
@@ -122,7 +149,7 @@ namespace Client
 	bool GameScene::CreateMesh()
 	{
 		Engine::StaticCreateBindable<Engine::Mesh>("Idle", "/Game/Mesh/Idle.mesh", MESH_PATH);
-		Engine::StaticCreateBindable<Engine::Mesh>("Idle2", "/Game/Mesh/Idle2.mesh", MESH_PATH);
+		//Engine::StaticCreateBindable<Engine::Mesh>("Idle2", "/Game/Mesh/Idle2.mesh", MESH_PATH);
 		return true;
 	}
 
@@ -178,6 +205,11 @@ namespace Client
 		// <exe-dir>\Resource\ by CPathManager::Init, so this works
 		// regardless of the host .exe's working directory.
 		WeaponDatabase::GetInst().LoadFromCSV("/Game/Data/Weapons/weapons_v2.csv");
+
+		// Cross-run weapon unlocks: ids the player has acquired in past runs,
+		// offered in the start-of-game picker. Guarded to load once per process;
+		// missing file => nothing unlocked yet (first run).
+		WeaponDatabase::GetInst().LoadUnlocked("/Game/Data/Weapons/unlocked.csv");
 
 		// Tower stat catalogue (base HP / attack / defense / fire-rate / crit /
 		// range / price, plus heal-tower params). Same /Game mount; Tower,
@@ -525,6 +557,9 @@ namespace Client
 				pInter->SetOnStartNextRound([this]()
 				{
 					++m_iRound;
+					// Towers destroyed last round come back online this round
+					// (the destroy-cooldown is "until the next round").
+					TowerManager::GetInst().OnNewRound();
 					if (m_pEnemySpawner) m_pEnemySpawner->StartRound(m_iRound);
 					GameStateManager::GetInst().ExitModal();
 				});
@@ -543,6 +578,8 @@ namespace Client
 				pStart->SetOnChosen([this]()
 				{
 					m_iRound = 1;
+					m_fActivePlayTime = 0.f;           // reset active-time accumulator for the new run
+					Telemetry::GetInst().RunStart();   // new run: fresh run_id + run_start event
 					if (m_pEnemySpawner) m_pEnemySpawner->StartRound(m_iRound);
 					GameStateManager::GetInst().ExitModal();
 				});
@@ -596,10 +633,20 @@ namespace Client
 			}
 		}
 
+		// Tower slots HUD — top-right corner, one box per owned tower (placed /
+		// ready / on destroy-cooldown). Reads TowerManager + the live "Tower"
+		// objects each frame; no target needed.
+		if (auto pTowerHUDObj = CreateGameObject<>("TowerHUD", FindLayer(DEFAULT_LAYER)))
+		{
+			pTowerHUDObj->AddComponent<TowerHUD>("towerhud");
+		}
+
 		// Debug overlay — live enemy count. Reads the active scene's
 		// default layer each frame, so it works whether the Editor or
 		// standalone Game launched us.
+#ifdef _DEBUG
 		m_pEnemyCountHUD = std::make_shared<EnemyCountHUD>();
+#endif
 
 		// InventoryCamera is owned by the Player (previously also registered
 		// on Layer's m_ComponentList; that parallel registration was removed
@@ -637,6 +684,16 @@ namespace Client
 		SpawnTelegraphManager::GetInst()->BeginFrame();
 
 		__super::Update(dt);   // Scene::Update auto-advances V2 drawables.
+
+		// Telemetry: accumulate active play time only while actually playing, so
+		// choice/pause screens (StartSelect, Intermission shop, LevelUp, Paused)
+		// are excluded. dt is already ~0 during modals, but gate explicitly too.
+		if (GameStateManager::GetInst().IsPlaying())
+			m_fActivePlayTime += dt;
+
+		// Telemetry: player death -> run_end("death"), exactly once (helper guards).
+		if (auto pPlayer = m_pPlayer.lock(); pPlayer && pPlayer->IsDead())
+			SendRunEndTelemetry("death");
 
 		// HP / XP gauges — only the ratio needs per-frame push; the rect
 		// is anchor-bound at gauge creation and re-resolved by UIControl
@@ -756,6 +813,9 @@ namespace Client
 			// the game-over button) can free this HUD between this
 			// registration and when RenderUI runs the callback. lock() then
 			// fails and we skip, instead of dereferencing a dangling HUD.
+#ifdef _DEBUG
+			// Instancing-count debug HUD: Debug builds only. Excluded from
+			// Release (itch) so players never see the counters.
 			if (m_pEnemyCountHUD)
 			{
 				std::weak_ptr<EnemyCountHUD> wpHud = m_pEnemyCountHUD;
@@ -763,6 +823,7 @@ namespace Client
 					Engine::RENDER_LAYER::UI,
 					[wpHud]() { if (auto p = wpHud.lock()) p->Render(); });
 			}
+#endif
 
 			Engine::RenderManager::GetInst()->AddCustomRender(
 				Engine::RENDER_LAYER::UI,

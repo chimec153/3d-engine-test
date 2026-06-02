@@ -6,20 +6,29 @@
 #include "../Scene/StartScene.h"
 #include "../Object/WeaponData.h"
 #include "../Object/WeaponDatabase.h"
+#include "../Object/Bullet.h"
 #include "Bindable/Texture.h"
 #include "Bindable/BindableManager.h"
+#include "Bindable/Camera.h"
+#include "Bindable/Transform.h"
 #include "Core/Window.h"
+#include "Core/Graphics.h"
+#include "GameObject/GameObject.h"
 #include "Resource/Font.h"
 #include "Resource/FontManager.h"
 #include "Resource/Text.h"
+#include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 #include "../Util/CSVLoader.h"
 #include "Types.h"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <cwchar>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -411,6 +420,20 @@ namespace Client
         }
         m_pCraftText = makeText("wc_craft_txt", m_pMidFont, fCraftX, fCraftY, fCraftW, fCraftH, L"저장");
 
+        // "Add weapon" button — sits just right of Save. Creates a NEW catalogue
+        // weapon from the current build (vs Save, which overwrites the selected
+        // one). Greyed until the build is craft-ready, like Save.
+        const float fAddW = (std::max)(160.f, W * 0.13f);
+        const float fAddX = fCraftX + fCraftW + W * 0.015f;
+        m_pAddButton = CreateComponent<Engine::Button>("wc_add_btn");
+        if (m_pAddButton)
+        {
+            m_pAddButton->SetRect(fAddX, fCraftY, fAddW, fCraftH);
+            m_pAddButton->SetTexture(EnsureSolidTexture(kCraftOffColor));
+            m_pAddButton->SetOnClick([this] { OnAddWeapon(); });
+        }
+        m_pAddText = makeText("wc_add_txt", m_pMidFont, fAddX, fCraftY, fAddW, fCraftH, L"무기 추가");
+
         // Live power-score preview, sitting in the gap above the craft
         // button. RefreshCraft fills it once all six slots are equipped.
         m_pScoreText = makeText("wc_score_txt", m_pSmallFont,
@@ -559,6 +582,43 @@ namespace Client
         numRow(m_pNumDamage, "wc_num_dmg", L"데미지", 1.f, 999.f, 0, 5.f, fFieldW, cy); cy += fLineH + fRowGap;
         numRow(m_pNumCount,  "wc_num_cnt", L"발사수", 1.f,  50.f, 0, 1.f, fFieldW, cy); cy += fLineH + fRowGap;
         numRow(m_pNumSpeed,  "wc_num_spd", L"속도",   0.f,  60.f, 1, 8.f, fFieldW, cy); cy += fLineH + fRowGap;
+        // Orbital path radius (only matters when the movement is Orbital). World
+        // units — NOT px (the loader leaves fOrbitRadius unscaled). 0 = centered.
+        numRow(m_pNumOrbitRadius, "wc_num_orbit", L"궤도 반지름", 0.f, 30.f, 2, 0.9f, fFieldW, cy); cy += fLineH + fRowGap;
+        // Random-origin spawn ring radius (world units). Only affects weapons
+        // whose 발사 원점 is Random. Default 6 = the legacy 2..6 ring.
+        numRow(m_pNumSpawnRadius, "wc_num_spawn", L"소환 반지름", 0.f, 30.f, 1, 6.f, fFieldW, cy); cy += fLineH + fRowGap;
+        // Multi-shot fan spread in degrees (0 = no spread). Only matters when
+        // 발사수 > 1; AssembleWeaponDef reads it into def.fSpreadDeg.
+        numRow(m_pNumSpread, "wc_num_spread", L"퍼짐 각도", 0.f, 180.f, 0, 0.f, fFieldW, cy); cy += fLineH + fRowGap;
+        // Shop appearance window: first / last round this weapon can roll in the
+        // between-round shop. 0 = no bound (시작 0 = from the start, 끝 0 = forever).
+        numRow(m_pNumMinRound, "wc_num_minround", L"시작 라운드", 0.f, 99.f, 0, 0.f, fFieldW, cy); cy += fLineH + fRowGap;
+        numRow(m_pNumMaxRound, "wc_num_maxround", L"끝 라운드",   0.f, 99.f, 0, 0.f, fFieldW, cy); cy += fLineH + fRowGap;
+        // Shop price (0 = global kWeaponPrice default) + evolution chain (target
+        // weapon id, 0 = never; and the level it evolves at).
+        numRow(m_pNumPrice,       "wc_num_price",  L"가격(0=기본)", 0.f, 9999.f, 0, 0.f, fFieldW, cy); cy += fLineH + fRowGap;
+        numRow(m_pNumEvolveInto,  "wc_num_evoid",  L"진화 ID(0=없음)", 0.f, 999.f, 0, 0.f, fFieldW, cy); cy += fLineH + fRowGap;
+        numRow(m_pNumEvolveLevel, "wc_num_evolv",  L"진화 레벨",   0.f, 30.f, 0, 0.f, fFieldW, cy); cy += fLineH + fRowGap;
+
+        // Shop-availability toggle (caption + a Sustain-style toggle button on
+        // the field column). On => the weapon can roll in the shop / start picker.
+        {
+            auto pcap = makeText("wc_shop_cap", m_pSmallFont, fInvLeftX, cy, fCatColW, fLineH, L"상점 등장");
+            reg(pcap, fInvLeftX, cy, fCatColW, fLineH);
+            m_pShopBtn = CreateComponent<Engine::Button>("wc_shop_btn");
+            if (m_pShopBtn)
+            {
+                m_pShopBtn->SetRect(fIconsX, cy, fFieldW, fLineH);
+                m_pShopBtn->SetTexture(EnsureSolidTexture(m_bShopAvailable ? kCraftOnColor : kEmptySlotColor));
+                m_pShopBtn->SetOnClick([this] { OnShopToggle(); });
+            }
+            m_pShopText = makeText("wc_shop_txt", m_pSmallFont, fIconsX, cy, fFieldW, fLineH,
+                                   m_bShopAvailable ? L"노출 ON" : L"숨김 OFF");
+            reg(m_pShopBtn,  fIconsX, cy, fFieldW, fLineH);
+            reg(m_pShopText, fIconsX, cy, fFieldW, fLineH);
+            cy += fLineH + fRowGap;
+        }
 
         if (m_pInvScroll) m_pInvScroll->RebuildContent();
 
@@ -677,6 +737,12 @@ namespace Client
         if (m_pSlotButton[c])   m_pSlotButton[c]->SetTexture(PartTexture(a));
         if (m_pSlotNameText[c]) m_pSlotNameText[c]->SetString(a.wLabel);
 
+        // Picking a movement card seeds the editable orbit radius with that
+        // card's preset (Orbital 0.9 / Follow 0 / SpiralOut 0.9), so the field
+        // tracks the chosen preset while still allowing a manual override after.
+        if (c == CAT_MOVE && m_pNumOrbitRadius)
+            m_pNumOrbitRadius->SetValue(a.fAmount);
+
         RefreshCraft();
     }
 
@@ -695,6 +761,8 @@ namespace Client
         m_bCraftReady = bReady;
         if (m_pCraftButton)
             m_pCraftButton->SetTexture(EnsureSolidTexture(bReady ? kCraftOnColor : kCraftOffColor));
+        if (m_pAddButton)
+            m_pAddButton->SetTexture(EnsureSolidTexture(bReady ? kCraftOnColor : kCraftOffColor));
 
         // Live power-score preview: current (level 1) plus the gain per
         // level-up, so the chosen LevelUp part visibly contributes.
@@ -774,7 +842,13 @@ namespace Client
         const PartCard& move = m_parts[m_iSlot[CAT_MOVE]];
         def.eOrigin   = static_cast<SpawnOrigin>    (m_parts[m_iSlot[CAT_ORIGIN]].iVariant);
         def.eMovement = static_cast<MovementType>   (move.iVariant);
-        def.fOrbitRadius = move.fAmount;   // Orbital radius; 0 = centered follow
+        // Orbital radius comes from the editable field (live-tunable); fall back
+        // to the movement card's preset amount if the field is somehow absent.
+        // 0 = centered follow.
+        def.fOrbitRadius = m_pNumOrbitRadius ? m_pNumOrbitRadius->GetValue() : move.fAmount;
+        // Random-origin ring radius (world units; default 6). Only consumed when
+        // eOrigin == Random — harmless for every other origin.
+        def.fSpawnRadius = m_pNumSpawnRadius ? m_pNumSpawnRadius->GetValue() : 6.f;
         def.fRadialSpeed = move.fGrowth;   // >0 = orbit spirals outward (SpiralOut)
         // AimMode rides the movement card, but only the auto-targeting movers
         // (Homing / Aimed) take its enemy-seeking value; every other movement
@@ -916,6 +990,16 @@ namespace Client
         def.fBurnDuration = fBurnDur;
         def.fSlowFactor   = fSlowFac;
         def.fSlowDuration = fSlowDur;
+
+        // Multi-shot spread + shop appearance window (editable number fields).
+        def.fSpreadDeg = m_pNumSpread ? m_pNumSpread->GetValue() : 0.f;
+        def.iMinRound  = m_pNumMinRound ? (std::max)(0, static_cast<int>(m_pNumMinRound->GetValue() + 0.5f)) : 0;
+        def.iMaxRound  = m_pNumMaxRound ? (std::max)(0, static_cast<int>(m_pNumMaxRound->GetValue() + 0.5f)) : 0;
+        // Shop price (0 = global default), evolution chain, and shop availability.
+        def.iPrice          = m_pNumPrice       ? (std::max)(0, static_cast<int>(m_pNumPrice->GetValue() + 0.5f)) : 0;
+        def.iEvolvesInto    = m_pNumEvolveInto  ? (std::max)(0, static_cast<int>(m_pNumEvolveInto->GetValue() + 0.5f)) : 0;
+        def.iEvolveMinLevel = m_pNumEvolveLevel ? (std::max)(0, static_cast<int>(m_pNumEvolveLevel->GetValue() + 0.5f)) : 0;
+        def.bShopAvailable  = m_bShopAvailable;
         return def;
     }
 
@@ -934,14 +1018,16 @@ namespace Client
         }
 
         // Graft the editor's fields onto the original so we preserve what the
-        // editor doesn't control (id / name / colour / price / evolution /
-        // shop_available / trail / shape).
+        // editor doesn't control (id / name / colour / trail / shape). Price,
+        // evolution, shop-availability and the round window ARE editable now and
+        // copied from `edited` below.
         const WeaponDef edited = AssembleWeaponDef();
         WeaponDef out = *pBase;
         out.eOrigin          = edited.eOrigin;
         out.eMovement        = edited.eMovement;
         out.fOrbitRadius     = edited.fOrbitRadius;
         out.fRadialSpeed     = edited.fRadialSpeed;
+        out.fSpawnRadius     = edited.fSpawnRadius;
         out.eAimMode         = edited.eAimMode;
         out.eOnHit           = edited.eOnHit;
         out.iMaxHits         = edited.iMaxHits;
@@ -964,6 +1050,13 @@ namespace Client
         out.iDamage          = edited.iDamage;
         out.iCount           = edited.iCount;
         out.fProjectileSpeed = edited.fProjectileSpeed;
+        out.fSpreadDeg       = edited.fSpreadDeg;
+        out.iMinRound        = edited.iMinRound;
+        out.iMaxRound        = edited.iMaxRound;
+        out.iPrice           = edited.iPrice;
+        out.iEvolvesInto     = edited.iEvolvesInto;
+        out.iEvolveMinLevel  = edited.iEvolveMinLevel;
+        out.bShopAvailable   = edited.bShopAvailable;
         // Editable name (ASCII) — keep the original if the field was cleared.
         if (m_pNameBox)
         {
@@ -986,6 +1079,42 @@ namespace Client
         }
     }
 
+    void WeaponCombiner::OnAddWeapon()
+    {
+        if (!m_bCraftReady) return;   // every card slot must be filled
+
+        auto& db = WeaponDatabase::GetInst();
+        // Build straight from the editor state — AssembleWeaponDef sets the
+        // gameplay fields, name, and colour; the WeaponDef defaults cover the
+        // editor-less fields (shop_available = true, price 0 => kWeaponPrice,
+        // round window 0/0 = always, never evolves).
+        WeaponDef def = AssembleWeaponDef();
+        // Override the auto-generated name with the box text when the player
+        // typed one (matches OnSave's behaviour).
+        if (m_pNameBox)
+        {
+            const std::wstring w = m_pNameBox->GetText();
+            if (!w.empty()) def.strName = std::string(w.begin(), w.end());
+        }
+        // Mirror the loader's Sustained-lifetime convention so the value
+        // round-trips through weapons_v2.csv (see OnSave).
+        if (def.eFireMode == FireMode::Sustained && def.eMovement != MovementType::Straight)
+            def.fLifetime = 9999.f;
+
+        const int iNewId = db.AddCatalogueWeapon(def);
+        db.SaveToCSV("/Game/Data/Weapons/weapons_v2.csv");
+
+        // Select the new weapon so the player can keep tweaking + Save it.
+        LoadWeaponIntoEditor(iNewId);
+        RefreshRegistry();
+
+        if (m_pResultText)
+        {
+            std::wstring w(def.strName.begin(), def.strName.end());
+            m_pResultText->SetString(L"추가됨: " + w);
+        }
+    }
+
     void WeaponCombiner::OnSustainToggle()
     {
         using namespace WeaponCombiner_detail;
@@ -1002,6 +1131,14 @@ namespace Client
         RefreshCraft();
     }
 
+    void WeaponCombiner::OnShopToggle()
+    {
+        using namespace WeaponCombiner_detail;
+        m_bShopAvailable = !m_bShopAvailable;
+        if (m_pShopBtn)  m_pShopBtn->SetTexture(EnsureSolidTexture(m_bShopAvailable ? kCraftOnColor : kEmptySlotColor));
+        if (m_pShopText) m_pShopText->SetString(m_bShopAvailable ? L"노출 ON" : L"숨김 OFF");
+    }
+
     void WeaponCombiner::OnRegistryClick(int iCell)
     {
         // The list shows the weapons_v2 catalogue in order; a cell maps 1:1 to
@@ -1009,6 +1146,9 @@ namespace Client
         auto& db = WeaponDatabase::GetInst();
         const auto& all = db.All();
         if (iCell < 0 || iCell >= static_cast<int>(all.size())) return;   // empty cell
+        // Re-clicking the weapon already being edited deselects it (clears the
+        // editor to a blank build); clicking a different one loads it.
+        if (all[iCell].iId == m_iEditId) { ClearEditor(); return; }
         LoadWeaponIntoEditor(all[iCell].iId);
     }
 
@@ -1101,9 +1241,20 @@ namespace Client
         if (m_pNumCooldown) m_pNumCooldown->SetValue(d.fCooldown);
         if (m_pNumSize)     m_pNumSize->SetValue(d.fSize);
         if (m_pNumAccel)    m_pNumAccel->SetValue(d.fAcceleration);
+        if (m_pNumOrbitRadius) m_pNumOrbitRadius->SetValue(d.fOrbitRadius);
+        if (m_pNumSpawnRadius) m_pNumSpawnRadius->SetValue(d.fSpawnRadius);
         if (m_pNumDamage)   m_pNumDamage->SetValue(static_cast<float>(d.iDamage));
         if (m_pNumCount)    m_pNumCount->SetValue(static_cast<float>(d.iCount));
         if (m_pNumSpeed)    m_pNumSpeed->SetValue(d.fProjectileSpeed);
+        if (m_pNumSpread)   m_pNumSpread->SetValue(d.fSpreadDeg);
+        if (m_pNumMinRound) m_pNumMinRound->SetValue(static_cast<float>(d.iMinRound));
+        if (m_pNumMaxRound) m_pNumMaxRound->SetValue(static_cast<float>(d.iMaxRound));
+        if (m_pNumPrice)       m_pNumPrice->SetValue(static_cast<float>(d.iPrice));
+        if (m_pNumEvolveInto)  m_pNumEvolveInto->SetValue(static_cast<float>(d.iEvolvesInto));
+        if (m_pNumEvolveLevel) m_pNumEvolveLevel->SetValue(static_cast<float>(d.iEvolveMinLevel));
+        m_bShopAvailable = d.bShopAvailable;
+        if (m_pShopBtn)  m_pShopBtn->SetTexture(EnsureSolidTexture(m_bShopAvailable ? kCraftOnColor : kEmptySlotColor));
+        if (m_pShopText) m_pShopText->SetString(m_bShopAvailable ? L"노출 ON" : L"숨김 OFF");
 
         // Sustained toggle + cooldown/lifetime greying (mirror OnSustainToggle).
         m_bSustained = (d.eFireMode == FireMode::Sustained);
@@ -1120,6 +1271,61 @@ namespace Client
             std::wstring w(d.strName.begin(), d.strName.end());
             m_pResultText->SetString(L"편집 중: " + w);
         }
+    }
+
+    void WeaponCombiner::ClearEditor()
+    {
+        using namespace WeaponCombiner_detail;
+        m_iEditId = -1;
+
+        // Empty every card slot. Single-select rows show "-"; the two
+        // multi-select rows (level-up / impact) clear their selection sets and
+        // are repainted by their Refresh* calls below.
+        for (int c = 0; c < kCatCount; ++c) m_iSlot[c] = -1;
+        m_impactSel.clear();
+        m_levelUpSel.clear();
+        for (int i = 0; i < kCardCatCount; ++i)
+        {
+            const int c = kCardCats[i];
+            if (m_pSlotButton[c])   m_pSlotButton[c]->SetTexture(EnsureSolidTexture(kEmptySlotColor));
+            if (m_pSlotNameText[c]) m_pSlotNameText[c]->SetString(L"-");
+        }
+
+        // Number fields back to their Init defaults.
+        if (m_pNumLifetime)    m_pNumLifetime->SetValue(2.0f);
+        if (m_pNumCooldown)    m_pNumCooldown->SetValue(0.5f);
+        if (m_pNumSize)        m_pNumSize->SetValue(1.0f);
+        if (m_pNumAccel)       m_pNumAccel->SetValue(0.0f);
+        if (m_pNumOrbitRadius) m_pNumOrbitRadius->SetValue(0.9f);
+        if (m_pNumSpawnRadius) m_pNumSpawnRadius->SetValue(6.0f);
+        if (m_pNumDamage)      m_pNumDamage->SetValue(5.0f);
+        if (m_pNumCount)       m_pNumCount->SetValue(1.0f);
+        if (m_pNumSpeed)       m_pNumSpeed->SetValue(8.0f);
+        if (m_pNumSpread)      m_pNumSpread->SetValue(0.0f);
+        if (m_pNumMinRound)    m_pNumMinRound->SetValue(0.0f);
+        if (m_pNumMaxRound)    m_pNumMaxRound->SetValue(0.0f);
+        if (m_pNumPrice)       m_pNumPrice->SetValue(0.0f);
+        if (m_pNumEvolveInto)  m_pNumEvolveInto->SetValue(0.0f);
+        if (m_pNumEvolveLevel) m_pNumEvolveLevel->SetValue(0.0f);
+
+        // Toggles back to defaults: Cooldown fire mode, shop-available on.
+        m_bSustained = false;
+        if (m_pSustainBtn)  m_pSustainBtn->SetTexture(EnsureSolidTexture(kEmptySlotColor));
+        if (m_pNumCooldown) m_pNumCooldown->SetEnabled(true);
+        if (m_pNumLifetime) m_pNumLifetime->SetEnabled(true);
+        m_bShopAvailable = true;
+        if (m_pShopBtn)  m_pShopBtn->SetTexture(EnsureSolidTexture(kCraftOnColor));
+        if (m_pShopText) m_pShopText->SetString(L"노출 ON");
+
+        if (m_pNameBox) m_pNameBox->SetText(L"");
+
+        ClearPreview();   // no craft-ready build now — stop the live preview
+
+        RefreshImpactSlot();
+        RefreshLevelUpSlot();
+        RefreshCraft();
+        RefreshRegistry();   // drop the highlight on the previously-edited cell
+        if (m_pResultText) m_pResultText->SetString(L"편집 해제됨 — 새 무기 빌드");
     }
 
     void WeaponCombiner::RefreshRegistry()
@@ -1190,6 +1396,237 @@ namespace Client
         // Inventory rows scroll themselves — each row's Engine::ScrollView
         // (a child of this control) handles wheel input and re-places its
         // icons in its own Update.
+
+        // Live in-scene firing preview of the current build.
+        UpdatePreview(fDeltaTime);
+    }
+
+    // Reopen the file's named detail namespace (the Game project is a
+    // unity/jumbo build, so an anonymous namespace here could collide with a
+    // same-named helper in another file merged into the same TU).
+    namespace WeaponCombiner_detail
+    {
+        // Preview stage (world units). Bullets fire forward (-Z) from the muzzle
+        // at the origin; the scene camera frames this lane. Kept small so even a
+        // fast/long-lived shot stays on screen before despawning.
+        constexpr float kPreviewPI       = 3.14159265f;
+        const Engine::Vector3 kPreviewMuzzle{ 0.f, 0.f, 0.f };
+        // Camera framing — mirrors Player's "target - camAxisZ * dist, y += bump"
+        // follow so the preview matches the gameplay viewpoint. Aimed a little
+        // down-lane so both the muzzle and the receding shots are in frame.
+        constexpr float kPreviewLaneLook = 4.f;   // look point ahead of the muzzle
+        constexpr float kPreviewCamDist  = 11.f;
+        constexpr float kPreviewCamYBump = 1.2f;
+        // Hard cap on live preview bullets — bounds orbital/sustained/high-count
+        // builds (oldest are retired past this).
+        constexpr size_t kPreviewMaxBullets = 80;
+    }
+
+    void WeaponCombiner::UpdatePreview(float fDeltaTime)
+    {
+        using namespace WeaponCombiner_detail;
+
+        // Keep the camera locked onto the muzzle lane (rotation was set once by
+        // the scene; GetAxis is fresh from the prior frame's PostUpdate).
+        if (auto pCam = Engine::Graphics::GetInst()->GetCamera())
+        {
+            if (auto pCamTr = pCam->GetTransform())
+            {
+                const Engine::Vector3 vLook = kPreviewMuzzle
+                    + Engine::Vector3{ 0.f, 0.f, -kPreviewLaneLook };
+                Engine::Vector3 vCamPos = vLook
+                    - pCamTr->GetAxis(Engine::AXIS_TYPE::Z) * kPreviewCamDist;
+                vCamPos.y += kPreviewCamYBump;
+                pCamTr->SetPosition(vCamPos);
+            }
+        }
+
+        // Drop expired (despawned) bullets from the tracking list.
+        for (auto it = m_previewBullets.begin(); it != m_previewBullets.end(); )
+            it = it->expired() ? m_previewBullets.erase(it) : std::next(it);
+
+        // Nothing to preview until every card slot is filled (AssembleWeaponDef
+        // indexes the slots directly and is only valid once craft-ready).
+        if (!m_bCraftReady)
+        {
+            ClearPreview();
+            m_uPreviewSig = 0ull;
+            return;
+        }
+
+        WeaponDef def = AssembleWeaponDef();
+        // The combiner UI doesn't edit projectile shape / trail style / colour;
+        // OnSave preserves those from the weapon being edited (out = *pBase).
+        // Mirror that graft here so the preview's mesh + trail + colour match the
+        // bullet that would actually be fired, instead of AssembleWeaponDef's
+        // defaults (Sphere / Tracer / label-hash hue).
+        if (const WeaponDef* pBase = WeaponDatabase::GetInst().Get(m_iEditId))
+        {
+            def.eShape      = pBase->eShape;
+            def.eTrailStyle = pBase->eTrailStyle;
+            def.uColorRGB   = pBase->uColorRGB;
+        }
+
+        // Any edit to the build restarts the preview so the new config shows
+        // from a clean slate (also handles orbital/sustained respawn).
+        const unsigned long long sig = PreviewSignature(def);
+        if (sig != m_uPreviewSig)
+        {
+            ClearPreview();
+            m_uPreviewSig     = sig;
+            m_fPreviewFireAcc = 1e9f;   // fire the first burst immediately
+        }
+
+        // Bound the live bullet count.
+        while (m_previewBullets.size() > kPreviewMaxBullets)
+        {
+            if (auto p = m_previewBullets.front().lock()) p->InActivate();
+            m_previewBullets.pop_front();
+        }
+
+        if (def.eFireMode == FireMode::Sustained)
+        {
+            // Persistent weapons (e.g. Orbital orbs) — spawn one set and let it
+            // live; respawn only once it has fully cleared.
+            if (m_previewBullets.empty())
+                FirePreviewBurst(def);
+        }
+        else
+        {
+            m_fPreviewFireAcc += fDeltaTime;
+            const float fCd = ComputeCooldown(def, 1);
+            if (m_fPreviewFireAcc >= fCd)
+            {
+                m_fPreviewFireAcc = 0.f;
+                FirePreviewBurst(def);
+            }
+        }
+    }
+
+    void WeaponCombiner::FirePreviewBurst(const WeaponDef& def)
+    {
+        using namespace WeaponCombiner_detail;
+        auto pOwner = GetGameObjectOwner();
+        if (!pOwner) return;
+        auto pScene = pOwner->GetScene();
+        if (!pScene) return;
+        auto pLayer = pScene->FindLayer(DEFAULT_LAYER);
+        if (!pLayer) return;
+
+        // Lazily create the orbital owner anchor (a bare Transform at the
+        // muzzle); Orbital movement circles it. Other movements ignore it.
+        std::shared_ptr<Engine::Transform> pAnchor = m_pPreviewAnchor.lock();
+        if (!pAnchor)
+        {
+            if (auto pAnchorObj = pScene->CreateGameObject<Engine::GameObject>("preview_anchor", pLayer))
+            {
+                pAnchor = pAnchorObj->AddComponent<Engine::Transform>("transform");
+                if (pAnchor) pAnchor->SetPosition(kPreviewMuzzle);
+                m_pPreviewAnchor = pAnchor;
+            }
+        }
+
+        // Forward fire (no enemies / cursor in the preview): heading 0 -> -Z.
+        const int   iCount  = ComputeCount(def, 1);
+        const bool  bRadial = (def.eAimMode == AimMode::Radial);
+        const float fAimYaw = 0.f;
+        const Engine::Vector3 vForward{ 0.f, 0.f, -1.f };
+
+        // Fan geometry — identical to Player::FireCooldownBurst: spread_deg < 0
+        // keeps the legacy ~10deg/shot fan; >= 0 spreads Count shots over the arc.
+        float fFanStep, fFanBase;
+        if (def.fSpreadDeg < 0.f)
+        {
+            fFanStep = 0.174f;
+            fFanBase = -fFanStep * (iCount - 1) * 0.5f;
+        }
+        else
+        {
+            const float fSpreadRad = def.fSpreadDeg * (kPreviewPI / 180.f);
+            fFanStep = (iCount > 1) ? fSpreadRad / (iCount - 1) : 0.f;
+            fFanBase = -fSpreadRad * 0.5f;
+        }
+
+        // Spawn origin (mirrors Player; Mouse has no cursor here so it falls
+        // back to the Front muzzle).
+        Engine::Vector3 vSpawn = kPreviewMuzzle;
+        switch (def.eOrigin)
+        {
+        case SpawnOrigin::Front:
+        case SpawnOrigin::Mouse:
+            vSpawn = vSpawn + vForward * 0.6f;
+            break;
+        case SpawnOrigin::Around:
+            break;
+        case SpawnOrigin::Random:
+        {
+            // Same per-weapon ring as Player::FireCooldownBurst: random distance
+            // in [fSpawnRadius/3, fSpawnRadius] around the muzzle.
+            const float fOuter  = (def.fSpawnRadius > 0.f) ? def.fSpawnRadius : 6.f;
+            const float fInner  = fOuter * (1.f / 3.f);
+            const float fAngle  = (static_cast<float>(std::rand()) / RAND_MAX) * (2.f * kPreviewPI);
+            const float fRadius = fInner + (static_cast<float>(std::rand()) / RAND_MAX) * (fOuter - fInner);
+            vSpawn = vSpawn + Engine::Vector3{ cosf(fAngle) * fRadius, 0.f, sinf(fAngle) * fRadius };
+            break;
+        }
+        default:
+            break;
+        }
+
+        for (int i = 0; i < iCount; ++i)
+        {
+            auto pBullet = pScene->CreateGameObject<Bullet>("preview_bullet", pLayer);
+            if (!pBullet) continue;
+            pBullet->Configure(def, 1, m_pPreviewAnchor);
+            pBullet->SetOrbitYOffset(0.f);   // muzzle already at stage height
+            if (auto pBulletTr = pBullet->GetTransform())
+            {
+                pBulletTr->SetPosition(vSpawn);
+                pBulletTr->SetRX(-kPreviewPI / 2.f);
+                pBulletTr->SetRY(bRadial
+                    ? (6.2831853f * i) / iCount
+                    : (fAimYaw + fFanBase + fFanStep * i));
+            }
+            m_previewBullets.push_back(pBullet);
+        }
+    }
+
+    void WeaponCombiner::ClearPreview()
+    {
+        for (auto& w : m_previewBullets)
+            if (auto p = w.lock()) p->InActivate();
+        m_previewBullets.clear();
+    }
+
+    unsigned long long WeaponCombiner::PreviewSignature(const WeaponDef& def) const
+    {
+        // FNV-1a over the fields that change how the shot looks/moves.
+        unsigned long long h = 1469598103934665603ull;
+        auto mix = [&](unsigned long long v) { h ^= v; h *= 1099511628211ull; };
+        auto mixf = [&](float f) { unsigned int u; std::memcpy(&u, &f, sizeof(u)); mix(u); };
+
+        mix(static_cast<unsigned>(def.eOrigin));
+        mix(static_cast<unsigned>(def.eMovement));
+        mix(static_cast<unsigned>(def.eFireMode));
+        mix(static_cast<unsigned>(def.eOnHit));
+        mix(static_cast<unsigned>(def.eShape));
+        mix(static_cast<unsigned>(def.eTrailStyle));
+        mix(static_cast<unsigned>(def.eAimMode));
+        mix(static_cast<unsigned>(def.iCount));
+        mix(static_cast<unsigned>(def.iMaxHits));
+        mix(def.uColorRGB);
+        mix(def.uImpactMask);
+        mixf(def.fSize);
+        mixf(def.fProjectileSpeed);
+        mixf(def.fLifetime);
+        mixf(def.fCooldown);
+        mixf(def.fAcceleration);
+        mixf(def.fSpreadDeg);
+        mixf(def.fOrbitRadius);
+        mixf(def.fRadialSpeed);
+        mixf(def.fSpawnRadius);
+        mixf(def.fDamageInterval);
+        return h;
     }
 
     std::shared_ptr<Engine::Component> WeaponCombiner::Clone()

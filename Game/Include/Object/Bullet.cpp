@@ -161,6 +161,13 @@ namespace Client
         m_trail.clear();
     }
 
+    void Bullet::AddImpactEffect(std::unique_ptr<IImpactEffect> pEffect)
+    {
+        // Layered on top of the weapon's own effects (built in Configure), so a
+        // tower's intrinsic effect and the equipped weapon's both run on a hit.
+        if (pEffect) m_pImpactEffects.push_back(std::move(pEffect));
+    }
+
     void Bullet::SetOrbitYOffset(float f)
     {
         if (m_pMovement) m_pMovement->SetYOffset(f);

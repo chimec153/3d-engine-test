@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <deque>
 
 namespace Engine
 {
@@ -13,11 +14,13 @@ namespace Engine
     class ScrollView;
     class NumberField;
     class EditBox;
+    class Transform;
 }
 
 namespace Client
 {
     struct WeaponDef;   // defined in ../Object/WeaponData.h (used by AssembleWeaponDef)
+    class Bullet;       // live-preview projectiles fired from the editor state
 
     // One craftable weapon part ("부품 카드"), loaded from parts.csv (with a
     // built-in fallback). iCategory is the slot/category index (0..5);
@@ -75,9 +78,10 @@ namespace Client
     private:
         static constexpr int kCatCount = 9;
         // Weapon-list capacity (right-hand panel). Sized to hold the whole
-        // weapons_v2 catalogue so every weapon is selectable for editing;
-        // weapons beyond this are not shown (logged-free cap).
-        static constexpr int kRegCells = 24;
+        // weapons_v2 catalogue (plus room for weapons added via the "add weapon"
+        // button) so every weapon is selectable for editing; weapons beyond this
+        // are not shown (logged-free cap). The list scrolls, so a high cap is fine.
+        static constexpr int kRegCells = 64;
 
         // One inventory click. Detects a double-click (same icon twice
         // within kDoubleClickSec) and equips on the second hit.
@@ -102,18 +106,58 @@ namespace Client
         // (id / name / colour / price / evolution / shop_available / trail),
         // then persist the whole catalogue to weapons_v2.csv.
         void OnSave();
+        // Add the current editor build as a BRAND-NEW weapon in the catalogue
+        // (fresh id) instead of overwriting the selected one, persist to
+        // weapons_v2.csv, then select the new weapon for further editing.
+        // Requires all card slots filled (same gate as OnSave).
+        void OnAddWeapon();
         // Load an existing weapons_v2 weapon's attributes into the editor for
         // editing (reverse-maps the def onto the card slots + number fields).
         void LoadWeaponIntoEditor(int iWeaponId);
+        // Deselect the edited weapon: clear m_iEditId and reset every slot /
+        // number field / toggle to its blank-build default. Invoked by clicking
+        // the already-edited registry cell again (a deselect toggle).
+        void ClearEditor();
         // Toggles Sustained (persistent) fire mode: greys the cooldown +
         // lifetime number fields and recolours the toggle button.
         void OnSustainToggle();
+        // Flips shop availability + recolours the toggle (the shop-side analogue
+        // of OnSustainToggle).
+        void OnShopToggle();
         // Single click on a registry cell — selects that weapons_v2 weapon and
         // loads it into the editor.
         void OnRegistryClick(int iCell);
         // Repaints the registry cells + header from the weapons_v2 catalogue,
         // highlighting the one currently being edited.
         void RefreshRegistry();
+
+        // --- Live firing preview ---
+        // Drives the in-scene weapon preview each frame: re-frames the camera on
+        // the fixed muzzle lane and auto-fires the currently-assembled WeaponDef
+        // forward on its own cooldown (sustained weapons persist; any edit
+        // restarts the preview). Only fires while the build is craft-ready.
+        void UpdatePreview(float fDeltaTime);
+        // Spawns one cooldown burst of preview bullets from the muzzle, reusing
+        // the same fan/spawn geometry as Player::FireCooldownBurst (minus the
+        // enemies / crit / voxel-reflect that need a live gameplay scene).
+        void FirePreviewBurst(const WeaponDef& def);
+        // InActivates every live preview bullet (on edit / when not craft-ready).
+        void ClearPreview();
+        // Cheap hash of the appearance-affecting WeaponDef fields, so an edit is
+        // detected and the preview restarts cleanly.
+        unsigned long long PreviewSignature(const WeaponDef& def) const;
+
+        // Orbital owner anchor (a bare Transform at the muzzle) — Orbital
+        // movement circles this. Created lazily on the first burst.
+        std::weak_ptr<Engine::Transform>  m_pPreviewAnchor;
+        // Live preview projectiles, oldest first; weak so natural despawn /
+        // ClearPreview lets the Layer drop them. Used to bound the count and to
+        // know when a sustained build needs (re)spawning.
+        std::deque<std::weak_ptr<Bullet>> m_previewBullets;
+        // Cooldown accumulator for the non-sustained preview firing loop.
+        float                             m_fPreviewFireAcc = 0.f;
+        // Signature of the build last previewed; a change restarts the preview.
+        unsigned long long                m_uPreviewSig     = 0ull;
 
         // Slot widgets, indexed by category.
         std::shared_ptr<Engine::Button> m_pSlotButton[kCatCount];
@@ -155,15 +199,42 @@ namespace Client
         std::shared_ptr<Engine::NumberField> m_pNumCooldown;
         std::shared_ptr<Engine::NumberField> m_pNumSize;
         std::shared_ptr<Engine::NumberField> m_pNumAccel;
+        // Orbital path radius (world/cell units; only used when the movement is
+        // Orbital). Editable so the orbit size can be tuned and previewed live;
+        // AssembleWeaponDef reads it into def.fOrbitRadius. Equip seeds it from
+        // the chosen movement card's preset (Orbital 0.9 / Follow 0).
+        std::shared_ptr<Engine::NumberField> m_pNumOrbitRadius;
+        // Random-origin ring radius (world units; only used when the spawn
+        // origin is Random). AssembleWeaponDef reads it into def.fSpawnRadius.
+        std::shared_ptr<Engine::NumberField> m_pNumSpawnRadius;
         // Core stat fields (top strip) — editable now that the combiner is a
         // full weapon editor. AssembleWeaponDef reads these for iDamage /
         // iCount / fProjectileSpeed (previously hard-coded).
         std::shared_ptr<Engine::NumberField> m_pNumDamage;
         std::shared_ptr<Engine::NumberField> m_pNumCount;
         std::shared_ptr<Engine::NumberField> m_pNumSpeed;
+        // Shop appearance window + multi-shot spread, previously preserved from
+        // the base weapon but not editable. AssembleWeaponDef reads these into
+        // def.iMinRound / def.iMaxRound / def.fSpreadDeg. min/max round 0 = no
+        // bound; spread 0 = single shot / no fan.
+        std::shared_ptr<Engine::NumberField> m_pNumMinRound;
+        std::shared_ptr<Engine::NumberField> m_pNumMaxRound;
+        std::shared_ptr<Engine::NumberField> m_pNumSpread;
+        // Shop price (0 = global kWeaponPrice default) + evolution chain (target
+        // weapon id, 0 = never evolves; and the level it evolves at). Read by
+        // AssembleWeaponDef into def.iPrice / iEvolvesInto / iEvolveMinLevel.
+        std::shared_ptr<Engine::NumberField> m_pNumPrice;
+        std::shared_ptr<Engine::NumberField> m_pNumEvolveInto;
+        std::shared_ptr<Engine::NumberField> m_pNumEvolveLevel;
         std::shared_ptr<Engine::Button>      m_pSustainBtn;
         std::shared_ptr<Engine::Text>        m_pSustainText;
         bool                                 m_bSustained = false;
+        // Shop-availability toggle (on = the weapon can roll in the between-round
+        // shop / start picker). Mirrors the Sustained toggle; read into
+        // def.bShopAvailable. Defaults on, like a fresh WeaponDef.
+        std::shared_ptr<Engine::Button>      m_pShopBtn;
+        std::shared_ptr<Engine::Text>        m_pShopText;
+        bool                                 m_bShopAvailable = true;
 
         // Editable weapon name (text-mode EditBox in the top bar). Read at save
         // time; populated from the selected weapon in LoadWeaponIntoEditor.
@@ -171,6 +242,10 @@ namespace Client
 
         std::shared_ptr<Engine::Button> m_pCraftButton;
         std::shared_ptr<Engine::Text>   m_pCraftText;
+        // "Add weapon" button beside Save — creates a new catalogue entry from
+        // the current build instead of overwriting the selected weapon.
+        std::shared_ptr<Engine::Button> m_pAddButton;
+        std::shared_ptr<Engine::Text>   m_pAddText;
         std::shared_ptr<Engine::Text>   m_pScoreText;   // live power-score preview
         std::shared_ptr<Engine::Text>   m_pResultText;
         std::shared_ptr<Engine::Text>   m_pTitleText;

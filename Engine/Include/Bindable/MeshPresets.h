@@ -37,5 +37,14 @@ namespace Engine
         // sitting on y=0 with a specific x/z half-extent).
         ENGINE_DLL std::shared_ptr<Mesh> AxisBox     (const Vector3& vLo,
                                                        const Vector3& vHi);
+
+        // Regular N-gon prism centred on the Y axis: an iSides-gon footprint of
+        // radius fRadius extruded from y=fYLo to y=fYHi, with flat-shaded sides
+        // and capped top/bottom. Side-count reads a tower's type at a glance
+        // (prism3 = triangular .. prism8 = octagonal). Cached by parameters, so
+        // every tower of the same shape shares one Mesh. CW-front + outward
+        // normals, matching AxisBox.
+        ENGINE_DLL std::shared_ptr<Mesh> RegularPrism(int iSides, float fRadius,
+                                                       float fYLo, float fYHi);
     }
 }

@@ -39,8 +39,10 @@ namespace Client
 		std::vector<MenuItem> items = {
 			{ L"Start Game",     0x2E7D32,
 			  [] { Engine::SceneManager::GetInst()->CreateScene<Client::GameScene>(); } },
+#ifdef _DEBUG
 			{ L"Weapon Combine", 0x1565C0,
 			  [] { Engine::SceneManager::GetInst()->CreateScene<Client::WeaponComboScene>(); } },
+#endif
 			{ L"Quit",           0xB71C1C,
 			  [] { Engine::Window::GetInst()->StopRunning(); } },
 		};

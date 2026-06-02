@@ -34,6 +34,12 @@ namespace Client
     constexpr int kTowerPrice  = 30;   // cost to buy one more placeable tower
     constexpr int kMaxTowers   = 5;    // hard cap on ALL owned towers combined (attack + heal, placed + unplaced); shop blocks buying past it
 
+    // Between-round shop reroll: pay to re-roll all unpinned buy slots. The cost
+    // scales linearly with the round, so late-game rerolls cost more.
+    //   cost = kRerollBaseCost + (round - 1) * kRerollCostPerRound
+    constexpr int kRerollBaseCost     = 20;   // round 1 reroll cost
+    constexpr int kRerollCostPerRound = 10;   // added per round past the first
+
     // Aggro + tower durability. Enemies path to and attack the highest-aggro
     // active target; towers out-aggro the player so they form the front line.
     constexpr int kPlayerAggro = 1;

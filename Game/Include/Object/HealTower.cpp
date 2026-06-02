@@ -210,9 +210,10 @@ namespace Client
                     FragmentShatterManager::VARIANT::HEAL_TOWER,
                     vBody, 0.5f, m_pMaterial, vBase.y + 0.1f);
             }
-            // Give up the owned slot so a destroyed heal tower must be re-bought
-            // before another can be placed (mirrors Tower).
-            TowerManager::GetInst().RemoveHealTower();
+            // Bench this heal tower until the next round: keep ownership but put
+            // it on destroy-cooldown so it can't be re-placed this round
+            // (OnNewRound clears it next round start). Mirrors Tower.
+            TowerManager::GetInst().DestroyHealTower();
             if (m_pHpBar) m_pHpBar->SetRectPx(0.f, 0.f, 0.f, 0.f);
             InActivate();
             return;

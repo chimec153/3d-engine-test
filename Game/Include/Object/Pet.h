@@ -156,7 +156,12 @@ namespace Client
             WeaponDef bulletDef = def;
             bulletDef.eMovement = MovementType::Straight;
 
-            const int iCount = ComputeCount(def, m_iLevel);
+            // Use the weapon's *base* projectile count, NOT ComputeCount.
+            // For Follow weapons the Count level-up grows the pet headcount
+            // (Player::RespawnPets); letting it also grow bullets-per-pet here
+            // would double-dip into L*L bullets per volley (geometric power
+            // creep). Each pet fires the weapon's intrinsic count instead.
+            const int iCount = def.iCount < 1 ? 1 : def.iCount;
             const float fFanStep = 0.174f;   // ~10 deg, matches Player/Tower
             const float fFanBase = -fFanStep * (iCount - 1) * 0.5f;
             for (int i = 0; i < iCount; ++i)

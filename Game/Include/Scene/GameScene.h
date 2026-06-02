@@ -87,6 +87,11 @@ namespace Client
         // Playing → Intermission → next-round loop in Update.
         int m_iRound = 0;
 
+        // Telemetry: active play time (seconds) excluding choice/pause screens.
+        // Accumulated in Update only while GameStateManager is Playing; sent as
+        // active_time_sec in run_end alongside the wall-clock survival_time_sec.
+        float m_fActivePlayTime = 0.f;
+
         // Brief post-round "collecting" phase: after surviving, the game keeps
         // running (not yet frozen) while leftover orbs magnet into the player,
         // then the shop opens. m_fCollectTimer caps the wait.
@@ -99,6 +104,11 @@ namespace Client
         // register the placement ghost's ALPHA render callback each frame.
         std::weak_ptr<TowerIntermissionUI>     m_pIntermission;
         std::weak_ptr<TowerPlacementController> m_pPlacement;
+
+        // Telemetry: gather the current run's round/level/weapons and send a
+        // run_end event with the given reason ("death" | "quit"). No-op if no
+        // run is active.
+        void SendRunEndTelemetry(const char* szReason);
 
     public:
         Engine::VoxelWorld* GetVoxelWorld() const { return m_pVoxelWorld.get(); }

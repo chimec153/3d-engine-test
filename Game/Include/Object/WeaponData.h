@@ -215,6 +215,12 @@ namespace Client
         // movement.
         float fRadialSpeed     = 0.f;
 
+        // Random-origin only: the ring radius (world/cell units) the projectile
+        // rains down within around the player. Spawn distance is random in
+        // [fSpawnRadius/3, fSpawnRadius], so the legacy default 6 reproduces the
+        // old hard-coded 2..6 ring. Ignored by every other SpawnOrigin.
+        float fSpawnRadius     = 6.f;
+
         // 0xRRGGBB packed. Used for the card colour and (for now) the
         // projectile material tint — no per-weapon texture pipeline yet.
         unsigned int uColorRGB = 0xFFFFFF;
@@ -284,6 +290,11 @@ namespace Client
     // true and Bullet::Update despawns the projectile, so a Sustained spiral
     // can't grow without bound.
     constexpr float kMaxOrbitRadius = 200.f;
+
+    // Hard cap on a weapon slot's level. LevelUpSlot won't raise iLevel past
+    // this — evolution resets to 1, so the evolved form gets its own 1..cap
+    // range. Stat readers below are unaffected (they just see a clamped level).
+    constexpr int kMaxWeaponLevel = 10;
 
     // Level-aware stat lookups. Centralised here so Bullet (damage / speed)
     // and Player slots (cooldown / count) read the same formulas — each weapon

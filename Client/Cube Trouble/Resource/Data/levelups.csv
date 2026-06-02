@@ -1,0 +1,27 @@
+# Level-up stat-upgrade cards (data-driven menu; read by LevelUpDatabase).
+#   key    - selects the effect in Player::ApplyStatUpgrade (must match a case)
+#   name   - card title (ASCII)
+#   effect - card effect line; {a} = amount, {p} = amount as percent (e.g.
+#            "+{a} Speed" or "+{p} Damage"). The number is filled from `amount`
+#            so it isn't typed twice.
+#   color  - 0xRRGGBB card colour
+#   weight - relative roll odds (percent options use 1, flat use 5)
+#   amount - effect magnitude; meaning depends on key:
+#            *_pct / *_chance / gold_gain / xp_gain / tower_* % use a fraction
+#            (0.15 = +15%); *_flat / crit_damage / tower_hp use a raw value.
+key,name,effect,color,weight,amount
+move_speed_flat,Move Speed,+{a} Speed,0x2A6FB0,5,0.3
+max_hp_flat,Max HP,+{a} HP,0x2E8B40,5,25
+attack_pct,Attack,+{p} Damage,0xB03030,1,0.15
+crit_chance,Crit,+{p} Crit,0xB07020,1,0.10
+defense,Defense,+{p} Defense,0x5A5AB0,1,0.08
+crit_damage,Crit Damage,+{a}x Crit Dmg,0xC04060,5,0.5
+attack_flat,Power,+{a} Damage,0x8B3030,5,3
+move_speed_pct,Agility,+{p} Speed,0x3A7FC0,1,0.10
+max_hp_pct,Vitality,+{p} Max HP,0x3E9B50,1,0.10
+gold_gain,Greed,+{p} Gold,0xC8A028,1,0.10
+xp_gain,Insight,+{p} XP,0x40A0C0,1,0.10
+tower_attack,Tower ATK,+{p} Twr Dmg,0x4F86C6,1,0.15
+tower_fire_rate,Tower Rate,+{p} Twr Rate,0x4F86C6,1,0.12
+tower_defense,Tower DEF,+{p} Twr Def,0x4F86C6,1,0.06
+tower_hp,Tower HP,+{a} Twr HP,0x4F86C6,5,25

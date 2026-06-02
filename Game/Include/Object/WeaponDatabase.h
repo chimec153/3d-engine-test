@@ -1,6 +1,7 @@
 #pragma once
 
 #include "WeaponData.h"
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -46,6 +47,14 @@ namespace Client
         // LoadFromCSV (GameScene reloads the catalogue on entry) — see
         // the re-apply pass at the end of LoadFromCSV.
         int Add(const WeaponDef& def);
+
+        // Inserts a brand-new weapon into the live catalogue ONLY (not the
+        // crafted registry): assigns a fresh id and returns it. Used by the
+        // weapon editor's "add weapon" button; the caller persists via SaveToCSV
+        // so the row round-trips through weapons_v2.csv as an ordinary catalogue
+        // entry. (Unlike Add(), which routes through the session crafted registry
+        // and would be re-applied with a second id on the next LoadFromCSV.)
+        int AddCatalogueWeapon(const WeaponDef& def);
 
         // Crafted-weapon registry + equip loadout (WeaponComboScene).
         // Only *equipped* crafted weapons feed the in-stage level-up pool,
@@ -93,7 +102,28 @@ namespace Client
         size_t LoadCrafted(const std::string& strPath);
         void   SaveCrafted(const std::string& strPath) const;
 
+        // Persistent "unlocked weapon" set: catalogue ids the player has
+        // acquired in any run. Once unlocked, a weapon is offered in the
+        // start-of-game weapon picker even if its appearance window only opens
+        // after round 1.
+        //   LoadUnlocked — read the saved ids ONCE per process (guarded);
+        //     remembers the path so Unlock can auto-save. Call from scene init.
+        //   Unlock — record an id (no-op if already known or if it's a
+        //     transient crafted id) and write the file immediately.
+        //   IsUnlocked — membership test.
+        //   StartWeaponIds — the start picker pool: the round-1 shop weapons
+        //     plus every unlocked catalogue weapon (deduped, stale ids dropped).
+        size_t LoadUnlocked(const std::string& strPath);
+        void   Unlock(int iId);
+        bool   IsUnlocked(int iId) const;
+        std::vector<int> StartWeaponIds() const;
+
     private:
+        // Writes the current unlocked set; called by Unlock after every change
+        // so the file is always current (same robustness rationale as
+        // SaveCrafted).
+        void SaveUnlocked(const std::string& strPath) const;
+
         WeaponDatabase() = default;
         WeaponDatabase(const WeaponDatabase&) = delete;
         WeaponDatabase& operator=(const WeaponDatabase&) = delete;
@@ -117,5 +147,11 @@ namespace Client
         std::vector<CraftedEntry>         m_vecCrafted;
         // LoadCrafted runs at most once per process (see its comment).
         bool                              m_bCraftedLoaded = false;
+        // Acquired-weapon ids, persisted across runs (see Unlock/LoadUnlocked).
+        // m_strUnlockPath is remembered by LoadUnlocked so Unlock can auto-save;
+        // it carries a default so a stray Unlock before load still persists.
+        std::vector<int>                  m_vecUnlocked;
+        std::string                       m_strUnlockPath = "/Game/Data/Weapons/unlocked.csv";
+        bool                              m_bUnlockedLoaded = false;
     };
 }

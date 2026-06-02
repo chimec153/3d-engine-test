@@ -4,12 +4,14 @@
 #include "Core/Macro.h"
 #include <functional>
 #include <memory>
+#include <vector>
 
 namespace Engine
 {
     class Font;
     class Text;
     class Button;
+    class GameObject;
 }
 
 namespace Client
@@ -125,15 +127,26 @@ namespace Client
         std::shared_ptr<Engine::Button> m_pStartButton;
         std::shared_ptr<Engine::Text>   m_pStartText;
 
+        // Reroll — a button under the buy rows that re-rolls every unpinned buy
+        // slot for a round-scaled fee (kReroll* in GameDefs). Pinned slots are
+        // kept (RollCatalog skips them).
+        std::shared_ptr<Engine::Button> m_pRerollButton;
+        std::shared_ptr<Engine::Text>   m_pRerollText;
+
         // Weapon action menu — clicking an owned-weapon icon pops a small panel
-        // with Sell / Combine / Equip (replaces the old drag-to-equip +
+        // with Sell / Merge / Equip (replaces the old drag-to-equip +
         // right-click-to-sell). m_iMenuWeaponId >= 0 means the menu is open and
         // is the weapon it acts on. Created last so it draws above the rows.
-        static constexpr int kMenuRows = 3;   // 0 Sell, 1 Combine, 2 Equip
+        static constexpr int kMenuRows = 3;   // 0 Sell, 1 Merge, 2 Equip
         std::shared_ptr<Engine::Button> m_pMenuBg;
         std::shared_ptr<Engine::Button> m_pMenuButtons[kMenuRows];
         std::shared_ptr<Engine::Text>   m_pMenuTexts[kMenuRows];
         int m_iMenuWeaponId = -1;
+        // The same panel doubles as a TOWER action menu (Merge / Weapon / Sell)
+        // when a placed-tower row is clicked. >= 0 = open for that tower row;
+        // mutually exclusive with m_iMenuWeaponId. The shared menu buttons route
+        // to the tower handlers when this is set (see Init's OnClick lambdas).
+        int m_iMenuTowerRow = -1;
         Rect m_MenuPanelRect;   // bg-panel rect for click-outside dismissal
 
         // "Equip to tower" arm state: after clicking Equip, the next click on a
@@ -168,6 +181,16 @@ namespace Client
         void RebuildList();
         // Live "Tower" objects in the scene (placed count, for the HUD line).
         int  PlacedTowerCount() const;
+        // True when a weapon id is mounted on any tower (placed or reserve).
+        // Such weapons are locked to towers, so the buy catalog hides them — a
+        // weapon is owned by EITHER the player OR a tower, never both.
+        bool IsWeaponHeldByTower(int iWeaponId) const;
+        // True when a weapon id is held by some OTHER tower than the one being
+        // assigned (a placed tower to exclude, and/or a reserve index to skip).
+        // Enforces one-tower-per-weapon: no two towers share the same weapon.
+        bool IsWeaponHeldByOtherTower(int iWeaponId,
+                                      const Engine::GameObject* pExcludeTower,
+                                      int iExcludeReserve) const;
         // Shop price for a weapon id — the WeaponDef's per-weapon iPrice, or the
         // global kWeaponPrice default when that's 0/unset. Used by buy / merge /
         // sell-refund so a weapon can be priced individually.
@@ -191,16 +214,37 @@ namespace Client
         // (or equip an armed weapon, mirroring OnCycleTowerWeapon).
         void OnCycleReserveWeapon(int iIndex);
         void OnStart();
+        // Re-roll all unpinned buy slots, charging RerollCost (no-op if every
+        // slot is pinned or the player can't afford it).
+        void OnReroll();
+        // Reroll fee for the upcoming round: kRerollBaseCost grows linearly by
+        // kRerollCostPerRound each round.
+        int  RerollCost() const;
 
         // Weapon action menu. OpenWeaponMenu pops the panel for the owned-icon
         // at iOwnedIndex; the three buttons run the actions; CloseWeaponMenu
-        // hides it. Combine = buy a duplicate (kWeaponPrice) to level up; Equip
-        // arms the weapon for a tower/reserve click.
+        // hides it. Merge = combine two owned copies of the same weapon into
+        // one higher-level copy (free); Equip arms the weapon for a
+        // tower/reserve click.
         void OpenWeaponMenu(int iOwnedIndex);
         void CloseWeaponMenu();
         void OnMenuSell();
-        void OnMenuCombine();
+        void OnMenuMerge();
         void OnMenuEquip();
+
+        // Tower action menu — the placed-tower analogue of the weapon menu,
+        // popped from a tower-loadout row click (reuses the same panel/buttons).
+        // OpenTowerMenu lays it out under row iRow; the three actions mirror the
+        // weapon menu: Merge combines two placed towers that share this tower's
+        // weapon into one a level higher (free, the cost is the consumed tower);
+        // Weapon cycles the equipped weapon; Sell removes + refunds.
+        void OpenTowerMenu(int iRow);
+        void OnTowerMenuMerge();
+        void OnTowerMenuCycle();
+        void OnTowerMenuSell();
+        // Live placed attack towers ("Tower" tag, active) firing weapon iWeaponId.
+        // Backs the merge (needs >= 2) and its greyed-button count.
+        std::vector<std::shared_ptr<Tower>> CollectAttackTowers(int iWeaponId) const;
         // True when the action menu is open and the cursor is over its panel —
         // the row buttons underneath bail on their click so it goes to the menu
         // (each UIControl hit-tests independently, so overlaps would double-fire).
