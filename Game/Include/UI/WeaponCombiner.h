@@ -111,6 +111,9 @@ namespace Client
         // weapons_v2.csv, then select the new weapon for further editing.
         // Requires all card slots filled (same gate as OnSave).
         void OnAddWeapon();
+        // Delete the weapon currently being edited from the catalogue, persist
+        // to weapons_v2.csv, then clear the editor. No-op if nothing is selected.
+        void OnDeleteWeapon();
         // Load an existing weapons_v2 weapon's attributes into the editor for
         // editing (reverse-maps the def onto the card slots + number fields).
         void LoadWeaponIntoEditor(int iWeaponId);
@@ -243,9 +246,14 @@ namespace Client
         std::shared_ptr<Engine::Button> m_pCraftButton;
         std::shared_ptr<Engine::Text>   m_pCraftText;
         // "Add weapon" button beside Save — creates a new catalogue entry from
-        // the current build instead of overwriting the selected weapon.
+        // the current build instead of overwriting the selected weapon. Disabled
+        // (greyed) while a weapon is being edited (m_iEditId >= 0).
         std::shared_ptr<Engine::Button> m_pAddButton;
         std::shared_ptr<Engine::Text>   m_pAddText;
+        // "Delete weapon" button — removes the weapon currently being edited from
+        // the catalogue. Enabled only while a weapon is selected (m_iEditId >= 0).
+        std::shared_ptr<Engine::Button> m_pDeleteButton;
+        std::shared_ptr<Engine::Text>   m_pDeleteText;
         std::shared_ptr<Engine::Text>   m_pScoreText;   // live power-score preview
         std::shared_ptr<Engine::Text>   m_pResultText;
         std::shared_ptr<Engine::Text>   m_pTitleText;

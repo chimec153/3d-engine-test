@@ -213,6 +213,7 @@
     <ClCompile Include="Object\Vfx\FragmentShatterManager.cpp" />
     <ClCompile Include="Object\Vfx\VfxManager.cpp" />
     <ClCompile Include="Object\Vfx\FootstepManager.cpp" />
+    <ClCompile Include="Object\Vfx\AimIndicatorManager.cpp" />
     <ClCompile Include="Object\Enemy.cpp" />
     <ClCompile Include="Object\EnemyBullet.cpp" />
     <ClCompile Include="Object\EnemyMeshRenderer.cpp" />
@@ -257,6 +258,7 @@
     <ClCompile Include="UI\StartMenu.cpp" />
     <ClCompile Include="UI\WeaponCombiner.cpp" />
     <ClCompile Include="UI\WeaponHUD.cpp" />
+    <ClCompile Include="UI\AimModeButtonUI.cpp" />
     <ClCompile Include="UI\TowerHUD.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -280,6 +282,7 @@
     <ClInclude Include="Object\Vfx\FragmentShatterManager.h" />
     <ClInclude Include="Object\Vfx\VfxManager.h" />
     <ClInclude Include="Object\Vfx\FootstepManager.h" />
+    <ClInclude Include="Object\Vfx\AimIndicatorManager.h" />
     <ClInclude Include="Object\Enemy.h" />
     <ClInclude Include="Object\EnemyBullet.h" />
     <ClInclude Include="Object\EnemyMeshRenderer.h" />
@@ -333,6 +336,7 @@
     <ClInclude Include="UI\StartMenu.h" />
     <ClInclude Include="UI\WeaponCombiner.h" />
     <ClInclude Include="UI\WeaponHUD.h" />
+    <ClInclude Include="UI\AimModeButtonUI.h" />
     <ClInclude Include="UI\TowerHUD.h" />
   </ItemGroup>
   <ItemGroup>

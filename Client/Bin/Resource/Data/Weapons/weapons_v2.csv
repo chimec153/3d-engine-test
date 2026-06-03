@@ -1,9 +1,9 @@
 # Weapon data table v2 ??saved by the in-game weapon editor.
 id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,projectile_speed,lifetime,count,color,level_up_field,level_up_amount,size,acceleration,aim_mode,spread_deg,max_hits,damage_interval,knockback,evolves_into,evolve_min_level,shop_available,trail_style,price,min_round,max_round,orbit_radius,radial_speed,impact_mask,gather_pull,gather_radius,burn_damage,burn_duration,slow_factor,slow_duration,spawn_radius
-1,Pellet,front,straight,cooldown,vanish,sphere,6,0.8,380,1.2,1,0xFFE066,count,1,0.25,0,nearest,0,1,0,4,101,8,1,tracer,30,1,5,0.9,0,3,1,4,3,3,0.5,2.5,6
+1,Pellet,front,straight,cooldown,vanish,sphere,6,0.8,380,1.2,1,0xFFE066,count,1,0.25,0,forward,0,0,0,6,101,8,1,tracer,12,1,5,0.9,0,3,1,4,3,3,0.5,2.5,6
 2,Piercing Bolt,front,aimed,cooldown,nochange,triangle,9,1.1,460,1.6,1,0x66D9FF,damage,5,0.3,0,nearest,0,3,0,6,0,0,1,tracer,105,11,15,0.9,0,3,1,4,3,3,0.5,2.5,6
 3,Orbit Blade,around,orbital,sustained,nochange,box,8,0.5,200,9999,2,0xB0B0C0,count,1,0.4,0,forward,0,0,0,6,0,0,1,none,150,18,22,2.66,0,3,1,4,3,3,0.5,2.5,6
-4,Scatter,front,straight,cooldown,vanish,sphere,4,1,340,0.7,5,0xFF9966,count,1,0.22,0,forward,45,0,0,6,0,0,1,spark,25,1,5,0,0,3,1,4,3,3,0.5,2.5,6
+4,Scatter,front,straight,cooldown,vanish,sphere,4,1,340,0.7,5,0xFF9966,count,1,0.22,0,forward,45,0,0,6,0,0,1,spark,18,1,5,0,0,3,1,4,3,3,0.5,2.5,6
 5,Spiral Orb,around,spiral,cooldown,nochange,sphere,5,1.4,260,2,3,0xCC66FF,count,1,0.28,0,radial,120,0,0,4,0,0,1,comet,80,9,13,0.9,0,3,1,4,3,3,0.5,2.5,6
 6,Land Mine,random,fixed,cooldown,nochange,box,1,1.6,0,4,1,0xFF5555,size,0.1,2.5,0,forward,0,0,0,6,0,0,1,none,35,3,7,0.9,0,3,1,4,3,3,0.5,2.5,7.8
 7,Ricochet,front,straight,cooldown,reflect,sphere,7,1.2,420,2.5,1,0x66FF99,count,1,0.25,0,random,0,4,0,5,0,0,1,tracer,45,3,7,0.9,0,3,1,4,3,3,0.5,2.5,6
@@ -30,3 +30,5 @@ id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,projectile_
 101,Storm Pellet,front,straight,cooldown,vanish,sphere,10,0.4,440,1.4,8,0xFFF0A0,count,2,0.25,0,nearest,60,1,0,4,0,0,0,spark,150,99,0,0.9,0,3,1,4,3,3,0.5,2.5,6
 102,Death Ray,mouse,straight,sustained,nochange,box,6,1,900,2,1,0xFF0066,damage,3,0.6,0,cursor,0,0,0.05,0,0,0,0,none,150,99,0,0.9,0,1,1,4,3,3,0.5,2.5,6
 103,Tempest,front,straight,cooldown,chain,sphere,12,1,700,1.8,2,0x66FFFF,damage,6,0.25,0,nearest,0,9,0,3,0,0,0,spark,115,99,0,0.9,0,3,1,4,3,3,0.5,2.5,6
+104,Spiral Ball,around,orbital,cooldown,nochange,sphere,5,2.24,410,2,1,0x435DF2,damage;size,2;0.1,1,0,forward,0,0,0,6,0,0,1,tracer,15,1,3,0.9,3,3,1,4,3,3,0.5,2.5,6
+105,Short Spear,front,straight,cooldown,multiply,sphere,5,1.57,400,2,1,0x43F2B5,damage,2,0.2,0,forward,0,3,0,6,0,0,1,tracer,15,1,5,0,0,1,1,4,3,3,0.5,2.5,6

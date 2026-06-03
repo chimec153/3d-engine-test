@@ -165,11 +165,10 @@ namespace Client
         auto pPlayer = m_pTarget.lock();
         if (!pPlayer) return;
 
-        // Hide weapons currently mounted on towers — they belong to the tower,
-        // not the player, so they shouldn't take a player weapon-HUD slot.
-        std::vector<int> vecIds;
-        for (int id : pPlayer->GetOwnedWeaponIds())
-            if (!pPlayer->IsWeaponTowerHeld(id)) vecIds.push_back(id);
+        // Show only the player's EQUIPPED weapons (the ones actually firing).
+        // Inventory weapons and tower-mounted weapons are excluded — they don't
+        // fire for the player, so they don't take a weapon-HUD slot.
+        const std::vector<int> vecIds = pPlayer->GetEquippedWeaponIds();
         for (int i = 0; i < kSlotCount; ++i)
         {
             const int iId    = (i < static_cast<int>(vecIds.size())) ? vecIds[i] : -1;

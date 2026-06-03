@@ -51,8 +51,10 @@ namespace Client
         // the same owner accumulates instead of spawning a new number,
         // so a burst on one enemy reads as a single growing total
         // rather than a stack of overlapping pop-ups.
+        // bHeal: draw as a green "+N" heal number (the colour-inverse of the
+        // red damage numbers) instead of the default damage colour.
         void Spawn(const Engine::Vector3& vWorldPos, int iValue, bool bCritical,
-                   uintptr_t ownerHandle = 0);
+                   uintptr_t ownerHandle = 0, bool bHeal = false);
 
         // Advance ages, drift positions, deactivate expired slots.
         void Update(float fDeltaTime);
@@ -88,6 +90,7 @@ namespace Client
             float    fLifetime  = 1.f;     // seconds
             int      iValue     = 0;
             bool     bCritical  = false;
+            bool     bHeal      = false;    // green "+N" heal number
             float    fJitterX   = 0.f;     // small horizontal scatter (screen px)
             bool     bActive    = false;
             uintptr_t ownerHandle = 0;     // accumulation key (Enemy*)

@@ -29,6 +29,7 @@ namespace Engine
 		, m_bUpdateRotation(true)
 		, m_bUpdatePosition(true)
 		, m_bUpdateScale(true)
+		, m_bInheritParentRotation(true)
 		, m_eCameraType(CAMERA_TYPE::NORMAL)
 	{
 		m_tBuffer.matJoint = Matrix::matIdentity;
@@ -54,6 +55,7 @@ namespace Engine
 		, m_bUpdateRotation(true)
 		, m_bUpdatePosition(true)
 		, m_bUpdateScale(true)
+		, m_bInheritParentRotation(buffer.m_bInheritParentRotation)
 		, m_eCameraType(buffer.m_eCameraType)
 	{
 		m_tBuffer.matJoint = Matrix::matIdentity;
@@ -69,6 +71,24 @@ namespace Engine
 	{
 		assert(this != pChild);
 		m_ChildTransformList.push_back(pChild);
+	}
+
+	void Transform::SetInheritParentRotation(bool bInherit)
+	{
+		if (m_bInheritParentRotation == bInherit)
+			return;
+
+		m_bInheritParentRotation = bInherit;
+
+		// Preserve the current world orientation: recompute the relative
+		// rotation under the new inheritance rule (this also re-propagates
+		// to children via UpdateRotation).
+		UpdateRelativeRotation();
+	}
+
+	bool Transform::IsInheritParentRotation() const
+	{
+		return m_bInheritParentRotation;
 	}
 
 	const std::shared_ptr<class ConstantBuffer<_tagTransformBuffer>>& Transform::GetConstantBuffer() const
@@ -174,7 +194,7 @@ namespace Engine
 			}
 		}
 
-		const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();
+		const std::shared_ptr<LightComponent>& pLight = Graphics::GetInst()->GetLight();
 
 		if (pLight)
 		{
@@ -273,7 +293,7 @@ namespace Engine
 	{
 		m_vRelativeRotation = m_vRotation;
 
-		if (m_pParentTrasnform)
+		if (m_pParentTrasnform && m_bInheritParentRotation)
 		{
 			m_vRelativeRotation -= m_pParentTrasnform->GetRotation();
 		}
@@ -295,7 +315,10 @@ namespace Engine
 
 		if (m_pParentTrasnform)
 		{
-			m_vRotation += m_pParentTrasnform->GetRotation();
+			if (m_bInheritParentRotation)
+			{
+				m_vRotation += m_pParentTrasnform->GetRotation();
+			}
 
 			m_vPosition = (Matrix::RotationXYZ(m_pParentTrasnform->GetRotation())).TransformCoord(m_vRelativePosition) + m_pParentTrasnform->GetPosition();
 

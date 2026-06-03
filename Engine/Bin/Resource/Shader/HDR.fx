@@ -207,6 +207,8 @@ cbuffer Shockwave : register(b13)
     float  g_fChipRed;          // subtle persistent red edge (contact/DoT)
     float  g_fLowHp;            // low-HP vignette + desaturation strength
     float  g_fFxTime;           // seconds, drives the low-HP pulse
+    float  g_fHealFlash;        // green heal vignette (heal received)
+    float3 _padHeal;
 }
 
 // Offset a UV along any active expanding rings. Each ring pushes pixels
@@ -302,6 +304,13 @@ float4 FinalPassPS(VS_HDR_OUTPUT input) :   SV_TARGET
 
     // Flash: sharp full-screen red on hard single hits (decays CPU-side).
     color = lerp(color, float3(0.85, 0.0, 0.0), saturate(g_fDamageFlash));
+
+    // Heal: green vignette pop when a heal pulse lands — the colour-inverse
+    // of the chip/flash reds so damage and healing share one visual language.
+    // Edge-weighted (vig) so the centre of the screen stays readable.
+    if (g_fHealFlash > 0.0)
+        color = lerp(color, float3(0.15, 1.0, 0.45),
+                     saturate((0.35 + 0.65 * vig) * g_fHealFlash * 0.7));
 
     return float4(color, 1.0);
 }

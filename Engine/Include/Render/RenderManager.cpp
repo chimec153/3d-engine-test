@@ -328,7 +328,7 @@ namespace Engine
 		m_pHDRCBuffer->UpdateBuffer(m_tHDRCBuffer);
 	}
 
-	void RenderManager::AddLight(const std::shared_ptr<PointLight>& pLight)
+	void RenderManager::AddLight(const std::shared_ptr<LightComponent>& pLight)
 	{
 		m_LightList[static_cast<int>(pLight->GetLightType())].push_back(pLight);
 	}
@@ -786,6 +786,12 @@ namespace Engine
 		m_fLowHp = fStrength < 0.f ? 0.f : (fStrength > 1.f ? 1.f : fStrength);
 	}
 
+	void RenderManager::AddHealFlash(float fStrength)
+	{
+		if (fStrength > m_fHealFlash) m_fHealFlash = fStrength;   // max-merge
+		if (m_fHealFlash > 1.f) m_fHealFlash = 1.f;
+	}
+
 	void RenderManager::UpdateShockwaves(float fDeltaTime)
 	{
 		// Age + expire active rings.
@@ -823,6 +829,10 @@ namespace Engine
 		constexpr float kChipDecay  = 3.f;
 		m_fDamageFlash -= kFlashDecay * fDeltaTime;
 		if (m_fDamageFlash < 0.f) m_fDamageFlash = 0.f;
+		// Heal flash decays a touch slower than the damage flash so the green
+		// pop lingers just long enough to read in a crowded screen.
+		m_fHealFlash -= 4.f * fDeltaTime;
+		if (m_fHealFlash < 0.f) m_fHealFlash = 0.f;
 		if (m_fChipTarget > m_fChipRed)
 			m_fChipRed += (m_fChipTarget - m_fChipRed) * std::min(1.f, kChipRise * fDeltaTime);
 		else
@@ -835,6 +845,7 @@ namespace Engine
 		m_tShockwaveCBuffer.fChipRed     = m_fChipRed;
 		m_tShockwaveCBuffer.fLowHp       = m_fLowHp;
 		m_tShockwaveCBuffer.fFxTime      = m_fFxTime;
+		m_tShockwaveCBuffer.fHealFlash   = m_fHealFlash;
 
 		m_pShockwaveCBuffer->UpdateBuffer(m_tShockwaveCBuffer);
 	}
@@ -1194,8 +1205,8 @@ namespace Engine
 
 		for (int i = 0; i < static_cast<int>(LIGHT_TYPE::END); ++i)
 		{
-			std::list<std::shared_ptr<PointLight>>::iterator iterL = m_LightList[i].begin();
-			std::list<std::shared_ptr<PointLight>>::iterator iterLEnd = m_LightList[i].end();
+			std::list<std::shared_ptr<LightComponent>>::iterator iterL = m_LightList[i].begin();
+			std::list<std::shared_ptr<LightComponent>>::iterator iterLEnd = m_LightList[i].end();
 
 			pDepthBuffer[i]->SetDepthSRV(15);
 
@@ -1240,7 +1251,7 @@ namespace Engine
 
 			const std::shared_ptr<Transform>& pTransform = pCamera->GetTransform();
 
-			const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();
+			const std::shared_ptr<LightComponent>& pLight = Graphics::GetInst()->GetLight();
 
 			if (pTransform && pLight)
 			{
@@ -1284,8 +1295,8 @@ namespace Engine
 		{
 			pDepthBuffer[i]->SetDepthSRV(15);
 
-			std::list<std::shared_ptr<PointLight>>::iterator iter = m_LightList[i].begin();
-			std::list<std::shared_ptr<PointLight>>::iterator iterEnd = m_LightList[i].end();
+			std::list<std::shared_ptr<LightComponent>>::iterator iter = m_LightList[i].begin();
+			std::list<std::shared_ptr<LightComponent>>::iterator iterEnd = m_LightList[i].end();
 
 			for (; iter != iterEnd; ++iter)
 			{
@@ -1316,7 +1327,7 @@ namespace Engine
 
 	void RenderManager::RenderShadow()
 	{
-		const std::shared_ptr<PointLight>& pLight = Graphics::GetInst()->GetLight();
+		const std::shared_ptr<LightComponent>& pLight = Graphics::GetInst()->GetLight();
 
 		if (!pLight)
 		{

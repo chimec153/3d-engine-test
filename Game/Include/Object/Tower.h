@@ -79,6 +79,11 @@ namespace Client
         virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
 
+        // Heal feedback — a heal tower pulse restored iAmount HP to this tower.
+        // Flashes the body green (Material hit-flash channel, decayed in Update)
+        // and pops a green "+N" number above the tower. No-op if iAmount<=0.
+        void OnHealed(int iAmount);
+
     private:
         std::shared_ptr<Engine::Transform>             m_pTransform;
         std::shared_ptr<Engine::MeshRendererComponent> m_pMeshRenderer;

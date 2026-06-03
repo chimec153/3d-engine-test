@@ -146,6 +146,9 @@
     <ClCompile Include="Object\Vfx\FootstepManager.cpp">
       <Filter>09. VFX</Filter>
     </ClCompile>
+    <ClCompile Include="Object\Vfx\AimIndicatorManager.cpp">
+      <Filter>09. VFX</Filter>
+    </ClCompile>
     <ClCompile Include="Object\Impact\GatherEffect.cpp">
       <Filter>08. Impact</Filter>
     </ClCompile>
@@ -158,13 +161,15 @@
     <ClCompile Include="UI\WeaponHUD.cpp">
       <Filter>03. UI</Filter>
     </ClCompile>
+    <ClCompile Include="UI\AimModeButtonUI.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
     <ClCompile Include="UI\TowerHUD.cpp">
       <Filter>03. UI</Filter>
     </ClCompile>
     <ClCompile Include="Object\EnemyMeshRenderer.cpp">
       <Filter>05. Component</Filter>
     </ClCompile>
-    <ClCompile Include="UI\WeaponCombiner.cpp" />
     <ClCompile Include="Scene\WeaponComboScene.cpp">
       <Filter>02. Scene</Filter>
     </ClCompile>
@@ -175,6 +180,10 @@
       <Filter>03. UI</Filter>
     </ClCompile>
     <ClCompile Include="UI\StartMenu.cpp">
+      <Filter>03. UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Util\Telemetry.cpp" />
+    <ClCompile Include="UI\WeaponCombiner.cpp">
       <Filter>03. UI</Filter>
     </ClCompile>
   </ItemGroup>
@@ -332,6 +341,9 @@
     <ClInclude Include="UI\WeaponHUD.h">
       <Filter>03. UI</Filter>
     </ClInclude>
+    <ClInclude Include="UI\AimModeButtonUI.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
     <ClInclude Include="UI\TowerHUD.h">
       <Filter>03. UI</Filter>
     </ClInclude>
@@ -371,7 +383,9 @@
     <ClInclude Include="Object\Vfx\FootstepManager.h">
       <Filter>09. VFX</Filter>
     </ClInclude>
-    <ClInclude Include="UI\WeaponCombiner.h" />
+    <ClInclude Include="Object\Vfx\AimIndicatorManager.h">
+      <Filter>09. VFX</Filter>
+    </ClInclude>
     <ClInclude Include="Scene\WeaponComboScene.h">
       <Filter>02. Scene</Filter>
     </ClInclude>
@@ -382,6 +396,10 @@
       <Filter>03. UI</Filter>
     </ClInclude>
     <ClInclude Include="UI\StartMenu.h">
+      <Filter>03. UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Util\Telemetry.h" />
+    <ClInclude Include="UI\WeaponCombiner.h">
       <Filter>03. UI</Filter>
     </ClInclude>
   </ItemGroup>

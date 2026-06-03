@@ -39,6 +39,7 @@ REGISTER_SCENE(Client::GameScene, GameScene)
 #include "../Object/GameStateManager.h"
 #include "../UI/DamageText.h"
 #include "../UI/WeaponHUD.h"
+#include "../UI/AimModeButtonUI.h"
 #include "../UI/TowerHUD.h"
 #include "Input/Input.h"
 #include "Bindable/Camera.h"
@@ -53,6 +54,7 @@ REGISTER_SCENE(Client::GameScene, GameScene)
 #include "../Object/EnemyMeshRenderer.h"
 #include "../Object/Vfx/VfxManager.h"
 #include "../Object/Vfx/FootstepManager.h"
+#include "../Object/Vfx/AimIndicatorManager.h"
 #include "../Object/Vfx/BeamRenderManager.h"
 #include "../Object/Vfx/TrailRenderManager.h"
 #include "../Object/Vfx/DeathBurstManager.h"
@@ -105,6 +107,7 @@ namespace Client
 	// sends since RunEnd clears the run_id.
 	void GameScene::SendRunEndTelemetry(const char* szReason)
 	{
+#ifndef _DEBUG
 		auto& tm = Telemetry::GetInst();
 		if (!tm.IsRunActive()) return;
 
@@ -118,6 +121,7 @@ namespace Client
 		}
 		const int iRound = m_pEnemySpawner ? m_pEnemySpawner->GetRound() : m_iRound;
 		tm.RunEnd(iRound, iLevel, m_fActivePlayTime, vecWeapons, szReason);
+#endif
 	}
 
 	bool GameScene::LoadSequences()
@@ -233,6 +237,9 @@ namespace Client
 		// Player footstep marks — build the footprint texture + reset the pool.
 		FootstepManager::GetInst()->Init();
 
+		// Target-mode aim indicator — build the ground triangle resources.
+		AimIndicatorManager::GetInst()->Init();
+
 		// Heal-tower ground-circle VFX — build the circle texture + resources.
 		HealAuraManager::GetInst()->Init();
 
@@ -282,33 +289,6 @@ namespace Client
 				pCamera->SetProjectType(Engine::Camera::PROJECT_TYPE::PERSPECTIVE);
 
 				Engine::Graphics::GetInst()->SetCamera(pCamera);
-			}
-		}
-
-		if (auto pLightObj = CreateGameObject("Light", FindLayer(DEFAULT_LAYER)))
-		{
-			if (auto pLight = pLightObj->AddComponent<Engine::PointLight>("Light"))
-			{
-				pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
-				pLight->GetTransform()->SetRX(1.f);
-
-				// Shrink shadow ortho to match this scene's scale. Player is
-				// authored at scale 0.01 (Player.cpp:442), so gameplay
-				// objects sit in a ~50-unit play radius. PointLight's
-				// default ortho is ±2500 — at a 2048² shadow map that's
-				// ~2.4 units/texel, so a ~1-unit player casts a shadow only
-				// 1-2 texels wide. Tighten to ±50 for ~0.05 units/texel.
-				float fSize = 15.f;
-				Engine::ORTHOINFO tOrtho = {};
-				tOrtho.fLeft   = -fSize;
-				tOrtho.fRight  =  fSize;
-				tOrtho.fTop    =  fSize;
-				tOrtho.fBottom = -fSize;
-				tOrtho.fNear   =   0.1f;
-				tOrtho.fFar    = 200.f;
-				pLight->SetOrthoInfo(tOrtho);
-
-				Engine::Graphics::GetInst()->SetLight(pLight);
 			}
 		}
 
@@ -579,7 +559,9 @@ namespace Client
 				{
 					m_iRound = 1;
 					m_fActivePlayTime = 0.f;           // reset active-time accumulator for the new run
+#ifndef _DEBUG
 					Telemetry::GetInst().RunStart();   // new run: fresh run_id + run_start event
+#endif
 					if (m_pEnemySpawner) m_pEnemySpawner->StartRound(m_iRound);
 					GameStateManager::GetInst().ExitModal();
 				});
@@ -630,6 +612,16 @@ namespace Client
 			if (auto pWeaponHUD = pWeaponHUDObj->AddComponent<WeaponHUD>("weaponhud"))
 			{
 				pWeaponHUD->SetTarget(pPlayer);
+			}
+		}
+
+		// Bottom-left HUD button showing the aim/target mode; clicking it
+		// toggles mouse-aim exactly like pressing Ctrl.
+		if (auto pAimBtnObj = CreateGameObject<>("AimModeButton", FindLayer(DEFAULT_LAYER)))
+		{
+			if (auto pAimBtn = pAimBtnObj->AddComponent<AimModeButtonUI>("aimmodebtn"))
+			{
+				pAimBtn->SetTarget(pPlayer);
 			}
 		}
 
@@ -835,6 +827,11 @@ namespace Client
 		Engine::RenderManager::GetInst()->AddCustomRender(
 			Engine::RENDER_LAYER::ALPHA,
 			[]() { FootstepManager::GetInst()->Render(); });
+
+		// Target-mode aim triangle — a ground quad in the ALPHA pass.
+		Engine::RenderManager::GetInst()->AddCustomRender(
+			Engine::RENDER_LAYER::ALPHA,
+			[]() { AimIndicatorManager::GetInst()->Render(); });
 
 		// Heal-tower aura circles — ground quads in the ALPHA pass.
 		Engine::RenderManager::GetInst()->AddCustomRender(

@@ -580,7 +580,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     shadowpos.y = 1.f - shadowpos.y;
     
-    float4 fShadowAttr = 1.f;//g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
+    float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
 
     float4 decal0 = g_DecalTexture0.Sample(g_sPoint, input.uv);
     float4 decal1 = g_DecalTexture1.Sample(g_sPoint, input.uv);

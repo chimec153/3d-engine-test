@@ -6,6 +6,7 @@
 #include "Bindable/Texture.h"
 #include "Bindable/BindableManager.h"
 #include "Core/Window.h"
+#include "Render/RenderManager.h"   // clear the low-HP overlay on game over
 #include "Resource/Font.h"
 #include "Resource/FontManager.h"
 #include "Resource/Text.h"
@@ -159,6 +160,11 @@ namespace Client
         {
             Show();
             GameStateManager::GetInst().EnterModal(GameState::GameOver);
+            // The low-HP vignette is pushed every frame by Player::Update; once
+            // the game-over modal stops the timer the player stops updating, so
+            // the last (full-strength) overlay would stay stuck on screen.
+            // Clear it explicitly so the near-death HUD turns off with the game.
+            Engine::RenderManager::GetInst()->SetLowHp(0.f);
         }
     }
 

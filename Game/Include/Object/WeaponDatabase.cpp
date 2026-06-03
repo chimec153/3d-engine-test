@@ -68,6 +68,7 @@ namespace Client
             if (v == "count")    return LevelUpField::Count;
             if (v == "speed")    return LevelUpField::Speed;
             if (v == "size")     return LevelUpField::Size;
+            if (v == "lifetime") return LevelUpField::Lifetime;
             return LevelUpField::Damage;
         }
         // Fill out[] (indexed by LevelUpField) from ';'-separated field tokens +
@@ -161,6 +162,7 @@ namespace Client
                          case LevelUpField::Count:    return "count";
                          case LevelUpField::Speed:    return "speed";
                          case LevelUpField::Size:     return "size";
+                         case LevelUpField::Lifetime: return "lifetime";
                          default:                     return "damage"; }
         }
         const char* AimTok(AimMode e)
@@ -369,6 +371,18 @@ namespace Client
         m_mapIdToIndex[def.iId] = m_vecWeapons.size();
         m_vecWeapons.push_back(def);
         return def.iId;
+    }
+
+    bool WeaponDatabase::RemoveCatalogueWeapon(int iId)
+    {
+        auto it = m_mapIdToIndex.find(iId);
+        if (it == m_mapIdToIndex.end()) return false;
+        m_vecWeapons.erase(m_vecWeapons.begin() + it->second);
+        // Erasing shifts later indices — rebuild the whole id->index map.
+        m_mapIdToIndex.clear();
+        for (size_t i = 0; i < m_vecWeapons.size(); ++i)
+            m_mapIdToIndex[m_vecWeapons[i].iId] = i;
+        return true;
     }
 
     bool WeaponDatabase::UpdateWeapon(int iId, const WeaponDef& def)

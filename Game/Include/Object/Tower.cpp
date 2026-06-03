@@ -30,6 +30,7 @@ REGISTER_GAMEOBJECT(Client::Tower, Tower)
 #include "Scene/Scene.h"
 #include "Scene/Layer.h"
 #include "UI/Gauge.h"
+#include "../UI/DamageText.h"
 #include <cmath>
 #include <cfloat>
 #include <cstdlib>
@@ -272,6 +273,24 @@ namespace Client
             static_cast<float>(cz) + 0.5f);
     }
 
+    void Tower::OnHealed(int iAmount)
+    {
+        if (iAmount <= 0) return;
+        // Green body pulse via the per-actor hit-flash channel (every PS
+        // variant lerps value0 toward this colour by intensity); Update decays
+        // it. Same channel the enemies use for the red hit flash.
+        if (m_pMaterial)
+            m_pMaterial->SetHitFlash(Engine::Vector3(0.2f, 1.f, 0.45f), 1.f);
+        // Green "+N" number above the head (same offset as the HP bar).
+        if (m_pTransform)
+        {
+            Engine::Vector3 vHead = m_pTransform->GetPosition();
+            vHead.y += 1.9f;
+            DamageTextManager::GetInst()->Spawn(
+                vHead, iAmount, false, reinterpret_cast<uintptr_t>(this), true);
+        }
+    }
+
     void Tower::Update(float fDeltaTime)
     {
         __super::Update(fDeltaTime);
@@ -396,6 +415,10 @@ namespace Client
                 m_vBaseColor.z * f,                                    // → 0
                 1.f);
         }
+        // Decay the green heal-flash pulse (set by OnHealed). Composes with the
+        // HP tint above — different channel (PS lerps value0 toward the flash
+        // colour by intensity). No-op once the pulse has decayed to 0.
+        if (m_pMaterial) m_pMaterial->TickHitFlash(fDeltaTime, 4.f);
 
         // Only fire while actually playing — a modal (level-up / intermission /
         // pause) freezes the timer (dt ~ 0) anyway, but gate explicitly so a

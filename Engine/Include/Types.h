@@ -541,6 +541,11 @@ namespace Engine
 		float   fChipRed     = 0.f;    // subtle persistent red edge (contact/DoT)
 		float   fLowHp       = 0.f;    // low-HP vignette + desaturation strength
 		float   fFxTime      = 0.f;    // seconds, for the pulse
+		// Heal feedback — green vignette flash on the player when a heal pulse
+		// lands. Mirrors fDamageFlash (max-merged, decays CPU-side). Own float4
+		// row so the b13 layout stays 16-byte aligned.
+		float   fHealFlash   = 0.f;    // green vignette flash (heal received)
+		float   _padHeal[3]  = {};
 	}SHOCKWAVECBUFFER, *PSHOCKWAVECBUFFER;
 
 	typedef struct ENGINE_DLL alignas(16) _tagUICBuffer

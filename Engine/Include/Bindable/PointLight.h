@@ -19,15 +19,15 @@ namespace Engine
     // RenderLight pass (Multi VS/PS fullscreen quad). Bind/PostBind kept as
     // regular methods (not Component overrides) since RenderManager calls
     // them directly when iterating m_LightList.
-    class ENGINE_DLL PointLight :
+    class ENGINE_DLL LightComponent :
         public Component
     {
         friend class Scene;
 
     public:
-        PointLight();
+        LightComponent();
     public:
-        virtual ~PointLight() override = default;
+        virtual ~LightComponent() override = default;
 
     private:
         std::shared_ptr<class Transform> m_pTransform;

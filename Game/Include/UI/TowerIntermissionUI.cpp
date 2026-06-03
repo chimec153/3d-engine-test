@@ -425,9 +425,9 @@ namespace Client
             y += fRerollH + S.fGap;
         }
 
-        // --- Your Weapons (drag sources) — a horizontal strip of icons ---
+        // --- Equipped weapons (firing slots) — horizontal icon strip ---
         m_pOwnedHeader = makeText("tower_shop_owned_h", y, S.fHeaderH, m_pItemFont, Engine::Text::HAlign::Left);
-        if (m_pOwnedHeader) m_pOwnedHeader->SetString(L"Your Weapons - click for menu (sell / merge / equip)");
+        if (m_pOwnedHeader) m_pOwnedHeader->SetString(L"Equipped (fires) - L-click: unequip / R-click: menu");
         y += S.fHeaderH + S.fGap;
         {
             const float fIconGap = S.fGap;
@@ -444,7 +444,36 @@ namespace Client
                     m_pOwnedIcons[i]->SetRect(fX, y, fIconW, fIconH);
                     m_pOwnedIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_blank", 0x303030));
                     const int idx = i;
-                    m_pOwnedIcons[i]->SetOnClick([this, idx]() { OpenWeaponMenu(idx); });
+                    // L-click unequips (→ inventory); R-click pops the weapon menu.
+                    m_pOwnedIcons[i]->SetOnClick([this, idx]() { OnEquipSlotClick(idx); });
+                    m_pOwnedIcons[i]->SetOnRightClick([this, idx]() { OpenWeaponMenu(m_iOwnedIds[idx], m_OwnedRect[idx]); });
+                }
+            }
+            y += fIconH + S.fGap;
+        }
+
+        // --- Weapon inventory (idle, unassigned) — horizontal icon strip ---
+        m_pInvHeader = makeText("tower_shop_inv_h", y, S.fHeaderH, m_pItemFont, Engine::Text::HAlign::Left);
+        if (m_pInvHeader) m_pInvHeader->SetString(L"Inventory (idle) - L-click: equip / R-click: menu");
+        y += S.fHeaderH + S.fGap;
+        {
+            const float fIconGap = S.fGap;
+            const float fIconW    = (S.fW - fIconGap * (kInvRows - 1)) / kInvRows;
+            const float fIconH    = S.fItemH;
+            for (int i = 0; i < kInvRows; ++i)
+            {
+                const float fX = S.fLeftX + i * (fIconW + fIconGap);
+                m_InvRect[i] = { fX, y, fIconW, fIconH };
+                m_iInvIds[i] = -1;
+                m_pInvIcons[i] = CreateComponent<Engine::Button>("tower_shop_inv_b" + std::to_string(i));
+                if (m_pInvIcons[i])
+                {
+                    m_pInvIcons[i]->SetRect(fX, y, fIconW, fIconH);
+                    m_pInvIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_blank", 0x303030));
+                    const int idx = i;
+                    // L-click equips (→ a free firing slot); R-click pops the menu.
+                    m_pInvIcons[i]->SetOnClick([this, idx]() { OnInventoryClick(idx); });
+                    m_pInvIcons[i]->SetOnRightClick([this, idx]() { OpenWeaponMenu(m_iInvIds[idx], m_InvRect[idx]); });
                 }
             }
             y += fIconH + S.fGap;
@@ -573,6 +602,7 @@ namespace Client
         if (m_pStatsText)      m_pStatsText->Enable();
         if (m_pBuyHeader)      m_pBuyHeader->Enable();
         if (m_pOwnedHeader)    m_pOwnedHeader->Enable();
+        if (m_pInvHeader)      m_pInvHeader->Enable();
         if (m_pTowerHeader)    m_pTowerHeader->Enable();
         if (m_pReserveHeader)  m_pReserveHeader->Enable();
         if (m_pStartButton)    m_pStartButton->Enable();
@@ -590,6 +620,7 @@ namespace Client
         if (m_pStatsText)      m_pStatsText->Disable();
         if (m_pBuyHeader)      m_pBuyHeader->Disable();
         if (m_pOwnedHeader)    m_pOwnedHeader->Disable();
+        if (m_pInvHeader)      m_pInvHeader->Disable();
         if (m_pTowerHeader)    m_pTowerHeader->Disable();
         if (m_pReserveHeader)  m_pReserveHeader->Disable();
         if (m_pStartButton)    m_pStartButton->Disable();
@@ -604,6 +635,8 @@ namespace Client
         m_bEquipArmedThisFrame = false;
         for (int i = 0; i < kOwnedRows; ++i)
             if (m_pOwnedIcons[i]) m_pOwnedIcons[i]->Disable();
+        for (int i = 0; i < kInvRows; ++i)
+            if (m_pInvIcons[i]) m_pInvIcons[i]->Disable();
         for (int i = 0; i < kBuyRows; ++i)
         {
             if (m_pBuyButtons[i]) m_pBuyButtons[i]->Disable();
@@ -1002,19 +1035,53 @@ namespace Client
             m_pRerollText->SetString(L"Reroll  $" + std::to_wstring(iCost));
         }
 
-        // --- Your Weapons (drag-source icons) ---
-        const std::vector<int> vecOwned = pPlayer ? pPlayer->GetOwnedWeaponIds() : std::vector<int>{};
+        // --- Equipped weapons (firing slots) ---
+        // Show the player's equipped weapons, then a dim [+] for each remaining
+        // free firing slot (up to kMaxEquipSlots), then disable the rest.
+        const std::vector<int> vecEquipped =
+            pPlayer ? pPlayer->GetEquippedWeaponIds() : std::vector<int>{};
+        const int iEquipCap = Player::GetMaxEquipSlots();
         for (int i = 0; i < kOwnedRows; ++i)
         {
-            const bool bHas = i < static_cast<int>(vecOwned.size());
-            const int  id   = bHas ? vecOwned[i] : -1;
-            m_iOwnedIds[i] = id;
             if (!m_pOwnedIcons[i]) continue;
-            if (!bHas) { m_pOwnedIcons[i]->Disable(); continue; }
+            const bool bHas = i < static_cast<int>(vecEquipped.size());
+            if (bHas)
+            {
+                const int id = vecEquipped[i];
+                m_iOwnedIds[i] = id;
+                const WeaponDef* pDef = WeaponDatabase::GetInst().Get(id);
+                const unsigned int uColor = pDef ? pDef->uColorRGB : 0x606060;
+                m_pOwnedIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_w_" + std::to_string(id), uColor));
+                m_pOwnedIcons[i]->Enable();
+            }
+            else if (i < iEquipCap)
+            {
+                // Empty firing slot — dim [+] placeholder (drop / equip target).
+                m_iOwnedIds[i] = -1;
+                m_pOwnedIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_equip_empty", 0x242424));
+                m_pOwnedIcons[i]->Enable();
+            }
+            else
+            {
+                m_iOwnedIds[i] = -1;
+                m_pOwnedIcons[i]->Disable();
+            }
+        }
+
+        // --- Weapon inventory (idle) ---
+        const std::vector<int> vecInv =
+            pPlayer ? pPlayer->GetInventoryWeaponIds() : std::vector<int>{};
+        for (int i = 0; i < kInvRows; ++i)
+        {
+            if (!m_pInvIcons[i]) continue;
+            const bool bHas = i < static_cast<int>(vecInv.size());
+            const int  id   = bHas ? vecInv[i] : -1;
+            m_iInvIds[i] = id;
+            if (!bHas) { m_pInvIcons[i]->Disable(); continue; }
             const WeaponDef* pDef = WeaponDatabase::GetInst().Get(id);
             const unsigned int uColor = pDef ? pDef->uColorRGB : 0x606060;
-            m_pOwnedIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_w_" + std::to_string(id), uColor));
-            m_pOwnedIcons[i]->Enable();
+            m_pInvIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_w_" + std::to_string(id), uColor));
+            m_pInvIcons[i]->Enable();
         }
 
         // --- Tower Loadout rows (each placed tower) ---
@@ -1091,21 +1158,29 @@ namespace Client
         }
 
         // --- Unplaced Towers (reserve weapon per bought-but-unplaced tower) ---
-        // Each icon's colour is the weapon that reserve tower will fire; a raw
-        // -1 (unconfigured) resolves to the current default for display.
+        // Each icon's colour is the weapon that reserve tower will fire. A raw
+        // -1 (unconfigured = freshly bought) shows a dim "no weapon" slot — the
+        // tower can't be PLACED until a weapon is equipped here (click to cycle /
+        // drag one on), so it must read as empty rather than borrowing a colour.
         const int iReserve  = TowerManager::GetInst().ReserveCount();
-        const int iDefaultW = TowerManager::GetInst().CurrentWeaponId();
         m_iReserveCount = (std::min)(kReserveRows, iReserve);
         for (int i = 0; i < kReserveRows; ++i)
         {
             if (!m_pReserveIcons[i]) continue;
             if (i >= m_iReserveCount) { m_pReserveIcons[i]->Disable(); continue; }
-            int wid = TowerManager::GetInst().ReserveWeaponRaw(i);
-            if (wid < 0) wid = iDefaultW;
-            const WeaponDef* pDef = WeaponDatabase::GetInst().Get(wid);
-            const unsigned int uColor = pDef ? pDef->uColorRGB : 0x606060;
-            m_pReserveIcons[i]->SetTexture(
-                EnsureSolidTexture("tower_shop_w_" + std::to_string(wid), uColor));
+            const int wid = TowerManager::GetInst().ReserveWeaponRaw(i);
+            if (wid < 0)
+            {
+                // Weaponless — dim slot, not placeable yet.
+                m_pReserveIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_reserve_empty", 0x242424));
+            }
+            else
+            {
+                const WeaponDef* pDef = WeaponDatabase::GetInst().Get(wid);
+                const unsigned int uColor = pDef ? pDef->uColorRGB : 0x606060;
+                m_pReserveIcons[i]->SetTexture(
+                    EnsureSolidTexture("tower_shop_w_" + std::to_string(wid), uColor));
+            }
             m_pReserveIcons[i]->Enable();
         }
 
@@ -1202,6 +1277,32 @@ namespace Client
         RebuildList();
     }
 
+    void TowerIntermissionUI::OnEquipSlotClick(int iIndex)
+    {
+        if (GameStateManager::GetInst().GetState() != GameState::Intermission) return;
+        if (PointerInOpenMenu()) return;
+        if (iIndex < 0 || iIndex >= kOwnedRows) return;
+        const int id = m_iOwnedIds[iIndex];
+        if (id < 0) return;   // empty firing slot — nothing to unequip
+        auto pPlayer = m_pTarget.lock();
+        if (!pPlayer) return;
+        pPlayer->UnequipWeapon(id);   // move to the inventory
+        RebuildList();
+    }
+
+    void TowerIntermissionUI::OnInventoryClick(int iIndex)
+    {
+        if (GameStateManager::GetInst().GetState() != GameState::Intermission) return;
+        if (PointerInOpenMenu()) return;
+        if (iIndex < 0 || iIndex >= kInvRows) return;
+        const int id = m_iInvIds[iIndex];
+        if (id < 0) return;
+        auto pPlayer = m_pTarget.lock();
+        if (!pPlayer) return;
+        pPlayer->EquipWeapon(id);     // move to a free firing slot (no-op if full)
+        RebuildList();
+    }
+
     bool TowerIntermissionUI::PointerInOpenMenu() const
     {
         if (m_iMenuWeaponId < 0 && m_iMenuTowerRow < 0) return false;
@@ -1210,13 +1311,12 @@ namespace Client
                       static_cast<float>(pInput->GetMouseY()), m_MenuPanelRect);
     }
 
-    void TowerIntermissionUI::OpenWeaponMenu(int iOwnedIndex)
+    void TowerIntermissionUI::OpenWeaponMenu(int iWeaponId, const Rect& anchor)
     {
         using namespace TowerIntermissionUI_detail;
         if (GameStateManager::GetInst().GetState() != GameState::Intermission) return;
         if (PointerInOpenMenu()) return;   // click landed on the already-open menu
-        if (iOwnedIndex < 0 || iOwnedIndex >= kOwnedRows) return;
-        const int id = m_iOwnedIds[iOwnedIndex];
+        const int id = iWeaponId;
         if (id < 0) return;
 
         // Opening a menu cancels any pending equip-arm.
@@ -1244,7 +1344,6 @@ namespace Client
         const float fRowH = S.fItemH;
         const float fW    = (std::max)(150.f, S.fW * 0.34f);
         const float fH    = fRowH * kMenuRows;
-        const Rect& anchor = m_OwnedRect[iOwnedIndex];
         float px = anchor.x;
         float py = anchor.y + anchor.h + S.fGap;
         if (px + fW > Wpx) px = Wpx - fW;
@@ -1586,15 +1685,19 @@ namespace Client
         const std::vector<int> vecOwned = pPlayer->GetOwnedWeaponIds();
         const int sz = static_cast<int>(vecOwned.size());
         if (sz == 0) return;
-        int cur = TowerManager::GetInst().ReserveWeaponRaw(iIndex);
-        if (cur < 0) cur = TowerManager::GetInst().CurrentWeaponId();
+        // -1 = UNCONFIGURED (freshly bought, weaponless): the first click should
+        // EQUIP a weapon (start scanning from index 0), not be treated as already
+        // sitting on the default — otherwise a single-weapon player can never arm
+        // the tower (and so can never place it).
+        const int rawCur = TowerManager::GetInst().ReserveWeaponRaw(iIndex);
         int idx = -1;
-        for (int i = 0; i < sz; ++i)
-            if (vecOwned[i] == cur) { idx = i; break; }
+        if (rawCur >= 0)
+            for (int i = 0; i < sz; ++i)
+                if (vecOwned[i] == rawCur) { idx = i; break; }
         for (int step = 1; step <= sz; ++step)
         {
             const int cand = vecOwned[(idx + step) % sz];
-            if (cand == cur) break;   // wrapped to current → nothing else free
+            if (rawCur >= 0 && cand == rawCur) break;   // wrapped to current → nothing else free
             if (!IsWeaponHeldByOtherTower(cand, nullptr, iIndex))
             {
                 TowerManager::GetInst().SetReserveWeapon(iIndex, cand);
@@ -1658,9 +1761,90 @@ namespace Client
 
         if (m_bShownLocal)
         {
+            HandleDrag();
             HandleWeaponMenu();
-            HandleTooltip();
+            if (m_iDragWeaponId < 0) HandleTooltip();   // no tooltip mid-drag
         }
+    }
+
+    void TowerIntermissionUI::HandleDrag()
+    {
+        auto pPlayer = m_pTarget.lock();
+        if (!pPlayer) return;
+
+        auto* pInput = Engine::CInput::GetInst();
+        using MOUSE = Engine::CInput::MOUSE_TYPE;
+        const float mx = static_cast<float>(pInput->GetMouseX());
+        const float my = static_cast<float>(pInput->GetMouseY());
+
+        // --- Begin: press over a filled equipped / inventory icon picks it up.
+        if (m_iDragWeaponId < 0)
+        {
+            // Don't START a drag while the menu's click-to-arm equip flow or any
+            // menu owns the cursor (an in-progress drag still resolves below).
+            if (m_iEquipArmedWeaponId >= 0) return;
+            if (m_iMenuWeaponId >= 0 || m_iMenuTowerRow >= 0) return;
+            if (!pInput->IsMouseButtonDown(MOUSE::LEFT)) return;
+            for (int i = 0; i < kOwnedRows; ++i)
+                if (m_iOwnedIds[i] >= 0 && InRect(mx, my, m_OwnedRect[i]))
+                { m_iDragWeaponId = m_iOwnedIds[i]; m_eDragSrc = DragSrc::Equipped; break; }
+            if (m_iDragWeaponId < 0)
+                for (int i = 0; i < kInvRows; ++i)
+                    if (m_iInvIds[i] >= 0 && InRect(mx, my, m_InvRect[i]))
+                    { m_iDragWeaponId = m_iInvIds[i]; m_eDragSrc = DragSrc::Inventory; break; }
+            if (m_iDragWeaponId >= 0 && m_pDragGhost)
+            {
+                const WeaponDef* pDef = WeaponDatabase::GetInst().Get(m_iDragWeaponId);
+                const unsigned int uColor = pDef ? pDef->uColorRGB : 0x808080;
+                m_pDragGhost->SetTexture(TowerIntermissionUI_detail::EnsureSolidTexture(
+                    "tower_shop_w_" + std::to_string(m_iDragWeaponId), uColor));
+            }
+            return;
+        }
+
+        // --- Dragging: the ghost trails the cursor.
+        const float fGhost = m_OwnedRect[0].h;
+        if (m_pDragGhost)
+        {
+            m_pDragGhost->SetRect(mx - fGhost * 0.5f, my - fGhost * 0.5f, fGhost, fGhost);
+            m_pDragGhost->Enable();
+        }
+        if (!pInput->IsMouseButtonUp(MOUSE::LEFT)) return;   // still held
+
+        // --- Release: resolve the drop target, then clear the drag.
+        const int     iDragId = m_iDragWeaponId;
+        const DragSrc eSrc    = m_eDragSrc;
+        m_iDragWeaponId = -1; m_eDragSrc = DragSrc::None;
+        if (m_pDragGhost) m_pDragGhost->Disable();
+
+        // 1) Onto a placed tower row → equip it there (reuse the arm path's
+        //    one-tower-per-weapon check + assignment).
+        for (int i = 0; i < m_iTowerCount; ++i)
+            if (InRect(mx, my, m_TowerRect[i]))
+            {
+                if (!m_bTowerRowIsHeal[i]) { m_iEquipArmedWeaponId = iDragId; OnCycleTowerWeapon(i); }
+                return;
+            }
+        // 2) Onto an unplaced (reserve) tower slot → equip it there.
+        for (int i = 0; i < m_iReserveCount; ++i)
+            if (InRect(mx, my, m_ReserveRect[i]))
+            { m_iEquipArmedWeaponId = iDragId; OnCycleReserveWeapon(i); return; }
+        // 3) Onto the equipped strip → equip (only meaningful from inventory).
+        const int iEquipCap = Player::GetMaxEquipSlots();
+        for (int i = 0; i < kOwnedRows && i < iEquipCap; ++i)
+            if (InRect(mx, my, m_OwnedRect[i]))
+            {
+                if (eSrc == DragSrc::Inventory) { pPlayer->EquipWeapon(iDragId); RebuildList(); }
+                return;
+            }
+        // 4) Onto the inventory strip → unequip (only meaningful from equipped).
+        for (int i = 0; i < kInvRows; ++i)
+            if (InRect(mx, my, m_InvRect[i]))
+            {
+                if (eSrc == DragSrc::Equipped) { pPlayer->UnequipWeapon(iDragId); RebuildList(); }
+                return;
+            }
+        // Dropped elsewhere → no change.
     }
 
     void TowerIntermissionUI::HandleWeaponMenu()

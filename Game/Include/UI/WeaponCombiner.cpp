@@ -114,6 +114,7 @@ namespace Client
                 { CAT_LEVELUP, 2, L"Count",    0x9CCC65, 1.0f, 0.f },
                 { CAT_LEVELUP, 3, L"Speed",    0xFFEE58, 3.0f, 0.f },
                 { CAT_LEVELUP, 4, L"Size",     0xAB47BC, 0.1f, 0.f },
+                { CAT_LEVELUP, 5, L"Lifetime", 0x5C6BC0, 1.0f, 0.f },
                 { CAT_ACCEL,  0, L"Decel",     kHueAccel, -3.f, 0.f }, // amount = speed delta/sec
                 { CAT_ACCEL,  1, L"Constant",  kHueAccel,  0.f, 0.f },
                 { CAT_ACCEL,  2, L"Accel",     kHueAccel,  6.f, 0.f },
@@ -433,6 +434,20 @@ namespace Client
             m_pAddButton->SetOnClick([this] { OnAddWeapon(); });
         }
         m_pAddText = makeText("wc_add_txt", m_pMidFont, fAddX, fCraftY, fAddW, fCraftH, L"무기 추가");
+
+        // "Delete weapon" button — mirrors Add on the LEFT of Save. Removes the
+        // weapon being edited; enabled only while one is selected (RefreshCraft
+        // greys it otherwise). Red to flag the destructive action.
+        const float fDelW = (std::max)(160.f, W * 0.13f);
+        const float fDelX = fCraftX - W * 0.015f - fDelW;
+        m_pDeleteButton = CreateComponent<Engine::Button>("wc_del_btn");
+        if (m_pDeleteButton)
+        {
+            m_pDeleteButton->SetRect(fDelX, fCraftY, fDelW, fCraftH);
+            m_pDeleteButton->SetTexture(EnsureSolidTexture(kCraftOffColor));
+            m_pDeleteButton->SetOnClick([this] { OnDeleteWeapon(); });
+        }
+        m_pDeleteText = makeText("wc_del_txt", m_pMidFont, fDelX, fCraftY, fDelW, fCraftH, L"무기 삭제");
 
         // Live power-score preview, sitting in the gap above the craft
         // button. RefreshCraft fills it once all six slots are equipped.
@@ -761,8 +776,15 @@ namespace Client
         m_bCraftReady = bReady;
         if (m_pCraftButton)
             m_pCraftButton->SetTexture(EnsureSolidTexture(bReady ? kCraftOnColor : kCraftOffColor));
+        // Add is for creating a NEW weapon, so it's only live on a fresh build
+        // (nothing selected); editing an existing weapon greys it out.
+        const bool bCanAdd = bReady && m_iEditId < 0;
         if (m_pAddButton)
-            m_pAddButton->SetTexture(EnsureSolidTexture(bReady ? kCraftOnColor : kCraftOffColor));
+            m_pAddButton->SetTexture(EnsureSolidTexture(bCanAdd ? kCraftOnColor : kCraftOffColor));
+        // Delete acts on the selected weapon, so it's live only while one is
+        // being edited (no craft-ready requirement). Red when active.
+        if (m_pDeleteButton)
+            m_pDeleteButton->SetTexture(EnsureSolidTexture(m_iEditId >= 0 ? 0xC0392Bu : kCraftOffColor));
 
         // Live power-score preview: current (level 1) plus the gain per
         // level-up, so the chosen LevelUp part visibly contributes.
@@ -1082,6 +1104,13 @@ namespace Client
     void WeaponCombiner::OnAddWeapon()
     {
         if (!m_bCraftReady) return;   // every card slot must be filled
+        // Add only creates fresh weapons; while editing an existing one the
+        // button is greyed (RefreshCraft), so guard the handler too.
+        if (m_iEditId >= 0)
+        {
+            if (m_pResultText) m_pResultText->SetString(L"편집 해제 후 새 무기를 추가하세요");
+            return;
+        }
 
         auto& db = WeaponDatabase::GetInst();
         // Build straight from the editor state — AssembleWeaponDef sets the
@@ -1113,6 +1142,24 @@ namespace Client
             std::wstring w(def.strName.begin(), def.strName.end());
             m_pResultText->SetString(L"추가됨: " + w);
         }
+    }
+
+    void WeaponCombiner::OnDeleteWeapon()
+    {
+        if (m_iEditId < 0) return;   // nothing selected (button is greyed too)
+
+        auto& db = WeaponDatabase::GetInst();
+        const WeaponDef* p = db.Get(m_iEditId);
+        const std::wstring wName = p ? std::wstring(p->strName.begin(), p->strName.end())
+                                     : std::wstring();
+
+        if (!db.RemoveCatalogueWeapon(m_iEditId)) return;
+        db.SaveToCSV("/Game/Data/Weapons/weapons_v2.csv");
+
+        // Editor now points at a weapon that no longer exists — reset to a blank
+        // build (also refreshes the registry + button states).
+        ClearEditor();
+        if (m_pResultText) m_pResultText->SetString(L"삭제됨: " + wName);
     }
 
     void WeaponCombiner::OnSustainToggle()

@@ -37,6 +37,11 @@ namespace Client
         virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
 
+        // A heal pulse restored iAmount HP to THIS heal tower (it has an
+        // AggroTarget, so HealNearbyAllies heals it too). Green body pulse +
+        // "+N" number, mirroring Tower::OnHealed.
+        void OnHealed(int iAmount);
+
         // Immediate removal for a shop SELL (no death shatter): just leaves the
         // scene. A heal tower owns no separate scene instances (it only pulses),
         // so there's nothing to tear down. The owned-count decrement + refund

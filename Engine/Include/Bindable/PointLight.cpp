@@ -14,7 +14,7 @@
 
 namespace Engine
 {
-	PointLight::PointLight() :
+	LightComponent::LightComponent() :
 		Component()
 		, pPointCBuffer(StaticFindBindable<ConstantBuffer<POINTLIGHT>>("PointLightCBuffer"))
 		, tPointLight{}                  // zero-init: prevents garbage intensity/color
@@ -35,112 +35,112 @@ namespace Engine
 		tPointLight.fQuadraticAttenuation = 0.f;
 	}
 
-	void PointLight::SetLightType(LIGHT_TYPE eType)
+	void LightComponent::SetLightType(LIGHT_TYPE eType)
 	{
 		tPointLight.eLightType = eType;
 	}
 
-	LIGHT_TYPE PointLight::GetLightType() const
+	LIGHT_TYPE LightComponent::GetLightType() const
 	{
 		return tPointLight.eLightType;
 	}
 
-	void PointLight::SetIntensity(float fIntensity)
+	void LightComponent::SetIntensity(float fIntensity)
 	{
 		tPointLight.fIntensity = fIntensity;
 	}
 
-	const std::shared_ptr<ConstantBuffer<POINTLIGHT>>& PointLight::GetLightCBuffer() const
+	const std::shared_ptr<ConstantBuffer<POINTLIGHT>>& LightComponent::GetLightCBuffer() const
 	{
 		return pPointCBuffer;
 	}
 
-	const Matrix& PointLight::GetView() const
+	const Matrix& LightComponent::GetView() const
 	{
 		return matView;
 	}
 
-	const Matrix& PointLight::GetViewProject() const
+	const Matrix& LightComponent::GetViewProject() const
 	{
 		return matViewProject;
 	}
 
-	const ORTHOINFO& PointLight::GetOrthoInfo() const
+	const ORTHOINFO& LightComponent::GetOrthoInfo() const
 	{
 		return m_tOrthoInfo;
 	}
 
-	void PointLight::SetOrthoInfo(const ORTHOINFO& tInfo)
+	void LightComponent::SetOrthoInfo(const ORTHOINFO& tInfo)
 	{
 		m_tOrthoInfo = tInfo;
 	}
 
-	float PointLight::GetIntensity() const
+	float LightComponent::GetIntensity() const
 	{
 		return tPointLight.fIntensity;
 	}
 
-	Vector4 PointLight::GetLightColor() const
+	Vector4 LightComponent::GetLightColor() const
 	{
 		return tPointLight.color;
 	}
 
-	Vector4 PointLight::GetAmbientColor() const
+	Vector4 LightComponent::GetAmbientColor() const
 	{
 		return tPointLight.ambientColor;
 	}
 
-	void PointLight::SetLightColor(const Vector4& vColor)
+	void LightComponent::SetLightColor(const Vector4& vColor)
 	{
 		tPointLight.color = vColor;
 	}
 
-	void PointLight::SetAmbientColor(const Vector4& vColor)
+	void LightComponent::SetAmbientColor(const Vector4& vColor)
 	{
 		tPointLight.ambientColor = vColor;
 	}
 
-	float PointLight::GetConstantAttenuation() const
+	float LightComponent::GetConstantAttenuation() const
 	{
 		return tPointLight.fConstantAttenuation;
 	}
 
-	float PointLight::GetLinearAttenuation() const
+	float LightComponent::GetLinearAttenuation() const
 	{
 		return tPointLight.fLinearAttenuation;
 	}
 
-	float PointLight::GetQuadraticAttenuation() const
+	float LightComponent::GetQuadraticAttenuation() const
 	{
 		return tPointLight.fQuadraticAttenuation;
 	}
 
-	void PointLight::SetConstantAttenuation(float fAttenuation)
+	void LightComponent::SetConstantAttenuation(float fAttenuation)
 	{
 		tPointLight.fConstantAttenuation = fAttenuation;
 	}
 
-	void PointLight::SetLinearAttenuation(float fAttenuation)
+	void LightComponent::SetLinearAttenuation(float fAttenuation)
 	{
 		tPointLight.fLinearAttenuation = fAttenuation;
 	}
 
-	void PointLight::SetQuadraticAttenuation(float fAttenuation)
+	void LightComponent::SetQuadraticAttenuation(float fAttenuation)
 	{
 		tPointLight.fQuadraticAttenuation = fAttenuation;
 	}
 
-	float PointLight::GetSpotConeExponent() const
+	float LightComponent::GetSpotConeExponent() const
 	{
 		return tPointLight.fSpotConeExponent;
 	}
 
-	void PointLight::SetSpotConeExponent(float fExponent)
+	void LightComponent::SetSpotConeExponent(float fExponent)
 	{
 		tPointLight.fSpotConeExponent = fExponent;
 	}
 
-	void PointLight::Reset()
+	void LightComponent::Reset()
 	{
 		__super::Reset();
 
@@ -170,7 +170,7 @@ namespace Engine
 		matView[3][3] = 1.f;
 	}
 
-	bool PointLight::Init()
+	bool LightComponent::Init()
 	{
 		if (!__super::Init())
 		{
@@ -196,7 +196,7 @@ namespace Engine
 		return true;
 	}
 
-	void PointLight::Update(float fDeltaTime)
+	void LightComponent::Update(float fDeltaTime)
 	{
 		__super::Update(fDeltaTime);
 
@@ -243,14 +243,14 @@ namespace Engine
 		}
 	}
 
-	void PointLight::PreDraw(float fDeltaTime)
+	void LightComponent::PreDraw(float fDeltaTime)
 	{
 		__super::PreDraw(fDeltaTime);
 
-		RenderManager::GetInst()->AddLight(std::static_pointer_cast<PointLight>(std::enable_shared_from_this<CRef>::shared_from_this()));
+		RenderManager::GetInst()->AddLight(std::static_pointer_cast<LightComponent>(std::enable_shared_from_this<CRef>::shared_from_this()));
 	}
 
-	void PointLight::Bind()
+	void LightComponent::Bind()
 	{
 		pPointCBuffer->UpdateBuffer(tPointLight);
 		pPointCBuffer->Bind();
@@ -258,18 +258,18 @@ namespace Engine
 		// + bind is the entire job for the deferred lighting pass.
 	}
 
-	void PointLight::PostBind()
+	void LightComponent::PostBind()
 	{
 		// No-op for now — RenderManager calls this for symmetry with the
 		// old Drawable::Bind/PostBind pair, but light CB doesn't need a
 		// cleanup step.
 	}
 
-	std::shared_ptr<Component> PointLight::Clone()
+	std::shared_ptr<Component> LightComponent::Clone()
 	{
-		return std::make_shared<PointLight>(*this);
+		return std::make_shared<LightComponent>(*this);
 	}
-	void PointLight::Save(FILE* pFile)
+	void LightComponent::Save(FILE* pFile)
 	{
 		__super::Save(pFile);
 
@@ -280,7 +280,7 @@ namespace Engine
 
 		fwrite(&bMainLight, 1, 1, pFile);
 	}
-	void PointLight::Load(FILE* pFile)
+	void LightComponent::Load(FILE* pFile)
 	{
 		__super::Load(pFile);
 
@@ -293,7 +293,7 @@ namespace Engine
 
 		if (bMainLight)
 		{
-			Graphics::GetInst()->SetLight(std::static_pointer_cast<PointLight>(shared_from_this()));
+			Graphics::GetInst()->SetLight(std::static_pointer_cast<LightComponent>(shared_from_this()));
 		}
 	}
 }

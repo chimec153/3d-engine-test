@@ -106,7 +106,7 @@ namespace Engine
 		// NDC, tilted faces (e.g. a tall tower's front from an isometric
 		// camera) got pushed back enough that enemies a short distance behind
 		// passed the LESS depth test and drew in front of the tower.
-		const std::shared_ptr<RasterizerState>& pRasterizer = CreateBindable("Basic", true, D3D11_CULL_BACK, D3D11_FILL_SOLID);
+		const std::shared_ptr<RasterizerState>& pRasterizer = CreateBindable("Basic", true, D3D11_CULL_BACK, D3D11_FILL_SOLID, 1.f, 1.8f);
 
 		if (pRasterizer)
 		{

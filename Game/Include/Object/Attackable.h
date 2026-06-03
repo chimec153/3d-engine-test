@@ -92,12 +92,16 @@ namespace Client
             if (m_iHP < 0)        m_iHP = 0;
         }
         // Restore current HP (heal tower). Clamped to max; never revives a
-        // dead (HP<=0) target.
-        void Heal(int iAmount)
+        // dead (HP<=0) target. Returns the HP actually restored (0 if already
+        // full / dead) so the caller only fires heal feedback when it did
+        // something.
+        int Heal(int iAmount)
         {
-            if (iAmount <= 0 || m_iHP <= 0) return;
+            if (iAmount <= 0 || m_iHP <= 0) return 0;
+            const int iBefore = m_iHP;
             m_iHP += iAmount;
             if (m_iHP > m_iMaxHP) m_iHP = m_iMaxHP;
+            return m_iHP - iBefore;
         }
         void AddAttack(int iDelta)
         {

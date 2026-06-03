@@ -25,6 +25,9 @@ REGISTER_GAMEOBJECT(Client::HealTower, HealTower)
 #include "Scene/Scene.h"
 #include "Scene/Layer.h"
 #include "UI/Gauge.h"
+#include "../UI/DamageText.h"
+#include "Player.h"
+#include "Tower.h"
 #include "Types.h"
 #include <cmath>
 #include <vector>
@@ -190,6 +193,22 @@ namespace Client
             static_cast<float>(cz) + 0.5f);
     }
 
+    void HealTower::OnHealed(int iAmount)
+    {
+        if (iAmount <= 0) return;
+        // Mirror Tower::OnHealed — green body pulse (hit-flash channel, decayed
+        // in Update) + a green "+N" number above the cylinder.
+        if (m_pMaterial)
+            m_pMaterial->SetHitFlash(Engine::Vector3(0.2f, 1.f, 0.45f), 1.f);
+        if (m_pTransform)
+        {
+            Engine::Vector3 vHead = m_pTransform->GetPosition();
+            vHead.y += 1.7f;
+            DamageTextManager::GetInst()->Spawn(
+                vHead, iAmount, false, reinterpret_cast<uintptr_t>(this), true);
+        }
+    }
+
     void HealTower::Update(float fDeltaTime)
     {
         __super::Update(fDeltaTime);
@@ -218,6 +237,10 @@ namespace Client
             InActivate();
             return;
         }
+
+        // Decay the green heal-flash pulse set by OnHealed (a heal tower heals
+        // itself too). Separate PS channel from the body's green diffuse.
+        if (m_pMaterial) m_pMaterial->TickHitFlash(fDeltaTime, 4.f);
 
         // HP bar — projected from the cylinder top each frame. Mirrors
         // Tower::Update; the only difference is the head-Y offset (the
@@ -317,7 +340,20 @@ namespace Client
             const float dz = e.z - vPos.z;
             if (dx * dx + dz * dz > fR2) continue;
             if (auto pHP = p->GetComponent<Attackable>())
-                pHP->Heal(m_iHealAmount);
+            {
+                // Only fire feedback when the heal actually restored HP (skip
+                // allies already at full). Dispatch to the concrete ally type
+                // for its character-level cue + "+N" number; the player also
+                // gets the green screen vignette (inside Player::OnHealed).
+                const int iHealed = pHP->Heal(m_iHealAmount);
+                if (iHealed <= 0) continue;
+                if (auto pPlayer = dynamic_cast<Player*>(p.get()))
+                    pPlayer->OnHealed(iHealed);
+                else if (auto pTower = dynamic_cast<Tower*>(p.get()))
+                    pTower->OnHealed(iHealed);
+                else if (auto pHealTower = dynamic_cast<HealTower*>(p.get()))
+                    pHealTower->OnHealed(iHealed);
+            }
         }
     }
 }

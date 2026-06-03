@@ -64,6 +64,12 @@ namespace Client
         Player(int iMaxHP, int iAttackMin, int iAttackMax);
         virtual ~Player() override;
 
+        // A heal tower pulse restored iAmount HP to the player. Fires the
+        // player's heal feedback: a green screen vignette (RenderManager),
+        // a burst of rising green motes around the body, and a green "+N"
+        // number above the head. No-op if iAmount<=0.
+        void OnHealed(int iAmount);
+
     private:
         // Phase E5 — Shadow effect entries. After RollEffect's GameObject
         // migration, each entry holds the GameObject and its MeshRenderer
@@ -86,6 +92,12 @@ namespace Client
         int m_iInitAttackMin;
         int m_iInitAttackMax;
         std::shared_ptr<Attackable> m_pAttackable;
+
+        // Heal feedback — rising green "motes" burst around the body when a
+        // heal pulse lands (OnHealed). World-space particles, so they only
+        // need positioning at emit time, not per-frame syncing. Armed once in
+        // Init (StopEmit + AddEmitCount(1)); OnHealed bursts it.
+        std::shared_ptr<Engine::Particle> m_pHealMoteParticle;
 
         // Phase E5 — Components on this GameObject.
         std::shared_ptr<Engine::Transform>             m_pTransform;
@@ -148,8 +160,20 @@ namespace Client
             // instances; releasing it (selling the tower) respawns them. Updated
             // each frame by ReconcileTowerHeldInstances.
             bool bTowerHeld = false;
+            // Equip model: an owned weapon is either EQUIPPED (in a player firing
+            // slot) or sitting in the INVENTORY (idle). Only equipped weapons
+            // that aren't tower-held actually fire. The shop moves weapons
+            // between inventory / equip slots / towers.
+            bool bEquipped = true;
+            // Whether this slot's persistent instances (orbs/beams/pets) are
+            // currently spawned, so ReconcileTowerHeldInstances only spawns/tears
+            // down on an active-state transition (active = equipped && !held).
+            bool bInstancesLive = false;
         };
+        // Owned-weapon collection cap (equipped + inventory). Player FIRES only
+        // up to kMaxEquipSlots of them; the rest sit in inventory.
         static constexpr int kMaxWeaponSlots = 6;
+        static constexpr int kMaxEquipSlots  = 4;
         std::vector<WeaponSlot> m_vecWeaponSlots;
 
         // Weapon ids currently mounted on towers (placed + reserve), rebuilt
@@ -282,6 +306,23 @@ namespace Client
         // reserve). The weapon HUD hides such weapons — they're used by the
         // tower, not the player. Backed by the per-frame held set.
         bool IsWeaponTowerHeld(int iWeaponId) const;
+
+        // --- Equip / inventory (shop) -----------------------------------------
+        // The player FIRES only equipped, non-tower-held weapons (up to
+        // kMaxEquipSlots). Everything else owned sits idle in the inventory.
+        static constexpr int GetMaxEquipSlots() { return kMaxEquipSlots; }
+        // Weapons the player currently fires (equipped & not on a tower).
+        std::vector<int> GetEquippedWeaponIds() const;
+        // Owned weapons sitting in the inventory (not equipped, not on a tower).
+        std::vector<int> GetInventoryWeaponIds() const;
+        // How many weapons occupy a player equip slot right now (incl. any that
+        // are also tower-held — those still count against the cap until moved).
+        int  GetEquippedCount() const;
+        bool IsWeaponEquipped(int iWeaponId) const;
+        // Move an owned weapon between the inventory and a player equip slot.
+        // EquipWeapon fails (returns false) when all equip slots are full.
+        bool EquipWeapon(int iWeaponId);
+        void UnequipWeapon(int iWeaponId);
         int  GetWeaponSlotCount() const { return static_cast<int>(m_vecWeaponSlots.size()); }
         static constexpr int GetMaxWeaponSlots() { return kMaxWeaponSlots; }
 
@@ -362,6 +403,12 @@ namespace Client
         // code paths that still reach in (Inventory's UI camera placement,
         // shadow effect spawning in RollEffect, etc.).
         std::shared_ptr<Engine::Transform> GetTransform() const { return m_pTransform; }
+
+        // Target-mode (mouse-aim) state. LCTRL toggles it in Input(); the
+        // bottom-left HUD button reads IsMouseAim() to label itself and calls
+        // ToggleMouseAim() to flip it exactly like the key.
+        bool IsMouseAim() const { return m_bMouseAim; }
+        void ToggleMouseAim() { m_bMouseAim = !m_bMouseAim; }
 
     public:
         void CollisionTerrainStay(Engine::Collider* pSrc, Engine::Collider* pDest, float fDeltaTime);

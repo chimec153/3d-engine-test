@@ -158,7 +158,7 @@ namespace Engine
 		pCamera[static_cast<int>(eType)] = _pCamera;
 	}
 
-	void Graphics::SetLight(const std::shared_ptr<class PointLight>& _pLight)
+	void Graphics::SetLight(const std::shared_ptr<class LightComponent>& _pLight)
 	{
 		pLight = _pLight;
 	}
@@ -183,7 +183,7 @@ namespace Engine
 		return pDepthStencilView;
 	}
 
-	const std::shared_ptr<PointLight>& Graphics::GetLight() const
+	const std::shared_ptr<LightComponent>& Graphics::GetLight() const
 	{
 		return pLight;
 	}

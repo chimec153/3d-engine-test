@@ -161,7 +161,7 @@ namespace Client
 
     void DamageTextManager::Spawn(const Engine::Vector3& vWorldPos,
                                   int iValue, bool bCritical,
-                                  uintptr_t ownerHandle)
+                                  uintptr_t ownerHandle, bool bHeal)
     {
         if (!m_bInitialised || iValue <= 0) return;
 
@@ -177,6 +177,7 @@ namespace Client
                     p.fAge = 0.f;                  // restart fade
                     p.vSpawnWorldPos = vWorldPos;  // follow the latest hit
                     p.bCritical = p.bCritical || bCritical;
+                    p.bHeal = bHeal;
                     return;
                 }
             }
@@ -203,6 +204,7 @@ namespace Client
         p.fLifetime  = bCritical ? 1.2f : 0.9f;
         p.iValue     = iValue;
         p.bCritical  = bCritical;
+        p.bHeal      = bHeal;
         p.fJitterX   = (static_cast<float>(std::rand() % 17) - 8.f);
         p.bActive    = true;
         p.ownerHandle = ownerHandle;
@@ -300,7 +302,8 @@ namespace Client
                 : (std::max)(0.f, 1.f - (t - fFadeStart) / (1.f - fFadeStart));
 
             char buf[16];
-            int  iLen = std::snprintf(buf, sizeof(buf), "%d", p.iValue);
+            int  iLen = std::snprintf(buf, sizeof(buf),
+                                      p.bHeal ? "+%d" : "%d", p.iValue);
             if (iLen <= 0) continue;
 
             float fTotalW = 0.f;
@@ -316,6 +319,7 @@ namespace Client
 
             float vMain[4] = { 1.f, 0.95f, 0.85f, fAlpha };
             if (p.bCritical) { vMain[0] = 1.f; vMain[1] = 0.25f; vMain[2] = 0.15f; }
+            if (p.bHeal)     { vMain[0] = 0.3f; vMain[1] = 1.f; vMain[2] = 0.45f; }
             const float vEdge[4] = { 0.f, 0.f, 0.f, fAlpha };
 
             // Emit 5 passes × N glyphs worth of GlyphInstance entries

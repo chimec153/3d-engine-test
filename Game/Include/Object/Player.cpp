@@ -30,11 +30,13 @@ REGISTER_GAMEOBJECT_EX(Player, new Client::Player(100, 1, 5))
 #include "AggroTarget.h"
 #include "Bindable/Decal.h"
 #include "Vfx/FootstepManager.h"
+#include "Vfx/AimIndicatorManager.h"
 #include "Vfx/VfxManager.h"
 #include "Vfx/MuzzleFlashManager.h"
 #include "Bindable/ColliderLine.h"
 #include "Bindable/UIRenderer.h"
 #include "../UI/Inventory.h"
+#include "../UI/DamageText.h"
 #include "Bindable/SoundBindable.h"
 #include "Render/RenderManager.h"
 #include "Core/Window.h"
@@ -52,6 +54,7 @@ REGISTER_GAMEOBJECT_EX(Player, new Client::Player(100, 1, 5))
 #include "../Scene/GameScene.h"
 #include <cmath>
 #include <cstdlib>
+#include "Bindable/PointLight.h"
 
 namespace Client
 {
@@ -352,6 +355,34 @@ namespace Client
 		Engine::Window::GetInst()->GetTimer()->RequestHitStop(0.06f, 0.05f);
 	}
 
+	void Player::OnHealed(int iAmount)
+	{
+		if (iAmount <= 0) return;
+
+		// Screen-level cue: green vignette pop — the colour-inverse of the
+		// damage red, so heal/damage read as one consistent visual language.
+		Engine::RenderManager::GetInst()->AddHealFlash(0.45f);
+
+		// Character-level cue: burst rising green motes at the body. World-space
+		// particles, so positioning the emitter here (right before the burst) is
+		// enough — they fly independently after spawn, no per-frame sync needed.
+		if (m_pHealMoteParticle && m_pTransform)
+		{
+			if (auto pTr = m_pHealMoteParticle->GetTransform())
+				pTr->SetPosition(m_pTransform->GetPosition());
+			m_pHealMoteParticle->AddEmitCount(24);
+		}
+
+		// Green "+N" number above the head (matches the heal-tower towers).
+		if (m_pTransform)
+		{
+			Engine::Vector3 vHead = m_pTransform->GetPosition();
+			vHead.y += 1.8f;
+			DamageTextManager::GetInst()->Spawn(
+				vHead, iAmount, false, reinterpret_cast<uintptr_t>(this), true);
+		}
+	}
+
 	void Player::UpdateDamageFeedback(float fDeltaTime)
 	{
 		if (m_fImpactCooldown > 0.f)
@@ -616,6 +647,38 @@ namespace Client
 		// tower exists (towers out-aggro the player — see GameDefs).
 		AddComponent<AggroTarget>("aggro", kPlayerAggro);
 
+
+		if (auto pLight = AddComponent<Engine::LightComponent>("Light"))
+		{
+			pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
+			if (auto pLightTransform = pLight->GetTransform())
+			{
+				pLightTransform->SetInheritParentRotation(false);
+				pLightTransform->SetRX(0.828f);
+				pLightTransform->SetRY(2.126f);
+				pLightTransform->SetParentTransform(m_pTransform.get());
+				m_pTransform->AddChildTransform(pLightTransform.get());
+			}
+
+			// Shrink shadow ortho to match this scene's scale. Player is
+			// authored at scale 0.01 (Player.cpp:442), so gameplay
+			// objects sit in a ~50-unit play radius. PointLight's
+			// default ortho is ±2500 — at a 2048² shadow map that's
+			// ~2.4 units/texel, so a ~1-unit player casts a shadow only
+			// 1-2 texels wide. Tighten to ±50 for ~0.05 units/texel.
+			float fSize = 15.f;
+			Engine::ORTHOINFO tOrtho = {};
+			tOrtho.fLeft = -fSize;
+			tOrtho.fRight = fSize;
+			tOrtho.fTop = fSize;
+			tOrtho.fBottom = -fSize;
+			tOrtho.fNear = 0.1f;
+			tOrtho.fFar = 200.f;
+			pLight->SetOrthoInfo(tOrtho);
+
+			Engine::Graphics::GetInst()->SetLight(pLight);
+		}
+
 		if (m_pTransform)
 		{
 			// 2D world — feet sit on top of the y=0 floor block at y=kWallY,
@@ -650,6 +713,40 @@ namespace Client
 			// target so the post-opaque composite can overlay a silhouette
 			// wherever the player is hidden behind voxel terrain.
 			m_pMeshRenderer->EnableCustomDepth(true);
+		}
+
+		// Heal-feedback emitter: rising green motes burst around the body when a
+		// heal pulse lands (OnHealed). Reuses the shared round particle texture
+		// (tinted green). Armed with the same StopEmit + AddEmitCount(1) pattern
+		// Attackable uses for its blood/dust emitters: that moves the emit count
+		// off continuous (-1) to burst-on-demand (0); OnHealed then bursts it.
+		{
+			std::shared_ptr<Engine::Texture> pMoteTex =
+				Engine::StaticCreateBindable<Engine::Texture>(
+					"particletexture", "/Game/Texture/Particle/particle_00.png", TEXTURE_PATH);
+
+			m_pHealMoteParticle = AddComponent<Engine::Particle>("healmotes", 256);
+			if (m_pHealMoteParticle)
+			{
+				m_pHealMoteParticle->SetAccelaration({ 0.f, 0.6f, 0.f });
+				m_pHealMoteParticle->SetEmitTime(0.0001f);
+				m_pHealMoteParticle->SetMinCreatePosition({ -0.4f, 0.f, -0.4f });
+				m_pHealMoteParticle->SetMaxCreatePosition({ 0.4f, 1.3f, 0.4f });
+				m_pHealMoteParticle->SetStartColor({ 0.3f, 1.f, 0.45f, 1.f });
+				m_pHealMoteParticle->SetEndColor({ 0.4f, 1.f, 0.55f, 0.f });
+				m_pHealMoteParticle->SetMaxLifeTime(0.9f);
+				m_pHealMoteParticle->SetStartSize({ 0.07f, 0.07f });
+				m_pHealMoteParticle->SetEndSize({ 0.13f, 0.13f });
+				m_pHealMoteParticle->SetVelocity({ -0.15f, 0.8f, -0.15f });
+				m_pHealMoteParticle->SetMaxVelocity({ 0.15f, 1.6f, 0.15f });
+				m_pHealMoteParticle->SetTexture(pMoteTex);
+				m_pHealMoteParticle->SetRenderLayer(Engine::RENDER_LAYER::ALPHA);
+				// Arm for burst-on-demand: m_iEmitCount starts at -1 (continuous);
+				// +1 brings it to 0 (off until OnHealed bursts it). Mirrors the
+				// blood/dust emitters in Attackable — NOT StopEmit(), which would
+				// gate emission off entirely (OnHealed never calls ResumeEmit).
+				m_pHealMoteParticle->AddEmitCount(1);
+			}
 		}
 
 		std::shared_ptr<Engine::Animation> pAnimation = m_pAnimation;
@@ -787,6 +884,22 @@ namespace Client
 			}
 		}
 
+		// Target-mode aim indicator: a ground triangle under the player whose
+		// tip points at the cursor while mouse-aim is on. Hidden otherwise.
+		{
+			float fCursorYaw = 0.f;
+			if (m_bMouseAim && TryComputeMouseAimYaw(fCursorYaw))
+			{
+				Engine::Vector3 vMark = pTransform->GetPosition();
+				vMark.y = static_cast<float>(kWallY) + 0.03f;   // just above the floor
+				AimIndicatorManager::GetInst()->Set(vMark, fCursorYaw);
+			}
+			else
+			{
+				AimIndicatorManager::GetInst()->SetVisible(false);
+			}
+		}
+
 		// F: place a wall in the cell immediately in front of the player.
 		// G: remove the wall in the cell immediately in front of the player.
 		// Placing at the player's own cell would trap them inside; the
@@ -901,7 +1014,7 @@ namespace Client
 		// per-frame work here, their orbital instances tick themselves.
 		for (auto& slot : m_vecWeaponSlots)
 		{
-			if (slot.bTowerHeld) continue;   // this weapon is on a tower
+			if (slot.bTowerHeld || !slot.bEquipped) continue;   // on a tower, or in inventory
 			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
 			if (!pDef || pDef->eFireMode != FireMode::Cooldown) continue;
 			// Follow weapons fire through their pets, not the player.
@@ -1045,25 +1158,30 @@ namespace Client
 	{
 		for (auto& slot : m_vecWeaponSlots)
 		{
-			const bool bHeld = IsWeaponTowerHeld(slot.iWeaponId);
-			if (bHeld && !slot.bTowerHeld)
+			slot.bTowerHeld = IsWeaponTowerHeld(slot.iWeaponId);
+			// A weapon "fires for the player" only while equipped AND not on a
+			// tower. Persistent instances (orbs/beams/pets) should exist exactly
+			// when active; spawn/tear-down on the transition so an unequipped or
+			// tower-handed weapon stops, and a re-equipped / released one resumes.
+			const bool bActive = slot.bEquipped && !slot.bTowerHeld;
+			if (bActive && !slot.bInstancesLive)
 			{
-				// Just handed to a tower — drop the player's persistent instances
-				// so the player stops using this weapon entirely.
+				SpawnSlotInstances(slot);
+				slot.bInstancesLive = true;
+			}
+			else if (!bActive)
+			{
+				// Inactive (inventory or tower-held): make sure no persistent
+				// instances linger — clear unconditionally so any spawned by a
+				// level-up/merge on an idle slot can't orphan.
 				for (auto& wp : slot.vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
 				slot.vecSustainedInstances.clear();
 				for (auto& wp : slot.vecBeams) if (auto sp = wp.lock()) sp->InActivate();
 				slot.vecBeams.clear();
 				for (auto& wp : slot.vecPets) if (auto sp = wp.lock()) sp->InActivate();
 				slot.vecPets.clear();
+				slot.bInstancesLive = false;
 			}
-			else if (!bHeld && slot.bTowerHeld)
-			{
-				// Released (tower sold) — respawn this weapon's persistent
-				// instances; Cooldown weapons just resume firing next frame.
-				SpawnSlotInstances(slot);
-			}
-			slot.bTowerHeld = bHeld;
 		}
 	}
 
@@ -1322,7 +1440,7 @@ namespace Client
 			m_pTransform->GetPosition() + Engine::Vector3{ 0.f, kMuzzleYOffset, 0.f };
 		for (auto& slot : m_vecWeaponSlots)
 		{
-			if (slot.bTowerHeld) continue;   // mounted on a tower — beams torn down
+			if (slot.bTowerHeld || !slot.bEquipped) continue;   // tower / inventory — beams torn down
 			if (slot.vecBeams.empty()) continue;
 			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
 			if (!pDef) continue;
@@ -1408,8 +1526,11 @@ namespace Client
 		WeaponSlot slot;
 		slot.iWeaponId = iWeaponId;
 		slot.iLevel    = 1;
+		// Auto-equip into a free firing slot; overflow lands in the inventory.
+		slot.bEquipped = GetEquippedCount() < kMaxEquipSlots;
 		m_vecWeaponSlots.push_back(std::move(slot));
-		SpawnSlotInstances(m_vecWeaponSlots.back());
+		WeaponSlot& sNew = m_vecWeaponSlots.back();
+		if (sNew.bEquipped) { SpawnSlotInstances(sNew); sNew.bInstancesLive = true; }
 	}
 
 	void Player::AddWeaponCopy(int iWeaponId)
@@ -1429,8 +1550,11 @@ namespace Client
 		WeaponSlot slot;
 		slot.iWeaponId = iWeaponId;
 		slot.iLevel    = 1;
+		// Auto-equip into a free firing slot; overflow lands in the inventory.
+		slot.bEquipped = GetEquippedCount() < kMaxEquipSlots;
 		m_vecWeaponSlots.push_back(std::move(slot));
-		SpawnSlotInstances(m_vecWeaponSlots.back());
+		WeaponSlot& sNew = m_vecWeaponSlots.back();
+		if (sNew.bEquipped) { SpawnSlotInstances(sNew); sNew.bInstancesLive = true; }
 	}
 
 	bool Player::MergeWeapon(int iWeaponId)
@@ -1506,6 +1630,67 @@ namespace Client
 		for (const auto& s : m_vecWeaponSlots)
 			if (s.iWeaponId == iWeaponId) return s.iLevel;
 		return 0;
+	}
+
+	// Equip / inventory partition. A weapon id lands in exactly one place:
+	// tower-held → neither list (shown in the tower section); equipped → the
+	// firing list; otherwise the idle inventory list.
+	std::vector<int> Player::GetEquippedWeaponIds() const
+	{
+		std::vector<int> out;
+		for (const auto& s : m_vecWeaponSlots)
+			if (s.bEquipped && !s.bTowerHeld) out.push_back(s.iWeaponId);
+		return out;
+	}
+
+	std::vector<int> Player::GetInventoryWeaponIds() const
+	{
+		std::vector<int> out;
+		for (const auto& s : m_vecWeaponSlots)
+			if (!s.bEquipped && !s.bTowerHeld) out.push_back(s.iWeaponId);
+		return out;
+	}
+
+	int Player::GetEquippedCount() const
+	{
+		// Player FIRING slots in use = equipped and not handed to a tower.
+		int n = 0;
+		for (const auto& s : m_vecWeaponSlots)
+			if (s.bEquipped && !s.bTowerHeld) ++n;
+		return n;
+	}
+
+	bool Player::IsWeaponEquipped(int iWeaponId) const
+	{
+		for (const auto& s : m_vecWeaponSlots)
+			if (s.iWeaponId == iWeaponId) return s.bEquipped;
+		return false;
+	}
+
+	bool Player::EquipWeapon(int iWeaponId)
+	{
+		// Move the first inventory copy into a free firing slot (instances are
+		// (re)spawned by ReconcileTowerHeldInstances next frame).
+		for (auto& s : m_vecWeaponSlots)
+		{
+			if (s.iWeaponId != iWeaponId || s.bEquipped || s.bTowerHeld) continue;
+			if (GetEquippedCount() >= kMaxEquipSlots) return false;   // all firing slots full
+			s.bEquipped = true;
+			return true;
+		}
+		return false;
+	}
+
+	void Player::UnequipWeapon(int iWeaponId)
+	{
+		// Move the first equipped copy back to the inventory (its instances are
+		// torn down by ReconcileTowerHeldInstances next frame).
+		for (auto& s : m_vecWeaponSlots)
+		{
+			if (s.iWeaponId != iWeaponId || !s.bEquipped) continue;
+			s.bEquipped = false;
+			return;
+		}
 	}
 
 	void Player::FixedUpdate(float fDeltaTime)

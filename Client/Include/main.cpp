@@ -15,7 +15,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         return -1;
     }
 
+#ifndef _DEBUG
     Client::Telemetry::GetInst().Init();
+#endif
 
     Engine::SceneManager::GetInst()->CreateScene<Client::StartScene>();
 
@@ -29,7 +31,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Telemetry shutdown AFTER DestroyInst: GameScene's destructor enqueues the
     // final run_end("quit") during DestroyInst, and Shutdown() flushes the queue
     // (and joins the worker) before the process exits.
+#ifndef _DEBUG
     Client::Telemetry::GetInst().Shutdown();
+#endif
 
     return 0;
 }

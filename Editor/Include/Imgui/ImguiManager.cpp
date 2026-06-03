@@ -1834,7 +1834,7 @@ namespace Editor
 		}
 	}
 
-	void ImguiManager::PointLight_ImGuiWindow(std::shared_ptr<Engine::PointLight> pLight)
+	void ImguiManager::PointLight_ImGuiWindow(std::shared_ptr<Engine::LightComponent> pLight)
 	{
 		CRef_ImGuiWindow(pLight);
 
@@ -2620,7 +2620,7 @@ namespace Editor
 			for (const auto& pObj : pLayer->GetGameObjectList())
 			{
 				if (!pObj) continue;
-				auto pLight = pObj->GetComponent<Engine::PointLight>();
+				auto pLight = pObj->GetComponent<Engine::LightComponent>();
 				if (!pLight) continue;
 				// PointLight owns its Transform internally — pull it via the
 				// Component::GetTransform() virtual rather than searching
@@ -3153,7 +3153,7 @@ namespace Editor
 						auto pNewObj = pScene->CreateGameObject(s_szLightName, pLayer);
 						if (pNewObj)
 						{
-							auto pLight = pNewObj->AddComponent<Engine::PointLight>(s_szLightName);
+							auto pLight = pNewObj->AddComponent<Engine::LightComponent>(s_szLightName);
 							if (pLight)
 							{
 								pLight->SetLightType(static_cast<Engine::LIGHT_TYPE>(s_iLightType));
@@ -3356,7 +3356,7 @@ namespace Editor
 			MeshRenderer_ImGuiWindow(pMR);
 		}
 
-		if (auto pLight = std::dynamic_pointer_cast<Engine::PointLight>(pComponent))
+		if (auto pLight = std::dynamic_pointer_cast<Engine::LightComponent>(pComponent))
 		{
 			PointLight_ImGuiWindow(pLight);
 		}

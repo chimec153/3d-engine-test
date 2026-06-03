@@ -42,6 +42,11 @@ namespace Engine
     public:
         void SetParentTransform(Transform* pParent);
         void AddChildTransform(Transform* pChild);
+        // When false, this child keeps its own world orientation instead of
+        // adding the parent's rotation. Position still orbits the parent
+        // (relative offset is rotated by parent rotation). Default true.
+        void SetInheritParentRotation(bool bInherit);
+        bool IsInheritParentRotation() const;
         const std::shared_ptr<class ConstantBuffer<_tagTransformBuffer>>& GetConstantBuffer()    const;
         const _tagTransformBuffer& GetBuffer()  const;
         void SetCameraType(CAMERA_TYPE eType);
@@ -66,6 +71,7 @@ namespace Engine
         bool m_bUpdateRotation;
         bool m_bUpdatePosition;
         bool m_bUpdateScale;
+        bool m_bInheritParentRotation;
 
     public:
         void SetX(float x);

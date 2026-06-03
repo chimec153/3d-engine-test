@@ -49,7 +49,7 @@ namespace Client
         // rendering as flat black spheres in the deferred pass.
         if (auto pLightObj = CreateGameObject("light", FindLayer(DEFAULT_LAYER)))
         {
-            if (auto pLight = pLightObj->AddComponent<Engine::PointLight>("light"))
+            if (auto pLight = pLightObj->AddComponent<Engine::LightComponent>("light"))
             {
                 pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
                 pLight->GetTransform()->SetRX(1.f);

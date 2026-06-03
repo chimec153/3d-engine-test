@@ -56,6 +56,12 @@ namespace Client
         // and would be re-applied with a second id on the next LoadFromCSV.)
         int AddCatalogueWeapon(const WeaponDef& def);
 
+        // Removes the weapon with the given id from the live catalogue and
+        // rebuilds the id->index map. Returns false if no such id is loaded.
+        // Used by the weapon editor's "delete weapon" button; the caller
+        // persists via SaveToCSV so the row is dropped from weapons_v2.csv.
+        bool RemoveCatalogueWeapon(int iId);
+
         // Crafted-weapon registry + equip loadout (WeaponComboScene).
         // Only *equipped* crafted weapons feed the in-stage level-up pool,
         // capped at kMaxEquipped. The registry is indexed in craft order;

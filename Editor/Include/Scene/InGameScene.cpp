@@ -145,7 +145,7 @@ namespace Editor
 
 		if (auto pLightObj = CreateGameObject("Light", FindLayer(DEFAULT_LAYER)))
 		{
-			if (auto pLight = pLightObj->AddComponent<Engine::PointLight>("Light"))
+			if (auto pLight = pLightObj->AddComponent<Engine::LightComponent>("Light"))
 			{
 				pLight->SetLightType(Engine::LIGHT_TYPE::DIRECTIONAL);
 				Engine::Graphics::GetInst()->SetLight(pLight);

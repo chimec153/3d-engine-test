@@ -106,8 +106,10 @@ namespace Client
 
     // Which stat the level-up bump touches. The amount column means
     // different things per field: Damage / Count are additive integers,
-    // Cooldown is a multiplier (e.g. 0.9 = -10%/level), Speed and Size are
-    // additive (world-units/sec and uniform scale respectively).
+    // Cooldown is a multiplier (e.g. 0.9 = -10%/level), Speed / Size / Lifetime
+    // are additive (world-units/sec, uniform scale, and seconds respectively).
+    // New fields go BEFORE COUNT_ so the existing indices stay stable (they're
+    // the array index in fLevelUpAmt and the legacy crafted-save int column).
     enum class LevelUpField
     {
         Damage,
@@ -115,6 +117,7 @@ namespace Client
         Count,
         Speed,
         Size,
+        Lifetime,  // additive seconds added to the projectile's lifetime/level
         COUNT_,    // suffixed because COUNT collides with the enum name on
                    // older MSVC parses inside macro contexts
     };
@@ -340,6 +343,14 @@ namespace Client
         // Defensive floor — a zero/negative scale would collapse the mesh
         // and the derived collider radius.
         return sz < 0.01f ? 0.01f : sz;
+    }
+    inline float ComputeLifetime(const WeaponDef& def, int iLevel)
+    {
+        float t = def.fLifetime;
+        t += LevelUpAmt(def, LevelUpField::Lifetime) * static_cast<float>(iLevel - 1);
+        // Floor at a small positive so a negative level-up amount can't despawn
+        // the projectile on frame 1 (Sustained's 9999 sentinel is unaffected).
+        return t < 0.1f ? 0.1f : t;
     }
 
     // Multiply split generations for a build: how many times it can split

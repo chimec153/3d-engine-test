@@ -349,8 +349,9 @@ namespace Client
         if (m_iHP <= 0)
         {
             // Telemetry: count this kill for the current run (reset on RunStart).
+#ifndef _DEBUG
             Telemetry::GetInst().AddKill();
-
+#endif
             // Stylized death burst at the body — flat-colour puff cloud, star
             // / diamond sparkles, hard-edge smoke ring (DeathBurstManager). The
             // puff palette comes from a per-enemy-colour ramp LUT. Replaces the

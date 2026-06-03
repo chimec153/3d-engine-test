@@ -72,7 +72,7 @@ namespace Engine
 		CPtr<ID3D11RenderTargetView> pRenderTargetView;
 		CPtr<ID3D11DepthStencilView> pDepthStencilView;
 		std::shared_ptr<class Camera> pCamera[static_cast<int>(CAMERA_TYPE::END)];
-		std::shared_ptr<class PointLight> pLight;
+		std::shared_ptr<class LightComponent> pLight;
 		BindCache m_bindCache;
 
 	public:
@@ -86,7 +86,7 @@ namespace Engine
 	public:
 		std::shared_ptr<class Camera> GetCamera(CAMERA_TYPE eType = CAMERA_TYPE::NORMAL)	const;
 		void SetCamera(std::shared_ptr<class Camera> pCamera, CAMERA_TYPE eType = CAMERA_TYPE::NORMAL);
-		void SetLight(const std::shared_ptr<class PointLight>& pLight);
+		void SetLight(const std::shared_ptr<class LightComponent>& pLight);
 		ID3D11DeviceContext* GetDeviceContext()	const;
 		ID3D11Device* GetDevice()	const;
 		const CPtr<ID3D11RenderTargetView>& GetRTV()	const;
@@ -95,7 +95,7 @@ namespace Engine
 		// target — needs the swap chain to query that surface.
 		const CPtr<IDXGISwapChain>& GetSwapChain() const { return pSwapChain; }
 		const CPtr<ID3D11DepthStencilView>& GetDSV()	const;
-		const std::shared_ptr<class PointLight>& GetLight()	const;
+		const std::shared_ptr<class LightComponent>& GetLight()	const;
 
 		BindCache& GetBindCache() { return m_bindCache; }
 		void ResetBindCache() { m_bindCache.Reset(); }

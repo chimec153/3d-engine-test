@@ -98,11 +98,22 @@ namespace Client
         std::shared_ptr<Engine::Button> m_pLockButtons[kBuyRows];
         std::shared_ptr<Engine::Text>   m_pLockTexts[kBuyRows];
 
-        // Your Weapons — draggable owned-weapon icons (horizontal strip).
+        // Equipped weapons — the player's firing slots (≤ Player kMaxEquipSlots).
+        // L-click an icon to UNEQUIP it (→ inventory); R-click for the menu
+        // (sell / merge / equip-to-tower). Empty firing slots show a dim [+].
         std::shared_ptr<Engine::Text>   m_pOwnedHeader;
         std::shared_ptr<Engine::Button> m_pOwnedIcons[kOwnedRows];
         int                             m_iOwnedIds[kOwnedRows];
         Rect                            m_OwnedRect[kOwnedRows];   // hit-test
+
+        // Weapon inventory — owned weapons that are neither equipped nor on a
+        // tower (idle). L-click to EQUIP (→ a free firing slot); R-click for the
+        // menu (sell / merge / equip-to-tower).
+        static constexpr int kInvRows = 6;
+        std::shared_ptr<Engine::Text>   m_pInvHeader;
+        std::shared_ptr<Engine::Button> m_pInvIcons[kInvRows];
+        int                             m_iInvIds[kInvRows] = {};
+        Rect                            m_InvRect[kInvRows];
 
         std::shared_ptr<Engine::Text>   m_pTowerHeader;
         std::shared_ptr<Engine::Button> m_pTowerButtons[kTowerRows];
@@ -158,6 +169,16 @@ namespace Client
         // same click as an off-target cancel; cleared on the next poll.
         bool m_bEquipArmedThisFrame = false;
         std::shared_ptr<Engine::Button> m_pDragGhost;
+
+        // Real drag-and-drop: press on an equipped / inventory weapon icon to
+        // pick it up (the ghost follows the cursor), release over a target to
+        // move it — inventory→equip, equipped→inventory, either→a tower slot.
+        // -1 = not dragging. Distinct from the menu's click-to-arm equip flow.
+        enum class DragSrc { None, Equipped, Inventory };
+        int     m_iDragWeaponId = -1;
+        DragSrc m_eDragSrc      = DragSrc::None;
+        // Poll the mouse to drive a press-drag-release weapon move (Update).
+        void HandleDrag();
 
         // Hover tooltip — a dark panel + multi-line text showing the weapon's
         // detail stats; follows the cursor while hovering a weapon (buy row or
@@ -226,11 +247,15 @@ namespace Client
         // hides it. Merge = combine two owned copies of the same weapon into
         // one higher-level copy (free); Equip arms the weapon for a
         // tower/reserve click.
-        void OpenWeaponMenu(int iOwnedIndex);
+        void OpenWeaponMenu(int iWeaponId, const Rect& anchor);
         void CloseWeaponMenu();
         void OnMenuSell();
         void OnMenuMerge();
         void OnMenuEquip();
+        // Equipped-strip icon L-click → unequip that weapon (→ inventory).
+        void OnEquipSlotClick(int iIndex);
+        // Inventory-strip icon L-click → equip that weapon (→ a free firing slot).
+        void OnInventoryClick(int iIndex);
 
         // Tower action menu — the placed-tower analogue of the weapon menu,
         // popped from a tower-loadout row click (reuses the same panel/buttons).

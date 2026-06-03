@@ -37,7 +37,7 @@ namespace Engine
 		}
 
 	private:
-		std::list<class std::shared_ptr<class PointLight>>	m_LightList[static_cast<int>(LIGHT_TYPE::END)];
+		std::list<class std::shared_ptr<class LightComponent>>	m_LightList[static_cast<int>(LIGHT_TYPE::END)];
 		// Phase E5 — m_RenderList<Drawable>, m_ShadowList, m_mapInstance,
 		// m_mapShadowInstance removed. With AddDrawable gone (E5) and all
 		// game classes migrated to GameObject + MeshRendererComponent,
@@ -176,6 +176,7 @@ namespace Engine
 		float m_fChipRed     = 0.f;   // chip-red actual (eases toward target, decays)
 		float m_fLowHp       = 0.f;   // low-HP strength, held by gameplay
 		float m_fFxTime      = 0.f;   // free-running clock for the vignette pulse
+		float m_fHealFlash   = 0.f;   // green heal-flash (decays, max-merged)
 
 		// Per-frame instancing tally — each successful instanced bucket
 		// appends its member count here. The vector preserves render
@@ -231,7 +232,7 @@ namespace Engine
 		float GetFogHeightFallOff() const;
 
 	public:
-		void AddLight(const std::shared_ptr<PointLight>& pLight);
+		void AddLight(const std::shared_ptr<LightComponent>& pLight);
 		void AddMeshRenderer(const std::shared_ptr<class MeshRendererComponent>& pMR);
 		void AddDecalComponent(const std::shared_ptr<class Decal>& pDecal);
 		void AddParticle(const std::shared_ptr<class Particle>& pParticle);
@@ -257,6 +258,11 @@ namespace Engine
 		void AddDamageFlash(float fStrength);
 		void SetChipRed(float fStrength);
 		void SetLowHp(float fStrength);
+		//   AddHealFlash   — green full-screen flash when the player receives a
+		//                    heal pulse. Mirrors AddDamageFlash (max-merged,
+		//                    decays CPU-side); the green/red contrast keeps the
+		//                    damage-vs-heal visual language consistent.
+		void AddHealFlash(float fStrength);
 		// Phase E5 — AddDrawable removed (no more live Drawable instances).
 		std::shared_ptr<class MRT> GetMRT()	const;
 

@@ -117,7 +117,7 @@ namespace Client
         m_iDamage       = ComputeDamage(def, iLevel);
         m_fSpeed        = ComputeSpeed (def, iLevel);
         m_fAcceleration = def.fAcceleration;
-        m_fLifetime     = def.fLifetime;
+        m_fLifetime     = ComputeLifetime(def, iLevel);
         m_fLifeAcc      = 0.f;
 
         ApplyShape(def.eShape, def.uColorRGB);

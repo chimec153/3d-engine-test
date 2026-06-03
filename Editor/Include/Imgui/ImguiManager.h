@@ -13,7 +13,7 @@ namespace Engine
 	class Collider;
 	class NavMesh;
 	class Transform;
-	class PointLight;
+	class LightComponent;
 	class Sphere;
 	class MRT;
 	class Material;
@@ -104,7 +104,7 @@ namespace Editor
 		void Material_ImGuiWindow(std::shared_ptr<Engine::Material> pMaterial);
 		std::shared_ptr<Engine::Bindable> Drawable_ShowImGuiTree(std::shared_ptr<Engine::Bindable>, bool& bSelect);
 		void TransformBuffer_ImGuiWindow(std::shared_ptr<Engine::Transform> pTransform);
-		void PointLight_ImGuiWindow(std::shared_ptr<Engine::PointLight> pLight);
+		void PointLight_ImGuiWindow(std::shared_ptr<Engine::LightComponent> pLight);
 		void Shader_ImGuiWindow(std::shared_ptr<Engine::Shader> pShader);
 		void Sphere_ImGuiWindow(std::shared_ptr<Engine::Sphere> pSphere);
 		void MRT_ShowImGuiImage(std::shared_ptr<Engine::MRT> pMRT, const std::string& name = "MRT: ");
