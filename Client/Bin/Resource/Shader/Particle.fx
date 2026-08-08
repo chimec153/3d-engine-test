@@ -1,5 +1,6 @@
 #include "shared.hlsl"
 
+// 5x5 가우시안 (블러 PS에서 사용 — 파티클 RNG와는 무관).
 static const float g_pGaussianFilter[5][5] =
 {
     1 / 273.f, 4 / 273.f, 7 / 273.f, 4 / 273.f, 1 / 273.f,
@@ -9,24 +10,21 @@ static const float g_pGaussianFilter[5][5] =
   1 / 273.f, 4 / 273.f, 7 / 273.f, 4 / 273.f, 1 / 273.f
 };
 
-float Random(float fSeed, float fSeed2)
+// 정수 해시 PRNG. 기존 노이즈텍스처+cos/sin+가우시안블러 방식은 세 가지 편향이
+// 있었다: (1) 가우시안 블러가 분산을 줄여 결과가 노이즈 평균(~0.5)으로 쏠림 →
+// 파티클이 스폰 박스 "중앙"으로 뭉침, (2) cos/sin UV가 arcsine 분포라 특정 텍셀
+// 과샘플(가장자리 편향), (3) seed*=threadID라 스레드0은 위치 고정·인접 스레드는 상관.
+// 균일 [0,1)·스레드/시간 비상관 해시로 교체해 박스 전체를 고르게 채운다.
+uint HashU(uint s)
 {
-    float2 uv = float2(cos(fSeed), sin(fSeed2));
-    
-    float value = 0;
-    
-    for (int i = -2; i < 3; ++i)
-    {
-        for (int j = -2; j < 3; ++j)
-        {
-            float u = i / (float) g_iNoiseTextureWidth;
-            float v = j / (float) g_iNoiseTextureHeight;
-            
-            value += g_NoiseTexture.SampleLevel(g_sPoint, uv + float2(u, v), 0.f).x * g_pGaussianFilter[i + 2][j + 2];
-        }
-    }
+    s = s * 747796405u + 2891336453u;
+    uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    return (w >> 22u) ^ w;
+}
 
-    return value;
+float Rand01(uint s)
+{
+    return HashU(s) * (1.0 / 4294967296.0); // [0,1)
 }
 
 [numthreads(64, 1, 1)]
@@ -42,28 +40,34 @@ void CS_PARTICLE(uint3 iDispatchThreadID : SV_DispatchThreadID, uint3 iGroupID :
             
             if (iOriginValue == g_vecEmitter[iGroupID.x] + 1)
             {
-                float fSeed = g_fGlobalAccTime;
-                
-                fSeed -= (int) (fSeed / (float)g_iNoiseTextureWidth) * g_iNoiseTextureWidth;
-                
-                fSeed *= iDispatchThreadID.x;
-                
+                // 파티클별·프레임별 비상관 시드. 같은 프레임의 서로 다른 파티클은
+                // threadID로, 프레임 간에는 accTime 비트(asuint)로 분리된다.
+                uint uSeed = HashU(iDispatchThreadID.x * 2654435761u + asuint(g_fGlobalAccTime));
+
                 float3 vRandom = float3
                 (
-                    Random(fSeed, fSeed * g_fGlobalDeltaTime * 100.f),
-                    Random(fSeed * 10.f, fSeed * g_fGlobalDeltaTime * 10.f),
-                    Random(fSeed * 100.f, fSeed * g_fGlobalDeltaTime * 2.f)
+                    Rand01(uSeed + 0x9E3779B9u),
+                    Rand01(uSeed + 0x85EBCA77u),
+                    Rand01(uSeed + 0xC2B2AE3Du)
                 );
                 
                 g_vecParticleInfo[iDispatchThreadID.x].alive = true;
 
                 g_vecParticleInfo[iDispatchThreadID.x].age = 0.f;
-                g_vecParticleInfo[iDispatchThreadID.x].maxage = g_fParticleMaxLifeTime * (1.f + Random(fSeed * 10.f, fSeed * g_fGlobalDeltaTime) * 0.2f);
+                g_vecParticleInfo[iDispatchThreadID.x].maxage = g_fParticleMaxLifeTime * (1.f + Rand01(uSeed + 0x165667B1u) * 0.2f);
                 g_vecParticleInfo[iDispatchThreadID.x].pos = g_vParticleMinimumPosition * (1.f - vRandom) + g_vParticleMaximumPosition * vRandom + g_matWorld[3].xyz;
                 g_vecParticleInfo[iDispatchThreadID.x].size = g_vParticleStartSize;
                 
+                // 주의: vVelocity~vMaxVelocity는 사실상 "방향 분포 박스"로만 동작한다.
+                // 아래 normalize가 크기를 버리고 단위 벡터만 남기므로(파티클은 1 unit/sec로
+                // 스폰된 뒤 accel로 가속됨), velocity 값의 절대 크기가 아니라 부호·비율
+                // (=방향 분포)만 의미가 있다. 물리적 속도 크기를 쓰려면 normalize를 빼고
+                // 모든 이펙트의 velocity를 재튜닝해야 한다.
                 float3 vSpeed = g_vParticleVelocity * (1.f - vRandom) + g_vParticleMaxVelocity * vRandom;
-                if(length(vSpeed) == 0)
+
+                // normalize(0)=0/0=NaN 방지. NaN speed는 pos를 오염시켜 빌보드가 화면을
+                // 뒤덮는다. 정확히 0뿐 아니라 근사 0도 잡도록 제곱길이로 임계 비교(sqrt 불요).
+                if (dot(vSpeed, vSpeed) < 1e-12)
                 {
                     g_vecParticleInfo[iDispatchThreadID.x].speed = float3(0.f, 0.f, 0.f);
                 }

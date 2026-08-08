@@ -37,8 +37,10 @@ namespace Client
 
         std::weak_ptr<Player>           m_pTarget;
         std::shared_ptr<Engine::Font>   m_pFont;
+        std::shared_ptr<Engine::Font>   m_pHintFont;
         std::shared_ptr<Engine::Button> m_pButton;
         std::shared_ptr<Engine::Text>   m_pLabel;
+        std::shared_ptr<Engine::Text>   m_pHint;    // key-press caption
 
         int m_iLastState = -1;   // -1 = uninitialised, 0 = off, 1 = on
     };

@@ -56,6 +56,23 @@ namespace Client
             L"발사 원점", L"이동 방식", L"지속 시간", L"연사 속도", L"피격 효과", L"크기", L"레벨업", L"가속도", L"충격 효과"
         };
 
+        // 조준 모드 cycle-button labels, indexed by AimMode enum value. Decoupled
+        // from the movement card now that aim is its own editor control: the
+        // enemy-seeking modes (0/1/2) fire toward a chosen enemy, the geometric
+        // modes (3 정면 / 4 커서 / 5 분산) derive the heading from player/cursor.
+        const wchar_t* AimModeLabel(int e)
+        {
+            switch (e)
+            {
+            case 0:  return L"가까운 적";   // Nearest
+            case 1:  return L"최저 체력";   // LowestHP
+            case 2:  return L"무작위 적";   // Random
+            case 4:  return L"커서";        // Cursor
+            case 5:  return L"360° 분산";   // Radial
+            default: return L"정면";        // Forward (3)
+            }
+        }
+
         // Per-category panel hues (behavioural categories share a hue so a
         // filled slot visibly belongs to its row). Level-up-field cards
         // carry their own per-variant colour instead.
@@ -616,6 +633,27 @@ namespace Client
         numRow(m_pNumEvolveInto,  "wc_num_evoid",  L"진화 ID(0=없음)", 0.f, 999.f, 0, 0.f, fFieldW, cy); cy += fLineH + fRowGap;
         numRow(m_pNumEvolveLevel, "wc_num_evolv",  L"진화 레벨",   0.f, 30.f, 0, 0.f, fFieldW, cy); cy += fLineH + fRowGap;
 
+        // 조준 모드 (aim) — independent cycle button: clicking steps through the
+        // AimMode values. AssembleWeaponDef reads m_iAimMode into def.eAimMode,
+        // so aim is no longer bound to the movement card. Greened while an
+        // enemy-seeking mode is active (가까운 적 / 최저 체력 / 무작위).
+        {
+            auto pcap = makeText("wc_aim_cap", m_pSmallFont, fInvLeftX, cy, fCatColW, fLineH, L"조준 모드");
+            reg(pcap, fInvLeftX, cy, fCatColW, fLineH);
+            m_pAimBtn = CreateComponent<Engine::Button>("wc_aim_btn");
+            if (m_pAimBtn)
+            {
+                m_pAimBtn->SetRect(fIconsX, cy, fFieldW, fLineH);
+                m_pAimBtn->SetTexture(EnsureSolidTexture(m_iAimMode <= 2 ? kCraftOnColor : kEmptySlotColor));
+                m_pAimBtn->SetOnClick([this] { OnAimToggle(); });
+            }
+            m_pAimText = makeText("wc_aim_txt", m_pSmallFont, fIconsX, cy, fFieldW, fLineH,
+                                  AimModeLabel(m_iAimMode));
+            reg(m_pAimBtn,  fIconsX, cy, fFieldW, fLineH);
+            reg(m_pAimText, fIconsX, cy, fFieldW, fLineH);
+            cy += fLineH + fRowGap;
+        }
+
         // Shop-availability toggle (caption + a Sustain-style toggle button on
         // the field column). On => the weapon can roll in the shop / start picker.
         {
@@ -872,19 +910,15 @@ namespace Client
         // eOrigin == Random — harmless for every other origin.
         def.fSpawnRadius = m_pNumSpawnRadius ? m_pNumSpawnRadius->GetValue() : 6.f;
         def.fRadialSpeed = move.fGrowth;   // >0 = orbit spirals outward (SpiralOut)
-        // AimMode rides the movement card, but only the auto-targeting movers
-        // (Homing / Aimed) take its enemy-seeking value; every other movement
-        // fires Forward (player facing), preserving the legacy combiner aim.
-        if (move.iVariant == static_cast<int>(MovementType::Homing) ||
-            move.iVariant == static_cast<int>(MovementType::Aimed))
+        // AimMode is its own editor control now (조준 모드 toggle), decoupled from
+        // the movement card so any movement (e.g. a straight Scatter) can fire at
+        // the nearest enemy. Player::ComputeWeaponAimYaw uses it for the spawn
+        // heading; Homing/Aimed movement additionally steers/locks onto it.
         {
-            int iAim = static_cast<int>(move.fAimMode);
-            if (iAim < 0 || iAim >= static_cast<int>(AimMode::COUNT)) iAim = 0;
+            int iAim = m_iAimMode;
+            if (iAim < 0 || iAim >= static_cast<int>(AimMode::COUNT))
+                iAim = static_cast<int>(AimMode::Forward);
             def.eAimMode = static_cast<AimMode>(iAim);
-        }
-        else
-        {
-            def.eAimMode = AimMode::Forward;
         }
         // OnHit part: variant = behaviour, amount = max hits before despawn
         // (0 = unlimited; caps NoChange/Reflect piercing).
@@ -1186,6 +1220,17 @@ namespace Client
         if (m_pShopText) m_pShopText->SetString(m_bShopAvailable ? L"노출 ON" : L"숨김 OFF");
     }
 
+    void WeaponCombiner::OnAimToggle()
+    {
+        using namespace WeaponCombiner_detail;
+        m_iAimMode = (m_iAimMode + 1) % static_cast<int>(AimMode::COUNT);
+        // Green while an enemy-seeking mode (0/1/2) is active so the editor shows
+        // at a glance that the weapon auto-targets.
+        if (m_pAimBtn)  m_pAimBtn->SetTexture(EnsureSolidTexture(m_iAimMode <= 2 ? kCraftOnColor : kEmptySlotColor));
+        if (m_pAimText) m_pAimText->SetString(AimModeLabel(m_iAimMode));
+        RefreshCraft();   // restart the live preview with the new aim
+    }
+
     void WeaponCombiner::OnRegistryClick(int iCell)
     {
         // The list shows the weapons_v2 catalogue in order; a cell maps 1:1 to
@@ -1309,6 +1354,15 @@ namespace Client
         if (m_pNumCooldown) m_pNumCooldown->SetEnabled(!m_bSustained);
         if (m_pNumLifetime) m_pNumLifetime->SetEnabled(!m_bSustained);
 
+        // Aim mode toggle — loaded straight from the def (decoupled from the
+        // movement card). The movement slot above still picks the matching
+        // Homing variant card for display via its fAimMode tie-break.
+        m_iAimMode = static_cast<int>(d.eAimMode);
+        if (m_iAimMode < 0 || m_iAimMode >= static_cast<int>(AimMode::COUNT))
+            m_iAimMode = static_cast<int>(AimMode::Forward);
+        if (m_pAimBtn)  m_pAimBtn->SetTexture(EnsureSolidTexture(m_iAimMode <= 2 ? kCraftOnColor : kEmptySlotColor));
+        if (m_pAimText) m_pAimText->SetString(AimModeLabel(m_iAimMode));
+
         RefreshImpactSlot();
         RefreshLevelUpSlot();
         RefreshCraft();
@@ -1363,6 +1417,11 @@ namespace Client
         m_bShopAvailable = true;
         if (m_pShopBtn)  m_pShopBtn->SetTexture(EnsureSolidTexture(kCraftOnColor));
         if (m_pShopText) m_pShopText->SetString(L"노출 ON");
+
+        // Aim back to the legacy default (정면 / Forward) for a blank build.
+        m_iAimMode = static_cast<int>(AimMode::Forward);
+        if (m_pAimBtn)  m_pAimBtn->SetTexture(EnsureSolidTexture(kEmptySlotColor));
+        if (m_pAimText) m_pAimText->SetString(AimModeLabel(m_iAimMode));
 
         if (m_pNameBox) m_pNameBox->SetText(L"");
 

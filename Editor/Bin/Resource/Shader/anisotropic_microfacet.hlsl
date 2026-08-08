@@ -202,31 +202,21 @@ PSOut PS(VSOut input)
 
     // Emissive is routed through MRT4 (added in PS_Multi after lighting),
     // so it must NOT be baked into baseColor (would otherwise get attenuated
-    // by NDotL/materialFraction).
+    // by NDotL).
     float3 baseColor = g_vDiffuseColor.xyz * g_Texture.Sample(g_sAnisotropic, input.uv).xyz;
     float3 specularRGB = g_SpecularTexture.Sample(g_sAnisotropic, input.uv).xyz;
 
-    // Optional Metalness texture (t9): converts a metalness-workflow
-    // asset (single base color) into the engine's specular workflow.
-    // metalness=0 keeps the supplied diffuse/specular pair as-is.
-    // metalness=1 mutes diffuse and tints F0 with base color.
-    //
-    // F0 (= value3, the actual input to GetFresnel in PS_Multi) starts
-    // from the material uniform g_vSpecularColor (dielectric F0, ~0.04
-    // by default) and lerps toward the original (pre-metalness) base
-    // color when the metalness texture says the surface is metallic.
-    // We must capture baseColor BEFORE the `baseColor *= (1-metalness)`
-    // step below, otherwise metals would tint F0 with black.
-    float3 F0 = g_vSpecularColor.xyz;
+    // metallic-roughness 워크플로우. metallic은 텍스처(t9) 있으면 .r,
+    // 없으면 머티리얼 유니폼 g_vMaterialRoughness.y. PS_Multi가 이 값으로
+    //   F0      = lerp(value3(유전체 F0), albedo, metallic)
+    //   diffuse = albedo * (1 - metallic)
+    // 를 계산하므로 여기선 albedo를 깎거나 specular를 합성하지 않는다.
+    float metallic = g_vMaterialRoughness.y;
     uint mW, mH;
     g_MetalnessTexture.GetDimensions(mW, mH);
     if (mW > 0)
     {
-        float metalness = g_MetalnessTexture.Sample(g_sAnisotropic, input.uv).r;
-        float3 metalBase = baseColor;                // original albedo
-        F0 = lerp(F0, metalBase, metalness);
-        specularRGB = lerp(specularRGB, baseColor, metalness);
-        baseColor *= (1.0f - metalness);
+        metallic = g_MetalnessTexture.Sample(g_sAnisotropic, input.uv).r;
     }
 
     // Optional AO texture (t8): pre-multiply into albedo when bound.
@@ -238,35 +228,24 @@ PSOut PS(VSOut input)
     }
     output.value0.xyz = baseColor;
 
-    // 진단 1: VS가 PS로 넘긴 normal 자체
-    //output.value1.xyz = normalize(input.normal) * 0.5f + 0.5f;
-
-    // 진단 2: VS가 PS로 넘긴 tangent 자체
-    //output.value1.xyz = input.tangent.xyz * 0.5f + 0.5f;
     output.value1.xyz = BumpMapping(input.normal, input.tangent, input.uv) * 0.5f + 0.5f;
 
     output.value2.xyz = specularRGB;
 
-    output.value3.xyz = F0;
+    // value3.xyz = 유전체 F0 베이스(~0.04). 디퓨드에서 metallic으로 albedo와 lerp.
+    output.value3.xyz = g_vSpecularColor.xyz;
 
     output.value4.xyz = g_vEmissiveColor.xyz * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv).xyz;
     output.value4.w = 1.f;
 
-    // Optional Roughness texture (t6): .r overrides uniform when bound.
+    // roughness: 텍스처(t6) 있으면 .r override, 없으면 유니폼.
     uint rW, rH;
     g_RoughnessTexture.GetDimensions(rW, rH);
-    if (rW > 0)
-    {
-        float r = g_RoughnessTexture.Sample(g_sAnisotropic, input.uv).r;
-        output.value0.w = r;
-        output.value1.w = r;
-    }
-    else
-    {
-        output.value0.w = g_vMaterialRoughness.x;
-        output.value1.w = g_vMaterialRoughness.y;
-    }
-    output.value2.w = g_fMaterialFraction;
+    float roughness = (rW > 0) ? g_RoughnessTexture.Sample(g_sAnisotropic, input.uv).r : g_vMaterialRoughness.x;
+
+    output.value0.w = roughness;   // 디퓨드가 읽는 roughness
+    output.value1.w = metallic;    // 디퓨드가 읽는 metallic
+    output.value2.w = 0.f;         // 구 materialFraction (metallic-roughness에선 미사용)
 
     // UE MID-스타일 히트 플래시 + ShadingModelID 패킹 (value3.w).
     output.value0.xyz = ApplyHitFlash(output.value0.xyz);
@@ -557,6 +536,29 @@ VSMultiOut VS_Multi(uint index :    SV_VertexID)
     return output;
 }
 
+// 부드러운 그림자(PCF). 비교-샘플러(s3)는 탭당 하드웨어 2x2 PCF지만, 단일 탭이면
+// penumbra가 ~1텍셀이라 0/1처럼 보인다. 3x3 탭을 텍셀 간격으로 평균내 가장자리를
+// 넓힌다. kShadowSoftness로 폭 조절(키우면 더 부드럽고, 너무 키우면 누수/피터팬닝).
+float SampleShadowPCF(float2 uv, float compareZ)
+{
+    uint w, h;
+    g_ShadowTexture.GetDimensions(w, h);
+    float2 texel = 1.0f / float2(max(w, 1u), max(h, 1u));
+    const float kShadowSoftness = 1.5f;
+
+    float sum = 0.0f;
+    [unroll]
+    for (int y = -1; y <= 1; ++y)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; ++x)
+        {
+            sum += g_ShadowTexture.SampleCmp(g_sShadow, uv + float2(x, y) * texel * kShadowSoftness, compareZ).r;
+        }
+    }
+    return sum / 9.0f;
+}
+
 float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
 {
     float3 viewPos = 0.f;
@@ -569,8 +571,21 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     viewPos.z = ConvertZToLinearDepth(depth);
     viewPos.xy = pos * viewPos.z * g_vProjectValues.xy;
-    
-    float4 shadowpos = mul(float4(viewPos, 1.f), g_matCameraViewToLightClip);
+
+    // --- 노멀 오프셋 그림자 바이어스 (grazing 슬로프 아크네 = 벽 줄무늬 제거) ---
+    // 셰이딩 점을 표면 노멀 방향으로 살짝 밀어 자기-그림자를 피한다. grazing(N·L
+    // 작음, 벽)일수록 sin으로 더 밀고, 바닥(N·L≈1)은 거의 안 건드려 회귀 없음.
+    // 오프셋은 뷰=월드 단위. 줄무늬가 남으면 kShadowNormalOffset를 키우고, 그림자가
+    // 표면에서 떠 보이면(peter-panning) 줄여라. 라이팅용 viewPos는 그대로 두고
+    // 그림자 조회에만 쓰는 별도 위치(viewPosShadow)를 만든다.
+    const float kShadowNormalOffset = 0.12f;
+    float3 nrmVS   = normalize((g_GBufferTexture1.Sample(g_sPoint, input.uv).xyz - 0.5f) * 2.f);
+    float3 lightVS = normalize(-g_vLightDir);
+    float  ndl     = saturate(dot(nrmVS, lightVS));
+    float  slope   = sqrt(saturate(1.f - ndl * ndl));   // sin(각): grazing일수록 1
+    float3 viewPosShadow = viewPos + nrmVS * (kShadowNormalOffset * slope);
+
+    float4 shadowpos = mul(float4(viewPosShadow, 1.f), g_matCameraViewToLightClip);
     
     shadowpos.xyz /= shadowpos.w;
     
@@ -580,7 +595,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     
     shadowpos.y = 1.f - shadowpos.y;
     
-    float4 fShadowAttr = g_ShadowTexture.SampleCmp(g_sShadow, shadowpos.xy, shadowpos.z);
+    float fShadowAttr = SampleShadowPCF(shadowpos.xy, shadowpos.z);
 
     float4 decal0 = g_DecalTexture0.Sample(g_sPoint, input.uv);
     float4 decal1 = g_DecalTexture1.Sample(g_sPoint, input.uv);
@@ -605,9 +620,7 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     float3 vSpecColor = value3.xyz * (1.f - decal3.w) + decal3.xyz * decal3.w;
     
     float3 G = value2.xyz;
-    
-    float materialFraction = value2.w * (1.0 - decal2.w) + decal2.z * decal2.w;
-    
+
     float3 light = 0.f;
     
     float4 C = 0.f;
@@ -621,42 +634,14 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
     float NDotH = max(dot(normal, hdir),0.0);
     
     float NDotL = max(dot(normal, light),0.0);
-    
-    float LDotH = max(dot(light, hdir),0.0);
-    
+
     float NDotV = max(dot(normal, view), 0.0001);
-    
+
     float3 reflect = 2.0 * (NDotV) * normal - view;
     
     float2 envUV = SphereMapping(normalize(reflect));
     
     float4 envColor = g_EnvironmentTexture.Sample(g_sAnisotropic, envUV);
-    
-    float3 P = normalize(hdir - NDotH * normal);
-    
-    float4 vFresnel = float4(GetFresnel(LDotH, vSpecColor), 1.0);
-    
-    //float HDotV = max(dot(hdir, view),0.0);
-    
-    //float3 Ks = GetF(HDotV, vSpecColor);
-    //float3 kd = (1.0 - Ks) * (1.0 - materialFraction);
-    
-    //float3 lambert = albedo / 3.141592;
-    
-    float hdenominator = max((hdir.x * hdir.x + hdir.y * hdir.y), 0.000001);
-    
-    float4 vMicroFacet = GetMicrofacetDistribution(NDotH, hdir.x * hdir.x / hdenominator, vMaterialRoughness);
-    
-    float4 vGeometry = GetGeometricAttenuation(NDotH, NDotV, NDotL, LDotH);
-    
-    //float3 cookTorranceNumerator = vMicroFacet.xyz * vGeometry.xyz * GetF(HDotV, vSpecColor);
-    //float cookTorranceDenominator = 4.0 * max(NDotV, 0.0) * max(NDotL, 0.0);
-    //cookTorranceDenominator = max(cookTorranceDenominator, 0.000001);
-    //float3 cookTorrance = cookTorranceNumerator / cookTorranceDenominator;
-    
-    //float3 BRDF = kd * lambert + cookTorrance;
-    
-    //float3 outgoingLight = BRDF * envColor.xyz * max(NDotL, 0.0);
     
     // UE-style Shading Model 분기: BasePass가 value3.w(0..1)로 ShadingModelID 패킹,
     // 여기서 디코드해 라이팅 모델을 선택. 환경(DefaultLit)·캐릭터(Toon)·UI(Unlit) 혼용.
@@ -689,31 +674,54 @@ float4 PS_Multi(VSMultiOut input)   :   SV_TARGET
         // 따라가도록 vSpecColor와 곱.
         float fRim = 1.0 - saturate(dot(normal, view));
         fRim = smoothstep(0.55, 0.85, fRim);
-        float3 toonLit = albedo * C.rgb * ndlToon * fShadowAttr.x
+        float3 toonLit = albedo * C.rgb * ndlToon * fShadowAttr
                        + fRim * vSpecColor;
         toonLit += emissive;
         toonLit = ApplyFog(toonLit, worldCamPos.y, worldPixelPos - worldCamPos);
         return float4(toonLit, 1.f);
     }
 
-    // SHADING_MODEL_DEFAULT_LIT — 기존 마이크로페이셋 BRDF.
-    float4 finalColor = (materialFraction * C * float4(albedo, 1.f) * max(NDotL, 0.f)
-    + (1.f - materialFraction) * saturate(C * envColor * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
+    // SHADING_MODEL_DEFAULT_LIT — metallic-roughness Cook-Torrance (GGX/Schlick).
+    // roughness에 최소값을 줘 GGX 분포가 델타로 치솟는 걸 막는다(매끈한 면의
+    // 스페큘러 파이어플라이 방지).
+    float roughness = max(vMaterialRoughness.x, 0.05);   // value0.w
+    float metallic  = vMaterialRoughness.y;              // value1.w
 
-    // Per-pixel emissive from MRT4 (written by BasePass PS variants).
-    // Added after shadow attenuation so emissive isn't darkened by shadow;
-    // fog still applies below.
-    finalColor.xyz += emissive;
+    // F0: 유전체는 value3(~0.04), 금속은 albedo. 디퓨즈는 (1-metallic)로 감쇠.
+    float3 F0 = lerp(vSpecColor, albedo, metallic);
+    float VDotH = max(dot(view, hdir), 0.0);
+    float3 Fdir = GetF(VDotH, F0);
+    float Dggx = DistributionGGX(NDotH, roughness);
+    float Gsm  = GeometrySmith(NDotV, NDotL, roughness);
 
-    // ApplyFog needs world-space data for both args. Pass camera world Y
-    // (g_matInvView row 3 column = camera position) as eyePosY, and the
-    // world-space camera→pixel vector as eyeToPixel.
-    finalColor.xyz = ApplyFog(finalColor.xyz, worldCamPos.y, worldPixelPos - worldCamPos);
+    // 분모 floor를 키우고 스페큘러를 캡한다. grazing 각에서 스페큘러가 폭주하면
+    // (파이어플라이) HDR.fx의 산술평균 자동노출이 치솟아 화면 전체가 검게 죽는다.
+    // 옛 specular-workflow의 saturate() 역할을 HDR 친화적 상한으로 대체.
+    float3 specDir = (Dggx * Gsm) * Fdir / max(4.0 * NDotV * NDotL, 0.0025);
+    specDir = min(specDir, 16.0);
+    float3 kd = (1.0 - Fdir) * (1.0 - metallic);
+    float3 diffDir = kd * albedo / 3.141592;
 
-    return finalColor;
-    
-    //return saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV) * fShadowAttr;
+    float3 direct = (diffDir + specDir) * C.rgb * NDotL * fShadowAttr;
 
+    // --- 전역 앰비언트 fill ---
+    // 직사광이 안 닿는 픽셀이 순흑이 되지 않도록 앰비언트를 더한다. 라이트 선택과
+    // 무관한 전역값 g_vAmbient(rgb=색, a=세기)를 RenderManager가 b12로 업로드하고
+    // 에디터 RenderManager 창에서 조절. 금속은 디퓨즈가 없어 (1-metallic)로 차단
+    // (대신 아래 ambSpec로 반사). 주의: 라이트별 가산 패스라 도미넌트 라이트 1개
+    // 가정(emissive와 동일) — 라이트가 많으면 세기를 낮춰 보정.
+    float3 ambientDiffuse = g_vAmbient.rgb * g_vAmbient.a * albedo * (1.0 - metallic);
+
+    // 환경 반사(스페큘러 IBL): 금속은 albedo로 틴트된 F0로 env를 반사, roughness가
+    // 높을수록 약화. 유전체(F0~0.04)는 미미.
+    float3 Famb = GetF(NDotV, F0);
+    float3 ambSpec = min(envColor.xyz * Famb * (1.0 - roughness), 8.0);
+
+    // emissive는 그림자/라이팅 영향 없이 가산, fog는 마지막에 적용.
+    float3 lit = direct + ambientDiffuse + ambSpec + emissive;
+    lit = ApplyFog(lit, worldCamPos.y, worldPixelPos - worldCamPos);
+
+    return float4(lit, 1.f);
 }
 
 float4 VS_PointLight()  :   SV_Position
@@ -1000,22 +1008,18 @@ float4 PS_Alpha(VSOut input) : SV_Target
     albedo = GetPaperBurnColor(albedo, input.uv);
     
     float3 normal = BumpMapping(input.normal, input.tangent, input.uv);
-    
-    float4 vSpecColor = g_SpecularTexture.Sample(g_sAnisotropic, input.uv) * g_vSpecularColor;
-    
-    float materialFraction = g_fMaterialFraction;
-    
+
     float3 light = 0.f;
-    
+
     float4 C = 0.f;
-    
+
     GetLightDirAndColor(input.view, C, light);
-    
+
     float3 view = normalize(-viewPos);
-    
+
     float3 hdir = normalize(light + view);
-    
-    return BRDF(view, hdir, normal, light, albedo, vSpecColor, C, vMaterialRoughness, materialFraction, fShadowAttr);
+
+    return BRDF(view, hdir, normal, light, albedo, vMaterialRoughness.x, vMaterialRoughness.y, g_vSpecularColor.xyz, C, fShadowAttr);
 }
 
 float4 PS_AlphaNoUV(VSOut input) : SV_Target
@@ -1057,7 +1061,7 @@ float4 PS_AlphaNoUV(VSOut input) : SV_Target
     
     float3 hdir = normalize(light + view);
     
-    return BRDF(view, hdir, input.normal, light, albedo, g_vSpecularColor, C, g_vMaterialRoughness, g_fMaterialFraction, fShadowAttr) + g_vEmissiveColor;
+    return BRDF(view, hdir, input.normal, light, albedo, g_vMaterialRoughness.x, g_vMaterialRoughness.y, g_vSpecularColor.xyz, C, fShadowAttr) + g_vEmissiveColor;
 }
 
 float4 PS_AlphaNoUVNoShadow(VSOut input) : SV_Target
@@ -1076,7 +1080,7 @@ float4 PS_AlphaNoUVNoShadow(VSOut input) : SV_Target
     
     float3 hdir = normalize(light + view);
     
-    return BRDF(view, hdir, input.normal, light, albedo, g_vSpecularColor, C, g_vMaterialRoughness, g_fMaterialFraction, 1.f) + g_vEmissiveColor;
+    return BRDF(view, hdir, input.normal, light, albedo, g_vMaterialRoughness.x, g_vMaterialRoughness.y, g_vSpecularColor.xyz, C, 1.f) + g_vEmissiveColor;
 }
 
 float4 PS_AlphaInst(VSInstOut input) : SV_Target
@@ -1110,10 +1114,6 @@ float4 PS_AlphaInst(VSInstOut input) : SV_Target
 
     float3 normal = BumpMapping(input.normal, input.tangent, input.uv);
 
-    float4 vSpecColor = g_SpecularTexture.Sample(g_sAnisotropic, input.uv) * input.vSpecularColor;
-
-    float materialFraction = input.fMaterialFraction;
-
     float3 light = 0.f;
 
     float4 C = 0.f;
@@ -1124,7 +1124,7 @@ float4 PS_AlphaInst(VSInstOut input) : SV_Target
 
     float3 hdir = normalize(light + view);
 
-    return BRDF(view, hdir, normal, light, albedo, vSpecColor, C, vMaterialRoughness, materialFraction, fShadowAttr)
+    return BRDF(view, hdir, normal, light, albedo, vMaterialRoughness.x, vMaterialRoughness.y, input.vSpecularColor.xyz, C, fShadowAttr)
         + g_vEmissiveColor * g_EmissiveTexture.Sample(g_sAnisotropic, input.uv);
 }
 
@@ -1165,6 +1165,6 @@ float4 PS_AlphaNoUVInst(VSInstOut input) : SV_Target
 
     float3 hdir = normalize(light + view);
 
-    return BRDF(view, hdir, input.normal, light, albedo, input.vSpecularColor, C, input.vMaterialRoughness, input.fMaterialFraction, fShadowAttr)
+    return BRDF(view, hdir, input.normal, light, albedo, input.vMaterialRoughness.x, input.vMaterialRoughness.y, input.vSpecularColor.xyz, C, fShadowAttr)
         + g_vEmissiveColor;
 }

@@ -62,6 +62,16 @@ namespace Engine
         void SetMaterial(const MATERIAL& mtrl);
         void SetRoughnessX(float x);
         void SetRoughnessY(float y);
+
+        // metallic-roughness 워크플로우. roughness = vRoughness.x,
+        // metallic = vRoughness.y (직렬화 80바이트 경계 안에 들어가도록 기존
+        // vRoughness 필드를 재활용 — 새 필드 추가 시 Save/Load 마이그레이션 필요).
+        // specularColor.xyz는 유전체 F0 베이스(기본 0.04)로 쓰인다.
+        void SetRoughness(float fRoughness);
+        void SetMetallic(float fMetallic);
+        float GetRoughness() const;
+        float GetMetallic() const;
+
         void UsePaperBurn();
 
         // UE의 머티리얼 Shading Model 드롭다운 + MID 스칼라 파라미터에 대응.

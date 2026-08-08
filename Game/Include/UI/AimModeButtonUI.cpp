@@ -61,15 +61,18 @@ namespace Client
 
         m_pFont = Engine::FontManager::GetInst()->CreateFont(
             "aimmode_btn", L"Malgun Gothic", (std::max)(16.f, H * 0.024f), DWRITE_FONT_WEIGHT_BOLD);
+        m_pHintFont = Engine::FontManager::GetInst()->CreateFont(
+            "aimmode_hint", L"Malgun Gothic", (std::max)(12.f, H * 0.017f), DWRITE_FONT_WEIGHT_NORMAL);
 
-        // Square button, bottom-left, lifted ABOVE the HP/XP gauges so it never
-        // covers the health bar. The gauges occupy y in [0.9325H, 0.975H],
-        // x in [0.025W, 0.225W] (see UIObjects.cpp); sit the button's bottom
-        // just above the XP bar's top (0.9325H) and align its left with them.
-        const float fSide = (std::max)(64.f, H * 0.085f);   // square side
-        const float fGap  = (std::max)(10.f, H * 0.012f);   // clearance above XP bar
-        const float fBtnX = W * 0.025f;
-        const float fBtnY = H * 0.9325f - fGap - fSide;
+        // Square button + a key-hint caption beneath it, bottom-left, lifted
+        // ABOVE the HP/XP gauges so neither covers the health bar. The gauges
+        // occupy y in [0.9325H, 0.975H], x in [0.025W, 0.225W] (UIObjects.cpp);
+        // keep the button AND its caption above the XP bar's top (0.9325H).
+        const float fSide  = (std::max)(64.f, H * 0.085f);   // square side
+        const float fGap   = (std::max)(10.f, H * 0.012f);   // clearance above XP bar
+        const float fHintH = (std::max)(16.f, H * 0.022f);   // caption strip height
+        const float fBtnX  = W * 0.025f;
+        const float fBtnY  = H * 0.9325f - fGap - fHintH - fSide;
 
         m_pButton = CreateComponent<Engine::Button>("aimmode_btn_bg");
         if (m_pButton)
@@ -92,6 +95,18 @@ namespace Client
             m_pLabel->SetVAlign(Engine::Text::VAlign::Center);
             m_pLabel->SetRect(fBtnX, fBtnY, fSide, fSide);
             m_pLabel->SetString(L"타겟\nOFF");
+        }
+
+        // Key-press hint directly below the button.
+        m_pHint = CreateComponent<Engine::Text>("aimmode_btn_hint");
+        if (m_pHint)
+        {
+            m_pHint->SetFont(m_pHintFont);
+            m_pHint->SetColor(0xCCCCCCFFu);
+            m_pHint->SetHAlign(Engine::Text::HAlign::Center);
+            m_pHint->SetVAlign(Engine::Text::VAlign::Center);
+            m_pHint->SetRect(fBtnX, fBtnY + fSide, fSide, fHintH);
+            m_pHint->SetString(L"[Ctrl]");
         }
 
         return true;

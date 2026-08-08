@@ -46,6 +46,18 @@ namespace Client
         // bound there). No-op unless placement mode has a valid cell.
         void RenderGhost();
 
+        // Enter attack-tower placement targeting a SPECIFIC reserve slot — the
+        // on-screen tower HUD picks WHICH unplaced tower to deploy. Re-clicking
+        // the already-selected slot cancels (mirrors the key toggle).
+        // iReserveIndex < 0 = "next placeable". No-op while the world is frozen (a
+        // modal is up) or without a placeable reserve. Suppresses the triggering
+        // left-click from also committing this frame.
+        void BeginAttackPlacement(int iReserveIndex);
+        // Enter heal-tower placement (heal towers are fungible — the front-most
+        // ready heal reserve is consumed at commit). Re-selecting cancels. Used by
+        // the tower HUD when a heal slot is clicked.
+        void BeginHealPlacement();
+
     private:
         Engine::VoxelWorld* m_pVoxelWorld = nullptr;
 
@@ -54,8 +66,18 @@ namespace Client
         PlaceType m_ePlaceType = PlaceType::Attack;
 
         bool m_bPlacing = false;
+        // Reserve slot the HUD chose to deploy; -1 = next placeable (key-1).
+        // Read by the commit path via TowerManager::ConsumePlaceableSlotAt.
+        int  m_iSelectedReserve = -1;
+        // Tower type the attack ghost mesh currently reflects (-2 = none built
+        // yet), so RefreshAttackGhostMesh only rebuilds on a type change.
+        int  m_iGhostTowerId = -2;
         bool m_bHasCell = false;   // cursor is over a valid grid cell
         bool m_bValidCell = false; // ...and that cell is free to build on
+        // Set when the tower button opens placement, so the same left-click that
+        // pressed the button doesn't immediately commit a tower under it. Cleared
+        // after one Update of the commit check.
+        bool m_bIgnoreCommitClick = false;
         int  m_iCellX   = 0;
         int  m_iCellZ   = 0;
 
@@ -77,11 +99,16 @@ namespace Client
         // Cast the cursor onto the floor plane and floor() to a cell. Returns
         // false for off-map or wall cells (no placement there).
         bool MouseToCell(int& cx, int& cz) const;
-        // Count live objects with the given tag in the default layer.
-        int  CountByTag(const char* pTag) const;
         // True if any tower (attack or heal) already occupies cell (cx,cz).
         bool IsCellOccupied(int cx, int cz) const;
         // Budget check for the current place type (placed < bought).
         bool HasBudgetFor(PlaceType eType) const;
+        // Rebuild m_pGhostMesh to match the tower that will actually be deployed
+        // (its type's N-gon prism), so the attack preview isn't a generic box.
+        void RefreshAttackGhostMesh();
+        // Number-key 1..kMaxTowers handler: deploy the tower in HUD slot iSlotIndex
+        // (acquisition order, see BuildTowerSlots). No-op when that slot isn't a
+        // deployable reserve (empty / placed / cooldown / weaponless).
+        void BeginPlacementForSlot(int iSlotIndex);
     };
 }

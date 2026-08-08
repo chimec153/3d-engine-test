@@ -40,9 +40,10 @@ namespace Client
                 float a = 0.f;
                 if (r <= 1.f)
                 {
-                    // Faint fill inside + a bright rim near the edge.
-                    a = 0.28f;
-                    const float rim = 1.f - std::fabs(r - 0.9f) / 0.12f;
+                    // Mostly-transparent interior so overlapping rings read as
+                    // two distinct outlines; the bright rim is the visible shape.
+                    a = 0.04f;
+                    const float rim = 1.f - std::fabs(r - 0.9f) / 0.05f;
                     if (rim > 0.f) a = (std::max)(a, rim);
                 }
                 if (a > 1.f) a = 1.f;

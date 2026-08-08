@@ -50,6 +50,9 @@ namespace Client
         void EndRound();
         bool IsRoundActive()   const { return m_bRoundActive; }
         bool IsRoundComplete() const;
+        // True while an active round is a boss round (ends on boss death, not
+        // the survival timer). HUD swaps the countdown for a boss caption.
+        bool IsBossRound()     const;
         int  GetRound()        const { return m_iRound; }
         int  GetAliveEnemyCount() const;
         // Seconds left in the current round (0 when not active). HUD readout.
@@ -138,8 +141,11 @@ namespace Client
         // Boss is materialised directly (no telegraph) when the round
         // elapsed crosses fSpawnTime. Picks a point on the same edge ring
         // as point_burst spawns; falls back through a few angles if the
-        // first cell is solid.
-        void MaterialiseBoss(const std::shared_ptr<Engine::GameObject>& pPlayer,
+        // first cell is solid. Returns true only when the boss was actually
+        // placed — a failed placement leaves m_bBossSpawned unset so Tick
+        // retries next frame (and the boss-death round-end can't misfire on
+        // a boss that never spawned).
+        bool MaterialiseBoss(const std::shared_ptr<Engine::GameObject>& pPlayer,
                              const std::shared_ptr<Engine::Layer>& pLayer,
                              const std::shared_ptr<Engine::Transform>& pPlayerTr);
 

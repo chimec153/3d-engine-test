@@ -15,7 +15,7 @@ namespace Engine
 namespace Client
 {
     // Top-left HUD: a horizontal row of square slot boxes, one per
-    // owned weapon (capacity = Player::GetMaxWeaponSlots, currently 6).
+    // EQUIPPED (firing) weapon (capacity = Player::GetMaxEquipSlots).
     // Each box shows the weapon name centred (DirectWrite wraps to two
     // lines when the name is long) and a small white "Lv.N" tag in
     // the bottom-right corner. Polls Player::GetOwnedWeaponIds +
@@ -35,7 +35,7 @@ namespace Client
         virtual std::shared_ptr<Engine::Component> Clone() override;
 
     private:
-        static constexpr int kSlotCount = Player::GetMaxWeaponSlots();
+        static constexpr int kSlotCount = Player::GetMaxEquipSlots();
 
         std::weak_ptr<Player> m_pTarget;
         std::shared_ptr<Engine::Font> m_pNameFont;
@@ -47,5 +47,14 @@ namespace Client
 
         int m_iLastIds[kSlotCount];
         int m_iLastLevels[kSlotCount];
+
+        // Hover tooltip — a dark panel + text showing the hovered weapon's stats,
+        // following the cursor (mirrors the shop's tooltip). Box rects are stored
+        // at Init for the per-frame hit-test in Update.
+        std::shared_ptr<Engine::Button> m_pTipBg;
+        std::shared_ptr<Engine::Text>   m_pTipText;
+        float m_fBoxX[kSlotCount] = {};
+        float m_fBoxY    = 0.f;
+        float m_fBoxSize = 0.f;
     };
 }

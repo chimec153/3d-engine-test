@@ -231,6 +231,13 @@ namespace Engine
 		float GetFogDensity() const;
 		float GetFogHeightFallOff() const;
 
+		// 전역 씬 앰비언트 (라이트 선택과 무관). Fog cbuffer(b12)에 함께 실어
+		// PS_Multi의 디퓨즈 앰비언트로 사용. 색/세기 분리.
+		void SetAmbientColor(const Vector3& vColor);
+		void SetAmbientIntensity(float fIntensity);
+		Vector3 GetAmbientColor() const;
+		float GetAmbientIntensity() const;
+
 	public:
 		void AddLight(const std::shared_ptr<LightComponent>& pLight);
 		void AddMeshRenderer(const std::shared_ptr<class MeshRendererComponent>& pMR);

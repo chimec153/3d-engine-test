@@ -324,6 +324,40 @@ namespace Client
 		if (pPlayer) pPlayer->SetVoxelWorld(m_pVoxelWorld.get());
 		m_pPlayer = pPlayer;
 
+#ifdef _DEBUG
+		// Debug test loadout: hand out a fixed stock so the shop's tower merge /
+		// weapon loadout can be exercised without grinding gold. Towers go into
+		// the reserve (unplaced) — place them in-game with the number keys.
+		//   - 2 heal towers
+		//   - 2 attack towers of the SAME type (both default-attack; a -1 reserve
+		//     resolves to FirstOfKind(Attack) at placement, so they merge as one type)
+		//   - 3 copies of one weapon + 1 each of two other weapons (3 same / 2 different)
+		if(false)
+		{
+			auto& tmgr = TowerManager::GetInst();
+			tmgr.AddHealTower();
+			tmgr.AddHealTower();
+			int iAtkType = -1;
+			if (const TowerDef* pAtk = TowerDatabase::GetInst().FirstOfKind(TowerKind::Attack))
+				iAtkType = pAtk->iId;
+			tmgr.AddTower(iAtkType);
+			tmgr.AddTower(iAtkType);
+
+			if (pPlayer)
+			{
+				const std::vector<WeaponDef>& vecW = WeaponDatabase::GetInst().All();
+				auto grantWeapon = [&](int iIdx, int iCopies)
+				{
+					if (iIdx < 0 || iIdx >= static_cast<int>(vecW.size())) return;
+					for (int c = 0; c < iCopies; ++c) pPlayer->AddWeaponCopy(vecW[iIdx].iId);
+				};
+				grantWeapon(0, 3);   // 3 of the same kind (mergeable)
+				grantWeapon(1, 1);   // a different kind
+				grantWeapon(2, 1);   // another different kind
+			}
+		}
+#endif
+
 		// HP / XP gauges. Layout is anchor-bound once (UIControl
 		// re-resolves the pixel rect on Window resize); only the ratio
 		// is pushed each frame from Update. Colors here match the old
@@ -438,68 +472,8 @@ namespace Client
 			}
 		}
 
-		// Installable-tower hotbar (bottom-right). One solid colour icon per
-		// tower type (a full Gauge = a flat colour quad), the remaining count
-		// centred on it, and a hotkey label below. Counts are pushed each frame
-		// in Update; colours match the placement ghost (blue=attack, green=heal).
-		// Gauge::SetColors is 0xAABBGGRR (R = lowest byte).
-		struct TowerSlotDef { float fX; uint32_t uColor; const wchar_t* szLabel; };
-		const TowerSlotDef kSlots[kTowerSlots] = {
-			{ 0.900f, 0xFFF06020u, L"1 Atk"  },   // attack — blue
-			{ 0.955f, 0xFF40C020u, L"2 Heal" },   // heal   — green
-		};
-		for (int i = 0; i < kTowerSlots; ++i)
-		{
-			if (auto pIconObj = CreateGameObject<>("TowerIcon" + std::to_string(i), FindLayer(DEFAULT_LAYER)))
-			{
-				if (auto pIcon = pIconObj->AddComponent<Engine::Gauge>("towericon"))
-				{
-					pIcon->SetColors(0xFF202020u, kSlots[i].uColor);
-					pIcon->SetRatio(1.f);   // full fill = solid colour square
-					pIcon->SetRectByAnchorFrac(
-						Engine::Vector2{ kSlots[i].fX, 0.880f },
-						Engine::Vector2{ 0.5f,         1.f    },
-						Engine::Vector2{ 0.04f,        0.06f  });
-					m_pTowerIcon[i]      = pIcon;
-					m_uTowerIconColor[i] = kSlots[i].uColor;
-				}
-			}
-			if (auto pCntObj = CreateGameObject<>("TowerCount" + std::to_string(i), FindLayer(DEFAULT_LAYER)))
-			{
-				if (auto pCnt = pCntObj->AddComponent<Engine::Text>("towercount"))
-				{
-					auto pFont = Engine::FontManager::GetInst()->CreateFont(
-						"hud_towercount", L"Arial", 24.f, DWRITE_FONT_WEIGHT_BOLD);
-					pCnt->SetFont(pFont);
-					pCnt->SetColor(0xFFFFFFFFu);
-					pCnt->SetHAlign(Engine::Text::HAlign::Center);
-					pCnt->SetVAlign(Engine::Text::VAlign::Center);
-					pCnt->SetRectByAnchorFrac(
-						Engine::Vector2{ kSlots[i].fX, 0.850f },
-						Engine::Vector2{ 0.5f,         0.5f   },
-						Engine::Vector2{ 0.05f,        0.05f  });
-					pCnt->SetString(L"x0");
-					m_pTowerCount[i] = pCnt;
-				}
-			}
-			if (auto pLblObj = CreateGameObject<>("TowerLabel" + std::to_string(i), FindLayer(DEFAULT_LAYER)))
-			{
-				if (auto pLbl = pLblObj->AddComponent<Engine::Text>("towerlabel"))
-				{
-					auto pFont = Engine::FontManager::GetInst()->CreateFont(
-						"hud_towerlabel", L"Arial", 14.f, DWRITE_FONT_WEIGHT_BOLD);
-					pLbl->SetFont(pFont);
-					pLbl->SetColor(0xFFFFFFFFu);
-					pLbl->SetHAlign(Engine::Text::HAlign::Center);
-					pLbl->SetVAlign(Engine::Text::VAlign::Center);
-					pLbl->SetRectByAnchorFrac(
-						Engine::Vector2{ kSlots[i].fX, 0.885f },
-						Engine::Vector2{ 0.5f,         0.f    },
-						Engine::Vector2{ 0.06f,        0.025f });
-					pLbl->SetString(kSlots[i].szLabel);
-				}
-			}
-		}
+		// (The old bottom-right installable-tower count hotbar was removed — the
+		// top-right tower HUD now shows owned towers + their deploy keys.)
 
 		// Level-up modal — orbs grant XP; on a level-up it shows 3 random
 		// stat upgrades (move speed / max HP / attack / crit / defense) and
@@ -627,10 +601,14 @@ namespace Client
 
 		// Tower slots HUD — top-right corner, one box per owned tower (placed /
 		// ready / on destroy-cooldown). Reads TowerManager + the live "Tower"
-		// objects each frame; no target needed.
+		// objects each frame. Clicking a box starts placement like key 1, so it
+		// gets the placement controller (set above) as its target.
 		if (auto pTowerHUDObj = CreateGameObject<>("TowerHUD", FindLayer(DEFAULT_LAYER)))
 		{
-			pTowerHUDObj->AddComponent<TowerHUD>("towerhud");
+			if (auto pTowerHUD = pTowerHUDObj->AddComponent<TowerHUD>("towerhud"))
+			{
+				pTowerHUD->SetTarget(m_pPlacement);
+			}
 		}
 
 		// Debug overlay — live enemy count. Reads the active scene's
@@ -704,46 +682,9 @@ namespace Client
 			}
 		}
 
-		// Gold readout + installable-tower icon counts (independent of the
-		// player lock — both are global state).
-		// Gold is just the number now — the per-type tower budget moved to the
-		// bottom-right icon hotbar. Count placed towers of each type once, then
-		// push remaining = owned - placed into each icon's count + colour.
-		int iPlacedAtk = 0, iPlacedHeal = 0;
-		if (auto pLayer = FindLayer(DEFAULT_LAYER))
-			for (const auto& p : pLayer->GetGameObjectList())
-			{
-				if (!p || !p->IsActive()) continue;
-				if (p->GetTag() == "Tower")          ++iPlacedAtk;
-				else if (p->GetTag() == "HealTower") ++iPlacedHeal;
-			}
-
+		// Gold readout (global state, independent of the player lock).
 		if (auto pMoney = m_pMoneyText.lock())
 			pMoney->SetString(L"Gold: " + std::to_wstring(Wallet::GetInst().Money()));
-
-		const int iRemain[kTowerSlots] = {
-			TowerManager::GetInst().TowersOwned()     - iPlacedAtk,
-			TowerManager::GetInst().HealTowersOwned() - iPlacedHeal,
-		};
-		const uint32_t uActive[kTowerSlots] = { 0xFFF06020u, 0xFF40C020u };
-		for (int i = 0; i < kTowerSlots; ++i)
-		{
-			const int iLeft = iRemain[i] > 0 ? iRemain[i] : 0;
-			if (auto pCnt = m_pTowerCount[i].lock())
-			{
-				pCnt->SetString(L"x" + std::to_wstring(iLeft));
-				pCnt->SetColor(iLeft > 0 ? 0xFFFFFFFFu : 0xFF6060FFu);   // white / muted red
-			}
-			// Dim the icon to grey when none are installable. SetColors swaps the
-			// texture SRV, so only re-bind when the colour actually changes.
-			const uint32_t uWant = iLeft > 0 ? uActive[i] : 0xFF303030u;
-			if (uWant != m_uTowerIconColor[i])
-			{
-				if (auto pIcon = m_pTowerIcon[i].lock())
-					pIcon->SetColors(0xFF202020u, uWant);
-				m_uTowerIconColor[i] = uWant;
-			}
-		}
 
 		// Round survival countdown — seconds left to survive (blank when not
 		// in an active round, e.g. during the shop / start pick).
@@ -753,10 +694,19 @@ namespace Client
 				GameStateManager::GetInst().IsPlaying() &&
 				m_pEnemySpawner->IsRoundActive())
 			{
-				const int iSec = static_cast<int>(std::ceil(m_pEnemySpawner->GetRoundTimeRemaining()));
-				pTimer->SetString(
-					L"Round " + std::to_wstring(m_pEnemySpawner->GetRound()) +
-					L"   -   Survive " + std::to_wstring(iSec) + L"s");
+				const std::wstring strRound =
+					L"Round " + std::to_wstring(m_pEnemySpawner->GetRound());
+				if (m_pEnemySpawner->IsBossRound())
+				{
+					// Boss rounds end on the kill, not a timer — show the
+					// objective instead of a misleading survival countdown.
+					pTimer->SetString(strRound + L"   -   Defeat the boss");
+				}
+				else
+				{
+					const int iSec = static_cast<int>(std::ceil(m_pEnemySpawner->GetRoundTimeRemaining()));
+					pTimer->SetString(strRound + L"   -   Survive " + std::to_wstring(iSec) + L"s");
+				}
 			}
 			else
 			{

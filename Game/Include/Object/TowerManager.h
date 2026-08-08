@@ -1,6 +1,8 @@
 #pragma once
 
+#include "Weapon.h"
 #include <vector>
+#include <utility>
 
 namespace Client
 {
@@ -20,10 +22,21 @@ namespace Client
         // placement controller can seed the fresh Tower's weapon + level.
         struct ReserveTower
         {
-            int  iTowerId  = -1;   // towers.csv def id; -1 = default attack type
-            int  iWeaponId = -1;   // -1 = inherit CurrentWeaponId
-            int  iLevel    = 1;
-            bool bDown     = false;
+            int       iTowerId = -1;   // towers.csv def id; -1 = default attack type
+            int       iLevel   = 1;    // TOWER level (the weapon carries its own)
+            bool      bDown    = false;
+            int       iSeq     = 0;    // acquisition order (stable; HUD/key slot order)
+            WeaponPtr pWeapon;         // the weapon object this unplaced tower carries (null = unarmed)
+        };
+
+        // One UNPLACED heal tower. Heal towers carry no weapon / level / type, so
+        // they only need an acquisition sequence (HUD/key slot order) + the
+        // destroy-cooldown flag. Mirrors ReserveTower's role for the attack queue.
+        struct HealReserve
+        {
+            int  iSeq   = 0;
+            bool bDown  = false;
+            int  iLevel = 1;   // heal-tower level (raised by shop merge)
         };
 
         static TowerManager& GetInst()
@@ -61,8 +74,9 @@ namespace Client
         {
             m_iTowersOwned     = 0;
             m_iHealTowersOwned = 0;
-            m_iHealTowersDown  = 0;
             m_vecReserve.clear();
+            m_vecHealReserve.clear();
+            m_iAcqCounter        = 0;
             m_fTowerAtkMult      = 1.f;
             m_fTowerFireRateMult = 1.f;
             m_iTowerBonusHP      = 0;
@@ -89,14 +103,21 @@ namespace Client
             ++m_iTowersOwned;
             ReserveTower r;
             r.iTowerId = iTowerId;
+            r.iSeq     = m_iAcqCounter++;   // acquisition order
             m_vecReserve.push_back(r);   // new unplaced tower, weapon unconfigured, level 1
         }
         void SetTowersOwned(int iCount)
         {
             m_iTowersOwned = iCount < 0 ? 0 : iCount;
             // Seeded at stage init (nothing placed yet): one unconfigured
-            // reserve slot per owned tower.
-            m_vecReserve.assign(static_cast<size_t>(m_iTowersOwned), ReserveTower{});
+            // reserve slot per owned tower, each with its own acquisition seq.
+            m_vecReserve.clear();
+            for (int i = 0; i < m_iTowersOwned; ++i)
+            {
+                ReserveTower r;
+                r.iSeq = m_iAcqCounter++;
+                m_vecReserve.push_back(r);
+            }
         }
         // A placed tower was SOLD or MERGED away: drop it from the owned count
         // (no reserve entry — the tower is gone for good). Used by the shop sell
@@ -107,20 +128,28 @@ namespace Client
         // but push its weapon + level back into the reserve as a "down" slot.
         // It can't be re-placed until the next round (OnNewRound clears bDown),
         // and it keeps its merged level + assigned weapon when re-placed.
-        void DestroyTower(int iWeaponId, int iLevel, int iTowerId = -1)
+        void DestroyTower(int iLevel, int iTowerId, int iSeq, WeaponPtr pWeapon)
         {
             ReserveTower r;
             r.iTowerId  = iTowerId;
-            r.iWeaponId = iWeaponId;
-            r.iLevel    = iLevel < 1 ? 1 : iLevel;
+            r.iLevel    = iLevel < 1 ? 1 : iLevel;   // tower level
             r.bDown     = true;
-            m_vecReserve.push_back(r);
+            // Preserve the tower's acquisition seq so it keeps its HUD/key slot
+            // position when it returns to the reserve (re-placeable next round).
+            r.iSeq      = (iSeq >= 0) ? iSeq : m_iAcqCounter++;
+            r.pWeapon   = std::move(pWeapon);   // the tower's weapon comes back with it
+            m_vecReserve.push_back(std::move(r));
         }
-        // Round start: destroyed towers come back online (placeable again).
+        // Round start: destroyed towers (attack + heal) come back online.
         void OnNewRound()
         {
-            for (auto& r : m_vecReserve) r.bDown = false;
-            m_iHealTowersDown = 0;
+            for (auto& r : m_vecReserve)     r.bDown = false;
+            for (auto& h : m_vecHealReserve) h.bDown = false;
+        }
+        // Acquisition seq of the i-th reserve slot (for the HUD/key slot order).
+        int  ReserveSeq(int i) const
+        {
+            return (i >= 0 && i < static_cast<int>(m_vecReserve.size())) ? m_vecReserve[i].iSeq : 0;
         }
         // Reserve slots that can be placed right now: not on destroy-cooldown AND
         // carrying an equipped weapon. A freshly bought tower starts weaponless
@@ -129,17 +158,23 @@ namespace Client
         int  PlaceableTowerCount() const
         {
             int n = 0;
-            for (const auto& r : m_vecReserve) if (!r.bDown && r.iWeaponId >= 0) ++n;
+            for (const auto& r : m_vecReserve) if (!r.bDown && r.pWeapon) ++n;
             return n;
         }
 
         // Per-unplaced-tower weapon config (shop UI). The reserve is the queue
         // of bought-but-unplaced towers; index 0 is the next one placed.
         int  ReserveCount() const            { return static_cast<int>(m_vecReserve.size()); }
-        // Raw stored id (-1 = inherit CurrentWeaponId); caller resolves for display.
+        // Def id of the i-th reserve's weapon object, or -1 if unarmed (display).
         int  ReserveWeaponRaw(int i) const
         {
-            return (i >= 0 && i < static_cast<int>(m_vecReserve.size())) ? m_vecReserve[i].iWeaponId : -1;
+            if (i < 0 || i >= static_cast<int>(m_vecReserve.size())) return -1;
+            return m_vecReserve[i].pWeapon ? m_vecReserve[i].pWeapon->iWeaponId : -1;
+        }
+        // The weapon OBJECT the i-th reserve carries (null = unarmed).
+        WeaponPtr ReserveWeapon(int i) const
+        {
+            return (i >= 0 && i < static_cast<int>(m_vecReserve.size())) ? m_vecReserve[i].pWeapon : nullptr;
         }
         int  ReserveLevel(int i) const
         {
@@ -154,9 +189,39 @@ namespace Client
         {
             return (i >= 0 && i < static_cast<int>(m_vecReserve.size())) && m_vecReserve[i].bDown;
         }
-        void SetReserveWeapon(int i, int iId)
+        // Install / replace the weapon object on the i-th reserve (the shop moves
+        // a player weapon here). Returns the previously held weapon (or null) so
+        // the caller can hand it back to the player.
+        WeaponPtr SetReserveWeapon(int i, const WeaponPtr& pWeapon)
         {
-            if (i >= 0 && i < static_cast<int>(m_vecReserve.size())) m_vecReserve[i].iWeaponId = iId;
+            if (i < 0 || i >= static_cast<int>(m_vecReserve.size())) return nullptr;
+            WeaponPtr old = m_vecReserve[i].pWeapon;
+            m_vecReserve[i].pWeapon = pWeapon;
+            return old;
+        }
+        // Bump an unplaced attack tower's level (shop merge into a reserve copy).
+        // Clamped to >= 1; the caller enforces the upper cap.
+        void AddReserveLevel(int i, int iDelta)
+        {
+            if (i < 0 || i >= static_cast<int>(m_vecReserve.size())) return;
+            int lv = m_vecReserve[i].iLevel + iDelta;
+            m_vecReserve[i].iLevel = lv < 1 ? 1 : lv;
+        }
+        // Remove an unplaced attack tower (shop sell / merge-consume of a reserve
+        // copy): drop the entry and the owned count. Mirrors RemoveTower, which
+        // only decrements (a placed tower has no reserve entry).
+        void RemoveReserveTower(int i)
+        {
+            if (i < 0 || i >= static_cast<int>(m_vecReserve.size())) return;
+            m_vecReserve.erase(m_vecReserve.begin() + i);
+            if (m_iTowersOwned > 0) --m_iTowersOwned;
+        }
+        // Remove an unplaced heal tower (shop sell of a reserve heal copy).
+        void RemoveHealReserveAt(int i)
+        {
+            if (i < 0 || i >= static_cast<int>(m_vecHealReserve.size())) return;
+            m_vecHealReserve.erase(m_vecHealReserve.begin() + i);
+            if (m_iHealTowersOwned > 0) --m_iHealTowersOwned;
         }
         // Placement pops the front-most PLACEABLE reserve slot: not on cooldown
         // and with an equipped weapon (iWeaponId >= 0). A weapon is NO LONGER
@@ -166,8 +231,8 @@ namespace Client
         {
             for (size_t i = 0; i < m_vecReserve.size(); ++i)
             {
-                if (m_vecReserve[i].bDown || m_vecReserve[i].iWeaponId < 0) continue;
-                ReserveTower r = m_vecReserve[i];
+                if (m_vecReserve[i].bDown || !m_vecReserve[i].pWeapon) continue;
+                ReserveTower r = std::move(m_vecReserve[i]);
                 m_vecReserve.erase(m_vecReserve.begin() + i);
                 return r;
             }
@@ -176,24 +241,121 @@ namespace Client
             // defensive only; the caller must not place a weaponless tower.
             return ReserveTower{};
         }
+        // Place a SPECIFIC reserve slot by index — the tower HUD lets the player
+        // pick WHICH unplaced tower to deploy (their type / weapon / level can
+        // differ). Erases and returns that slot when it's placeable (not on
+        // cooldown, weapon equipped); otherwise falls back to the front-most
+        // placeable slot (ConsumePlaceableSlot). iIndex < 0 also falls back.
+        ReserveTower ConsumePlaceableSlotAt(int iIndex)
+        {
+            if (iIndex >= 0 && iIndex < static_cast<int>(m_vecReserve.size()) &&
+                !m_vecReserve[iIndex].bDown && m_vecReserve[iIndex].pWeapon)
+            {
+                ReserveTower r = std::move(m_vecReserve[iIndex]);
+                m_vecReserve.erase(m_vecReserve.begin() + iIndex);
+                return r;
+            }
+            return ConsumePlaceableSlot();
+        }
+        // The towers.csv type id that ConsumePlaceableSlotAt(iIndex) WOULD deploy,
+        // WITHOUT consuming it — lets the placement ghost match the chosen tower's
+        // shape. Falls back to the front-most placeable slot (iIndex < 0 or that
+        // slot isn't placeable); -1 (default attack type) when nothing's placeable.
+        int PeekPlaceableTowerId(int iIndex) const
+        {
+            if (iIndex >= 0 && iIndex < static_cast<int>(m_vecReserve.size()) &&
+                !m_vecReserve[iIndex].bDown && m_vecReserve[iIndex].pWeapon)
+                return m_vecReserve[iIndex].iTowerId;
+            for (const auto& r : m_vecReserve)
+                if (!r.bDown && r.pWeapon) return r.iTowerId;
+            return -1;
+        }
 
-        // Heal-tower budget — separate from attack towers (bought separately
-        // in the shop, placed with a different key).
+        // Heal-tower budget — separate from attack towers (bought separately in
+        // the shop). Each UNPLACED heal tower is an m_vecHealReserve entry (with
+        // its acquisition seq), mirroring the attack reserve so heal towers take
+        // their own numbered HUD/key slot. Invariant: heal reserve size ==
+        // owned - placed.
         int  HealTowersOwned() const         { return m_iHealTowersOwned; }
-        void AddHealTower()                  { ++m_iHealTowersOwned; }
-        void SetHealTowersOwned(int iCount)  { m_iHealTowersOwned = iCount < 0 ? 0 : iCount; m_iHealTowersDown = 0; }
-        // Shop SELL of a placed heal tower: give up ownership for good.
+        void AddHealTower()
+        {
+            ++m_iHealTowersOwned;
+            HealReserve h;
+            h.iSeq = m_iAcqCounter++;
+            m_vecHealReserve.push_back(h);
+        }
+        void SetHealTowersOwned(int iCount)
+        {
+            m_iHealTowersOwned = iCount < 0 ? 0 : iCount;
+            m_vecHealReserve.clear();
+            for (int i = 0; i < m_iHealTowersOwned; ++i)
+            {
+                HealReserve h;
+                h.iSeq = m_iAcqCounter++;
+                m_vecHealReserve.push_back(h);
+            }
+        }
+        // Shop SELL of a placed heal tower: give up ownership for good (the sold
+        // tower was placed, so it isn't in the reserve — just drop the count).
         void RemoveHealTower()               { if (m_iHealTowersOwned > 0) --m_iHealTowersOwned; }
         // Heal tower DESTROYED by enemies: keep ownership but bench it until the
-        // next round (mirrors DestroyTower; heal towers have no weapon/level so
-        // a plain count is enough). PlaceableHealCount excludes these.
-        void DestroyHealTower()              { ++m_iHealTowersDown; }
-        int  HealTowersDown() const          { return m_iHealTowersDown; }
-        // Heal towers placeable right now = owned, minus those on cooldown.
+        // next round (mirrors DestroyTower). Preserves its acquisition seq so it
+        // keeps its slot position when re-placeable next round.
+        void DestroyHealTower(int iSeq, int iLevel)
+        {
+            HealReserve h;
+            h.bDown  = true;
+            h.iSeq   = (iSeq >= 0) ? iSeq : m_iAcqCounter++;
+            h.iLevel = iLevel < 1 ? 1 : iLevel;   // keeps its merged level
+            m_vecHealReserve.push_back(h);
+        }
+        int  HealTowersDown() const
+        {
+            int n = 0;
+            for (const auto& h : m_vecHealReserve) if (h.bDown) ++n;
+            return n;
+        }
+        // Heal towers placeable right now = unplaced heal reserves not on cooldown.
         int  PlaceableHealCount() const
         {
-            const int n = m_iHealTowersOwned - m_iHealTowersDown;
-            return n < 0 ? 0 : n;
+            int n = 0;
+            for (const auto& h : m_vecHealReserve) if (!h.bDown) ++n;
+            return n;
+        }
+        // Pop the front-most placeable (not-down) heal reserve, returning it (seq
+        // + level) so the placed HealTower keeps its slot + level. iSeq < 0 in the
+        // returned struct means none placeable (caller gates on PlaceableHealCount).
+        HealReserve ConsumePlaceableHeal()
+        {
+            for (size_t i = 0; i < m_vecHealReserve.size(); ++i)
+            {
+                if (m_vecHealReserve[i].bDown) continue;
+                HealReserve h = m_vecHealReserve[i];
+                m_vecHealReserve.erase(m_vecHealReserve.begin() + i);
+                return h;
+            }
+            HealReserve none; none.iSeq = -1; return none;
+        }
+        // Heal reserve enumeration for the HUD/key slot builder.
+        int  HealReserveCount() const        { return static_cast<int>(m_vecHealReserve.size()); }
+        int  HealReserveSeq(int i) const
+        {
+            return (i >= 0 && i < static_cast<int>(m_vecHealReserve.size())) ? m_vecHealReserve[i].iSeq : 0;
+        }
+        bool HealReserveDown(int i) const
+        {
+            return (i >= 0 && i < static_cast<int>(m_vecHealReserve.size())) && m_vecHealReserve[i].bDown;
+        }
+        int  HealReserveLevel(int i) const
+        {
+            return (i >= 0 && i < static_cast<int>(m_vecHealReserve.size())) ? m_vecHealReserve[i].iLevel : 1;
+        }
+        // Bump an unplaced heal tower's level (shop merge into a reserve heal copy).
+        void AddHealReserveLevel(int i, int iDelta)
+        {
+            if (i < 0 || i >= static_cast<int>(m_vecHealReserve.size())) return;
+            int lv = m_vecHealReserve[i].iLevel + iDelta;
+            m_vecHealReserve[i].iLevel = lv < 1 ? 1 : lv;
         }
 
     private:
@@ -207,7 +369,9 @@ namespace Client
         int m_iWeaponId        = -1;
         int m_iTowersOwned     = 0;
         int m_iHealTowersOwned = 0;
-        int m_iHealTowersDown  = 0;   // heal towers destroyed this round (cooldown)
+        // Monotonic acquisition counter — every bought tower (attack or heal)
+        // gets the next value, defining the numbered HUD/key slot order.
+        int m_iAcqCounter      = 0;
 
         // Level-up tower buffs (see accessors above).
         float m_fTowerAtkMult      = 1.f;
@@ -219,5 +383,7 @@ namespace Client
         // tower's weapon + level + destroy-cooldown flag. Size tracks
         // owned - placed (see AddTower / ConsumePlaceableSlot / DestroyTower).
         std::vector<ReserveTower> m_vecReserve;
+        // One entry per unplaced heal tower (see the heal-tower section above).
+        std::vector<HealReserve>  m_vecHealReserve;
     };
 }

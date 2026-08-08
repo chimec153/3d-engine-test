@@ -68,4 +68,38 @@ namespace Engine
 		virtual void Load(FILE* pFile) override;
 
 	};
+
+	// === Procedural material-texture authoring ===
+	// CPU-generates a pattern into an RGBA8 buffer and saves it as a PNG under
+	// strPathKey (default Resource/Texture). The caller then loads it back as a
+	// normal slotted Texture (same path the editor's "Set" button uses), so it
+	// persists through the existing .mat pipeline with zero serialization change.
+	// For single-channel maps (Roughness/Metalness/AO) the value is written into
+	// all of R/G/B; the PBR shader samples .r, so it reads correctly.
+	enum class ProcPattern
+	{
+		SolidValue = 0,   // flat colorA
+		Checker,          // colorA/colorB squares (scale = cells across)
+		ValueNoise,       // fBm noise, lerp colorA..colorB (strength = contrast)
+		Gradient,         // vertical colorA(top)..colorB(bottom)
+		Brick,            // brick field, colorA brick / colorB mortar
+		NormalFromNoise,  // tangent-space normal map baked from noise height
+	};
+
+	struct ProcTexParams
+	{
+		int   width    = 256;
+		int   height   = 256;
+		float colorA[4] = { 1.f, 1.f, 1.f, 1.f };
+		float colorB[4] = { 0.f, 0.f, 0.f, 1.f };
+		float scale    = 8.f;    // cells (checker/brick) or frequency (noise)
+		int   seed     = 1337;
+		float strength = 1.f;    // noise contrast / normal-map strength
+	};
+
+	// Returns true on success. When pOutFullPath/iOutCap are supplied, the
+	// resolved absolute file path is copied out so the caller can load it.
+	ENGINE_DLL bool GenerateProceduralTexturePNG(ProcPattern pattern, const ProcTexParams& params,
+		const TCHAR* pRelPath, const std::string& strPathKey,
+		TCHAR* pOutFullPath = nullptr, int iOutCap = 0);
 }

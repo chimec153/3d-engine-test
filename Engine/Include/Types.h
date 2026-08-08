@@ -570,6 +570,13 @@ namespace Engine
 		float fFogStartDepth;
 		Vector3 vFogHighlightColor;
 		float fFogGlobalDensity;
-		float fFogHeightFallOff;
+		float fFogHeightFallOff;       // offset 32
+		// HLSL b12에서 float4 g_vAmbient는 16바이트 정렬 규칙상 offset 48에 놓인다.
+		// Vector4(정렬 4)는 그냥 두면 offset 36에 와서 12바이트 어긋난다(=셰이더가
+		// 엉뚱한 메모리를 앰비언트로 읽어 모델이 시안색 등으로 깨짐). 명시 패딩으로
+		// 48에 맞춘다.
+		float _padAmbient[3];          // offset 36 -> 48
+		// 전역 씬 앰비언트: xyz=색, w=세기. HLSL g_vAmbient와 매칭 (offset 48).
+		Vector4 vAmbient;
 	}FOGCBUFFER, *PFOGCBUFFER;
 }

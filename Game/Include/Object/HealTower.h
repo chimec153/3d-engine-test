@@ -34,6 +34,17 @@ namespace Client
         // top (y = kWallY).
         void SetCell(int cx, int cz);
 
+        // Acquisition-order slot seq (from the heal reserve at placement). Drives
+        // this tower's numbered position in the tower HUD; preserved through death
+        // so a re-placed heal tower keeps its slot.
+        int  GetSlotSeq() const   { return m_iSlotSeq; }
+        void SetSlotSeq(int iSeq)  { m_iSlotSeq = iSeq; }
+
+        // Heal-tower level (1..). Merging two heal towers in the shop raises it;
+        // the pulse heals iHealAmount * level. Set at placement from the reserve.
+        int  GetLevel() const     { return m_iLevel; }
+        void SetLevel(int iLevel);
+
         virtual bool Init() override;
         virtual void Update(float fDeltaTime) override;
 
@@ -74,6 +85,8 @@ namespace Client
         float m_fHealRadius   = 0.f;
 
         float m_fHealAcc = 0.f;   // counts up to m_fHealInterval, then pulses
+        int   m_iSlotSeq = 0;     // acquisition-order slot (HUD numbering)
+        int   m_iLevel   = 1;     // heal-tower level (scales the pulse amount)
 
         // Heal every ally (AggroTarget holder) within kHealRadius.
         void HealNearbyAllies();

@@ -45,9 +45,8 @@ namespace Engine
 		m_tMaterial.ambientColor.w = 1.f;
 
 		// PBR dielectric F0 ≈ 0.04 (plastic, wood, fabric, skin, ...).
-		// Used in PS_Multi as GetFresnel(LDotH, vSpecColor) — vSpecColor is
-		// the F0 in the specular workflow. Metals override this via the
-		// metalness-texture branch in anisotropic_microfacet.hlsl PS.
+		// metallic-roughness 워크플로우에서 specularColor.xyz는 "유전체 F0 베이스"다.
+		// PS_Multi가 F0 = lerp(specularColor, albedo, metallic)로 금속을 처리한다.
 		m_tMaterial.specularColor.x = 0.04f;
 		m_tMaterial.specularColor.y = 0.04f;
 		m_tMaterial.specularColor.z = 0.04f;
@@ -59,9 +58,9 @@ namespace Engine
 		m_tMaterial.emissiveColor.w = 1.f;
 
 		m_tMaterial.fSpecPower = 100;
-		m_tMaterial.fFraction = 0.5f;
-		m_tMaterial.vRoughness.x = 0.5f;
-		m_tMaterial.vRoughness.y = 0.1f;
+		m_tMaterial.fFraction = 0.5f;       // 레거시 — metallic-roughness 경로 미사용
+		m_tMaterial.vRoughness.x = 0.5f;    // roughness
+		m_tMaterial.vRoughness.y = 0.f;     // metallic (기본 유전체)
 	}
 
 	Material::Material(const std::shared_ptr<ConstantBuffer<MATERIAL>>& pBuffer) :
@@ -182,6 +181,27 @@ namespace Engine
 	void Material::SetRoughnessY(float y)
 	{
 		m_tMaterial.vRoughness.y = y;
+	}
+
+	void Material::SetRoughness(float fRoughness)
+	{
+		m_tMaterial.vRoughness.x = fRoughness;
+	}
+
+	void Material::SetMetallic(float fMetallic)
+	{
+		// metallic은 vRoughness.y에 패킹 (셰이더 PS가 value1.w로 기록).
+		m_tMaterial.vRoughness.y = fMetallic;
+	}
+
+	float Material::GetRoughness() const
+	{
+		return m_tMaterial.vRoughness.x;
+	}
+
+	float Material::GetMetallic() const
+	{
+		return m_tMaterial.vRoughness.y;
 	}
 
 	void Material::UsePaperBurn()

@@ -103,6 +103,7 @@ namespace Client
         // (sell / merge / equip-to-tower). Empty firing slots show a dim [+].
         std::shared_ptr<Engine::Text>   m_pOwnedHeader;
         std::shared_ptr<Engine::Button> m_pOwnedIcons[kOwnedRows];
+        std::shared_ptr<Engine::Text>   m_pOwnedLvlTexts[kOwnedRows];   // per-copy "Lv.N"
         int                             m_iOwnedIds[kOwnedRows];
         Rect                            m_OwnedRect[kOwnedRows];   // hit-test
 
@@ -112,6 +113,7 @@ namespace Client
         static constexpr int kInvRows = 6;
         std::shared_ptr<Engine::Text>   m_pInvHeader;
         std::shared_ptr<Engine::Button> m_pInvIcons[kInvRows];
+        std::shared_ptr<Engine::Text>   m_pInvLvlTexts[kInvRows];   // per-copy "Lv.N"
         int                             m_iInvIds[kInvRows] = {};
         Rect                            m_InvRect[kInvRows];
 
@@ -126,6 +128,14 @@ namespace Client
         bool                            m_bTowerRowIsHeal[kTowerRows] = {};
         Rect                            m_TowerRect[kTowerRows];   // drop target
         int                             m_iTowerCount = 0;
+        // Placed and unplaced towers now share ONE list (acquisition order); each
+        // row is either a placed scene object (m_pTowerRowRefs) or an index into
+        // TowerManager's attack/heal reserve. m_eTowerRowSrc says which.
+        enum class TowerRowSrc { Placed, AtkReserve, HealReserve };
+        TowerRowSrc                     m_eTowerRowSrc[kTowerRows] = {};
+        int                             m_iTowerRowReserve[kTowerRows] = {};   // reserve index for reserve rows
+        int                             m_iTowerRowDefId[kTowerRows] = {};     // towers.csv type (merge grouping)
+        int                             m_iTowerRowLevel[kTowerRows] = {};
 
         // Unplaced Towers — per-reserve-tower weapon config (drag target +
         // click to cycle). Icons only (weapon shown by colour, like the owned
@@ -170,6 +180,14 @@ namespace Client
         bool m_bEquipArmedThisFrame = false;
         std::shared_ptr<Engine::Button> m_pDragGhost;
 
+        // Double-click detection for the equip/inventory icons. Intermission dt
+        // is ~0 (the world is frozen), so the click gap is measured in FRAMES
+        // (Update still ticks). m_iClickFrame advances each Update.
+        int m_iClickFrame     = 0;
+        int m_iLastClickFrame = -1000;
+        int m_iLastClickKey   = -1;   // last icon clicked (encoded: equip/inv + index)
+        static constexpr int kDoubleClickFrames = 18;   // ~0.3s at 60fps
+
         // Real drag-and-drop: press on an equipped / inventory weapon icon to
         // pick it up (the ghost follows the cursor), release over a target to
         // move it — inventory→equip, equipped→inventory, either→a tower slot.
@@ -206,12 +224,6 @@ namespace Client
         // Such weapons are locked to towers, so the buy catalog hides them — a
         // weapon is owned by EITHER the player OR a tower, never both.
         bool IsWeaponHeldByTower(int iWeaponId) const;
-        // True when a weapon id is held by some OTHER tower than the one being
-        // assigned (a placed tower to exclude, and/or a reserve index to skip).
-        // Enforces one-tower-per-weapon: no two towers share the same weapon.
-        bool IsWeaponHeldByOtherTower(int iWeaponId,
-                                      const Engine::GameObject* pExcludeTower,
-                                      int iExcludeReserve) const;
         // Shop price for a weapon id — the WeaponDef's per-weapon iPrice, or the
         // global kWeaponPrice default when that's 0/unset. Used by buy / merge /
         // sell-refund so a weapon can be priced individually.
@@ -252,10 +264,15 @@ namespace Client
         void OnMenuSell();
         void OnMenuMerge();
         void OnMenuEquip();
-        // Equipped-strip icon L-click → unequip that weapon (→ inventory).
+        // Equipped-strip icon → unequip that weapon (→ inventory).
         void OnEquipSlotClick(int iIndex);
-        // Inventory-strip icon L-click → equip that weapon (→ a free firing slot).
+        // Inventory-strip icon → equip that weapon (→ a free firing slot).
         void OnInventoryClick(int iIndex);
+        // Double-click router for the equipped (bEquipped=true) / inventory
+        // weapon icons: a SINGLE click does nothing; only a quick second click
+        // toggles equip/unequip (a single click was too easy to trigger by
+        // accident). bEquipped picks which handler to run on the double-click.
+        void OnWeaponIconClick(bool bEquipped, int iIndex);
 
         // Tower action menu — the placed-tower analogue of the weapon menu,
         // popped from a tower-loadout row click (reuses the same panel/buttons).
@@ -267,9 +284,20 @@ namespace Client
         void OnTowerMenuMerge();
         void OnTowerMenuCycle();
         void OnTowerMenuSell();
-        // Live placed attack towers ("Tower" tag, active) firing weapon iWeaponId.
-        // Backs the merge (needs >= 2) and its greyed-button count.
-        std::vector<std::shared_ptr<Tower>> CollectAttackTowers(int iWeaponId) const;
+        // Unified tower-row click: assign an armed weapon (placed or reserve) or
+        // open the action menu. Right-click sells. Dispatch by m_eTowerRowSrc.
+        void OnTowerRowClick(int iRow);
+        void OnTowerRowSell(int iRow);
+        // Resolve a stored tower-type id to its canonical id: a default attack
+        // tower stores -1 in the reserve but the resolved FirstOfKind(Attack) id
+        // once placed, so merge must normalise both to group them as one TYPE.
+        int  ResolveTowerType(int iTowerDefId) const;
+        // Count owned towers (placed + unplaced) of a resolved TYPE, and the
+        // highest level among them — backs the merge enable + its "(xN)" label.
+        void CountTowersOfType(int iResolvedType, int& outCount, int& outMaxLevel) const;
+        // Same for HEAL towers (all one type): owned heal count (placed +
+        // unplaced) and the highest heal-tower level.
+        void CountHealTowers(int& outCount, int& outMaxLevel) const;
         // True when the action menu is open and the cursor is over its panel —
         // the row buttons underneath bail on their click so it goes to the menu
         // (each UIControl hit-tests independently, so overlaps would double-fire).

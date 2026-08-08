@@ -9,7 +9,7 @@
 #                lifetime: index only (0,1,2…); seconds are the duration column
 #                onhit:    Vanish=0 NoChange=1 Reflect=2 Multiply=3 Field=4
 #                size:     index only (0,1,2…); the scale is the amount column
-#                levelup:  Damage=0 Cooldown=1 Count=2 Speed=3 Size=4
+#                levelup:  Damage=0 Cooldown=1 Count=2 Speed=3 Size=4 Lifetime=5
 #                impact:   Damage=0 Knockback=1 Gather=2 Burn=3 Slow=4 (multi-
 #                          select: a weapon may equip several; Damage is the
 #                          always-on baseline. amount = effect strength / Burn
@@ -92,6 +92,7 @@ levelup,1,Cooldown,0x26C6DA,0.9,0
 levelup,2,Count,0x9CCC65,1.0,0
 levelup,3,Speed,0xFFEE58,3.0,0
 levelup,4,Size,0xAB47BC,0.1,0
+levelup,5,Lifetime,0x5C6BC0,1.0,0
 acceleration,0,Decel,0x4DB6AC,-3,0
 acceleration,1,Constant,0x4DB6AC,0,0
 acceleration,2,Accel,0x4DB6AC,6,0

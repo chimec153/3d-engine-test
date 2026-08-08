@@ -9,6 +9,9 @@
 #include "Resource/FontManager.h"
 #include "Resource/Text.h"
 #include "Core/Window.h"
+#include "Input/Input.h"
+#include "../Object/GameStateManager.h"
+#include "HudTooltip.h"
 #include "Types.h"
 #include <algorithm>
 #include <string>
@@ -17,8 +20,8 @@ namespace Client
 {
     namespace WeaponHUD_detail
     {
-        // Layout, applied to the current window size at Init. Six square
-        // slot boxes laid out horizontally along the top-left corner;
+        // Layout, applied to the current window size at Init. One square
+        // slot box per equip slot, laid out horizontally along the top-left corner;
         // a small gap between each so the boxes read as a row of icons.
         constexpr float kLeftFrac     = 0.020f;
         constexpr float kTopFrac      = 0.025f;
@@ -99,9 +102,12 @@ namespace Client
         m_pLvlFont = Engine::FontManager::GetInst()->CreateFont(
             "weapon_hud_lvl",  L"Arial", fLvlSize,  DWRITE_FONT_WEIGHT_BOLD);
 
+        m_fBoxY    = fTop;
+        m_fBoxSize = fSlotSize;
         for (int i = 0; i < kSlotCount; ++i)
         {
             const float fX = fLeft + i * (fSlotSize + fSlotGap);
+            m_fBoxX[i] = fX;   // stored for the hover hit-test
 
             // Background box — Button gives us SetTexture; the (unused)
             // OnClick stays null so a click is harmlessly absorbed.
@@ -155,6 +161,23 @@ namespace Client
                     fLvlH);
             }
         }
+
+        // Hover tooltip panel (created last so it draws above the slot boxes).
+        m_pTipBg = CreateComponent<Engine::Button>("weapon_hud_tip_bg");
+        if (m_pTipBg)
+        {
+            m_pTipBg->SetTexture(WeaponHUD_detail::EnsureSolidTexture("weapon_hud_tip_bg", 0x101014, 0xE0));
+            m_pTipBg->Disable();
+        }
+        m_pTipText = CreateComponent<Engine::Text>("weapon_hud_tip_text");
+        if (m_pTipText)
+        {
+            m_pTipText->SetFont(m_pNameFont);
+            m_pTipText->SetColor(0xFFFFFFFFu);
+            m_pTipText->SetHAlign(Engine::Text::HAlign::Left);
+            m_pTipText->SetVAlign(Engine::Text::VAlign::Top);
+            m_pTipText->Disable();
+        }
         return true;
     }
 
@@ -168,11 +191,14 @@ namespace Client
         // Show only the player's EQUIPPED weapons (the ones actually firing).
         // Inventory weapons and tower-mounted weapons are excluded — they don't
         // fire for the player, so they don't take a weapon-HUD slot.
-        const std::vector<int> vecIds = pPlayer->GetEquippedWeaponIds();
+        const std::vector<int> vecIds  = pPlayer->GetEquippedWeaponIds();
+        const std::vector<int> vecLvls = pPlayer->GetEquippedWeaponLevels();
         for (int i = 0; i < kSlotCount; ++i)
         {
-            const int iId    = (i < static_cast<int>(vecIds.size())) ? vecIds[i] : -1;
-            const int iLevel = (iId >= 0) ? pPlayer->GetOwnedWeaponLevel(iId) : -1;
+            const int iId    = (i < static_cast<int>(vecIds.size()))  ? vecIds[i]  : -1;
+            // Per-copy level (positional) so a duplicate equipped copy reads its
+            // own level, not the first owned copy's.
+            const int iLevel = (i < static_cast<int>(vecLvls.size())) ? vecLvls[i] : -1;
 
             if (iId == m_iLastIds[i] && iLevel == m_iLastLevels[i]) continue;
             m_iLastIds[i]    = iId;
@@ -194,6 +220,51 @@ namespace Client
             std::wstring wsName(pDef->strName.begin(), pDef->strName.end());
             if (m_pNameTexts[i]) m_pNameTexts[i]->SetString(wsName);
             if (m_pLvlTexts[i])  m_pLvlTexts[i]->SetString(L"Lv." + std::to_wstring(iLevel));
+        }
+
+        // --- Hover tooltip: the hovered slot's weapon stats follow the cursor.
+        // Only while actually playing (the between-round shop has its own).
+        auto hideTip = [&]() {
+            if (m_pTipBg)   m_pTipBg->Disable();
+            if (m_pTipText) m_pTipText->Disable();
+        };
+        // Tooltip shows on hover in every state; hides only when not hovering a
+        // slot (handled below).
+
+        auto* pInput = Engine::CInput::GetInst();
+        const float mx = static_cast<float>(pInput->GetMouseX());
+        const float my = static_cast<float>(pInput->GetMouseY());
+        std::wstring wInfo;
+        for (int i = 0; i < kSlotCount; ++i)
+        {
+            if (m_iLastIds[i] < 0) continue;
+            if (mx < m_fBoxX[i] || mx >= m_fBoxX[i] + m_fBoxSize ||
+                my < m_fBoxY    || my >= m_fBoxY    + m_fBoxSize) continue;
+            if (const WeaponDef* pDef = WeaponDatabase::GetInst().Get(m_iLastIds[i]))
+                wInfo = HudTip::Weapon(*pDef, m_iLastLevels[i]);
+            break;
+        }
+        if (wInfo.empty()) { hideTip(); return; }
+
+        // Size + place next to the cursor, clamped to the window.
+        const float fScreenW = static_cast<float>(Engine::Window::GetInst()->GetWidth());
+        const float fScreenH = static_cast<float>(Engine::Window::GetInst()->GetHeight());
+        int iLines = 1; for (wchar_t c : wInfo) if (c == L'\n') ++iLines;
+        const float fPad   = 6.f;
+        const float fLineH = (std::max)(14.f, m_fBoxSize * 0.18f);
+        const float fTipW  = m_fBoxSize * 3.4f;
+        const float fTipH  = iLines * fLineH + fPad * 2.f;
+        float tx = mx + 18.f, ty = my + 14.f;
+        if (tx + fTipW > fScreenW) tx = mx - fTipW - 18.f;
+        if (tx < 0.f) tx = 0.f;
+        if (ty + fTipH > fScreenH) ty = fScreenH - fTipH;
+        if (ty < 0.f) ty = 0.f;
+        if (m_pTipBg)   { m_pTipBg->SetRect(tx, ty, fTipW, fTipH); m_pTipBg->Enable(); }
+        if (m_pTipText)
+        {
+            m_pTipText->SetRect(tx + fPad, ty + fPad, fTipW - fPad * 2.f, fTipH - fPad * 2.f);
+            m_pTipText->SetString(wInfo);
+            m_pTipText->Enable();
         }
     }
 

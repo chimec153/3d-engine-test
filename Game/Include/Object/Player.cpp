@@ -735,8 +735,8 @@ namespace Client
 				m_pHealMoteParticle->SetStartColor({ 0.3f, 1.f, 0.45f, 1.f });
 				m_pHealMoteParticle->SetEndColor({ 0.4f, 1.f, 0.55f, 0.f });
 				m_pHealMoteParticle->SetMaxLifeTime(0.9f);
-				m_pHealMoteParticle->SetStartSize({ 0.07f, 0.07f });
-				m_pHealMoteParticle->SetEndSize({ 0.13f, 0.13f });
+				m_pHealMoteParticle->SetStartSize({ 0.22f, 0.22f });
+				m_pHealMoteParticle->SetEndSize({ 0.40f, 0.40f });
 				m_pHealMoteParticle->SetVelocity({ -0.15f, 0.8f, -0.15f });
 				m_pHealMoteParticle->SetMaxVelocity({ 0.15f, 1.6f, 0.15f });
 				m_pHealMoteParticle->SetTexture(pMoteTex);
@@ -884,20 +884,15 @@ namespace Client
 			}
 		}
 
-		// Target-mode aim indicator: a ground triangle under the player whose
-		// tip points at the cursor while mouse-aim is on. Hidden otherwise.
+		// Aim indicator: a ground triangle that always shows and points where
+		// shots actually go — at the cursor while target mode is on, along the
+		// player's forward facing while it's off. ComputeAimYaw() encodes that
+		// (cursor when m_bMouseAim, GetRY() otherwise, with a safe fallback).
 		{
-			float fCursorYaw = 0.f;
-			if (m_bMouseAim && TryComputeMouseAimYaw(fCursorYaw))
-			{
-				Engine::Vector3 vMark = pTransform->GetPosition();
-				vMark.y = static_cast<float>(kWallY) + 0.03f;   // just above the floor
-				AimIndicatorManager::GetInst()->Set(vMark, fCursorYaw);
-			}
-			else
-			{
-				AimIndicatorManager::GetInst()->SetVisible(false);
-			}
+			const float fYaw = ComputeAimYaw();
+			Engine::Vector3 vMark = pTransform->GetPosition();
+			vMark.y = static_cast<float>(kWallY) + 0.03f;   // just above the floor
+			AimIndicatorManager::GetInst()->Set(vMark, fYaw);
 		}
 
 		// F: place a wall in the cell immediately in front of the player.
@@ -1003,29 +998,27 @@ namespace Client
 		// voxels; UpdateState still runs so Idle/Run animations sync.
 		UpdateState(fDeltaTime);
 
-		// A weapon mounted on a tower is used by the tower, not the player.
-		// Refresh the held set, then suppress/restore each slot's persistent
-		// instances accordingly, before any firing this frame.
-		RefreshTowerHeldWeapons();
-		ReconcileTowerHeldInstances();
+		// Keep each owned weapon's persistent instances in sync with whether it's
+		// equipped (weapons on towers were moved out of m_vecWeaponSlots).
+		ReconcileInstances();
 
 		// Weapon slots — Cooldown slots accumulate dt and fire when the
 		// (level-scaled) cooldown is reached; Sustained slots have no
 		// per-frame work here, their orbital instances tick themselves.
 		for (auto& slot : m_vecWeaponSlots)
 		{
-			if (slot.bTowerHeld || !slot.bEquipped) continue;   // on a tower, or in inventory
-			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+			if (!slot || !slot->bEquipped) continue;   // in inventory
+			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot->iWeaponId);
 			if (!pDef || pDef->eFireMode != FireMode::Cooldown) continue;
 			// Follow weapons fire through their pets, not the player.
 			if (pDef->eMovement == MovementType::Follow) continue;
-			const float fCd = ComputeCooldown(*pDef, slot.iLevel);
-			slot.fCooldownAcc += fDeltaTime;
+			const float fCd = ComputeCooldown(*pDef, slot->iLevel);
+			slot->fCooldownAcc += fDeltaTime;
 			// Loop so a paused / hitching frame doesn't drop shots.
 			int iGuard = 0;
-			while (slot.fCooldownAcc >= fCd && iGuard++ < 8)
+			while (slot->fCooldownAcc >= fCd && iGuard++ < 8)
 			{
-				slot.fCooldownAcc -= fCd;
+				slot->fCooldownAcc -= fCd;
 				FireCooldownBurst(slot);
 			}
 		}
@@ -1120,75 +1113,38 @@ namespace Client
 		}
 	}
 
-	void Player::RefreshTowerHeldWeapons()
+	void Player::ReconcileInstances()
 	{
-		m_vecTowerHeldWeapons.clear();
-		// Placed towers in the scene (each fires one weapon id).
-		if (auto pScene = GetScene())
-		{
-			if (auto pLayer = pScene->FindLayer(DEFAULT_LAYER))
-			{
-				for (const auto& p : pLayer->GetGameObjectList())
-				{
-					if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
-					const int wid = std::static_pointer_cast<Tower>(p)->GetWeaponId();
-					if (wid >= 0) m_vecTowerHeldWeapons.push_back(wid);
-				}
-			}
-		}
-		// Bought-but-unplaced towers (reserve) reserve their weapon too.
-		auto& tm = TowerManager::GetInst();
-		const int n = tm.ReserveCount();
-		for (int i = 0; i < n; ++i)
-		{
-			const int wid = tm.ReserveWeaponRaw(i);
-			if (wid >= 0) m_vecTowerHeldWeapons.push_back(wid);
-		}
-	}
-
-	bool Player::IsWeaponTowerHeld(int iWeaponId) const
-	{
-		if (iWeaponId < 0) return false;
-		for (int id : m_vecTowerHeldWeapons)
-			if (id == iWeaponId) return true;
-		return false;
-	}
-
-	void Player::ReconcileTowerHeldInstances()
-	{
+		// A weapon fires for the player only while EQUIPPED (weapons assigned to
+		// towers were moved out of this vector entirely, so there's no tower-held
+		// state to check any more). Spawn persistent instances (orbs/beams/pets)
+		// when equipped, tear them down when idle in the inventory.
 		for (auto& slot : m_vecWeaponSlots)
 		{
-			slot.bTowerHeld = IsWeaponTowerHeld(slot.iWeaponId);
-			// A weapon "fires for the player" only while equipped AND not on a
-			// tower. Persistent instances (orbs/beams/pets) should exist exactly
-			// when active; spawn/tear-down on the transition so an unequipped or
-			// tower-handed weapon stops, and a re-equipped / released one resumes.
-			const bool bActive = slot.bEquipped && !slot.bTowerHeld;
-			if (bActive && !slot.bInstancesLive)
+			if (!slot) continue;
+			const bool bActive = slot->bEquipped;
+			if (bActive && !slot->bInstancesLive)
 			{
 				SpawnSlotInstances(slot);
-				slot.bInstancesLive = true;
+				slot->bInstancesLive = true;
 			}
 			else if (!bActive)
 			{
-				// Inactive (inventory or tower-held): make sure no persistent
-				// instances linger — clear unconditionally so any spawned by a
-				// level-up/merge on an idle slot can't orphan.
-				for (auto& wp : slot.vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
-				slot.vecSustainedInstances.clear();
-				for (auto& wp : slot.vecBeams) if (auto sp = wp.lock()) sp->InActivate();
-				slot.vecBeams.clear();
-				for (auto& wp : slot.vecPets) if (auto sp = wp.lock()) sp->InActivate();
-				slot.vecPets.clear();
-				slot.bInstancesLive = false;
+				for (auto& wp : slot->vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+				slot->vecSustainedInstances.clear();
+				for (auto& wp : slot->vecBeams) if (auto sp = wp.lock()) sp->InActivate();
+				slot->vecBeams.clear();
+				for (auto& wp : slot->vecPets) if (auto sp = wp.lock()) sp->InActivate();
+				slot->vecPets.clear();
+				slot->bInstancesLive = false;
 			}
 		}
 	}
 
-	void Player::FireCooldownBurst(const WeaponSlot& slot)
+	void Player::FireCooldownBurst(const WeaponPtr& slot)
 	{
-		if (!m_pTransform) return;
-		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		if (!m_pTransform || !slot) return;
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot->iWeaponId);
 		if (!pDef) return;
 
 		const Engine::Vector3 vPlayerPos = m_pTransform->GetPosition();
@@ -1272,7 +1228,7 @@ namespace Client
 		// otherwise they fan around the aim heading at ~10 deg per extra shot,
 		// tight enough to stay readable. (spread_deg will replace the fixed
 		// fan step in a later phase.)
-		const int iCount = ComputeCount(*pDef, slot.iLevel);
+		const int iCount = ComputeCount(*pDef, slot->iLevel);
 		// Fan geometry. spread_deg < 0 (unset) keeps the legacy ~10deg-per-shot
 		// fan; >= 0 spreads Count shots evenly across that total arc (0 =
 		// stacked single line). Radial ignores both (handled in the loop).
@@ -1292,7 +1248,7 @@ namespace Client
 		{
 			auto pBullet = GetScene()->CreateGameObject<Bullet>("bullet", pLayer);
 			if (!pBullet) continue;
-			pBullet->Configure(*pDef, slot.iLevel, m_pTransform);
+			pBullet->Configure(*pDef, slot->iLevel, m_pTransform);
 			// Hand the bullet the voxel world so a Reflect-type projectile
 			// can bounce off walls (no-op for every other on-hit).
 			pBullet->SetVoxelWorld(m_pVoxelWorld);
@@ -1323,23 +1279,24 @@ namespace Client
 		}
 	}
 
-	void Player::RespawnSustainedInstances(WeaponSlot& slot)
+	void Player::RespawnSustainedInstances(const WeaponPtr& slot)
 	{
+		if (!slot) return;
 		// Drop any still-live instances first — Orbital orbs from the
 		// previous level no longer reflect the new count/speed/damage.
-		for (auto& wp : slot.vecSustainedInstances)
+		for (auto& wp : slot->vecSustainedInstances)
 			if (auto sp = wp.lock())
 				sp->InActivate();
-		slot.vecSustainedInstances.clear();
+		slot->vecSustainedInstances.clear();
 
 		if (!m_pTransform) return;
-		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot->iWeaponId);
 		if (!pDef || pDef->eFireMode != FireMode::Sustained) return;
 
 		auto pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
 		if (!pLayer) return;
 
-		const int iCount = ComputeCount(*pDef, slot.iLevel);
+		const int iCount = ComputeCount(*pDef, slot->iLevel);
 		// Same muzzle drop FireCooldownBurst uses — without it the orbs
 		// would circle at player pivot height (~kWallY+1) and never
 		// intersect enemy collider spheres (~kWallY+0.3).
@@ -1364,31 +1321,32 @@ namespace Client
 				pBulletTr->SetRX(-PI / 2.f);
 				pBulletTr->SetRY(bRing ? (6.2831853f * i) / iCount : fAimYaw);
 			}
-			pBullet->Configure(*pDef, slot.iLevel, m_pTransform);
+			pBullet->Configure(*pDef, slot->iLevel, m_pTransform);
 			// Keep the orbital path at muzzle height — Bullet::Update
 			// adds this each frame to vCenter.y (the owner pivot).
 			pBullet->SetOrbitYOffset(kMuzzleYOffset);
-			slot.vecSustainedInstances.emplace_back(pBullet);
+			slot->vecSustainedInstances.emplace_back(pBullet);
 		}
 	}
 
-	void Player::RespawnPets(WeaponSlot& slot)
+	void Player::RespawnPets(const WeaponPtr& slot)
 	{
+		if (!slot) return;
 		// Drop any live pets first — the previous level's count no longer
 		// matches after a level-up (mirrors RespawnSustainedInstances).
-		for (auto& wp : slot.vecPets)
+		for (auto& wp : slot->vecPets)
 			if (auto sp = wp.lock())
 				sp->InActivate();
-		slot.vecPets.clear();
+		slot->vecPets.clear();
 
 		if (!m_pTransform) return;
-		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot->iWeaponId);
 		if (!pDef || pDef->eMovement != MovementType::Follow) return;
 
 		auto pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
 		if (!pLayer) return;
 
-		const int iCount = ComputeCount(*pDef, slot.iLevel);
+		const int iCount = ComputeCount(*pDef, slot->iLevel);
 		const Engine::Vector3 vSpawn = m_pTransform->GetPosition();
 		for (int i = 0; i < iCount; ++i)
 		{
@@ -1398,38 +1356,39 @@ namespace Client
 			if (auto pPetTr = pPet->GetTransform())
 				pPetTr->SetPosition(vSpawn);
 			const float fRing = (6.2831853f * i) / iCount;
-			pPet->Configure(slot.iWeaponId, slot.iLevel, m_pTransform, fRing, m_pVoxelWorld);
-			slot.vecPets.emplace_back(pPet);
+			pPet->Configure(slot->iWeaponId, slot->iLevel, m_pTransform, fRing, m_pVoxelWorld);
+			slot->vecPets.emplace_back(pPet);
 		}
 	}
 
-	void Player::RespawnBeams(WeaponSlot& slot)
+	void Player::RespawnBeams(const WeaponPtr& slot)
 	{
+		if (!slot) return;
 		// Drop old beams (level-up re-spawn) and create ComputeCount fresh ones.
 		// They're positioned/aimed by DriveBeams each frame, so spawn position
 		// doesn't matter here.
-		for (auto& wp : slot.vecBeams)
+		for (auto& wp : slot->vecBeams)
 			if (auto sp = wp.lock())
 				sp->InActivate();
-		slot.vecBeams.clear();
+		slot->vecBeams.clear();
 
-		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot->iWeaponId);
 		if (!pDef || pDef->eFireMode != FireMode::Sustained) return;
 
 		auto pLayer = GetScene()->FindLayer(DEFAULT_LAYER);
 		if (!pLayer) return;
 
-		const int iCount = ComputeCount(*pDef, slot.iLevel);
+		const int iCount = ComputeCount(*pDef, slot->iLevel);
 		for (int i = 0; i < iCount; ++i)
 		{
 			auto pBeam = GetScene()->CreateGameObject<Beam>("beam", pLayer);
 			if (!pBeam) continue;
-			pBeam->Configure(slot.iWeaponId, slot.iLevel);
+			pBeam->Configure(slot->iWeaponId, slot->iLevel);
 			// Lock the heading per on-pulse: DriveBeams still passes the live
 			// cursor yaw every frame, but the beam latches it when it fires and
 			// holds it for the whole pulse, re-aiming only during the off phase.
 			pBeam->SetAimLock(true);
-			slot.vecBeams.emplace_back(pBeam);
+			slot->vecBeams.emplace_back(pBeam);
 		}
 	}
 
@@ -1440,20 +1399,21 @@ namespace Client
 			m_pTransform->GetPosition() + Engine::Vector3{ 0.f, kMuzzleYOffset, 0.f };
 		for (auto& slot : m_vecWeaponSlots)
 		{
-			if (slot.bTowerHeld || !slot.bEquipped) continue;   // tower / inventory — beams torn down
-			if (slot.vecBeams.empty()) continue;
-			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+			if (!slot || !slot->bEquipped) continue;   // inventory — beams torn down
+			if (slot->vecBeams.empty()) continue;
+			const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot->iWeaponId);
 			if (!pDef) continue;
 			const float fAimYaw = ComputeWeaponAimYaw(*pDef, m_pTransform->GetPosition());
-			for (auto& wp : slot.vecBeams)
+			for (auto& wp : slot->vecBeams)
 				if (auto sp = wp.lock())
 					sp->Drive(vMuzzle, fAimYaw, fDeltaTime);
 		}
 	}
 
-	void Player::SpawnSlotInstances(WeaponSlot& slot)
+	void Player::SpawnSlotInstances(const WeaponPtr& slot)
 	{
-		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		if (!slot) return;
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot->iWeaponId);
 		if (!pDef) return;
 		// Sustained orbs / pets / beams need a re-spawn so a count/speed bump
 		// on the level-up column takes effect; Cooldown weapons just read the
@@ -1469,28 +1429,29 @@ namespace Client
 		}
 	}
 
-	void Player::LevelUpSlot(WeaponSlot& slot)
+	void Player::LevelUpSlot(const WeaponPtr& slot)
 	{
-		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot.iWeaponId);
+		if (!slot) return;
+		const WeaponDef* pDef = WeaponDatabase::GetInst().Get(slot->iWeaponId);
 		if (!pDef) return;
 		// Capped at kMaxWeaponLevel. Already maxed → nothing to do (the slot
 		// is already spawned), so bail before touching level / evolution.
-		if (slot.iLevel >= kMaxWeaponLevel) return;
-		++slot.iLevel;
+		if (slot->iLevel >= kMaxWeaponLevel) return;
+		++slot->iLevel;
 		// One-time evolution: at the threshold level the slot transforms
 		// into the evolved weapon (fresh at level 1). Drop the base
 		// weapon's live instances first so an evolution that changes
 		// category (Sustained/Follow -> Cooldown) leaves no orphans.
-		if (pDef->iEvolvesInto > 0 && slot.iLevel >= pDef->iEvolveMinLevel)
+		if (pDef->iEvolvesInto > 0 && slot->iLevel >= pDef->iEvolveMinLevel)
 		{
 			if (WeaponDatabase::GetInst().Get(pDef->iEvolvesInto))
 			{
-				for (auto& wp : slot.vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
-				slot.vecSustainedInstances.clear();
-				for (auto& wp : slot.vecPets) if (auto sp = wp.lock()) sp->InActivate();
-				slot.vecPets.clear();
-				slot.iWeaponId = pDef->iEvolvesInto;
-				slot.iLevel    = 1;
+				for (auto& wp : slot->vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+				slot->vecSustainedInstances.clear();
+				for (auto& wp : slot->vecPets) if (auto sp = wp.lock()) sp->InActivate();
+				slot->vecPets.clear();
+				slot->iWeaponId = pDef->iEvolvesInto;
+				slot->iLevel    = 1;
 			}
 		}
 		SpawnSlotInstances(slot);
@@ -1512,7 +1473,7 @@ namespace Client
 		// Existing slot → bump level in place.
 		for (auto& slot : m_vecWeaponSlots)
 		{
-			if (slot.iWeaponId == iWeaponId)
+			if (slot && slot->iWeaponId == iWeaponId)
 			{
 				LevelUpSlot(slot);
 				return;
@@ -1523,14 +1484,11 @@ namespace Client
 		// new-weapon cards once the cap is hit, but the guard here keeps
 		// the invariant local.
 		if (static_cast<int>(m_vecWeaponSlots.size()) >= kMaxWeaponSlots) return;
-		WeaponSlot slot;
-		slot.iWeaponId = iWeaponId;
-		slot.iLevel    = 1;
+		auto sNew = std::make_shared<Weapon>(iWeaponId, 1);
 		// Auto-equip into a free firing slot; overflow lands in the inventory.
-		slot.bEquipped = GetEquippedCount() < kMaxEquipSlots;
-		m_vecWeaponSlots.push_back(std::move(slot));
-		WeaponSlot& sNew = m_vecWeaponSlots.back();
-		if (sNew.bEquipped) { SpawnSlotInstances(sNew); sNew.bInstancesLive = true; }
+		sNew->bEquipped = GetEquippedCount() < kMaxEquipSlots;
+		m_vecWeaponSlots.push_back(sNew);
+		if (sNew->bEquipped) { SpawnSlotInstances(sNew); sNew->bInstancesLive = true; }
 	}
 
 	void Player::AddWeaponCopy(int iWeaponId)
@@ -1544,17 +1502,13 @@ namespace Client
 		}
 		// Acquiring a weapon unlocks it for future runs' start-of-game picker.
 		WeaponDatabase::GetInst().Unlock(iWeaponId);
-		// Always a new slot (duplicate copies are mergeable later). Capped at
+		// Always a new object (duplicate copies are mergeable later). Capped at
 		// kMaxWeaponSlots — the shop guards this before charging gold.
 		if (static_cast<int>(m_vecWeaponSlots.size()) >= kMaxWeaponSlots) return;
-		WeaponSlot slot;
-		slot.iWeaponId = iWeaponId;
-		slot.iLevel    = 1;
-		// Auto-equip into a free firing slot; overflow lands in the inventory.
-		slot.bEquipped = GetEquippedCount() < kMaxEquipSlots;
-		m_vecWeaponSlots.push_back(std::move(slot));
-		WeaponSlot& sNew = m_vecWeaponSlots.back();
-		if (sNew.bEquipped) { SpawnSlotInstances(sNew); sNew.bInstancesLive = true; }
+		auto sNew = std::make_shared<Weapon>(iWeaponId, 1);
+		sNew->bEquipped = GetEquippedCount() < kMaxEquipSlots;
+		m_vecWeaponSlots.push_back(sNew);
+		if (sNew->bEquipped) { SpawnSlotInstances(sNew); sNew->bInstancesLive = true; }
 	}
 
 	bool Player::MergeWeapon(int iWeaponId)
@@ -1564,29 +1518,31 @@ namespace Client
 		int iKeep = -1, iErase = -1, iCopies = 0;
 		for (int i = 0; i < static_cast<int>(m_vecWeaponSlots.size()); ++i)
 		{
-			if (m_vecWeaponSlots[i].iWeaponId != iWeaponId) continue;
+			const auto& s = m_vecWeaponSlots[i];
+			if (!s || s->iWeaponId != iWeaponId) continue;
 			++iCopies;
-			if (iKeep < 0 || m_vecWeaponSlots[i].iLevel > m_vecWeaponSlots[iKeep].iLevel)
+			if (iKeep < 0 || s->iLevel > m_vecWeaponSlots[iKeep]->iLevel)
 				iKeep = i;
 		}
 		if (iCopies < 2) return false;
 		// Kept copy already maxed → merging gains nothing, so don't consume the
 		// other copy. Player keeps both copies to merge/use elsewhere.
-		if (m_vecWeaponSlots[iKeep].iLevel >= kMaxWeaponLevel) return false;
+		if (m_vecWeaponSlots[iKeep]->iLevel >= kMaxWeaponLevel) return false;
 		for (int i = 0; i < static_cast<int>(m_vecWeaponSlots.size()); ++i)
 		{
-			if (m_vecWeaponSlots[i].iWeaponId != iWeaponId || i == iKeep) continue;
-			if (iErase < 0 || m_vecWeaponSlots[i].iLevel < m_vecWeaponSlots[iErase].iLevel)
+			const auto& s = m_vecWeaponSlots[i];
+			if (!s || s->iWeaponId != iWeaponId || i == iKeep) continue;
+			if (iErase < 0 || s->iLevel < m_vecWeaponSlots[iErase]->iLevel)
 				iErase = i;
 		}
 		if (iErase < 0) return false;
 
 		// Tear down the consumed copy's live instances before erasing it
 		// (same teardown RemoveWeapon uses) so no orbs / pets / beams orphan.
-		WeaponSlot& e = m_vecWeaponSlots[iErase];
-		for (auto& wp : e.vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
-		for (auto& wp : e.vecPets)               if (auto sp = wp.lock()) sp->InActivate();
-		for (auto& wp : e.vecBeams)              if (auto sp = wp.lock()) sp->InActivate();
+		const auto& e = m_vecWeaponSlots[iErase];
+		for (auto& wp : e->vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+		for (auto& wp : e->vecPets)               if (auto sp = wp.lock()) sp->InActivate();
+		for (auto& wp : e->vecBeams)              if (auto sp = wp.lock()) sp->InActivate();
 		m_vecWeaponSlots.erase(m_vecWeaponSlots.begin() + iErase);
 		if (iErase < iKeep) --iKeep;   // erase shifted the kept slot down one
 		LevelUpSlot(m_vecWeaponSlots[iKeep]);
@@ -1597,7 +1553,7 @@ namespace Client
 	{
 		int n = 0;
 		for (const auto& s : m_vecWeaponSlots)
-			if (s.iWeaponId == iWeaponId) ++n;
+			if (s && s->iWeaponId == iWeaponId) ++n;
 		return n;
 	}
 
@@ -1605,13 +1561,14 @@ namespace Client
 	{
 		for (auto it = m_vecWeaponSlots.begin(); it != m_vecWeaponSlots.end(); ++it)
 		{
-			if (it->iWeaponId != iWeaponId) continue;
-			// Drop the slot's live instances (same teardown the respawn paths
+			if (!*it || (*it)->iWeaponId != iWeaponId) continue;
+			// Drop the weapon's live instances (same teardown the respawn paths
 			// use) so selling a Sustained / Follow / Beam weapon leaves no
 			// orphaned orbs, pets, or laser lines behind.
-			for (auto& wp : it->vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
-			for (auto& wp : it->vecPets)               if (auto sp = wp.lock()) sp->InActivate();
-			for (auto& wp : it->vecBeams)              if (auto sp = wp.lock()) sp->InActivate();
+			const auto& w = *it;
+			for (auto& wp : w->vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+			for (auto& wp : w->vecPets)               if (auto sp = wp.lock()) sp->InActivate();
+			for (auto& wp : w->vecBeams)              if (auto sp = wp.lock()) sp->InActivate();
 			m_vecWeaponSlots.erase(it);
 			return;
 		}
@@ -1621,25 +1578,25 @@ namespace Client
 	{
 		std::vector<int> out;
 		out.reserve(m_vecWeaponSlots.size());
-		for (const auto& s : m_vecWeaponSlots) out.push_back(s.iWeaponId);
+		for (const auto& s : m_vecWeaponSlots) if (s) out.push_back(s->iWeaponId);
 		return out;
 	}
 
 	int Player::GetOwnedWeaponLevel(int iWeaponId) const
 	{
 		for (const auto& s : m_vecWeaponSlots)
-			if (s.iWeaponId == iWeaponId) return s.iLevel;
+			if (s && s->iWeaponId == iWeaponId) return s->iLevel;
 		return 0;
 	}
 
-	// Equip / inventory partition. A weapon id lands in exactly one place:
-	// tower-held → neither list (shown in the tower section); equipped → the
-	// firing list; otherwise the idle inventory list.
+	// Equip / inventory partition. A player-owned weapon is EITHER equipped (the
+	// firing list) or idle (the inventory). Weapons assigned to towers were moved
+	// out of m_vecWeaponSlots entirely, so they appear in neither list here.
 	std::vector<int> Player::GetEquippedWeaponIds() const
 	{
 		std::vector<int> out;
 		for (const auto& s : m_vecWeaponSlots)
-			if (s.bEquipped && !s.bTowerHeld) out.push_back(s.iWeaponId);
+			if (s && s->bEquipped) out.push_back(s->iWeaponId);
 		return out;
 	}
 
@@ -1647,35 +1604,50 @@ namespace Client
 	{
 		std::vector<int> out;
 		for (const auto& s : m_vecWeaponSlots)
-			if (!s.bEquipped && !s.bTowerHeld) out.push_back(s.iWeaponId);
+			if (s && !s->bEquipped) out.push_back(s->iWeaponId);
+		return out;
+	}
+
+	std::vector<int> Player::GetEquippedWeaponLevels() const
+	{
+		std::vector<int> out;
+		for (const auto& s : m_vecWeaponSlots)
+			if (s && s->bEquipped) out.push_back(s->iLevel);
+		return out;
+	}
+
+	std::vector<int> Player::GetInventoryWeaponLevels() const
+	{
+		std::vector<int> out;
+		for (const auto& s : m_vecWeaponSlots)
+			if (s && !s->bEquipped) out.push_back(s->iLevel);
 		return out;
 	}
 
 	int Player::GetEquippedCount() const
 	{
-		// Player FIRING slots in use = equipped and not handed to a tower.
 		int n = 0;
 		for (const auto& s : m_vecWeaponSlots)
-			if (s.bEquipped && !s.bTowerHeld) ++n;
+			if (s && s->bEquipped) ++n;
 		return n;
 	}
 
 	bool Player::IsWeaponEquipped(int iWeaponId) const
 	{
 		for (const auto& s : m_vecWeaponSlots)
-			if (s.iWeaponId == iWeaponId) return s.bEquipped;
+			if (s && s->iWeaponId == iWeaponId) return s->bEquipped;
 		return false;
 	}
 
 	bool Player::EquipWeapon(int iWeaponId)
 	{
 		// Move the first inventory copy into a free firing slot (instances are
-		// (re)spawned by ReconcileTowerHeldInstances next frame).
+		// (re)spawned by ReconcileInstances next frame).
 		for (auto& s : m_vecWeaponSlots)
 		{
-			if (s.iWeaponId != iWeaponId || s.bEquipped || s.bTowerHeld) continue;
+			if (!s || s->iWeaponId != iWeaponId || s->bEquipped) continue;
 			if (GetEquippedCount() >= kMaxEquipSlots) return false;   // all firing slots full
-			s.bEquipped = true;
+			s->bEquipped = true;
 			return true;
 		}
 		return false;
@@ -1683,14 +1655,58 @@ namespace Client
 
 	void Player::UnequipWeapon(int iWeaponId)
 	{
+		// Refuse if the inventory is already full — unequipping would push a
+		// weapon into a slot the inventory UI can't show (kMaxInventorySlots).
+		int iInInventory = 0;
+		for (const auto& s : m_vecWeaponSlots)
+			if (s && !s->bEquipped) ++iInInventory;
+		if (iInInventory >= kMaxInventorySlots) return;
+
 		// Move the first equipped copy back to the inventory (its instances are
-		// torn down by ReconcileTowerHeldInstances next frame).
+		// torn down by ReconcileInstances next frame).
 		for (auto& s : m_vecWeaponSlots)
 		{
-			if (s.iWeaponId != iWeaponId || !s.bEquipped) continue;
-			s.bEquipped = false;
+			if (!s || s->iWeaponId != iWeaponId || !s->bEquipped) continue;
+			s->bEquipped = false;
 			return;
 		}
+	}
+
+	WeaponPtr Player::DetachWeapon(int iWeaponId)
+	{
+		// Remove ONE owned copy (prefer an idle inventory copy so an equipped
+		// copy keeps firing) and hand it to a tower. Tear down its player-side
+		// instances first — the tower spawns its own.
+		int iPick = -1;
+		for (int i = 0; i < static_cast<int>(m_vecWeaponSlots.size()); ++i)
+		{
+			const auto& s = m_vecWeaponSlots[i];
+			if (!s || s->iWeaponId != iWeaponId) continue;
+			if (!s->bEquipped) { iPick = i; break; }   // idle copy preferred
+			if (iPick < 0) iPick = i;                    // equipped fallback
+		}
+		if (iPick < 0) return nullptr;
+		WeaponPtr w = m_vecWeaponSlots[iPick];
+		for (auto& wp : w->vecSustainedInstances) if (auto sp = wp.lock()) sp->InActivate();
+		w->vecSustainedInstances.clear();
+		for (auto& wp : w->vecPets)               if (auto sp = wp.lock()) sp->InActivate();
+		w->vecPets.clear();
+		for (auto& wp : w->vecBeams)              if (auto sp = wp.lock()) sp->InActivate();
+		w->vecBeams.clear();
+		w->bInstancesLive = false;
+		m_vecWeaponSlots.erase(m_vecWeaponSlots.begin() + iPick);
+		return w;
+	}
+
+	void Player::AttachWeapon(const WeaponPtr& pWeapon)
+	{
+		// A tower handed a weapon back (sell / merge-consume / unassign). Park it
+		// in the inventory. Allowed to exceed the buy cap so a returned weapon is
+		// never lost; the player can then sell/merge it down.
+		if (!pWeapon) return;
+		pWeapon->bEquipped      = false;
+		pWeapon->bInstancesLive = false;
+		m_vecWeaponSlots.push_back(pWeapon);
 	}
 
 	void Player::FixedUpdate(float fDeltaTime)

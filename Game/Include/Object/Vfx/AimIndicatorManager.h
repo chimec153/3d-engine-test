@@ -89,6 +89,7 @@ namespace Client
         std::shared_ptr<Engine::ConstantBuffer<Engine::UITINTBUFFER>> m_pTint;
         std::shared_ptr<Engine::ConstantBuffer<Engine::UICBUFFER>>    m_pUI;
 
-        static constexpr float kSize = 1.3f;   // quad world size
+        static constexpr float kSize      = 0.6f;   // quad world size (smaller)
+        static constexpr float kOrbitDist = 1.5f;   // distance from player centre
     };
 }

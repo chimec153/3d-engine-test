@@ -244,9 +244,11 @@ float2 ApplyShockwave(float2 uv)
 float3 ToneMapping(float3 HDRColor)
 {
     float LScale = dot(HDRColor, LUM_FACTOR.xyz);
-    LScale *= MiddleGray / AvgLum[0];
+    // AvgLum이 0이면 0*inf=NaN으로 화면이 깨진다(빈 공간만 보이는 위치 등). 하한
+    // 가드. (특정 위치 검은화면의 진짜 원인은 ApplyFog exp 오버플로였음 — shared.hlsl)
+    LScale *= MiddleGray / max(AvgLum[0], 1e-4);
     LScale = (LScale + LScale * LScale / LumWhiteSqr) / (1.0 + LScale);
-    
+
     return HDRColor * LScale;
 }
 

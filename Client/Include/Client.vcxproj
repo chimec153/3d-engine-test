@@ -83,7 +83,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <TargetName>$(ProjectName)32</TargetName>
-    <OutDir>../Bin/</OutDir>
+    <OutDir>../Cube Trouble/</OutDir>
     <IntDir>../BinObj/</IntDir>
     <IncludePath>..\..\Engine\Include\;..\..\Game\Include\;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86)</LibraryPath>
@@ -97,7 +97,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <TargetName>$(ProjectName)</TargetName>
-    <OutDir>../Bin/</OutDir>
+    <OutDir>../Cube Trouble/</OutDir>
     <IntDir>../BinObj/</IntDir>
     <IncludePath>..\..\Engine\Include\;..\..\Game\Include\;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>..\Bin\;C:\Program Files\Autodesk\FBX\FBX SDK\2020.0.1\lib\vs2017\x64\release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>

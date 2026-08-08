@@ -2,6 +2,10 @@
 #include "../Core/PathManager.h"
 #include "../Core/Window.h"
 #include "BindableManager.h"
+#include <vector>
+#include <cmath>
+#include <cstring>
+#include <cstdint>
 
 namespace Engine
 {
@@ -525,5 +529,161 @@ namespace Engine
 		}
 
 		//LoadTextureFromFullPath(m_strFullPath);
+	}
+
+	// Named (not anonymous) detail namespace: Engine is a unity/jumbo build, so
+	// file-local helpers must not collide across the merged translation unit.
+	namespace texture_proc_detail
+	{
+		inline uint32_t Hash(uint32_t x)
+		{
+			x ^= x >> 16; x *= 0x7feb352dU;
+			x ^= x >> 15; x *= 0x846ca68bU;
+			x ^= x >> 16;
+			return x;
+		}
+		inline float Rand01(int ix, int iy, int seed)
+		{
+			uint32_t h = Hash((uint32_t)ix * 374761393u + (uint32_t)iy * 668265263u + (uint32_t)seed * 362437u);
+			return (h & 0xFFFFFFu) / (float)0xFFFFFFu;
+		}
+		inline float Smooth(float t) { return t * t * (3.f - 2.f * t); }
+		inline float ValueNoise(float x, float y, int seed)
+		{
+			int x0 = (int)floorf(x), y0 = (int)floorf(y);
+			float fx = Smooth(x - (float)x0), fy = Smooth(y - (float)y0);
+			float v00 = Rand01(x0, y0, seed),     v10 = Rand01(x0 + 1, y0, seed);
+			float v01 = Rand01(x0, y0 + 1, seed), v11 = Rand01(x0 + 1, y0 + 1, seed);
+			float a = v00 + (v10 - v00) * fx;
+			float b = v01 + (v11 - v01) * fx;
+			return a + (b - a) * fy;
+		}
+		inline float Fbm(float x, float y, int seed)
+		{
+			float sum = 0.f, amp = 0.5f, freq = 1.f;
+			for (int o = 0; o < 4; ++o)
+			{
+				sum += amp * ValueNoise(x * freq, y * freq, seed + o * 101);
+				freq *= 2.f; amp *= 0.5f;
+			}
+			return sum; // ~[0,1)
+		}
+		inline uint32_t PackRGBA(float r, float g, float b, float a)
+		{
+			auto c = [](float v) -> uint32_t { int i = (int)(v * 255.f + 0.5f); return (uint32_t)(i < 0 ? 0 : (i > 255 ? 255 : i)); };
+			return c(r) | (c(g) << 8) | (c(b) << 16) | (c(a) << 24); // R8G8B8A8_UNORM little-endian
+		}
+	}
+
+	bool GenerateProceduralTexturePNG(ProcPattern pattern, const ProcTexParams& p,
+		const TCHAR* pRelPath, const std::string& strPathKey,
+		TCHAR* pOutFullPath, int iOutCap)
+	{
+		using namespace texture_proc_detail;
+
+		const int w = p.width  > 0 ? p.width  : 1;
+		const int h = p.height > 0 ? p.height : 1;
+		const float A[4] = { p.colorA[0], p.colorA[1], p.colorA[2], p.colorA[3] };
+		const float B[4] = { p.colorB[0], p.colorB[1], p.colorB[2], p.colorB[3] };
+		const float scale = p.scale > 0.0001f ? p.scale : 1.f;
+
+		std::vector<uint32_t> pixels((size_t)w * (size_t)h);
+
+		for (int y = 0; y < h; ++y)
+		{
+			for (int x = 0; x < w; ++x)
+			{
+				const float u = (x + 0.5f) / (float)w;
+				const float v = (y + 0.5f) / (float)h;
+				float r = 0.f, g = 0.f, b = 0.f, a = 1.f;
+
+				switch (pattern)
+				{
+				case ProcPattern::SolidValue:
+					r = A[0]; g = A[1]; b = A[2]; a = A[3];
+					break;
+				case ProcPattern::Checker:
+				{
+					int cx = (int)floorf(u * scale), cy = (int)floorf(v * scale);
+					const float* c = ((cx + cy) & 1) ? B : A;
+					r = c[0]; g = c[1]; b = c[2]; a = c[3];
+					break;
+				}
+				case ProcPattern::Gradient:
+				{
+					float t = v;
+					r = A[0] + (B[0] - A[0]) * t; g = A[1] + (B[1] - A[1]) * t;
+					b = A[2] + (B[2] - A[2]) * t; a = A[3] + (B[3] - A[3]) * t;
+					break;
+				}
+				case ProcPattern::ValueNoise:
+				{
+					float n = Fbm(u * scale, v * scale, p.seed);
+					n = (n - 0.5f) * p.strength + 0.5f;
+					n = n < 0.f ? 0.f : (n > 1.f ? 1.f : n);
+					r = A[0] + (B[0] - A[0]) * n; g = A[1] + (B[1] - A[1]) * n;
+					b = A[2] + (B[2] - A[2]) * n; a = 1.f;
+					break;
+				}
+				case ProcPattern::Brick:
+				{
+					float rowF = v * scale * 0.5f;          // rows = half the brick count
+					int   row  = (int)floorf(rowF);
+					float offset = (row & 1) ? 0.5f : 0.f;  // running bond
+					float colF = u * scale + offset;
+					float fxc = colF - floorf(colF);
+					float fyc = rowF - floorf(rowF);
+					const float mortar = 0.08f;             // line thickness (cell fraction)
+					bool isMortar = (fxc < mortar || fxc > 1.f - mortar || fyc < mortar || fyc > 1.f - mortar);
+					const float* c = isMortar ? B : A;
+					r = c[0]; g = c[1]; b = c[2]; a = c[3];
+					break;
+				}
+				case ProcPattern::NormalFromNoise:
+				{
+					float hC = Fbm(u * scale, v * scale, p.seed);
+					float hX = Fbm((u + 1.f / w) * scale, v * scale, p.seed);
+					float hY = Fbm(u * scale, (v + 1.f / h) * scale, p.seed);
+					float dx = (hX - hC) * p.strength * 8.f;
+					float dy = (hY - hC) * p.strength * 8.f;
+					float nx = -dx, ny = -dy, nz = 1.f;
+					float inv = 1.f / sqrtf(nx * nx + ny * ny + nz * nz);
+					nx *= inv; ny *= inv; nz *= inv;
+					r = nx * 0.5f + 0.5f; g = ny * 0.5f + 0.5f; b = nz * 0.5f + 0.5f; a = 1.f;
+					break;
+				}
+				default:
+					break;
+				}
+
+				pixels[(size_t)y * w + x] = PackRGBA(r, g, b, a);
+			}
+		}
+
+		DirectX::ScratchImage img;
+		if (FAILED(img.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, w, h, 1, 1)))
+		{
+			return false;
+		}
+		const DirectX::Image* dst = img.GetImage(0, 0, 0);
+		for (int y = 0; y < h; ++y)
+		{
+			memcpy(dst->pixels + (size_t)y * dst->rowPitch, &pixels[(size_t)y * w], (size_t)w * 4);
+		}
+
+		TCHAR strFullPath[MAX_PATH] = {};
+		CPathManager::GetInst()->Resolve(pRelPath, strPathKey, strFullPath);
+
+		if (FAILED(DirectX::SaveToWICFile(*dst, DirectX::WIC_FLAGS_NONE,
+			DirectX::GetWICCodec(DirectX::WIC_CODEC_PNG), strFullPath, nullptr, nullptr)))
+		{
+			return false;
+		}
+
+		if (pOutFullPath && iOutCap > 0)
+		{
+			_tcsncpy_s(pOutFullPath, iOutCap, strFullPath, _TRUNCATE);
+		}
+		return true;
 	}
 }

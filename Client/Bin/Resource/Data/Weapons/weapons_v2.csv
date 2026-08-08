@@ -3,7 +3,7 @@ id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,projectile_
 1,Pellet,front,straight,cooldown,vanish,sphere,6,0.8,380,1.2,1,0xFFE066,count,1,0.25,0,forward,0,0,0,6,101,8,1,tracer,12,1,5,0.9,0,3,1,4,3,3,0.5,2.5,6
 2,Piercing Bolt,front,aimed,cooldown,nochange,triangle,9,1.1,460,1.6,1,0x66D9FF,damage,5,0.3,0,nearest,0,3,0,6,0,0,1,tracer,105,11,15,0.9,0,3,1,4,3,3,0.5,2.5,6
 3,Orbit Blade,around,orbital,sustained,nochange,box,8,0.5,200,9999,2,0xB0B0C0,count,1,0.4,0,forward,0,0,0,6,0,0,1,none,150,18,22,2.66,0,3,1,4,3,3,0.5,2.5,6
-4,Scatter,front,straight,cooldown,vanish,sphere,4,1,340,0.7,5,0xFF9966,count,1,0.22,0,forward,45,0,0,6,0,0,1,spark,18,1,5,0,0,3,1,4,3,3,0.5,2.5,6
+4,Scatter,front,straight,cooldown,vanish,sphere,4,1,340,0.7,5,0xFF9966,count,1,0.22,0,nearest,45,0,0,6,0,0,1,spark,18,1,5,0,0,3,1,4,3,3,0.5,2.5,6
 5,Spiral Orb,around,spiral,cooldown,nochange,sphere,5,1.4,260,2,3,0xCC66FF,count,1,0.28,0,radial,120,0,0,4,0,0,1,comet,80,9,13,0.9,0,3,1,4,3,3,0.5,2.5,6
 6,Land Mine,random,fixed,cooldown,nochange,box,1,1.6,0,4,1,0xFF5555,size,0.1,2.5,0,forward,0,0,0,6,0,0,1,none,35,3,7,0.9,0,3,1,4,3,3,0.5,2.5,7.8
 7,Ricochet,front,straight,cooldown,reflect,sphere,7,1.2,420,2.5,1,0x66FF99,count,1,0.25,0,random,0,4,0,5,0,0,1,tracer,45,3,7,0.9,0,3,1,4,3,3,0.5,2.5,6
@@ -24,7 +24,7 @@ id,name,spawn_origin,movement,fire_mode,on_hit,shape,damage,cooldown,projectile_
 22,Annihilator,mouse,straight,sustained,nochange,box,9,1.5,950,1.8,1,0xFF2200,damage,3,0.4,0,cursor,0,0,0.06,0,0,0,1,none,150,21,25,0.9,0,1,1,4,3,3,0.5,2.5,6
 23,Homing Rocket,front,homing,cooldown,vanish,triangle,18,1.1,360,2.5,1,0xFF66AA,damage,6,0.3,0,nearest,0,1,0,6,0,0,1,comet,95,10,14,0.9,0,3,1,4,3,3,0.5,2.5,6
 24,Meteor Strike,random,fixed,cooldown,nochange,sphere,16,0.8,0,0.7,1,0xFF7711,damage,5,0.6,0,forward,0,0,0.3,8,0,0,1,none,70,8,12,0.9,0,3,1,4,3,3,0.5,2.5,6
-25,Flamethrower,front,straight,cooldown,vanish,triangle,6,0.5,300,0.5,3,0xFF5500,damage,3,0.3,0,forward,25,1,0,0,0,0,1,spark,50,5,9,0.9,0,9,1,4,4,3,0.5,2.5,6
+25,Flamethrower,front,straight,cooldown,vanish,triangle,6,0.5,300,0.5,3,0xFF5500,damage,2,0.3,0,nearest,25,0,0,6,0,0,1,spark,50,5,9,0.9,0,9,1,4,3,3,0.5,2.5,6
 26,Frost Bolt,front,straight,cooldown,vanish,triangle,10,1,460,1.5,1,0x66DDFF,damage,4,0.28,0,nearest,0,1,0,0,0,0,1,tracer,50,6,10,0.9,0,17,1,4,3,3,0.45,2.5,6
 27,Spiral Saw,around,orbital,cooldown,nochange,triangle,8,2,220,4,2,0xFFAA00,count,1,0.4,0,radial,0,0,0.3,5,0,0,1,none,60,7,11,0.8,1.2,3,1,4,3,3,0.5,2.5,6
 101,Storm Pellet,front,straight,cooldown,vanish,sphere,10,0.4,440,1.4,8,0xFFF0A0,count,2,0.25,0,nearest,60,1,0,4,0,0,0,spark,150,99,0,0.9,0,3,1,4,3,3,0.5,2.5,6

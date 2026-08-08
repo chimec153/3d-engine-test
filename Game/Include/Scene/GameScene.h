@@ -56,16 +56,6 @@ namespace Client
         std::weak_ptr<Engine::Gauge>  m_pBossHPGauge;
         std::weak_ptr<Engine::Text>   m_pBossNameText;
 
-        // Installable-tower hotbar (bottom-right): one colour-coded icon per
-        // tower type with the remaining count (owned - placed) on it. Index
-        // 0 = attack (key 1), 1 = heal (key 2). Icons dim to grey at 0 left;
-        // m_uTowerIconColor caches the last applied fill so Update only re-binds
-        // the icon texture when the colour actually changes.
-        static constexpr int          kTowerSlots = 2;
-        std::weak_ptr<Engine::Gauge>  m_pTowerIcon[kTowerSlots];
-        std::weak_ptr<Engine::Text>   m_pTowerCount[kTowerSlots];
-        uint32_t                      m_uTowerIconColor[kTowerSlots] = { 0, 0 };
-
         std::weak_ptr<Player>         m_pPlayer;
 
         // Top-right debug HUD showing the current live enemy count as a

@@ -232,7 +232,7 @@ namespace Client
             // Bench this heal tower until the next round: keep ownership but put
             // it on destroy-cooldown so it can't be re-placed this round
             // (OnNewRound clears it next round start). Mirrors Tower.
-            TowerManager::GetInst().DestroyHealTower();
+            TowerManager::GetInst().DestroyHealTower(m_iSlotSeq, m_iLevel);
             if (m_pHpBar) m_pHpBar->SetRectPx(0.f, 0.f, 0.f, 0.f);
             InActivate();
             return;
@@ -317,6 +317,11 @@ namespace Client
         }
     }
 
+    void HealTower::SetLevel(int iLevel)
+    {
+        m_iLevel = iLevel < 1 ? 1 : iLevel;   // upper cap enforced by the shop merge
+    }
+
     void HealTower::HealNearbyAllies()
     {
         auto pScene = GetScene();
@@ -345,7 +350,7 @@ namespace Client
                 // allies already at full). Dispatch to the concrete ally type
                 // for its character-level cue + "+N" number; the player also
                 // gets the green screen vignette (inside Player::OnHealed).
-                const int iHealed = pHP->Heal(m_iHealAmount);
+                const int iHealed = pHP->Heal(m_iHealAmount * m_iLevel);
                 if (iHealed <= 0) continue;
                 if (auto pPlayer = dynamic_cast<Player*>(p.get()))
                     pPlayer->OnHealed(iHealed);

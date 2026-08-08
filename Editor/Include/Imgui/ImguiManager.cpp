@@ -509,8 +509,9 @@ namespace Editor
 									if (auto pSrcMat = Engine::StaticFindBindable<Engine::Material>("Material"))
 									{
 										auto pMat = std::static_pointer_cast<Engine::Material>(pSrcMat->Clone());
+										// metallic-roughness: 기본 F0(0.04)면 디퓨즈가
+										// 그대로 보이므로 specular override 불필요.
 										pMat->SetDiffuseColor (0.8f, 0.8f, 0.8f, 1.f);
-										pMat->SetSpecularColor(1.f, 1.f, 1.f, 1.f);
 										pMat->SetEmissiveColor({ 0.05f, 0.05f, 0.05f, 1.f });
 										pMR->SetMaterial(pMat);
 									}
@@ -1566,17 +1567,17 @@ namespace Editor
 			pMaterial->SetAmbientColor(vAmbient);
 		}
 
+		// metallic-roughness 워크플로우: specularColor.xyz는 "유전체 F0 베이스"(보통 0.04).
+		// 금속은 이 값이 아니라 아래 Metallic 슬라이더 + albedo로 결정된다(F0=lerp(이값,albedo,metallic)).
 		Engine::Vector4 vSpecular = tMaterial.specularColor;
 
-		if (ImGui::ColorEdit4("specular", &vSpecular.x))
+		if (ImGui::ColorEdit3("F0 (dielectric)", &vSpecular.x))
 		{
-			pMaterial->SetSpecularColor(vSpecular);
+			pMaterial->SetSpecularColor(vSpecular.x, vSpecular.y, vSpecular.z, 1.f);
 		}
 
-		// F0 (specular color) presets — common PBR reference values used as
-		// the Fresnel base reflectance in PS_Multi. Dielectric covers ~all
-		// non-metals (plastic, wood, fabric, skin, ceramic). The metals are
-		// measured F0 values widely cited in Disney / Substance references.
+		// 유전체 F0 프리셋. 금속(Gold/Iron 등)은 Metallic=1 + albedo로 표현하므로
+		// 여기엔 비금속 반사율만 둔다.
 		struct F0Preset
 		{
 			const char* name;
@@ -1584,12 +1585,10 @@ namespace Editor
 		};
 		static const F0Preset kPresets[] =
 		{
-			{ "Dielectric", 0.04f, 0.04f, 0.04f },
-			{ "Gold",       1.00f, 0.86f, 0.57f },
-			{ "Silver",     0.95f, 0.93f, 0.88f },
-			{ "Copper",     0.95f, 0.64f, 0.54f },
-			{ "Iron",       0.56f, 0.57f, 0.58f },
-			{ "Aluminum",   0.91f, 0.92f, 0.92f },
+			{ "Default 0.04", 0.040f, 0.040f, 0.040f },
+			{ "Water 0.02",   0.020f, 0.020f, 0.020f },
+			{ "Skin 0.028",   0.028f, 0.028f, 0.028f },
+			{ "Gem 0.08",     0.080f, 0.080f, 0.080f },
 		};
 		ImGui::PushID("F0Presets");
 		ImGui::TextUnformatted("F0 preset:");
@@ -1610,32 +1609,19 @@ namespace Editor
 			pMaterial->SetEmissiveColor(vEmissive);
 		}
 
-		float fSpecPower = tMaterial.fSpecPower;
+		// metallic-roughness 핵심 파라미터 (vRoughness.x=roughness, vRoughness.y=metallic).
+		float fRoughness = tMaterial.vRoughness.x;
 
-		if (ImGui::SliderFloat("SpecularExponent", &fSpecPower, 0.f, 250.f))
+		if (ImGui::SliderFloat("Roughness", &fRoughness, 0.f, 1.f))
 		{
-			pMaterial->SetShininess(fSpecPower);
+			pMaterial->SetRoughness(fRoughness);
 		}
 
-		float fFraction = tMaterial.fFraction;
+		float fMetallic = tMaterial.vRoughness.y;
 
-		if (ImGui::SliderFloat("Fraction", &fFraction, 0.f, 1.f))
+		if (ImGui::SliderFloat("Metallic", &fMetallic, 0.f, 1.f))
 		{
-			pMaterial->SetReflectivity(fFraction);
-		}
-
-		float fRoughnessX = tMaterial.vRoughness.x;
-
-		if (ImGui::SliderFloat("RoughnessX", &fRoughnessX, 0.f, 1.f))
-		{
-			pMaterial->SetRoughnessX(fRoughnessX);
-		}
-
-		float fRoughnessY = tMaterial.vRoughness.y;
-
-		if (ImGui::SliderFloat("RoughnessY", &fRoughnessY, 0.f, 1.f))
-		{
-			pMaterial->SetRoughnessY(fRoughnessY);
+			pMaterial->SetMetallic(fMetallic);
 		}
 
 		// Texture slots — owned by the Material itself. Slot indices on the
@@ -1724,6 +1710,74 @@ namespace Editor
 			ImGui::PopID();
 		}
 		ImGui::PopID();
+
+		// ── Procedural texture generation ─────────────────────────────
+		// Bakes a CPU pattern to a PNG under Resource/Texture, then loads it
+		// back into the chosen slot exactly like a hand-painted file texture
+		// (so it persists in the .mat). Single-channel maps (Roughness/Metalness/
+		// AO) read .r, which the generator writes into all of R/G/B.
+		ImGui::Separator();
+		if (ImGui::TreeNode("Procedural Texture"))
+		{
+			static int   s_iPattern  = static_cast<int>(Engine::ProcPattern::ValueNoise);
+			static int   s_iTarget   = 4;   // index into kSlotLabels (Roughness)
+			static int   s_iSize     = 256;
+			static float s_fScale    = 8.f;
+			static float s_fStrength = 1.f;
+			static int   s_iSeed     = 1337;
+			static float s_colA[4]   = { 1.f, 1.f, 1.f, 1.f };
+			static float s_colB[4]   = { 0.f, 0.f, 0.f, 1.f };
+
+			const char* kPatternNames[] = { "SolidValue", "Checker", "ValueNoise", "Gradient", "Brick", "NormalFromNoise" };
+			ImGui::Combo("Pattern", &s_iPattern, kPatternNames, IM_ARRAYSIZE(kPatternNames));
+
+			const char* kTargetNames[Engine::Material::kMaterialSlotCount];
+			for (int i = 0; i < Engine::Material::kMaterialSlotCount; ++i) kTargetNames[i] = kSlotLabels[i].pName;
+			ImGui::Combo("Target slot", &s_iTarget, kTargetNames, Engine::Material::kMaterialSlotCount);
+
+			ImGui::SliderInt("Size", &s_iSize, 16, 1024);
+			ImGui::SliderFloat("Scale", &s_fScale, 1.f, 64.f);
+			ImGui::SliderFloat("Strength", &s_fStrength, 0.f, 4.f);
+			ImGui::InputInt("Seed", &s_iSeed);
+			ImGui::ColorEdit4("Color A", s_colA);
+			ImGui::ColorEdit4("Color B", s_colB);
+
+			const bool bHasTag = !pMaterial->GetTag().empty();
+			if (!bHasTag) ImGui::TextDisabled("(set material tag first)");
+
+			if (bHasTag && ImGui::Button("Generate & Assign"))
+			{
+				const SlotLabel& tgt = kSlotLabels[s_iTarget];
+				const int iRegister = Engine::Material::kMaterialSlotRegisters[tgt.iSlotIdx];
+
+				// One asset per material+slot; regenerating overwrites it.
+				std::string strName = "proc_" + pMaterial->GetTag() + "_" + tgt.pName + ".png";
+
+				Engine::ProcTexParams param;
+				param.width = s_iSize; param.height = s_iSize;
+				param.scale = s_fScale; param.seed = s_iSeed; param.strength = s_fStrength;
+				memcpy(param.colorA, s_colA, sizeof(param.colorA));
+				memcpy(param.colorB, s_colB, sizeof(param.colorB));
+
+				TCHAR szRel[MAX_PATH] = {};
+				MultiByteToWideChar(CP_ACP, 0, strName.c_str(), -1, szRel, MAX_PATH);
+
+				TCHAR szFull[MAX_PATH] = {};
+				if (Engine::GenerateProceduralTexturePNG(static_cast<Engine::ProcPattern>(s_iPattern),
+					param, szRel, TEXTURE_PATH, szFull, MAX_PATH))
+				{
+					auto pNewTex = Engine::StaticCreateBindable<Engine::Texture>(strName, szFull, iRegister);
+					if (!pNewTex)
+					{
+						// Already registered (regenerated) — refresh its pixels.
+						pNewTex = Engine::StaticFindBindable<Engine::Texture>(strName);
+						if (pNewTex) pNewTex->LoadTextureFromFullPath(szFull);
+					}
+					if (pNewTex) pMaterial->SetTexture(tgt.iSlotIdx, pNewTex);
+				}
+			}
+			ImGui::TreePop();
+		}
 
 		// Persist this material to disk as a .mat asset under Resource/Material.
 		// On reload the asset auto-registers via ResourceManager::LoadAllMaterials,
@@ -3229,14 +3283,10 @@ namespace Editor
 							if (pSrcMat)
 							{
 								auto pMat = std::static_pointer_cast<Engine::Material>(pSrcMat->Clone());
-								// Mirror Bullet's full material init. PS_Multi's
-								// non-emissive term collapses to 0 when both
-								// materialFraction and vSpecColor default to 0,
-								// so spec must be non-zero for the albedo term
-								// to survive. Emissive kept tiny so the cube
-								// still shows clear shadow contrast.
+								// metallic-roughness: 기본 F0(0.04)+metallic=0이면
+								// 디퓨즈가 그대로 보이므로 specular(F0)를 흰색으로
+								// 덮을 필요 없다. Emissive는 작게 둬 그림자 대비 유지.
 								pMat->SetDiffuseColor (0.8f, 0.8f, 0.8f, 1.f);
-								pMat->SetSpecularColor(1.f, 1.f, 1.f, 1.f);
 								pMat->SetEmissiveColor({ 0.05f, 0.05f, 0.05f, 1.f });
 								pMR->SetMaterial(pMat);
 								pMR->SetOverrideMaterial(0, 0, pMat);
@@ -3683,6 +3733,21 @@ namespace Editor
 
 				pMultiPixelShader->LoadShader();
 			}*/
+
+			// 전역 씬 앰비언트 — 라이트 선택과 무관하게 직사광 없는 면의 바닥
+			// 밝기를 조절. 라이트가 많은 씬이면 세기를 낮춰 과다 가산을 보정.
+			ImGui::SeparatorText("Ambient");
+			Engine::Vector3 vAmbient = Engine::RenderManager::GetInst()->GetAmbientColor();
+			if (ImGui::ColorEdit3("Ambient Color", &vAmbient.x))
+			{
+				Engine::RenderManager::GetInst()->SetAmbientColor(vAmbient);
+			}
+			float fAmbientIntensity = Engine::RenderManager::GetInst()->GetAmbientIntensity();
+			if (ImGui::SliderFloat("Ambient Intensity", &fAmbientIntensity, 0.f, 3.f))
+			{
+				Engine::RenderManager::GetInst()->SetAmbientIntensity(fAmbientIntensity);
+			}
+			ImGui::Separator();
 
 			float fMidGray = Engine::RenderManager::GetInst()->GetHDRMidGray();
 

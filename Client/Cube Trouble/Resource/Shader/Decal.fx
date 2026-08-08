@@ -153,7 +153,7 @@ PSOut PS_DECAL_RING(VS_DECAL_OUT input)
     float2 decal_uv = FloorDecalUV(input.screenpos.xy / input.screenpos.w);
     float r = length(decal_uv - 0.5f); // 0 centre .. 1 edge
     // static outer ring at the boundary (r ~ 0.5)
-    float ring = smoothstep(0.42, 0.44, r) * (1.0 - smoothstep(0.48, 0.5, r));
+    float ring = smoothstep(0.42, 0.44, r) * (1.0 - smoothstep(0.49, 0.5, r));
     float CastingProgress = 1.0f - clamp((g_fDecalMaxFade - g_fDecalFadeTime) / (g_fDecalMaxFade - g_fDecalFadeStart), 0.0, 1.0);
     float currentRadius = CastingProgress * 0.46f; // fill grows up to inner edge of ring
     

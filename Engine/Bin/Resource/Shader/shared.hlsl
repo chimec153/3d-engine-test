@@ -359,6 +359,9 @@ cbuffer Fog : register(b12)
     float3 FogHighlightColor;
     float FogGlobalDensity;
     float FogHeightFallOff;
+    // 전역 씬 앰비언트 (라이트와 무관). rgb=색, a=세기. RenderManager가 업로드,
+    // 에디터 RenderManager 창에서 조절. float4라 offset 48에 16-정렬.
+    float4 g_vAmbient;
 }
 
 struct Transform
@@ -639,26 +642,50 @@ float4 GetGeometricAttenuation(float NDotH, float NDotV, float NDotL, float LDot
     return min(min(1.f, 2.f * NDotH * NDotV / max(LDotH, 0.000001)), 2.f * NDotH * NDotL / max(LDotH, 0.000001));
 }
 
-float4 BRDF(float3 view, float3 hdir, float3 normal, float3 light, float4 albedo, float4 vSpecColor, float4 C, float2 vMaterialRoughness, float materialFraction, float fShadowAttr)
+// === metallic-roughness Cook-Torrance (GGX 분포 + Smith G + Schlick F) ===
+// 기존 Beckmann/정확-Fresnel 헬퍼(GetMicrofacetDistribution/GetGeometricAttenuation/
+// GetFresnel)는 PS_Sphere 등 레거시 경로가 아직 참조하므로 남겨둔다.
+float DistributionGGX(float NDotH, float roughness)
 {
-    float NDotH = dot(normal, hdir);
-    
-    float NDotL = dot(normal, light);
-    
-    float LDotH = dot(light, hdir);
-    
-    float NDotV = dot(normal, view);
-    
-    float3 P = normalize(hdir - NDotH * normal);
-    
-    float4 vFresnel = float4(GetFresnel(LDotH, vSpecColor.xyz), 1.f);
-    
-    float4 vMicroFacet = GetMicrofacetDistribution(NDotH, hdir.x * hdir.x / (hdir.x * hdir.x + hdir.y * hdir.y), vMaterialRoughness);
-    
-    float4 vGeometry = GetGeometricAttenuation(NDotH, NDotV, NDotL, LDotH);
-    
-    return (materialFraction * C * albedo * max(NDotL, 0.f)
-    + (1.f - materialFraction) * saturate(C * vFresnel * vMicroFacet * vGeometry / 3.141592f / NDotV)) * fShadowAttr;
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float d = (NDotH * NDotH) * (a2 - 1.f) + 1.f;
+    return a2 / max(3.141592f * d * d, 0.000001f);
+}
+
+float GeometrySchlickGGX(float NDotX, float k)
+{
+    return NDotX / max(NDotX * (1.f - k) + k, 0.000001f);
+}
+
+float GeometrySmith(float NDotV, float NDotL, float roughness)
+{
+    // 직사광 k = (roughness+1)^2 / 8 (UE4 컨벤션)
+    float r = roughness + 1.f;
+    float k = (r * r) / 8.f;
+    return GeometrySchlickGGX(NDotV, k) * GeometrySchlickGGX(NDotL, k);
+}
+
+// metallic-roughness BRDF. F0base = 유전체 F0(보통 0.04), metallic=1이면
+// F0가 albedo로 lerp되고 디퓨즈가 사라진다. 포워드 알파 경로(PS_Alpha*)가 사용.
+float4 BRDF(float3 view, float3 hdir, float3 normal, float3 light, float4 albedo, float roughness, float metallic, float3 F0base, float4 C, float fShadowAttr)
+{
+    float NDotH = max(dot(normal, hdir), 0.f);
+    float NDotL = max(dot(normal, light), 0.f);
+    float NDotV = max(dot(normal, view), 0.0001f);
+    float VDotH = max(dot(view, hdir), 0.f);
+
+    float3 F0 = lerp(F0base, albedo.rgb, metallic);
+    float3 F = GetF(VDotH, F0);
+    float D = DistributionGGX(NDotH, roughness);
+    float G = GeometrySmith(NDotV, NDotL, roughness);
+
+    float3 spec = (D * G) * F / max(4.f * NDotV * NDotL, 0.000001f);
+    float3 kd = (1.f - F) * (1.f - metallic);
+    float3 diffuse = kd * albedo.rgb / 3.141592f;
+
+    float3 lit = (diffuse + spec) * C.rgb * NDotL * fShadowAttr;
+    return float4(lit, albedo.a);
 }
 
 
@@ -695,14 +722,17 @@ float3 ApplyFog(float3 originalColor, float eyePosY, float3 eyeToPixel)
     float fogDist = max(pixelDist - FogStartDepth, 0.0);
     
     // �Ȱ� ���⿡ ���� �Ÿ� ���
-    float fogHeightDensityAtViewer = exp(-FogHeightFallOff * eyePosY);
+    // exp 인자를 클램프해 오버플로(+Inf) 방지. 카메라 월드 Y(eyePosY)가 극단값이면
+    // exp(-FogHeightFallOff*eyePosY)가 +Inf가 되고, 포그가 꺼져 있어도(density=0)
+    // 아래 fogFinalFactor에서 0*Inf=NaN이 전 픽셀로 퍼져 화면이 전부 검게 죽는다.
+    float fogHeightDensityAtViewer = exp(clamp(-FogHeightFallOff * eyePosY, -30.0, 30.0));
     float fogDistInt = fogDist * fogHeightDensityAtViewer;
     
     // �Ȱ� ���⿡ ���� ���� ���
     float eyeToPixelY = eyeToPixel.y * (fogDist / pixelDist);
     float t = FogHeightFallOff * eyeToPixelY;
     const float thresholdT = 0.01;
-    float fogHeightInt = abs(t) > thresholdT ? (1.0 - exp(-t)) / t : 1.0;
+    float fogHeightInt = abs(t) > thresholdT ? (1.0 - exp(-clamp(t, -30.0, 30.0))) / t : 1.0;
     
     // �� ��� ���� ���� ���� �μ� ���
     float fogFinalFactor = exp(-FogGlobalDensity * fogDistInt * fogHeightInt);

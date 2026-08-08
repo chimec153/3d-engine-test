@@ -116,18 +116,25 @@ namespace Client
         Engine::Graphics::GetInst()->GetBindCache().pBoundIL = nullptr;
         m_pTex->Bind();   // slot 0; sampled for alpha by PS_UITint
 
-        // Centre the local (0,0)-(1,1) UI quad on the player feet. The world
-        // half-diagonal is 0.5*kSize*(u+v) where u,v are the transform's rotated
+        // Aim direction toward the cursor (forward = (-sin yaw, 0, -cos yaw),
+        // per TryComputeMouseAimYaw). The indicator orbits the player centre at
+        // a fixed radius along this direction and its tip points outward.
+        const Engine::Vector3 vAim(-sinf(m_fYaw), 0.f, -cosf(m_fYaw));
+        const Engine::Vector3 vCenter = m_vPos + vAim * kOrbitDist;
+
+        // Centre the local (0,0)-(1,1) UI quad on vCenter. The world half-
+        // diagonal is 0.5*kSize*(u+v) where u,v are the transform's rotated
         // X/Y axes; read them back after a first PostUpdate so the offset is
         // exact regardless of Euler order (same trick as FootstepManager).
+        // +PI: the texture tip rendered 180 off the cursor, so flip the quad.
         m_pQuad->SetScale(kSize, kSize, 1.f);
-        m_pQuad->SetRX(-PI / 2.f);     // lay the XY quad onto the XZ ground
-        m_pQuad->SetRY(m_fYaw);        // tip down the forward axis -> cursor
-        m_pQuad->SetPosition(m_vPos);
+        m_pQuad->SetRX(-PI / 2.f);          // lay the XY quad onto the XZ ground
+        m_pQuad->SetRY(m_fYaw + PI);        // tip points toward the cursor
+        m_pQuad->SetPosition(vCenter);
         m_pQuad->PostUpdate(0.f);
         const Engine::Vector3 u = m_pQuad->GetAxis(Engine::AXIS_TYPE::X);
         const Engine::Vector3 v = m_pQuad->GetAxis(Engine::AXIS_TYPE::Y);
-        m_pQuad->SetPosition(m_vPos - (u + v) * (0.5f * kSize));
+        m_pQuad->SetPosition(vCenter - (u + v) * (0.5f * kSize));
         m_pQuad->PostUpdate(0.f);
         m_pQuad->Bind();               // g_matTransform = world * VP
 

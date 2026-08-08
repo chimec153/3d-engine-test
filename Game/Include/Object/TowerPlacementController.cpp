@@ -2,6 +2,8 @@
 #include "Tower.h"
 #include "HealTower.h"
 #include "TowerManager.h"
+#include "TowerData.h"
+#include "TowerSlots.h"
 #include "GameStateManager.h"
 #include "../GameDefs.h"
 #include "../Scene/GameWorldBuilder.h"
@@ -37,8 +39,12 @@ namespace Client
         if (!__super::Init())
             return false;
 
-        Engine::CInput::GetInst()->AddKey(DIK_1);   // attack tower
-        Engine::CInput::GetInst()->AddKey(DIK_2);   // heal tower
+        // Number keys 1..5 each deploy the tower in the matching tower-HUD slot.
+        Engine::CInput::GetInst()->AddKey(DIK_1);
+        Engine::CInput::GetInst()->AddKey(DIK_2);
+        Engine::CInput::GetInst()->AddKey(DIK_3);
+        Engine::CInput::GetInst()->AddKey(DIK_4);
+        Engine::CInput::GetInst()->AddKey(DIK_5);
 
         // Shared ghost resources. Forward alpha PS (AlphaNoUVNoShadowPS) is
         // registered unconditionally and outputs the material diffuse with
@@ -53,11 +59,11 @@ namespace Client
         m_pDepthTest   = Engine::StaticFindBindable<Engine::DepthStencilState>("NoDepthWrite");
         m_pDepthNone   = Engine::StaticFindBindable<Engine::DepthStencilState>("NoDepth");
 
-        // Preview meshes — cube for the attack tower, cylinder for the heal
-        // tower (matches the real towers).
-        m_pGhostMesh = Engine::MeshPresets::AxisBox(
-            Engine::Vector3(-0.3f, 0.0f, -0.3f),
-            Engine::Vector3( 0.3f, 1.6f,  0.3f));
+        // Preview meshes — the attack ghost is rebuilt per selected tower TYPE
+        // (RefreshAttackGhostMesh) so it matches the real tower's N-gon prism;
+        // seed it with the default-type body. The heal ghost is the heal
+        // cylinder (matches the real heal tower).
+        m_pGhostMesh     = Tower::BuildBodyMesh(nullptr);
         m_pGhostMeshHeal = HealTower::BuildCylinderMesh();
 
         if (auto pSrc = Engine::StaticFindBindable<Engine::Material>("Material"))
@@ -96,24 +102,20 @@ namespace Client
 
         auto* pInput = Engine::CInput::GetInst();
 
-        // Key 1 = attack tower, key 2 = heal tower. Pressing the active type's
-        // key exits; pressing the other switches type. Entering needs budget
-        // (placed < bought) for that type.
-        if (pInput->IsKey(Engine::CInput::KEY_STATE::DOWN, DIK_1))
-        {
-            if (m_bPlacing && m_ePlaceType == PlaceType::Attack) m_bPlacing = false;
-            else if (HasBudgetFor(PlaceType::Attack)) { m_bPlacing = true; m_ePlaceType = PlaceType::Attack; }
-            m_bHasCell = false;
-        }
-        if (pInput->IsKey(Engine::CInput::KEY_STATE::DOWN, DIK_2))
-        {
-            if (m_bPlacing && m_ePlaceType == PlaceType::Heal) m_bPlacing = false;
-            else if (HasBudgetFor(PlaceType::Heal)) { m_bPlacing = true; m_ePlaceType = PlaceType::Heal; }
-            m_bHasCell = false;
-        }
+        // Number keys 1..kMaxTowers deploy the tower in the matching tower-HUD
+        // slot (slots are in acquisition order — see BuildTowerSlots). Re-pressing
+        // the key of the tower already selected cancels (Begin*Placement toggles).
+        static const int kSlotKeys[] = { DIK_1, DIK_2, DIK_3, DIK_4, DIK_5 };
+        for (int k = 0; k < static_cast<int>(sizeof(kSlotKeys) / sizeof(kSlotKeys[0])); ++k)
+            if (pInput->IsKey(Engine::CInput::KEY_STATE::DOWN, kSlotKeys[k]))
+                BeginPlacementForSlot(k);
 
         if (!m_bPlacing)
             return;
+
+        // Keep the attack ghost shaped like the tower that will actually drop.
+        if (m_ePlaceType == PlaceType::Attack)
+            RefreshAttackGhostMesh();
 
         // Right-click cancels the in-progress placement without building (the
         // 1/2 toggle still works too). Left-click below commits; this is the
@@ -130,7 +132,7 @@ namespace Client
         // turns red on occupied cells; walls/off-map already hide the ghost).
         m_bValidCell = m_bHasCell && !IsCellOccupied(m_iCellX, m_iCellZ);
 
-        if (m_bHasCell && m_bValidCell &&
+        if (m_bHasCell && m_bValidCell && !m_bIgnoreCommitClick &&
             pInput->IsMouseButtonDown(Engine::CInput::MOUSE_TYPE::LEFT))
         {
             auto* pOwner = GetGameObjectOwner();
@@ -141,8 +143,18 @@ namespace Client
             {
                 if (m_ePlaceType == PlaceType::Heal)
                 {
-                    if (auto pHeal = pScene->CreateGameObject<HealTower>("HealTower", pLayer))
-                        pHeal->SetCell(m_iCellX, m_iCellZ);
+                    if (TowerManager::GetInst().PlaceableHealCount() > 0)
+                    {
+                        if (auto pHeal = pScene->CreateGameObject<HealTower>("HealTower", pLayer))
+                        {
+                            pHeal->SetCell(m_iCellX, m_iCellZ);
+                            // Consume a ready heal reserve and carry its seq + level
+                            // so the placed heal tower keeps its slot and merged level.
+                            const auto hs = TowerManager::GetInst().ConsumePlaceableHeal();
+                            pHeal->SetSlotSeq(hs.iSeq);
+                            pHeal->SetLevel(hs.iLevel);
+                        }
+                    }
                 }
                 // A tower can only be DEPLOYED with a weapon equipped. A freshly
                 // bought tower starts weaponless and must be equipped in the shop
@@ -153,22 +165,100 @@ namespace Client
                     {
                         pTower->SetVoxelWorld(m_pVoxelWorld);
                         pTower->SetCell(m_iCellX, m_iCellZ);
-                        // Consume the next placeable reserve slot: it carries the
-                        // tower's weapon AND level (a re-placed destroyed tower
-                        // keeps both; a freshly bought one is level 1).
-                        const auto slot = TowerManager::GetInst().ConsumePlaceableSlot();
-                        pTower->SetWeaponId(slot.iWeaponId);
-                        pTower->SetLevel(slot.iLevel);
-                        // Apply the bought tower TYPE (stats + intrinsic effect)
-                        // over the defaults Init seeded. -1 = default attack type.
+                        // Consume the reserve slot the HUD selected (or the next
+                        // placeable when key-1 / generic): it carries the tower's
+                        // weapon AND level (a re-placed destroyed tower keeps both;
+                        // a freshly bought one is level 1).
+                        auto slot = TowerManager::GetInst()
+                            .ConsumePlaceableSlotAt(m_iSelectedReserve);
+                        // Apply the bought tower TYPE first (seeds per-level
+                        // deltas + base HP) so SetLevel's HP bonus is correct.
                         pTower->SetTowerDefId(slot.iTowerId);
+                        pTower->SetLevel(slot.iLevel);   // tower level
+                        pTower->SetSlotSeq(slot.iSeq);   // numbered HUD/key slot
+                        // Hand over the weapon OBJECT (carries its own level).
+                        pTower->SetWeapon(slot.pWeapon);
                     }
                 }
             }
             // One tower per placement: exit the mode after dropping it.
             m_bPlacing = false;
             m_bHasCell = false;
+            m_iSelectedReserve = -1;
         }
+
+        // The button-press click is consumed for exactly this frame's commit
+        // check; allow normal left-click commits from the next frame on.
+        m_bIgnoreCommitClick = false;
+    }
+
+    void TowerPlacementController::BeginAttackPlacement(int iReserveIndex)
+    {
+        // Mirror the key-1 DOWN-edge logic, including the play-phase gate.
+        if (!GameStateManager::GetInst().IsPlaying()) return;
+        // Re-clicking the tower that's already selected toggles placement off.
+        if (m_bPlacing && m_ePlaceType == PlaceType::Attack &&
+            m_iSelectedReserve == iReserveIndex)
+        {
+            m_bPlacing = false;
+        }
+        else if (HasBudgetFor(PlaceType::Attack))
+        {
+            m_bPlacing         = true;
+            m_ePlaceType       = PlaceType::Attack;
+            m_iSelectedReserve = iReserveIndex;   // which reserve slot to deploy
+            // Don't let the click that pressed the button also drop a tower
+            // at the cell under the button this same frame.
+            m_bIgnoreCommitClick = true;
+        }
+        m_bHasCell = false;
+    }
+
+    void TowerPlacementController::BeginHealPlacement()
+    {
+        if (!GameStateManager::GetInst().IsPlaying()) return;
+        // Re-selecting heal placement cancels (heal towers are fungible, so there
+        // is no per-slot selection to switch between).
+        if (m_bPlacing && m_ePlaceType == PlaceType::Heal)
+        {
+            m_bPlacing = false;
+        }
+        else if (HasBudgetFor(PlaceType::Heal))
+        {
+            m_bPlacing   = true;
+            m_ePlaceType = PlaceType::Heal;
+            m_bIgnoreCommitClick = true;
+        }
+        m_bHasCell = false;
+    }
+
+    void TowerPlacementController::BeginPlacementForSlot(int iSlotIndex)
+    {
+        if (!GameStateManager::GetInst().IsPlaying()) return;
+        auto* pOwner = GetGameObjectOwner();
+        Engine::Scene* pScene = pOwner ? pOwner->GetScene() : nullptr;
+        std::shared_ptr<Engine::Layer> pLayer =
+            pScene ? pScene->FindLayer(DEFAULT_LAYER) : nullptr;
+        const std::vector<TowerSlotView> slots = BuildTowerSlots(pLayer.get());
+        if (iSlotIndex < 0 || iSlotIndex >= static_cast<int>(slots.size())) return;
+        const TowerSlotView& s = slots[iSlotIndex];
+        if (!s.Deployable()) return;   // placed / cooldown / weaponless → no-op
+        if (s.bHeal) BeginHealPlacement();
+        else         BeginAttackPlacement(s.iReserveIdx);
+    }
+
+    void TowerPlacementController::RefreshAttackGhostMesh()
+    {
+        // The id ConsumePlaceableSlotAt(m_iSelectedReserve) would deploy. Resolve
+        // it to the same TowerDef SetTowerDefId will use, then build the ghost
+        // with the shared Tower::BuildBodyMesh so preview == placed tower.
+        const int iTowerId = TowerManager::GetInst().PeekPlaceableTowerId(m_iSelectedReserve);
+        if (iTowerId == m_iGhostTowerId) return;   // unchanged — keep cached mesh
+        m_iGhostTowerId = iTowerId;
+        const TowerDef* pDef = (iTowerId >= 0)
+            ? TowerDatabase::GetInst().Get(iTowerId)
+            : TowerDatabase::GetInst().FirstOfKind(TowerKind::Attack);
+        m_pGhostMesh = Tower::BuildBodyMesh(pDef);
     }
 
     bool TowerPlacementController::MouseToCell(int& cx, int& cz) const
@@ -212,26 +302,13 @@ namespace Client
         return true;
     }
 
-    int TowerPlacementController::CountByTag(const char* pTag) const
-    {
-        auto* pOwner = GetGameObjectOwner();
-        Engine::Scene* pScene = pOwner ? pOwner->GetScene() : nullptr;
-        std::shared_ptr<Engine::Layer> pLayer =
-            pScene ? pScene->FindLayer(DEFAULT_LAYER) : nullptr;
-        if (!pLayer) return 0;
-        int iCount = 0;
-        for (const auto& p : pLayer->GetGameObjectList())
-            if (p && p->IsActive() && p->GetTag() == pTag) ++iCount;
-        return iCount;
-    }
-
     bool TowerPlacementController::HasBudgetFor(PlaceType eType) const
     {
         // Placeable = owned but not currently placed and not on destroy-cooldown.
-        // A tower destroyed this round is benched (counts as owned) until the
-        // next round, so it doesn't grant build budget here.
+        // Both PlaceableHealCount and PlaceableTowerCount already exclude placed
+        // (they count unplaced reserves) and benched (destroy-cooldown) towers.
         if (eType == PlaceType::Heal)
-            return CountByTag("HealTower") < TowerManager::GetInst().PlaceableHealCount();
+            return TowerManager::GetInst().PlaceableHealCount() > 0;
         return TowerManager::GetInst().PlaceableTowerCount() > 0;
     }
 

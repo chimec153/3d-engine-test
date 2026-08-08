@@ -427,7 +427,7 @@ namespace Client
 
         // --- Equipped weapons (firing slots) — horizontal icon strip ---
         m_pOwnedHeader = makeText("tower_shop_owned_h", y, S.fHeaderH, m_pItemFont, Engine::Text::HAlign::Left);
-        if (m_pOwnedHeader) m_pOwnedHeader->SetString(L"Equipped (fires) - L-click: unequip / R-click: menu");
+        if (m_pOwnedHeader) m_pOwnedHeader->SetString(L"Equipped (fires) - double-click: unequip / R-click: menu");
         y += S.fHeaderH + S.fGap;
         {
             const float fIconGap = S.fGap;
@@ -444,17 +444,20 @@ namespace Client
                     m_pOwnedIcons[i]->SetRect(fX, y, fIconW, fIconH);
                     m_pOwnedIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_blank", 0x303030));
                     const int idx = i;
-                    // L-click unequips (→ inventory); R-click pops the weapon menu.
-                    m_pOwnedIcons[i]->SetOnClick([this, idx]() { OnEquipSlotClick(idx); });
+                    // Double-click unequips (→ inventory); R-click pops the menu.
+                    m_pOwnedIcons[i]->SetOnClick([this, idx]() { OnWeaponIconClick(true, idx); });
                     m_pOwnedIcons[i]->SetOnRightClick([this, idx]() { OpenWeaponMenu(m_iOwnedIds[idx], m_OwnedRect[idx]); });
                 }
+                // Per-copy level badge, bottom-right of the icon.
+                m_pOwnedLvlTexts[i] = makeText("tower_shop_owned_lv" + std::to_string(i), y, fIconH, m_pItemFont, Engine::Text::HAlign::Right);
+                if (m_pOwnedLvlTexts[i]) m_pOwnedLvlTexts[i]->SetRect(fX, y + fIconH * 0.55f, fIconW - fIconH * 0.08f, fIconH * 0.4f);
             }
             y += fIconH + S.fGap;
         }
 
         // --- Weapon inventory (idle, unassigned) — horizontal icon strip ---
         m_pInvHeader = makeText("tower_shop_inv_h", y, S.fHeaderH, m_pItemFont, Engine::Text::HAlign::Left);
-        if (m_pInvHeader) m_pInvHeader->SetString(L"Inventory (idle) - L-click: equip / R-click: menu");
+        if (m_pInvHeader) m_pInvHeader->SetString(L"Inventory (idle) - double-click: equip / R-click: menu");
         y += S.fHeaderH + S.fGap;
         {
             const float fIconGap = S.fGap;
@@ -471,17 +474,20 @@ namespace Client
                     m_pInvIcons[i]->SetRect(fX, y, fIconW, fIconH);
                     m_pInvIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_blank", 0x303030));
                     const int idx = i;
-                    // L-click equips (→ a free firing slot); R-click pops the menu.
-                    m_pInvIcons[i]->SetOnClick([this, idx]() { OnInventoryClick(idx); });
+                    // Double-click equips (→ a free firing slot); R-click = menu.
+                    m_pInvIcons[i]->SetOnClick([this, idx]() { OnWeaponIconClick(false, idx); });
                     m_pInvIcons[i]->SetOnRightClick([this, idx]() { OpenWeaponMenu(m_iInvIds[idx], m_InvRect[idx]); });
                 }
+                // Per-copy level badge, bottom-right of the icon.
+                m_pInvLvlTexts[i] = makeText("tower_shop_inv_lv" + std::to_string(i), y, fIconH, m_pItemFont, Engine::Text::HAlign::Right);
+                if (m_pInvLvlTexts[i]) m_pInvLvlTexts[i]->SetRect(fX, y + fIconH * 0.55f, fIconW - fIconH * 0.08f, fIconH * 0.4f);
             }
             y += fIconH + S.fGap;
         }
 
         // --- Tower Loadout section (drop targets) ---
         m_pTowerHeader = makeText("tower_shop_tower_h", y, S.fHeaderH, m_pItemFont, Engine::Text::HAlign::Left);
-        if (m_pTowerHeader) m_pTowerHeader->SetString(L"Towers (& heal) - L-click cycle / R-click sell (or use a weapon's Equip)");
+        if (m_pTowerHeader) m_pTowerHeader->SetString(L"Towers - click for menu (merge / weapon / sell)");
         y += S.fHeaderH + S.fGap;
         for (int i = 0; i < kTowerRows; ++i)
         {
@@ -492,43 +498,21 @@ namespace Client
                 m_pTowerButtons[i]->SetRect(S.fLeftX, y, S.fW, S.fItemH);
                 m_pTowerButtons[i]->SetTexture(EnsureSolidTexture("tower_shop_blank", 0x303030));
                 const int idx = i;
-                // Equip armed (weapon menu) → assign that weapon to this tower;
-                // otherwise pop the tower action menu (Merge / Weapon / Sell).
-                m_pTowerButtons[i]->SetOnClick([this, idx]() {
-                    if (m_iEquipArmedWeaponId >= 0) OnCycleTowerWeapon(idx);
-                    else                            OpenTowerMenu(idx);
-                });
-                m_pTowerButtons[i]->SetOnRightClick([this, idx]() { OnSellTower(idx); });
+                // One unified list of placed + unplaced towers. Equip armed (weapon
+                // menu) → assign that weapon here; otherwise pop the action menu.
+                m_pTowerButtons[i]->SetOnClick([this, idx]() { OnTowerRowClick(idx); });
+                // Right-click pops the action menu too (Merge / Weapon / Sell) —
+                // it no longer sells directly, so an accidental R-click can't
+                // dump a tower; selling is the menu's Sell row.
+                m_pTowerButtons[i]->SetOnRightClick([this, idx]() { OpenTowerMenu(idx); });
             }
             m_pTowerTexts[i] = makeText("tower_shop_tower_t" + std::to_string(i), y, S.fItemH, m_pItemFont, Engine::Text::HAlign::Center);
             y += S.fItemH + S.fGap;
         }
 
-        // --- Unplaced Towers (weapon per bought-but-unplaced tower) ---
-        // A horizontal icon strip (like Your Weapons). Leftmost = the next
-        // tower placed (FIFO). Drop a weapon on a slot or click to cycle.
-        m_pReserveHeader = makeText("tower_shop_reserve_h", y, S.fHeaderH, m_pItemFont, Engine::Text::HAlign::Left);
-        if (m_pReserveHeader) m_pReserveHeader->SetString(L"Unplaced Towers (left = placed first) - click to cycle (or use Equip)");
-        y += S.fHeaderH + S.fGap;
-        {
-            const float fIconGap = S.fGap;
-            const float fIconW   = (S.fW - fIconGap * (kReserveRows - 1)) / kReserveRows;
-            const float fIconH   = S.fItemH;
-            for (int i = 0; i < kReserveRows; ++i)
-            {
-                const float fX = S.fLeftX + i * (fIconW + fIconGap);
-                m_ReserveRect[i] = { fX, y, fIconW, fIconH };
-                m_pReserveIcons[i] = CreateComponent<Engine::Button>("tower_shop_reserve_b" + std::to_string(i));
-                if (m_pReserveIcons[i])
-                {
-                    m_pReserveIcons[i]->SetRect(fX, y, fIconW, fIconH);
-                    m_pReserveIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_blank", 0x303030));
-                    const int idx = i;
-                    m_pReserveIcons[i]->SetOnClick([this, idx]() { OnCycleReserveWeapon(idx); });
-                }
-            }
-            y += fIconH + S.fGap;
-        }
+        // (Unplaced towers used to live in a separate icon strip here; they now
+        // share the single tower list above — placed and unplaced are no longer
+        // distinguished — so that section is gone and Start moves up.)
 
         // --- Start ---
         m_pStartButton = CreateComponent<Engine::Button>("tower_shop_start_b");
@@ -634,9 +618,15 @@ namespace Client
         m_iEquipArmedWeaponId  = -1;
         m_bEquipArmedThisFrame = false;
         for (int i = 0; i < kOwnedRows; ++i)
-            if (m_pOwnedIcons[i]) m_pOwnedIcons[i]->Disable();
+        {
+            if (m_pOwnedIcons[i])    m_pOwnedIcons[i]->Disable();
+            if (m_pOwnedLvlTexts[i]) m_pOwnedLvlTexts[i]->Disable();
+        }
         for (int i = 0; i < kInvRows; ++i)
-            if (m_pInvIcons[i]) m_pInvIcons[i]->Disable();
+        {
+            if (m_pInvIcons[i])    m_pInvIcons[i]->Disable();
+            if (m_pInvLvlTexts[i]) m_pInvLvlTexts[i]->Disable();
+        }
         for (int i = 0; i < kBuyRows; ++i)
         {
             if (m_pBuyButtons[i]) m_pBuyButtons[i]->Disable();
@@ -675,7 +665,6 @@ namespace Client
         {
             if (std::find(vecCrafted.begin(), vecCrafted.end(), id) != vecCrafted.end())
                 continue;   // skip session-crafted weapons
-            if (IsWeaponHeldByTower(id)) continue;   // locked to a tower — not buyable
             all.push_back({ BuyKind::Weapon, id });
         }
         // One entry per round-available attack tower TYPE (Gatling / Frost /
@@ -737,7 +726,6 @@ namespace Client
         {
             if (std::find(vecCrafted.begin(), vecCrafted.end(), id) != vecCrafted.end())
                 continue;
-            if (IsWeaponHeldByTower(id)) continue;   // locked to a tower — not buyable
             all.push_back({ BuyKind::Weapon, id });
         }
         // One entry per round-available attack tower TYPE (Gatling / Frost /
@@ -807,31 +795,6 @@ namespace Client
         return false;
     }
 
-    bool TowerIntermissionUI::IsWeaponHeldByOtherTower(
-        int iWeaponId, const Engine::GameObject* pExcludeTower, int iExcludeReserve) const
-    {
-        if (iWeaponId < 0) return false;
-        auto* pOwnerO = GetGameObjectOwner();
-        Engine::Scene* pSceneO = pOwnerO ? pOwnerO->GetScene() : nullptr;
-        std::shared_ptr<Engine::Layer> pLayerO =
-            pSceneO ? pSceneO->FindLayer(DEFAULT_LAYER) : nullptr;
-        if (pLayerO)
-            for (const auto& p : pLayerO->GetGameObjectList())
-            {
-                if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
-                if (p.get() == pExcludeTower) continue;   // the tower being assigned
-                if (std::static_pointer_cast<Tower>(p)->GetWeaponId() == iWeaponId) return true;
-            }
-        auto& tm = TowerManager::GetInst();
-        const int n = tm.ReserveCount();
-        for (int i = 0; i < n; ++i)
-        {
-            if (i == iExcludeReserve) continue;
-            if (tm.ReserveWeaponRaw(i) == iWeaponId) return true;
-        }
-        return false;
-    }
-
     int TowerIntermissionUI::PlacedTowerCount() const
     {
         auto* pOwner = GetGameObjectOwner();
@@ -850,6 +813,9 @@ namespace Client
         using namespace TowerIntermissionUI_detail;
 
         auto pPlayer = m_pTarget.lock();
+        // (Tower-held weapons are no longer tracked by id: a weapon assigned to a
+        // tower is MOVED out of the player's lists entirely, so the equipped /
+        // inventory lists below are already exact — no sync needed.)
         const int iMoney   = Wallet::GetInst().Money();
         const bool bLoadoutFull =
             pPlayer && pPlayer->GetWeaponSlotCount() >= Player::GetMaxWeaponSlots();
@@ -1040,6 +1006,8 @@ namespace Client
         // free firing slot (up to kMaxEquipSlots), then disable the rest.
         const std::vector<int> vecEquipped =
             pPlayer ? pPlayer->GetEquippedWeaponIds() : std::vector<int>{};
+        const std::vector<int> vecEquippedLv =
+            pPlayer ? pPlayer->GetEquippedWeaponLevels() : std::vector<int>{};
         const int iEquipCap = Player::GetMaxEquipSlots();
         for (int i = 0; i < kOwnedRows; ++i)
         {
@@ -1066,30 +1034,59 @@ namespace Client
                 m_iOwnedIds[i] = -1;
                 m_pOwnedIcons[i]->Disable();
             }
+            // Per-copy level badge: this icon's OWN level (copies of the same
+            // weapon can differ), shown only on a filled firing slot.
+            if (m_pOwnedLvlTexts[i])
+            {
+                if (bHas && i < static_cast<int>(vecEquippedLv.size()))
+                {
+                    m_pOwnedLvlTexts[i]->SetString(L"Lv." + std::to_wstring(vecEquippedLv[i]));
+                    m_pOwnedLvlTexts[i]->Enable();
+                }
+                else m_pOwnedLvlTexts[i]->Disable();
+            }
         }
 
         // --- Weapon inventory (idle) ---
         const std::vector<int> vecInv =
             pPlayer ? pPlayer->GetInventoryWeaponIds() : std::vector<int>{};
+        const std::vector<int> vecInvLv =
+            pPlayer ? pPlayer->GetInventoryWeaponLevels() : std::vector<int>{};
         for (int i = 0; i < kInvRows; ++i)
         {
             if (!m_pInvIcons[i]) continue;
             const bool bHas = i < static_cast<int>(vecInv.size());
             const int  id   = bHas ? vecInv[i] : -1;
             m_iInvIds[i] = id;
-            if (!bHas) { m_pInvIcons[i]->Disable(); continue; }
+            if (!bHas)
+            {
+                m_pInvIcons[i]->Disable();
+                if (m_pInvLvlTexts[i]) m_pInvLvlTexts[i]->Disable();
+                continue;
+            }
             const WeaponDef* pDef = WeaponDatabase::GetInst().Get(id);
             const unsigned int uColor = pDef ? pDef->uColorRGB : 0x606060;
             m_pInvIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_w_" + std::to_string(id), uColor));
             m_pInvIcons[i]->Enable();
+            if (m_pInvLvlTexts[i])
+            {
+                m_pInvLvlTexts[i]->SetString(
+                    L"Lv." + std::to_wstring(i < static_cast<int>(vecInvLv.size()) ? vecInvLv[i] : 1));
+                m_pInvLvlTexts[i]->Enable();
+            }
         }
 
-        // --- Tower Loadout rows (each placed tower) ---
-        // Gather the placed towers from the scene (stable while frozen). Both
-        // attack ("Tower") and heal ("HealTower") towers go in one list so both
-        // can be sold here; bHeal marks which (heal rows can't cycle a weapon).
-        struct RowEnt { std::shared_ptr<Engine::GameObject> obj; bool bHeal; };
-        std::vector<RowEnt> vecTowers;
+        // --- Towers (placed + unplaced in ONE list, acquisition order) --------
+        // Placed and unplaced towers are no longer distinguished: every owned
+        // tower (attack or heal) gets one row, ordered by acquisition seq (same
+        // order as the in-game tower HUD). Each row records its source (a placed
+        // scene object or a reserve index) so the action menu / drag can act on
+        // it. Clicking a row opens the Merge / Weapon / Sell menu.
+        struct Row {
+            int seq; bool heal; int defId; int weapon; int level;
+            TowerRowSrc src; std::shared_ptr<Engine::GameObject> obj; int reserveIdx;
+        };
+        std::vector<Row> vecRows;
         {
             auto* pOwner = GetGameObjectOwner();
             Engine::Scene* pScene = pOwner ? pOwner->GetScene() : nullptr;
@@ -1099,89 +1096,97 @@ namespace Client
                 for (const auto& p : pLayer->GetGameObjectList())
                 {
                     if (!p || !p->IsActive()) continue;
-                    if      (p->GetTag() == "Tower")     vecTowers.push_back({ p, false });
-                    else if (p->GetTag() == "HealTower") vecTowers.push_back({ p, true  });
+                    if (p->GetTag() == "Tower")
+                    {
+                        auto pT = std::static_pointer_cast<Tower>(p);
+                        vecRows.push_back({ pT->GetSlotSeq(), false, pT->GetTowerDefId(),
+                            pT->GetWeaponId(), pT->GetLevel(), TowerRowSrc::Placed, p, -1 });
+                    }
+                    else if (p->GetTag() == "HealTower")
+                    {
+                        auto pH = std::static_pointer_cast<HealTower>(p);
+                        vecRows.push_back({ pH->GetSlotSeq(), true, -1, -1, pH->GetLevel(),
+                            TowerRowSrc::Placed, p, -1 });
+                    }
                 }
         }
-        m_iTowerCount = (std::min)(kTowerRows, static_cast<int>(vecTowers.size()));
+        {
+            auto& tmgr = TowerManager::GetInst();
+            for (int i = 0; i < tmgr.ReserveCount(); ++i)
+                vecRows.push_back({ tmgr.ReserveSeq(i), false, tmgr.ReserveTowerId(i),
+                    tmgr.ReserveWeaponRaw(i), tmgr.ReserveLevel(i), TowerRowSrc::AtkReserve, nullptr, i });
+            for (int i = 0; i < tmgr.HealReserveCount(); ++i)
+                vecRows.push_back({ tmgr.HealReserveSeq(i), true, -1, -1, tmgr.HealReserveLevel(i),
+                    TowerRowSrc::HealReserve, nullptr, i });
+        }
+        std::sort(vecRows.begin(), vecRows.end(),
+            [](const Row& a, const Row& b) { return a.seq < b.seq; });
+
+        m_iTowerCount = (std::min)(kTowerRows, static_cast<int>(vecRows.size()));
         for (int i = 0; i < kTowerRows; ++i)
         {
             const bool bHas = i < m_iTowerCount;
             if (!bHas)
             {
                 m_pTowerRowRefs[i].reset();
-                m_bTowerRowIsHeal[i] = false;
+                m_bTowerRowIsHeal[i]  = false;
+                m_eTowerRowSrc[i]     = TowerRowSrc::Placed;
+                m_iTowerRowReserve[i] = -1;
+                m_iTowerRowDefId[i]   = -1;
+                m_iTowerRowLevel[i]   = 1;
                 if (m_pTowerButtons[i]) m_pTowerButtons[i]->Disable();
                 if (m_pTowerTexts[i])   m_pTowerTexts[i]->Disable();
                 continue;
             }
-            m_pTowerRowRefs[i]   = vecTowers[i].obj;
-            m_bTowerRowIsHeal[i] = vecTowers[i].bHeal;
+            const Row& r = vecRows[i];
+            m_eTowerRowSrc[i]     = r.src;
+            m_bTowerRowIsHeal[i]  = r.heal;
+            m_iTowerRowReserve[i] = r.reserveIdx;
+            m_iTowerRowDefId[i]   = r.defId;
+            m_iTowerRowLevel[i]   = r.level;
+            if (r.src == TowerRowSrc::Placed) m_pTowerRowRefs[i] = r.obj;
+            else                              m_pTowerRowRefs[i].reset();
 
-            if (vecTowers[i].bHeal)
+            if (r.heal)
             {
-                // Heal tower: no weapon to cycle — a flat green row, R-click sells.
                 if (m_pTowerButtons[i])
                 {
-                    m_pTowerButtons[i]->SetTexture(
-                        EnsureSolidTexture("tower_shop_healrow", 0x1E7A3C));
+                    m_pTowerButtons[i]->SetTexture(EnsureSolidTexture("tower_shop_healrow", 0x1E7A3C));
                     m_pTowerButtons[i]->Enable();
                 }
                 if (m_pTowerTexts[i])
                 {
                     m_pTowerTexts[i]->SetColor(0x80FF80FFu);
-                    m_pTowerTexts[i]->SetString(L"Heal Tower " + std::to_wstring(i + 1));
+                    m_pTowerTexts[i]->SetString(L"Heal Tower Lv." + std::to_wstring(r.level));
                     m_pTowerTexts[i]->Enable();
                 }
                 continue;
             }
 
-            auto pT = std::static_pointer_cast<Tower>(vecTowers[i].obj);
-            const int wid = pT->GetWeaponId();
-            const WeaponDef* pDef = WeaponDatabase::GetInst().Get(wid);
-            const std::wstring wName = pDef ? ToW(pDef->strName) : L"None";
-
+            // Attack tower: type name + level + equipped weapon (or "(no weapon)").
+            // Box tinted by the equipped weapon's colour (grey when unequipped).
+            const TowerDef* pTD = (r.defId >= 0)
+                ? TowerDatabase::GetInst().Get(r.defId)
+                : TowerDatabase::GetInst().FirstOfKind(TowerKind::Attack);
+            const std::wstring wType = pTD ? ToW(pTD->strName) : std::wstring(L"Tower");
+            const WeaponDef* pWDef = (r.weapon >= 0) ? WeaponDatabase::GetInst().Get(r.weapon) : nullptr;
+            const std::wstring wName = pWDef ? ToW(pWDef->strName) : std::wstring(L"(no weapon)");
             if (m_pTowerButtons[i])
             {
-                const unsigned int uColor = pDef ? pDef->uColorRGB : 0x606060;
-                m_pTowerButtons[i]->SetTexture(
-                    EnsureSolidTexture("tower_shop_w_" + std::to_string(wid), uColor));
+                const unsigned int uColor = pWDef ? pWDef->uColorRGB : 0x484848u;
+                const std::string tag = pWDef
+                    ? ("tower_shop_w_" + std::to_string(r.weapon))
+                    : std::string("tower_shop_tower_nowpn");
+                m_pTowerButtons[i]->SetTexture(EnsureSolidTexture(tag, uColor));
                 m_pTowerButtons[i]->Enable();
             }
             if (m_pTowerTexts[i])
             {
                 m_pTowerTexts[i]->SetColor(0xFFFFFFFFu);
-                m_pTowerTexts[i]->SetString(L"Tower " + std::to_wstring(i + 1) +
-                    L" (Lv." + std::to_wstring(pT->GetLevel()) + L"): " + wName);
+                m_pTowerTexts[i]->SetString(
+                    wType + L" Lv." + std::to_wstring(r.level) + L"  [" + wName + L"]");
                 m_pTowerTexts[i]->Enable();
             }
-        }
-
-        // --- Unplaced Towers (reserve weapon per bought-but-unplaced tower) ---
-        // Each icon's colour is the weapon that reserve tower will fire. A raw
-        // -1 (unconfigured = freshly bought) shows a dim "no weapon" slot — the
-        // tower can't be PLACED until a weapon is equipped here (click to cycle /
-        // drag one on), so it must read as empty rather than borrowing a colour.
-        const int iReserve  = TowerManager::GetInst().ReserveCount();
-        m_iReserveCount = (std::min)(kReserveRows, iReserve);
-        for (int i = 0; i < kReserveRows; ++i)
-        {
-            if (!m_pReserveIcons[i]) continue;
-            if (i >= m_iReserveCount) { m_pReserveIcons[i]->Disable(); continue; }
-            const int wid = TowerManager::GetInst().ReserveWeaponRaw(i);
-            if (wid < 0)
-            {
-                // Weaponless — dim slot, not placeable yet.
-                m_pReserveIcons[i]->SetTexture(EnsureSolidTexture("tower_shop_reserve_empty", 0x242424));
-            }
-            else
-            {
-                const WeaponDef* pDef = WeaponDatabase::GetInst().Get(wid);
-                const unsigned int uColor = pDef ? pDef->uColorRGB : 0x606060;
-                m_pReserveIcons[i]->SetTexture(
-                    EnsureSolidTexture("tower_shop_w_" + std::to_string(wid), uColor));
-            }
-            m_pReserveIcons[i]->Enable();
         }
 
         // --- Start ---
@@ -1301,6 +1306,27 @@ namespace Client
         if (!pPlayer) return;
         pPlayer->EquipWeapon(id);     // move to a free firing slot (no-op if full)
         RebuildList();
+    }
+
+    void TowerIntermissionUI::OnWeaponIconClick(bool bEquipped, int iIndex)
+    {
+        // Only a DOUBLE-click (a quick second click on the same icon) toggles
+        // equip/unequip; a single click is ignored so it can't fire by accident.
+        // The gap is measured in frames (intermission dt ~ 0; see m_iClickFrame).
+        const int iKey = (bEquipped ? 1 : 2) * 1000 + iIndex;
+        const bool bDouble = (iKey == m_iLastClickKey) &&
+                             (m_iClickFrame - m_iLastClickFrame) <= kDoubleClickFrames;
+        if (!bDouble)
+        {
+            // First click: just remember it (and when) so the next one can pair.
+            m_iLastClickKey   = iKey;
+            m_iLastClickFrame = m_iClickFrame;
+            return;
+        }
+        // Second quick click → act, then reset so a third click starts fresh.
+        m_iLastClickKey = -1;
+        if (bEquipped) OnEquipSlotClick(iIndex);
+        else           OnInventoryClick(iIndex);
     }
 
     bool TowerIntermissionUI::PointerInOpenMenu() const
@@ -1434,21 +1460,61 @@ namespace Client
     // Placed attack towers of a given TYPE (towers.csv def id). Merging groups
     // by type, NOT weapon: any two same-type towers combine regardless of the
     // weapons they have equipped.
-    std::vector<std::shared_ptr<Tower>> TowerIntermissionUI::CollectAttackTowers(int iTowerDefId) const
+    int TowerIntermissionUI::ResolveTowerType(int iTowerDefId) const
     {
-        std::vector<std::shared_ptr<Tower>> vec;
+        if (iTowerDefId >= 0) return iTowerDefId;
+        const TowerDef* pDef = TowerDatabase::GetInst().FirstOfKind(TowerKind::Attack);
+        return pDef ? pDef->iId : -1;
+    }
+
+    void TowerIntermissionUI::CountTowersOfType(int iType, int& outCount, int& outMaxLevel) const
+    {
+        outCount = 0; outMaxLevel = 1;
+        // Placed attack towers of this resolved type.
         auto* pOwner = GetGameObjectOwner();
         Engine::Scene* pScene = pOwner ? pOwner->GetScene() : nullptr;
         std::shared_ptr<Engine::Layer> pLayer =
             pScene ? pScene->FindLayer(DEFAULT_LAYER) : nullptr;
-        if (!pLayer) return vec;
-        for (const auto& p : pLayer->GetGameObjectList())
+        if (pLayer)
+            for (const auto& p : pLayer->GetGameObjectList())
+            {
+                if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
+                auto pT = std::static_pointer_cast<Tower>(p);
+                if (ResolveTowerType(pT->GetTowerDefId()) != iType) continue;
+                ++outCount;
+                if (pT->GetLevel() > outMaxLevel) outMaxLevel = pT->GetLevel();
+            }
+        // Unplaced (reserve) attack towers of this resolved type.
+        auto& tm = TowerManager::GetInst();
+        for (int i = 0; i < tm.ReserveCount(); ++i)
         {
-            if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
-            auto pT = std::static_pointer_cast<Tower>(p);
-            if (pT->GetTowerDefId() == iTowerDefId) vec.push_back(pT);
+            if (ResolveTowerType(tm.ReserveTowerId(i)) != iType) continue;
+            ++outCount;
+            if (tm.ReserveLevel(i) > outMaxLevel) outMaxLevel = tm.ReserveLevel(i);
         }
-        return vec;
+    }
+
+    void TowerIntermissionUI::CountHealTowers(int& outCount, int& outMaxLevel) const
+    {
+        outCount = 0; outMaxLevel = 1;
+        auto* pOwner = GetGameObjectOwner();
+        Engine::Scene* pScene = pOwner ? pOwner->GetScene() : nullptr;
+        std::shared_ptr<Engine::Layer> pLayer =
+            pScene ? pScene->FindLayer(DEFAULT_LAYER) : nullptr;
+        if (pLayer)
+            for (const auto& p : pLayer->GetGameObjectList())
+            {
+                if (!p || !p->IsActive() || p->GetTag() != "HealTower") continue;
+                auto pH = std::static_pointer_cast<HealTower>(p);
+                ++outCount;
+                if (pH->GetLevel() > outMaxLevel) outMaxLevel = pH->GetLevel();
+            }
+        auto& tm = TowerManager::GetInst();
+        for (int i = 0; i < tm.HealReserveCount(); ++i)
+        {
+            ++outCount;
+            if (tm.HealReserveLevel(i) > outMaxLevel) outMaxLevel = tm.HealReserveLevel(i);
+        }
     }
 
     void TowerIntermissionUI::OpenTowerMenu(int iRow)
@@ -1464,24 +1530,36 @@ namespace Client
         m_iMenuWeaponId = -1;
         m_iMenuTowerRow = iRow;
 
-        // Merge needs >= 2 placed towers of the same TYPE (regardless of weapon)
-        // and a kept copy below the cap; heal towers have no level and never merge.
+        // Merge needs >= 2 towers of the same TYPE (placed OR unplaced, any
+        // weapon) and a kept copy below the cap; heal towers never merge.
         const bool bHeal = m_bTowerRowIsHeal[iRow];
         int iCopies = 0; bool bCanMerge = false; std::wstring wName = L"-";
         if (!bHeal)
         {
-            auto pT = std::static_pointer_cast<Tower>(m_pTowerRowRefs[iRow].lock());
-            if (pT)
+            // Equipped weapon name — from the placed object or the reserve entry.
+            int wid = -1;
+            if (m_eTowerRowSrc[iRow] == TowerRowSrc::Placed)
             {
-                const int wid = pT->GetWeaponId();
-                const WeaponDef* pDef = WeaponDatabase::GetInst().Get(wid);
-                wName = pDef ? TowerIntermissionUI_detail::ToW(pDef->strName) : L"None";
-                auto vec = CollectAttackTowers(pT->GetTowerDefId());
-                iCopies = static_cast<int>(vec.size());
-                int iKeepLv = 1;
-                for (auto& t : vec) if (t->GetLevel() > iKeepLv) iKeepLv = t->GetLevel();
-                bCanMerge = iCopies >= 2 && iKeepLv < kMaxWeaponLevel;
+                if (auto pT = std::static_pointer_cast<Tower>(m_pTowerRowRefs[iRow].lock()))
+                    wid = pT->GetWeaponId();
             }
+            else
+            {
+                wid = TowerManager::GetInst().ReserveWeaponRaw(m_iTowerRowReserve[iRow]);
+            }
+            const WeaponDef* pDef = (wid >= 0) ? WeaponDatabase::GetInst().Get(wid) : nullptr;
+            wName = pDef ? TowerIntermissionUI_detail::ToW(pDef->strName) : std::wstring(L"None");
+
+            int iMaxLv = 1;
+            CountTowersOfType(ResolveTowerType(m_iTowerRowDefId[iRow]), iCopies, iMaxLv);
+            bCanMerge = iCopies >= 2 && iMaxLv < kMaxWeaponLevel;
+        }
+        else
+        {
+            // Heal towers are all one type — any two merge (keep level +1).
+            int iMaxLv = 1;
+            CountHealTowers(iCopies, iMaxLv);
+            bCanMerge = iCopies >= 2 && iMaxLv < kMaxWeaponLevel;
         }
         int iRefund = TowerIntermissionUI_detail::TowerBuyPrice(bHeal) / 2;
         if (iRefund < 1) iRefund = 1;
@@ -1533,35 +1611,114 @@ namespace Client
         const int row = m_iMenuTowerRow;
         CloseWeaponMenu();
         if (row < 0 || row >= m_iTowerCount) return;
-        if (m_bTowerRowIsHeal[row]) return;   // heal towers have no weapon level
-        auto pClicked = std::static_pointer_cast<Tower>(m_pTowerRowRefs[row].lock());
-        if (!pClicked) return;
 
-        // Among the placed towers of the SAME TYPE (any weapon), keep the highest
-        // level, consume the lowest, level the kept one up by one. Free — the cost
-        // was the consumed tower (its owned slot is freed so it can be re-bought).
-        // No-op if fewer than two or kept maxed.
-        auto vec = CollectAttackTowers(pClicked->GetTowerDefId());
-        if (vec.size() < 2) return;
-        std::shared_ptr<Tower> pKeep = vec.front(), pErase;
-        for (auto& t : vec) if (t->GetLevel() > pKeep->GetLevel()) pKeep = t;
-        if (pKeep->GetLevel() >= kMaxWeaponLevel) return;   // maxed → don't waste a tower
-        for (auto& t : vec)
-            if (t != pKeep && (!pErase || t->GetLevel() < pErase->GetLevel())) pErase = t;
-        if (!pErase) return;
+        // --- Heal towers: all one type, no weapon. Merge any two (placed or
+        // unplaced) — keep the highest level +1, consume the other. ----------
+        if (m_bTowerRowIsHeal[row])
+        {
+            struct HH { bool reserve; std::shared_ptr<HealTower> placed; int rIdx; int level; };
+            std::vector<HH> hs;
+            auto* pOwner = GetGameObjectOwner();
+            Engine::Scene* pScene = pOwner ? pOwner->GetScene() : nullptr;
+            std::shared_ptr<Engine::Layer> pLayer =
+                pScene ? pScene->FindLayer(DEFAULT_LAYER) : nullptr;
+            if (pLayer)
+                for (const auto& p : pLayer->GetGameObjectList())
+                {
+                    if (!p || !p->IsActive() || p->GetTag() != "HealTower") continue;
+                    auto pH = std::static_pointer_cast<HealTower>(p);
+                    hs.push_back({ false, pH, -1, pH->GetLevel() });
+                }
+            auto& tmH = TowerManager::GetInst();
+            for (int i = 0; i < tmH.HealReserveCount(); ++i)
+                hs.push_back({ true, nullptr, i, tmH.HealReserveLevel(i) });
 
-        pErase->Despawn();
-        TowerManager::GetInst().RemoveTower();   // free the owned slot (re-buyable)
-        pKeep->SetLevel(pKeep->GetLevel() + 1);
+            if (hs.size() < 2) return;
+            int iKeepH = 0;
+            for (int k = 1; k < static_cast<int>(hs.size()); ++k)
+                if (hs[k].level > hs[iKeepH].level) iKeepH = k;
+            if (hs[iKeepH].level >= kMaxWeaponLevel) return;
+            int iConsH = -1;
+            for (int k = 0; k < static_cast<int>(hs.size()); ++k)
+                if (k != iKeepH && (iConsH < 0 || hs[k].level < hs[iConsH].level)) iConsH = k;
+            if (iConsH < 0) return;
+
+            // Bump kept first (reserve index still valid), then remove consumed.
+            if (hs[iKeepH].reserve) tmH.AddHealReserveLevel(hs[iKeepH].rIdx, 1);
+            else                    hs[iKeepH].placed->SetLevel(hs[iKeepH].placed->GetLevel() + 1);
+            if (hs[iConsH].reserve) tmH.RemoveHealReserveAt(hs[iConsH].rIdx);
+            else { hs[iConsH].placed->Despawn(); tmH.RemoveHealTower(); }
+            RebuildList();
+            return;
+        }
+
+        const int iType = ResolveTowerType(m_iTowerRowDefId[row]);
+
+        // Gather ALL owned towers of this TYPE — placed AND unplaced, regardless
+        // of equipped weapon. Keep the highest level, consume the lowest, level
+        // the kept one up by one. Free (the cost was the consumed tower).
+        struct H { bool reserve; std::shared_ptr<Tower> placed; int rIdx; int level; };
+        std::vector<H> hs;
+        {
+            auto* pOwner = GetGameObjectOwner();
+            Engine::Scene* pScene = pOwner ? pOwner->GetScene() : nullptr;
+            std::shared_ptr<Engine::Layer> pLayer =
+                pScene ? pScene->FindLayer(DEFAULT_LAYER) : nullptr;
+            if (pLayer)
+                for (const auto& p : pLayer->GetGameObjectList())
+                {
+                    if (!p || !p->IsActive() || p->GetTag() != "Tower") continue;
+                    auto pT = std::static_pointer_cast<Tower>(p);
+                    if (ResolveTowerType(pT->GetTowerDefId()) == iType)
+                        hs.push_back({ false, pT, -1, pT->GetLevel() });
+                }
+        }
+        auto& tm = TowerManager::GetInst();
+        for (int i = 0; i < tm.ReserveCount(); ++i)
+            if (ResolveTowerType(tm.ReserveTowerId(i)) == iType)
+                hs.push_back({ true, nullptr, i, tm.ReserveLevel(i) });
+
+        if (hs.size() < 2) return;
+        int iKeep = 0;
+        for (int k = 1; k < static_cast<int>(hs.size()); ++k)
+            if (hs[k].level > hs[iKeep].level) iKeep = k;
+        if (hs[iKeep].level >= kMaxWeaponLevel) return;   // maxed → don't waste a tower
+        int iCons = -1;
+        for (int k = 0; k < static_cast<int>(hs.size()); ++k)
+            if (k != iKeep && (iCons < 0 || hs[k].level < hs[iCons].level)) iCons = k;
+        if (iCons < 0) return;
+
+        // Bump the kept copy FIRST (its reserve index is still valid), then remove
+        // the consumed one (erasing a reserve entry can shift later indices). The
+        // consumed tower's weapon goes back to the player (never destroyed).
+        auto pPlayer = m_pTarget.lock();
+        if (hs[iKeep].reserve) tm.AddReserveLevel(hs[iKeep].rIdx, 1);
+        else                   hs[iKeep].placed->SetLevel(hs[iKeep].placed->GetLevel() + 1);
+        if (hs[iCons].reserve)
+        {
+            if (pPlayer) if (WeaponPtr w = tm.ReserveWeapon(hs[iCons].rIdx)) pPlayer->AttachWeapon(w);
+            tm.RemoveReserveTower(hs[iCons].rIdx);
+        }
+        else
+        {
+            if (pPlayer) if (WeaponPtr w = hs[iCons].placed->ReleaseWeapon()) pPlayer->AttachWeapon(w);
+            hs[iCons].placed->Despawn();
+            tm.RemoveTower();
+        }
         RebuildList();
     }
 
     void TowerIntermissionUI::OnTowerMenuCycle()
     {
         const int row = m_iMenuTowerRow;
+        const TowerRowSrc src = (row >= 0 && row < kTowerRows) ? m_eTowerRowSrc[row] : TowerRowSrc::Placed;
+        const int rIdx = (row >= 0 && row < kTowerRows) ? m_iTowerRowReserve[row] : -1;
         CloseWeaponMenu();
         if (row < 0) return;
-        OnCycleTowerWeapon(row);   // menu closed + not armed → cycles the weapon
+        // Menu closed + not armed → cycles the weapon (placed vs reserve path).
+        if (src == TowerRowSrc::Placed)         OnCycleTowerWeapon(row);
+        else if (src == TowerRowSrc::AtkReserve) OnCycleReserveWeapon(rIdx);
+        // Heal reserve: no weapon to cycle.
     }
 
     void TowerIntermissionUI::OnTowerMenuSell()
@@ -1569,7 +1726,65 @@ namespace Client
         const int row = m_iMenuTowerRow;
         CloseWeaponMenu();
         if (row < 0) return;
-        OnSellTower(row);
+        OnTowerRowSell(row);
+    }
+
+    void TowerIntermissionUI::OnTowerRowClick(int iRow)
+    {
+        if (iRow < 0 || iRow >= m_iTowerCount) return;
+        // An armed weapon (weapon menu's Equip / a drag) assigns to this tower.
+        if (m_iEquipArmedWeaponId >= 0)
+        {
+            const TowerRowSrc src = m_eTowerRowSrc[iRow];
+            if (src == TowerRowSrc::Placed && !m_bTowerRowIsHeal[iRow])
+                OnCycleTowerWeapon(iRow);
+            else if (src == TowerRowSrc::AtkReserve)
+                OnCycleReserveWeapon(m_iTowerRowReserve[iRow]);
+            else
+            {
+                // Heal tower: nothing to equip — cancel the arm so it doesn't dangle.
+                m_iEquipArmedWeaponId = -1;
+                if (m_pDragGhost) m_pDragGhost->Disable();
+            }
+            return;
+        }
+        OpenTowerMenu(iRow);
+    }
+
+    void TowerIntermissionUI::OnTowerRowSell(int iRow)
+    {
+        if (GameStateManager::GetInst().GetState() != GameState::Intermission) return;
+        if (PointerInOpenMenu()) return;
+        if (m_iEquipArmedWeaponId >= 0) return;   // armed → row equips, not sells
+        if (iRow < 0 || iRow >= m_iTowerCount) return;
+
+        const bool bHeal = m_bTowerRowIsHeal[iRow];
+        int iRefund = TowerIntermissionUI_detail::TowerBuyPrice(bHeal) / 2;
+        if (iRefund < 1) iRefund = 1;
+
+        switch (m_eTowerRowSrc[iRow])
+        {
+        case TowerRowSrc::Placed:
+            OnSellTower(iRow);   // existing placed-tower sell (Despawn + refund)
+            return;
+        case TowerRowSrc::AtkReserve:
+        {
+            // Hand the reserve tower's weapon back to the player before removing it.
+            const int rIdx = m_iTowerRowReserve[iRow];
+            if (auto pPlayer = m_pTarget.lock())
+                if (WeaponPtr w = TowerManager::GetInst().ReserveWeapon(rIdx))
+                    pPlayer->AttachWeapon(w);
+            TowerManager::GetInst().RemoveReserveTower(rIdx);
+            Wallet::GetInst().Add(iRefund);
+            RebuildList();
+            return;
+        }
+        case TowerRowSrc::HealReserve:
+            TowerManager::GetInst().RemoveHealReserveAt(m_iTowerRowReserve[iRow]);
+            Wallet::GetInst().Add(iRefund);
+            RebuildList();
+            return;
+        }
     }
 
     void TowerIntermissionUI::OnCycleTowerWeapon(int iIndex)
@@ -1590,41 +1805,30 @@ namespace Client
         }
         auto pTower = std::static_pointer_cast<Tower>(m_pTowerRowRefs[iIndex].lock());
         if (!pTower) return;
+        auto pPlayer = m_pTarget.lock();
+        if (!pPlayer) return;
 
-        // Armed by the weapon menu's Equip → assign that weapon, not a cycle.
+        // Armed by the weapon menu's Equip / a drag → MOVE a player copy of that
+        // weapon onto this tower; the tower's previous weapon (if any) returns to
+        // the player inventory (a weapon object lives in exactly one place).
         if (m_iEquipArmedWeaponId >= 0)
         {
-            // Reject if another tower already holds it (one tower per weapon).
-            if (!IsWeaponHeldByOtherTower(m_iEquipArmedWeaponId, pTower.get(), -1))
-                pTower->SetWeaponId(m_iEquipArmedWeaponId);
+            if (WeaponPtr w = pPlayer->DetachWeapon(m_iEquipArmedWeaponId))
+            {
+                WeaponPtr old = pTower->ReleaseWeapon();
+                pTower->SetWeapon(w);
+                if (old) pPlayer->AttachWeapon(old);
+            }
             m_iEquipArmedWeaponId = -1;
             if (m_pDragGhost) m_pDragGhost->Disable();
             RebuildList();
             return;
         }
 
-        auto pPlayer = m_pTarget.lock();
-        if (!pPlayer) return;
-
-        // Cycle this tower's weapon to the player's next owned weapon that no
-        // OTHER tower already holds (each weapon sits on at most one tower).
-        const std::vector<int> vecOwned = pPlayer->GetOwnedWeaponIds();
-        const int sz = static_cast<int>(vecOwned.size());
-        if (sz == 0) return;
-        const int cur = pTower->GetWeaponId();
-        int idx = -1;
-        for (int i = 0; i < sz; ++i)
-            if (vecOwned[i] == cur) { idx = i; break; }
-        for (int step = 1; step <= sz; ++step)
-        {
-            const int cand = vecOwned[(idx + step) % sz];
-            if (cand == cur) break;   // wrapped to current → nothing else free
-            if (!IsWeaponHeldByOtherTower(cand, pTower.get(), -1))
-            {
-                pTower->SetWeaponId(cand);
-                break;
-            }
-        }
+        // Plain click (not armed) → UNASSIGN: hand the tower's weapon back to the
+        // player inventory. Re-assign a weapon via its Equip action / drag.
+        if (WeaponPtr old = pTower->ReleaseWeapon())
+            pPlayer->AttachWeapon(old);
         RebuildList();
     }
 
@@ -1653,8 +1857,12 @@ namespace Client
 
         int iRefund = TowerIntermissionUI_detail::TowerBuyPrice(false) / 2;
         if (iRefund < 1) iRefund = 1;
+        auto pT = std::static_pointer_cast<Tower>(pObj);
+        // Hand the tower's weapon back to the player before it leaves.
+        if (auto pPlayer = m_pTarget.lock())
+            if (WeaponPtr w = pT->ReleaseWeapon()) pPlayer->AttachWeapon(w);
         TowerManager::GetInst().RemoveTower();   // free the owned slot (re-buyable)
-        std::static_pointer_cast<Tower>(pObj)->Despawn();   // leave the scene
+        pT->Despawn();                           // leave the scene
         Wallet::GetInst().Add(iRefund);
         RebuildList();
     }
@@ -1663,47 +1871,31 @@ namespace Client
     {
         if (GameStateManager::GetInst().GetState() != GameState::Intermission) return;
         if (PointerInOpenMenu()) return;   // click belongs to the open weapon menu
-        if (iIndex < 0 || iIndex >= m_iReserveCount) return;
+        // Indexed against the live reserve (the unplaced-tower icon strip that
+        // used to bound this was removed — towers share one list now).
+        if (iIndex < 0 || iIndex >= TowerManager::GetInst().ReserveCount()) return;
 
-        // Armed by the weapon menu's Equip → assign that weapon, not a cycle.
+        auto pPlayer = m_pTarget.lock();
+        if (!pPlayer) return;
+
+        // Armed → MOVE a player copy onto this unplaced tower; its previous
+        // weapon (if any) returns to the player inventory.
         if (m_iEquipArmedWeaponId >= 0)
         {
-            // Reject if another tower already holds it (one tower per weapon).
-            if (!IsWeaponHeldByOtherTower(m_iEquipArmedWeaponId, nullptr, iIndex))
-                TowerManager::GetInst().SetReserveWeapon(iIndex, m_iEquipArmedWeaponId);
+            if (WeaponPtr w = pPlayer->DetachWeapon(m_iEquipArmedWeaponId))
+            {
+                WeaponPtr old = TowerManager::GetInst().SetReserveWeapon(iIndex, w);
+                if (old) pPlayer->AttachWeapon(old);
+            }
             m_iEquipArmedWeaponId = -1;
             if (m_pDragGhost) m_pDragGhost->Disable();
             RebuildList();
             return;
         }
 
-        auto pPlayer = m_pTarget.lock();
-        if (!pPlayer) return;
-
-        // Cycle this unplaced tower's weapon to the player's next owned weapon
-        // that no OTHER tower already holds (each weapon sits on one tower).
-        const std::vector<int> vecOwned = pPlayer->GetOwnedWeaponIds();
-        const int sz = static_cast<int>(vecOwned.size());
-        if (sz == 0) return;
-        // -1 = UNCONFIGURED (freshly bought, weaponless): the first click should
-        // EQUIP a weapon (start scanning from index 0), not be treated as already
-        // sitting on the default — otherwise a single-weapon player can never arm
-        // the tower (and so can never place it).
-        const int rawCur = TowerManager::GetInst().ReserveWeaponRaw(iIndex);
-        int idx = -1;
-        if (rawCur >= 0)
-            for (int i = 0; i < sz; ++i)
-                if (vecOwned[i] == rawCur) { idx = i; break; }
-        for (int step = 1; step <= sz; ++step)
-        {
-            const int cand = vecOwned[(idx + step) % sz];
-            if (rawCur >= 0 && cand == rawCur) break;   // wrapped to current → nothing else free
-            if (!IsWeaponHeldByOtherTower(cand, nullptr, iIndex))
-            {
-                TowerManager::GetInst().SetReserveWeapon(iIndex, cand);
-                break;
-            }
-        }
+        // Plain click → UNASSIGN: hand the reserve tower's weapon back to inventory.
+        if (WeaponPtr old = TowerManager::GetInst().SetReserveWeapon(iIndex, nullptr))
+            pPlayer->AttachWeapon(old);
         RebuildList();
     }
 
@@ -1761,6 +1953,7 @@ namespace Client
 
         if (m_bShownLocal)
         {
+            ++m_iClickFrame;   // frame clock for double-click detection (dt ~ 0 here)
             HandleDrag();
             HandleWeaponMenu();
             if (m_iDragWeaponId < 0) HandleTooltip();   // no tooltip mid-drag
@@ -1817,19 +2010,22 @@ namespace Client
         m_iDragWeaponId = -1; m_eDragSrc = DragSrc::None;
         if (m_pDragGhost) m_pDragGhost->Disable();
 
-        // 1) Onto a placed tower row → equip it there (reuse the arm path's
-        //    one-tower-per-weapon check + assignment).
+        // 1) Onto a tower row → equip it there (placed or unplaced; reuse the arm
+        //    path's one-tower-per-weapon check + assignment). Heal rows ignore it.
         for (int i = 0; i < m_iTowerCount; ++i)
             if (InRect(mx, my, m_TowerRect[i]))
             {
-                if (!m_bTowerRowIsHeal[i]) { m_iEquipArmedWeaponId = iDragId; OnCycleTowerWeapon(i); }
+                if (m_eTowerRowSrc[i] == TowerRowSrc::Placed && !m_bTowerRowIsHeal[i])
+                {
+                    m_iEquipArmedWeaponId = iDragId; OnCycleTowerWeapon(i);
+                }
+                else if (m_eTowerRowSrc[i] == TowerRowSrc::AtkReserve)
+                {
+                    m_iEquipArmedWeaponId = iDragId; OnCycleReserveWeapon(m_iTowerRowReserve[i]);
+                }
                 return;
             }
-        // 2) Onto an unplaced (reserve) tower slot → equip it there.
-        for (int i = 0; i < m_iReserveCount; ++i)
-            if (InRect(mx, my, m_ReserveRect[i]))
-            { m_iEquipArmedWeaponId = iDragId; OnCycleReserveWeapon(i); return; }
-        // 3) Onto the equipped strip → equip (only meaningful from inventory).
+        // 2) Onto the equipped strip → equip (only meaningful from inventory).
         const int iEquipCap = Player::GetMaxEquipSlots();
         for (int i = 0; i < kOwnedRows && i < iEquipCap; ++i)
             if (InRect(mx, my, m_OwnedRect[i]))
@@ -1837,7 +2033,7 @@ namespace Client
                 if (eSrc == DragSrc::Inventory) { pPlayer->EquipWeapon(iDragId); RebuildList(); }
                 return;
             }
-        // 4) Onto the inventory strip → unequip (only meaningful from equipped).
+        // 3) Onto the inventory strip → unequip (only meaningful from equipped).
         for (int i = 0; i < kInvRows; ++i)
             if (InRect(mx, my, m_InvRect[i]))
             {
@@ -1877,9 +2073,6 @@ namespace Client
                 bool bOnTarget = false;
                 for (int i = 0; i < m_iTowerCount; ++i)
                     if (InRect(mx, my, m_TowerRect[i])) { bOnTarget = true; break; }
-                if (!bOnTarget)
-                    for (int i = 0; i < m_iReserveCount; ++i)
-                        if (InRect(mx, my, m_ReserveRect[i])) { bOnTarget = true; break; }
                 // On-target clicks are consumed by the row buttons' OnClick;
                 // anything else cancels the arm.
                 if (!bOnTarget)
@@ -1958,6 +2151,14 @@ namespace Client
             {
                 if (m_iOwnedIds[i] < 0 || !InRect(mx, my, m_OwnedRect[i])) continue;
                 wInfo = weaponTip(m_iOwnedIds[i]);
+                break;
+            }
+        // Inventory (idle) weapon icons — same per-weapon stat tooltip.
+        if (wInfo.empty())
+            for (int i = 0; i < kInvRows; ++i)
+            {
+                if (m_iInvIds[i] < 0 || !InRect(mx, my, m_InvRect[i])) continue;
+                wInfo = weaponTip(m_iInvIds[i]);
                 break;
             }
         // Placed-tower loadout rows: show the tower's own stats. Heal rows reuse

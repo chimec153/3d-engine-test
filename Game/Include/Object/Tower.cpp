@@ -46,11 +46,57 @@ namespace Client
         if (iLevel < 1)                iLevel = 1;
         if (iLevel > kMaxWeaponLevel)  iLevel = kMaxWeaponLevel;
         if (iLevel == m_iLevel) return;
+        const int iDelta = iLevel - m_iLevel;
         m_iLevel = iLevel;
+        // Tower-level HP bonus (towers.csv per-level delta) — shift the
+        // Attackable's max HP by the level change.
+        if (m_pAttackable && m_iLvlHpAdd != 0)
+            m_pAttackable->AddMaxHP(iDelta * m_iLvlHpAdd);
         // Sustained / Beam towers cache their instances; invalidating the
-        // spawned-for id makes Update tear them down and respawn at the new
-        // level's ComputeCount (cooldown towers pick up the level next shot).
+        // spawned-for id makes Update tear them down and respawn (cooldown
+        // towers pick up the change next shot).
         m_iSustainedForId = -1;
+    }
+
+    void Tower::SetWeapon(const WeaponPtr& pWeapon)
+    {
+        // Tear down instances spawned for the old weapon, install the new one,
+        // and force a respawn (the Update path re-creates Sustained/Beam
+        // instances when m_iSustainedForId no longer matches).
+        for (auto& wp : m_vecSustained) if (auto sp = wp.lock()) sp->InActivate();
+        m_vecSustained.clear();
+        for (auto& wp : m_vecBeams)     if (auto sp = wp.lock()) sp->InActivate();
+        m_vecBeams.clear();
+        m_pWeapon = pWeapon;
+        m_iSustainedForId = -1;
+    }
+
+    WeaponPtr Tower::ReleaseWeapon()
+    {
+        for (auto& wp : m_vecSustained) if (auto sp = wp.lock()) sp->InActivate();
+        m_vecSustained.clear();
+        for (auto& wp : m_vecBeams)     if (auto sp = wp.lock()) sp->InActivate();
+        m_vecBeams.clear();
+        WeaponPtr w = m_pWeapon;
+        m_pWeapon = nullptr;
+        m_iSustainedForId = -1;
+        return w;
+    }
+
+    std::shared_ptr<Engine::Mesh> Tower::BuildBodyMesh(const TowerDef* pDef)
+    {
+        // Shape: the mesh key "prismN" picks an N-gon prism (side-count reads the
+        // type at a glance); anything else (incl. nullptr) falls back to a square
+        // prism. Same footprint/height envelope as the original body box (radius
+        // ~0.32 ≈ the 0.3 half-extent; 0 → 1.6 tall). MeshPresets caches per
+        // side-count, so same-shape towers share one Mesh.
+        int iSides = 4;
+        if (pDef && pDef->strMesh.rfind("prism", 0) == 0)   // starts with "prism"
+        {
+            const int n = std::atoi(pDef->strMesh.c_str() + 5);
+            if (n >= 3) iSides = n;
+        }
+        return Engine::MeshPresets::RegularPrism(iSides, 0.32f, 0.f, 1.6f);
     }
 
     void Tower::SetTowerDefId(int iId)
@@ -74,6 +120,12 @@ namespace Client
         m_uTowerImpact   = pDef->uTowerImpact;
         m_fTowerEffectP0 = pDef->fTowerEffectP0;
         m_fTowerEffectP1 = pDef->fTowerEffectP1;
+        // Per-tower-level deltas (applied with (m_iLevel-1) in the fire path +
+        // SetLevel for HP). These are tower-level bonuses, separate from the
+        // weapon-level scaling that the held weapon contributes.
+        m_fLvlAtkAdd     = pDef->fLvlAtkAdd;
+        m_fLvlAtkSpdAdd  = pDef->fLvlAtkSpdAdd;
+        m_iLvlHpAdd      = pDef->iLvlHpAdd;
 
         // HP / defence are baked into the Attackable. Shift only the base
         // portion by the delta from what Init seeded so the level-up bonus
@@ -89,21 +141,10 @@ namespace Client
         m_fSeedBaseDef = pDef->fDefense;
 
         // --- Per-type body: shape (N-gon prism) + identity colour ------------
-        // Shape: the mesh key "prismN" picks an N-gon prism (side-count reads the
-        // type at a glance); anything else falls back to a square prism.
-        int iSides = 4;
-        if (pDef->strMesh.rfind("prism", 0) == 0)   // starts with "prism"
-        {
-            const int n = std::atoi(pDef->strMesh.c_str() + 5);
-            if (n >= 3) iSides = n;
-        }
+        // Shape comes from the type def via the shared builder, so the placement
+        // ghost (which calls the same BuildBodyMesh) always matches this tower.
         if (m_pMeshRenderer)
-        {
-            // Same footprint/height envelope as the original box (radius ~0.32
-            // ≈ the 0.3 half-extent; 0 → 1.6 tall). Cached per side-count, so
-            // same-shape towers share one Mesh.
-            m_pMeshRenderer->SetMesh(Engine::MeshPresets::RegularPrism(iSides, 0.32f, 0.f, 1.6f));
-        }
+            m_pMeshRenderer->SetMesh(BuildBodyMesh(pDef));
 
         // Colour: one identity hue per kind (NOTE: a unique material tag was set
         // in Init, so this shows per-tower instead of collapsing to tower #0).
@@ -183,9 +224,8 @@ namespace Client
             }
         }
 
-        // Seed this tower's weapon from the current placement default. The
-        // shop can reassign it per-tower afterward (SetWeaponId).
-        m_iWeaponId = TowerManager::GetInst().CurrentWeaponId();
+        // Towers start UNARMED — the weapon object is moved in at placement
+        // (from the reserve, which got it from the player in the shop).
 
         // Base stats from towers.csv (falls back to the GameDefs constants when
         // no row is loaded). These drive HP / defence / range / aggro below and
@@ -337,7 +377,7 @@ namespace Client
             // re-bought), but it returns to the reserve carrying its weapon +
             // level, flagged on destroy-cooldown so it can't be re-placed this
             // round (OnNewRound clears the flag at the next round start).
-            TowerManager::GetInst().DestroyTower(m_iWeaponId, m_iLevel, m_iTowerDefId);
+            TowerManager::GetInst().DestroyTower(m_iLevel, m_iTowerDefId, m_iSlotSeq, ReleaseWeapon());
             // Drop the persistent instances this tower owns (orbiting
             // sustained bullets + laser beams) — they're scene-owned and held
             // only by weak_ptr here, so without this they outlive the tower.
@@ -426,12 +466,13 @@ namespace Client
         if (!GameStateManager::GetInst().IsPlaying())
             return;
 
-        const WeaponDef* pDef = WeaponDatabase::GetInst().Get(m_iWeaponId);
-        if (!pDef) return;   // no weapon equipped / invalid id
+        if (!m_pWeapon) return;   // unarmed → doesn't fire
+        const WeaponDef* pDef = WeaponDatabase::GetInst().Get(m_pWeapon->iWeaponId);
+        if (!pDef) return;   // invalid weapon id
 
         // Weapon changed -> drop any persistent instances (orbiting bullets or
         // laser beams) spawned for the old one.
-        if (m_iSustainedForId != m_iWeaponId)
+        if (m_iSustainedForId != m_pWeapon->iWeaponId)
         {
             for (auto& wp : m_vecSustained)
                 if (auto sp = wp.lock()) sp->InActivate();
@@ -439,7 +480,7 @@ namespace Client
             for (auto& wp : m_vecBeams)
                 if (auto sp = wp.lock()) sp->InActivate();
             m_vecBeams.clear();
-            m_iSustainedForId = m_iWeaponId;
+            m_iSustainedForId = m_pWeapon->iWeaponId;
         }
 
         // Sustained weapons don't auto-fire (cooldown 0 floors to 0.05s and
@@ -469,8 +510,12 @@ namespace Client
 
         // Fire rate = the tower's base attack speed (towers.csv) times the
         // level-up fire-rate buff; both shorten the cooldown (mult > 1 = faster).
-        float fCooldown = ComputeCooldown(*pDef, m_iLevel);
-        const float fRateMult = TowerManager::GetInst().TowerFireRateMult() * m_fAttackSpeed;
+        // Weapon scaling uses the WEAPON's level; the cooldown is then sped up by
+        // the tower's fire-rate (base + per-tower-level delta) and the global
+        // level-up tower fire-rate buff.
+        float fCooldown = ComputeCooldown(*pDef, m_pWeapon->iLevel);
+        const float fTowerSpd = m_fAttackSpeed + (m_iLevel - 1) * m_fLvlAtkSpdAdd;
+        const float fRateMult = TowerManager::GetInst().TowerFireRateMult() * fTowerSpd;
         if (fRateMult > 0.f) fCooldown /= fRateMult;
         m_fCooldownAcc += fDeltaTime;
         if (m_fCooldownAcc < fCooldown) return;
@@ -562,20 +607,22 @@ namespace Client
         if (def.eOrigin == SpawnOrigin::Front || def.eOrigin == SpawnOrigin::Mouse)
             vSpawn = vSpawn + vForward * 0.6f;
 
-        const int iCount = ComputeCount(def, m_iLevel);
+        const int   iWlvl    = m_pWeapon ? m_pWeapon->iLevel : 1;   // weapon scaling
+        const float fTowerAtk = (m_fAttack + (m_iLevel - 1) * m_fLvlAtkAdd);  // tower-level bonus
+        const int iCount = ComputeCount(def, iWlvl);
         const float fFanStep = 0.174f;   // ~10°, matches Player's fan
         const float fFanBase = -fFanStep * (iCount - 1) * 0.5f;
         for (int i = 0; i < iCount; ++i)
         {
             auto pBullet = pScene->CreateGameObject<Bullet>("bullet", pLayer);
             if (!pBullet) continue;
-            pBullet->Configure(def, m_iLevel, m_pTransform);
+            pBullet->Configure(def, iWlvl, m_pTransform);
             // Damage scaling, player-style: tower base attack x the level-up
             // tower-atk buff, then a per-shot crit roll multiplies by crit_mult.
             // (crit uses std::rand like Player — <random> is banned here, see
             // the epsilon-macro note in the codebase memory.)
             {
-                float fScale = m_fAttack * TowerManager::GetInst().TowerAtkMult();
+                float fScale = fTowerAtk * TowerManager::GetInst().TowerAtkMult();
                 if (m_fCritChance > 0.f &&
                     (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) < m_fCritChance)
                     fScale *= m_fCritMult;
@@ -617,7 +664,9 @@ namespace Client
         auto pLayer = pScene->FindLayer(DEFAULT_LAYER);
         if (!pLayer) return;
 
-        const int iCount = ComputeCount(def, m_iLevel);
+        const int   iWlvl     = m_pWeapon ? m_pWeapon->iLevel : 1;
+        const float fTowerAtk = (m_fAttack + (m_iLevel - 1) * m_fLvlAtkAdd);
+        const int iCount = ComputeCount(def, iWlvl);
         // Spawn at enemy-collider height (kWallY + 0.3), the same altitude
         // FireAt uses, so orbiting blades cross enemy hitboxes.
         Engine::Vector3 vSpawn = m_pTransform->GetPosition();
@@ -635,10 +684,10 @@ namespace Client
             // Owner = this tower, so OrbitalMovement circles the tower rather
             // than the player. Non-orbital Sustained types just fly/sit per
             // their movement from the tower (Fixed = aura at the tower).
-            pBullet->Configure(def, m_iLevel, m_pTransform);
+            pBullet->Configure(def, iWlvl, m_pTransform);
             // Base attack x level-up buff (no per-shot crit roll on persistent
             // orbiting instances — crit is a per-fire event).
-            pBullet->ScaleDamage(m_fAttack * TowerManager::GetInst().TowerAtkMult());
+            pBullet->ScaleDamage(fTowerAtk * TowerManager::GetInst().TowerAtkMult());
             pBullet->SetVoxelWorld(m_pVoxelWorld);
             pBullet->SetOrbitYOffset(0.3f);
             // Layer the tower's intrinsic effect on top of the weapon's effects.
@@ -663,12 +712,14 @@ namespace Client
         // One persistent Beam per count (mirrors Player::RespawnBeams). They
         // all aim the same way from the tower, but DriveBeams reads the live
         // weapon level each frame, so a level-up takes effect without respawn.
-        const int iCount = ComputeCount(def, m_iLevel);
+        const int iWlvl = m_pWeapon ? m_pWeapon->iLevel : 1;
+        const int iWid  = m_pWeapon ? m_pWeapon->iWeaponId : -1;
+        const int iCount = ComputeCount(def, iWlvl);
         for (int i = 0; i < iCount; ++i)
         {
             auto pBeam = pScene->CreateGameObject<Beam>("beam", pLayer);
             if (!pBeam) continue;
-            pBeam->Configure(m_iWeaponId, m_iLevel);
+            pBeam->Configure(iWid, iWlvl);
             // Lock the heading per on-pulse: the tower auto-aims, so without
             // this the beam would swivel to track the nearest enemy every
             // frame. It now fires a fixed straight shot and only re-acquires

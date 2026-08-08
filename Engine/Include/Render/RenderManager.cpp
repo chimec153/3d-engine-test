@@ -721,6 +721,9 @@ namespace Engine
 		m_tFogCBuffer.fFogStartDepth = 500.f;
 		m_tFogCBuffer.fFogGlobalDensity = 1.f;
 		m_tFogCBuffer.fFogHeightFallOff = 1.f;
+		// 전역 앰비언트 기본값: 부드러운 푸른빛 fill, 세기 0.6. 직사광 없는 면이
+		// 순흑이 되지 않게 하는 바닥 밝기.
+		m_tFogCBuffer.vAmbient = Vector4(0.35f, 0.38f, 0.45f, 0.6f);
 
 		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
 
@@ -1486,6 +1489,32 @@ namespace Engine
 	float RenderManager::GetFogHeightFallOff() const
 	{
 		return m_tFogCBuffer.fFogHeightFallOff;
+	}
+
+	void RenderManager::SetAmbientColor(const Vector3& vColor)
+	{
+		m_tFogCBuffer.vAmbient.x = vColor.x;
+		m_tFogCBuffer.vAmbient.y = vColor.y;
+		m_tFogCBuffer.vAmbient.z = vColor.z;
+
+		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
+	}
+
+	void RenderManager::SetAmbientIntensity(float fIntensity)
+	{
+		m_tFogCBuffer.vAmbient.w = fIntensity;
+
+		m_pFogCBuffer->UpdateBuffer(m_tFogCBuffer);
+	}
+
+	Vector3 RenderManager::GetAmbientColor() const
+	{
+		return Vector3(m_tFogCBuffer.vAmbient.x, m_tFogCBuffer.vAmbient.y, m_tFogCBuffer.vAmbient.z);
+	}
+
+	float RenderManager::GetAmbientIntensity() const
+	{
+		return m_tFogCBuffer.vAmbient.w;
 	}
 
 	void RenderManager::RenderDecal()

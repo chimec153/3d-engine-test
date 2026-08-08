@@ -198,8 +198,10 @@ namespace Client
         if (m_pCurrentRound->bIsBoss && !m_bBossSpawned &&
             m_fRoundElapsed >= m_pCurrentRound->tBoss.fSpawnTime)
         {
-            MaterialiseBoss(pPlayer, pLayer, pPlayerTr);
-            m_bBossSpawned = true;
+            // Only latch m_bBossSpawned on a successful placement; a failed
+            // attempt (boss cell walled in) retries next frame.
+            if (MaterialiseBoss(pPlayer, pLayer, pPlayerTr))
+                m_bBossSpawned = true;
         }
 
         // 2) Advance each spawn entry's window + accumulator and queue
@@ -363,7 +365,25 @@ namespace Client
     bool EnemySpawner::IsRoundComplete() const
     {
         if (!m_bRoundActive || !m_pCurrentRound) return false;
+
+        // Boss rounds end the instant the boss dies — not on the duration
+        // timer. The minion spawn windows still cap themselves at their own
+        // endTime, so a long fight just stops spawning adds while the player
+        // finishes the boss. (Same liveness predicate the boss HP bar uses.)
+        if (m_pCurrentRound->bIsBoss)
+        {
+            if (!m_bBossSpawned) return false;   // boss not in the world yet
+            auto pBoss = m_wpBoss.lock();
+            const bool bBossAlive = pBoss && pBoss->IsActive() && pBoss->GetHP() > 0;
+            return !bBossAlive;
+        }
+
         return m_fRoundElapsed >= m_pCurrentRound->fDuration;
+    }
+
+    bool EnemySpawner::IsBossRound() const
+    {
+        return m_bRoundActive && m_pCurrentRound && m_pCurrentRound->bIsBoss;
     }
 
     float EnemySpawner::GetRoundTimeRemaining() const
@@ -432,13 +452,13 @@ namespace Client
         m_vecPending.push_back(pend);
     }
 
-    void EnemySpawner::MaterialiseBoss(const std::shared_ptr<Engine::GameObject>& pPlayer,
+    bool EnemySpawner::MaterialiseBoss(const std::shared_ptr<Engine::GameObject>& pPlayer,
                                        const std::shared_ptr<Engine::Layer>& pLayer,
                                        const std::shared_ptr<Engine::Transform>& pPlayerTr)
     {
-        if (!m_pCurrentRound || !pLayer || !pPlayerTr) return;
+        if (!m_pCurrentRound || !pLayer || !pPlayerTr) return false;
         const EnemyDef* pDef = EnemyDatabase::GetInst().Get(m_pCurrentRound->tBoss.strBossId);
-        if (!pDef || !pDef->bIsBoss) return;
+        if (!pDef || !pDef->bIsBoss) return false;
 
         const Engine::Vector3 vPlayer = pPlayerTr->GetPosition();
         const int iMax = GameWorldBuilder::kFloorSize - 1;
@@ -454,7 +474,7 @@ namespace Client
             cz = (std::max)(1, (std::min)(iMax - 1, static_cast<int>(std::floor(fZ))));
             bOpen = !Engine::IsSolid(m_pWorld->GetBlock(cx, kWallY, cz));
         }
-        if (!bOpen) return;
+        if (!bOpen) return false;
 
         // Multipliers apply to bosses' minions in their phases too — but the
         // boss itself doesn't double-dip on hpMultiplier (its baseHp is
@@ -471,13 +491,14 @@ namespace Client
         def.iAttackMax = iScaledMelee;
 
         auto pEnemy = m_pScene->CreateGameObject<Enemy>("Enemy", pLayer);
-        if (!pEnemy) return;
+        if (!pEnemy) return false;
         pEnemy->ApplyDef(def);
         pEnemy->SetVoxelWorld(m_pWorld);
         pEnemy->SetFlowField(m_pFlowField.get());
         pEnemy->SetSpawnCell(cx, cz);
         pEnemy->SetTarget(pPlayer);
         m_wpBoss = pEnemy;   // HUD reads its HP for the boss bar
+        return true;
     }
 
     void EnemySpawner::MaterialisePending(const PendingSpawn& pending,

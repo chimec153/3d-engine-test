@@ -127,6 +127,10 @@ namespace Client
         // Flips shop availability + recolours the toggle (the shop-side analogue
         // of OnSustainToggle).
         void OnShopToggle();
+        // Cycles the 조준 모드 (aim) selector through the AimMode values. Aim is
+        // now independent of the movement card, so any weapon (e.g. a straight
+        // Scatter) can fire at the nearest enemy without becoming a homing shot.
+        void OnAimToggle();
         // Single click on a registry cell — selects that weapons_v2 weapon and
         // loads it into the editor.
         void OnRegistryClick(int iCell);
@@ -238,6 +242,14 @@ namespace Client
         std::shared_ptr<Engine::Button>      m_pShopBtn;
         std::shared_ptr<Engine::Text>        m_pShopText;
         bool                                 m_bShopAvailable = true;
+
+        // Aim mode (조준) — independent of the movement card now: a cycle button
+        // steps through the AimMode values (가까운 적 / 정면 / 커서 ...).
+        // AssembleWeaponDef reads m_iAimMode into def.eAimMode. 3 = AimMode::Forward
+        // (the legacy default for non-homing weapons).
+        std::shared_ptr<Engine::Button>      m_pAimBtn;
+        std::shared_ptr<Engine::Text>        m_pAimText;
+        int                                  m_iAimMode = 3;
 
         // Editable weapon name (text-mode EditBox in the top bar). Read at save
         // time; populated from the selected weapon in LoadWeaponIntoEditor.

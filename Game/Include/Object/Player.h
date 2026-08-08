@@ -3,8 +3,10 @@
 #include "GameObject\GameObject.h"
 #include "State.h"
 #include "WeaponData.h"
+#include "Weapon.h"
 #include <vector>
 #include <string>
+#include <memory>
 
 namespace Engine
 {
@@ -138,52 +140,20 @@ namespace Client
         // Player is constructed.
         Engine::VoxelWorld* m_pVoxelWorld = nullptr;
 
-        // Weapon slots. Each slot tracks one CSV-loaded weapon, its current
-        // level, the cooldown accumulator (for FireMode::Cooldown), and the
-        // live Sustained instances (Orbital orbs etc. that persist across
-        // frames). Capacity is locked to 6 (Vampire-Survivors-style).
-        struct WeaponSlot
-        {
-            int   iWeaponId    = -1;
-            int   iLevel       = 1;
-            float fCooldownAcc = 0.f;
-            std::vector<std::weak_ptr<Bullet>> vecSustainedInstances;
-            // Follow-weapon pets (independent companions). Spawned/refreshed by
-            // RespawnPets on add / level-up, like vecSustainedInstances.
-            std::vector<std::weak_ptr<Pet>> vecPets;
-            // Laser beams (Straight + Sustained weapons). Spawned by
-            // RespawnBeams; the Player drives them each frame (anchor + aim).
-            std::vector<std::weak_ptr<Beam>> vecBeams;
-            // True while this weapon is mounted on a tower: a weapon is used by
-            // EITHER the player OR a tower, never both (towers.csv type-lock).
-            // The player skips firing a held slot and tears down its persistent
-            // instances; releasing it (selling the tower) respawns them. Updated
-            // each frame by ReconcileTowerHeldInstances.
-            bool bTowerHeld = false;
-            // Equip model: an owned weapon is either EQUIPPED (in a player firing
-            // slot) or sitting in the INVENTORY (idle). Only equipped weapons
-            // that aren't tower-held actually fire. The shop moves weapons
-            // between inventory / equip slots / towers.
-            bool bEquipped = true;
-            // Whether this slot's persistent instances (orbs/beams/pets) are
-            // currently spawned, so ReconcileTowerHeldInstances only spawns/tears
-            // down on an active-state transition (active = equipped && !held).
-            bool bInstancesLive = false;
-        };
-        // Owned-weapon collection cap (equipped + inventory). Player FIRES only
-        // up to kMaxEquipSlots of them; the rest sit in inventory.
-        static constexpr int kMaxWeaponSlots = 6;
-        static constexpr int kMaxEquipSlots  = 4;
-        std::vector<WeaponSlot> m_vecWeaponSlots;
+        // Owned weapons are now heap Weapon objects (Weapon.h), held by
+        // shared_ptr. The player holds the ones it owns (equipped + idle
+        // inventory, distinguished by Weapon::bEquipped); a weapon assigned to a
+        // tower is MOVED out of this vector into the tower (one object, one
+        // holder — so no copy-counting / tower-held flag is needed).
+        static constexpr int kMaxEquipSlots     = 4;
+        static constexpr int kMaxInventorySlots = 6;
+        static constexpr int kMaxWeaponSlots    = kMaxEquipSlots + kMaxInventorySlots;
+        std::vector<WeaponPtr> m_vecWeaponSlots;
 
-        // Weapon ids currently mounted on towers (placed + reserve), rebuilt
-        // each frame from the scene + TowerManager. The player never fires a
-        // weapon in this set, enforcing the player/tower mutual exclusivity.
-        std::vector<int> m_vecTowerHeldWeapons;
-        void RefreshTowerHeldWeapons();
-        // Drive the per-slot held state: tear down a slot's persistent instances
-        // when it becomes tower-held, respawn them when it's released.
-        void ReconcileTowerHeldInstances();
+        // Spawn/tear-down each owned weapon's persistent instances to match its
+        // location: equipped weapons fire (instances live), inventory weapons
+        // don't. Called each frame from Update.
+        void ReconcileInstances();
 
         // Aim mode toggle. Default = false (bullets follow the player's
         // facing direction). Pressing LCTRL flips it; while true the
@@ -239,31 +209,31 @@ namespace Client
         // false / leaves outYaw untouched when unavailable. Shared by
         // ComputeAimYaw and ComputeWeaponAimYaw.
         bool TryComputeMouseAimYaw(float& outYaw) const;
-        // Spawn one Cooldown shot from a slot. Reads slot.iLevel for damage
-        // / speed scaling; the slot's cooldown accumulator is the caller's
-        // job.
-        void  FireCooldownBurst(const WeaponSlot& slot);
-        // Spawn Sustained instances for a slot (Orbital orbs). Called when
+        // Spawn one Cooldown shot from a weapon. Reads the weapon level for
+        // damage / speed scaling; the weapon's cooldown accumulator is the
+        // caller's job.
+        void  FireCooldownBurst(const WeaponPtr& slot);
+        // Spawn Sustained instances for a weapon (Orbital orbs). Called when
         // the weapon is gained or its level changes — old instances are
         // released first so the count change takes effect.
-        void  RespawnSustainedInstances(WeaponSlot& slot);
+        void  RespawnSustainedInstances(const WeaponPtr& slot);
         // Spawn / refresh a Follow weapon's pets (movement == Follow). Mirrors
         // RespawnSustainedInstances: drops the old companions and spawns
         // ComputeCount fresh ones ringed around the player.
-        void  RespawnPets(WeaponSlot& slot);
+        void  RespawnPets(const WeaponPtr& slot);
         // Spawn / refresh a Straight+Sustained weapon's laser beam(s). The
         // Player drives them each frame (DriveBeams) with the live cursor aim.
-        void  RespawnBeams(WeaponSlot& slot);
+        void  RespawnBeams(const WeaponPtr& slot);
         // Per-frame: anchor each beam at the muzzle and aim it down the
         // weapon's current heading (called from Update).
         void  DriveBeams(float fDeltaTime);
-        // Spawn a slot's live instances (orbs / pets / beams) per its weapon
-        // def. Shared by the add-new, add-copy, and level-up paths.
-        void  SpawnSlotInstances(WeaponSlot& slot);
-        // Bump a slot's level in place, applying the one-time evolution at the
+        // Spawn a weapon's live instances (orbs / pets / beams) per its def.
+        // Shared by the add-new, add-copy, and level-up paths.
+        void  SpawnSlotInstances(const WeaponPtr& slot);
+        // Bump a weapon's level in place, applying the one-time evolution at the
         // threshold and re-spawning its live instances. Shared by
         // AddOrLevelUpWeapon (existing slot) and MergeWeapon.
-        void  LevelUpSlot(WeaponSlot& slot);
+        void  LevelUpSlot(const WeaponPtr& slot);
         // Player damage feedback. TriggerImpactFeedback fires the dramatic
         // single-hit reaction (red flash + camera shake + hit-stop), throttled
         // by m_fImpactCooldown. UpdateDamageFeedback runs each frame: ticks the
@@ -302,10 +272,20 @@ namespace Client
         void RemoveWeapon(int iWeaponId);
         std::vector<int> GetOwnedWeaponIds() const;
         int  GetOwnedWeaponLevel(int iWeaponId) const;
-        // True when a weapon id is currently mounted on a tower (placed or
-        // reserve). The weapon HUD hides such weapons — they're used by the
-        // tower, not the player. Backed by the per-frame held set.
-        bool IsWeaponTowerHeld(int iWeaponId) const;
+
+        // --- Move a weapon between the player and a tower (object ownership) ---
+        // DetachWeapon removes ONE owned copy of iWeaponId (preferring an idle
+        // inventory copy) and returns it for a tower to hold — the player no
+        // longer owns it. Returns nullptr if no copy is owned. AttachWeapon takes
+        // a weapon back from a tower (sell / merge-consume / unassign) and parks
+        // it in the inventory. Together these give move semantics: a weapon is
+        // owned by EITHER the player OR a tower, never both — no copy-counting.
+        WeaponPtr DetachWeapon(int iWeaponId);
+        void      AttachWeapon(const WeaponPtr& pWeapon);
+        bool      HasFreeWeaponSlot() const
+        {
+            return static_cast<int>(m_vecWeaponSlots.size()) < kMaxWeaponSlots;
+        }
 
         // --- Equip / inventory (shop) -----------------------------------------
         // The player FIRES only equipped, non-tower-held weapons (up to
@@ -315,6 +295,12 @@ namespace Client
         std::vector<int> GetEquippedWeaponIds() const;
         // Owned weapons sitting in the inventory (not equipped, not on a tower).
         std::vector<int> GetInventoryWeaponIds() const;
+        // Per-copy LEVELS in the SAME order as the id lists above. Each owned copy
+        // has its own level (Weapon::iLevel), and duplicate ids can be at
+        // different levels, so the shop reads the level positionally (not by id)
+        // to show each icon's true level.
+        std::vector<int> GetEquippedWeaponLevels() const;
+        std::vector<int> GetInventoryWeaponLevels() const;
         // How many weapons occupy a player equip slot right now (incl. any that
         // are also tower-held — those still count against the cap until moved).
         int  GetEquippedCount() const;

@@ -1,6 +1,7 @@
 #pragma once
 #include "GameObject/GameObject.h"
 #include "Vector3.h"
+#include "Weapon.h"
 #include <memory>
 #include <vector>
 
@@ -9,6 +10,7 @@ namespace Engine
     class Transform;
     class MeshRendererComponent;
     class Material;
+    class Mesh;
     class VoxelWorld;
     class Gauge;
     class ColliderSphere;
@@ -18,6 +20,7 @@ namespace Engine
 namespace Client
 {
     struct WeaponDef;
+    struct TowerDef;
     class Attackable;
     class Bullet;
     class Beam;
@@ -46,11 +49,18 @@ namespace Client
         // height.
         void SetCell(int cx, int cz);
 
-        // This tower's equipped weapon (a WeaponDatabase live id). The shop's
-        // per-tower loadout section sets this; Tower::Init seeds it from
-        // TowerManager's placement default.
-        int  GetWeaponId() const   { return m_iWeaponId; }
-        void SetWeaponId(int iId)   { m_iWeaponId = iId; }
+        // The weapon OBJECT this tower fires — moved in from the player via the
+        // shop / placement (one object, one holder). null = unarmed (doesn't
+        // fire). The weapon carries its own level (weapon scaling); the tower
+        // layers its own tower-level bonuses on top.
+        WeaponPtr GetWeapon() const { return m_pWeapon; }
+        // Install a weapon (caller hands over ownership); respawns persistent
+        // instances for the new weapon. ReleaseWeapon hands it back out (sell /
+        // merge-consume / unassign), tearing the tower's instances down first.
+        void      SetWeapon(const WeaponPtr& pWeapon);
+        WeaponPtr ReleaseWeapon();
+        int  GetWeaponId() const    { return m_pWeapon ? m_pWeapon->iWeaponId : -1; }
+        int  GetWeaponLevel() const { return m_pWeapon ? m_pWeapon->iLevel : 0; }
 
         // This tower's weapon level (1..kMaxWeaponLevel). Drives the same
         // ComputeCooldown/ComputeCount/ComputeDamage scaling the player's
@@ -68,6 +78,18 @@ namespace Client
         // re-placed destroyed tower keeps its type.
         int  GetTowerDefId() const { return m_iTowerDefId; }
         void SetTowerDefId(int iId);
+
+        // Acquisition-order slot seq (from the reserve entry at placement). Drives
+        // this tower's numbered position in the tower HUD; preserved through death
+        // so a re-placed tower keeps its slot.
+        int  GetSlotSeq() const    { return m_iSlotSeq; }
+        void SetSlotSeq(int iSeq)   { m_iSlotSeq = iSeq; }
+
+        // Build a tower's body mesh for a type def — shared by SetTowerDefId and
+        // the placement ghost so the preview matches the placed tower exactly.
+        // "prismN" → N-gon prism (N>=3); anything else (incl. nullptr) → a 4-gon
+        // (square) prism. Same 0.32 radius / 0..1.6 height envelope as the body.
+        static std::shared_ptr<Engine::Mesh> BuildBodyMesh(const TowerDef* pDef);
 
         // Immediate removal for a shop SELL (no death squish): tears down the
         // tower's owned scene instances (orbiting sustained bullets + beams),
@@ -113,10 +135,11 @@ namespace Client
         static constexpr float kSquishFlatY  = 0.20f;
         static constexpr float kSquishWideXZ = 1.40f;
 
-        // This tower's weapon (live id). Seeded in Init from TowerManager's
-        // placement default; reassigned per-tower by the shop.
-        int   m_iWeaponId    = -1;
+        // This tower's weapon object (moved in from the player; null = unarmed).
+        WeaponPtr m_pWeapon;
         float m_fCooldownAcc = 0.f;
+        // TOWER level (distinct from the weapon's level). Drives the tower-level
+        // bonuses (HP / fire-rate / attack) applied on top of the weapon scaling.
         int   m_iLevel       = 1;
         // towers.csv type id (-1 = default attack type). Set by the placement
         // controller via SetTowerDefId; preserved through death so a re-placed
@@ -124,6 +147,7 @@ namespace Client
         // applied, so SetTowerDefId can shift HP/defence by the type delta
         // without disturbing the level-up bonus layered on top.
         int   m_iTowerDefId  = -1;
+        int   m_iSlotSeq     = 0;   // acquisition-order slot (HUD numbering)
         int   m_iSeedBaseHP  = 0;
         float m_fSeedBaseDef = 0.f;
         // Targeting radius (world units). Enemies farther than this are
@@ -139,6 +163,11 @@ namespace Client
         float m_fAttackSpeed = 1.f;
         float m_fCritChance  = 0.f;
         float m_fCritMult    = 2.f;
+        // Per-tower-level deltas from towers.csv (applied with (m_iLevel-1)).
+        // Attack / fire-rate fold into the fire path; HP is applied at SetLevel.
+        float m_fLvlAtkAdd    = 0.f;
+        float m_fLvlAtkSpdAdd = 0.f;
+        int   m_iLvlHpAdd     = 0;
 
         // Intrinsic tower effect from towers.csv, layered onto every bullet this
         // tower fires (on top of the equipped weapon's own effects). 0u =
